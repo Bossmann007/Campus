@@ -132,6 +132,12 @@ assert.deepStrictEqual(td.todo.map(t => t.name + "@" + t.due), ["TDE - TAREFA SO
 assert.deepStrictEqual(td.dates, { "etica:ra2": "2026-11-10", "imp:p1": "2026-11-12", "imp:p2": "2026-11-11" }, "single-assignment items carry the Canvas date");
 assert.strictEqual(got.todo, null, "old exports without the flag: unknown");
 ok("to-do comes from the submitted flag; single items get Canvas due dates");
+assert.strictEqual(C.verLess("0.3.0", "0.4.0"), true); assert.strictEqual(C.verLess("0.4.0", "0.4.0"), false); assert.strictEqual(C.verLess("0.10.0", "0.4.0"), false);
+assert.strictEqual(C.fromCanvas({ v: 1, ext: "0.3.0", courses: [] }).extOld, true); assert.strictEqual(C.fromCanvas({ v: 1, courses: [] }).extOld, true);
+assert.strictEqual(C.fromCanvas({ v: 1, ext: C.EXT_LATEST, courses: [] }).extOld, false); assert.strictEqual(C.fromCanvas({ v: 1, ext: "script", courses: [] }).extOld, false); assert.strictEqual(C.fromCanvas({ v: 1, ext: "<b>", courses: [] }).ext, null);
+const man = JSON.parse(fs.readFileSync(require("path").join(__dirname, "..", "extension", "manifest.json"), "utf8"));
+assert.strictEqual(man.version, C.EXT_LATEST, "EXT_LATEST matches the extension manifest");
+ok("outdated extensions are detected; EXT_LATEST matches the manifest");
 
 // the name table matches the real Canvas listing: every rule hits exactly one assignment (Somativa III not created yet)
 const real = JSON.parse(fs.readFileSync(require("path").join(__dirname, "canvas-names.json"), "utf8"));
