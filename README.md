@@ -15,7 +15,7 @@ Calculadora "Quanto falta pra passar" for PUCPR 2026/2: one static page (`index.
 - `scripts/verify`: exit 0 = core tests pass and the UI script parses.
 - `scripts/snapshot`: copy `index.html` into `old/` before any redesign.
 - `extension/`: Chrome MV3 extension (popup + `collect.js`) that reads the student's own Canvas grades and opens the page with them. Load unpacked from `chrome://extensions` for testing.
-- `tools/canvas-export.py`: optional path for students who prefer their own Canvas API token; runs locally, read-only, prints the same JSON as the extension for the paste box. Stdlib only.
+- `tools/canvas-export.py`: optional path for students who prefer their own Canvas API token; runs locally, read-only, prints the same JSON as the extension for the paste box. Stdlib only. Token from `CANVAS_TOKEN`, a `.env` (copy `tools/.env.example`; `.env` is git-ignored) or a hidden prompt.
 - `scripts/package-extension`: builds the release zip; `EXT_LATEST` in `index.html` must match `extension/manifest.json` (tested).
 - `referencias/`: design reference links (`README.md`, `links.html`); not deployed.
 

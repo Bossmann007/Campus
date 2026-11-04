@@ -6,4 +6,4 @@ TZ=America/Sao_Paulo node tests/notas-test.js index.html   # due dates are shown
 node tests/extension-test.js
 python3 -c "import re;s=open('index.html').read();open('/tmp/notas-ui-check.js','w').write(re.search(r'<script id=\"ui\">([\s\S]*?)</script>',s).group(1))"
 node --check /tmp/notas-ui-check.js && echo "ui script parses"
-python3 -m py_compile tools/canvas-export.py && echo "token script compiles"
+python3 -c "import ast; ast.parse(open('tools/canvas-export.py').read())" && echo "token script parses"

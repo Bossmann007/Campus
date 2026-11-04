@@ -1,0 +1,12 @@
+name: Feedback para o Enzo
+description: Ideia, algo que você mudaria ou qualquer recado sobre o Quanto falta
+title: "Feedback: "
+labels: [feedback]
+body:
+  - type: textarea
+    id: mensagem
+    attributes: { label: Mensagem, description: "O que você mudaria ou gostaria de ver. Não cole notas, tokens nem o texto copiado do Canvas." }
+    validations: { required: true }
+  - type: input
+    id: origem
+    attributes: { label: Enviado de, description: "Preenchido pelo botão de feedback do site." }

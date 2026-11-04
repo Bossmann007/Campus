@@ -139,6 +139,17 @@ const man = JSON.parse(fs.readFileSync(require("path").join(__dirname, "..", "ex
 assert.strictEqual(man.version, C.EXT_LATEST, "EXT_LATEST matches the extension manifest");
 ok("outdated extensions are detected; EXT_LATEST matches the manifest");
 
+// class statistics (single-assignment items, rescaled) and announcements (text only, Canvas links only)
+const st = C.fromCanvas({ v: 1, courses: [cv("Arquitetura de Banco de Dados", [{ name: "Avaliação somativa RA2", points: 3, score: 2.4, stats: { mean: 2.1, min: 0.6, max: 3 } }]),
+  cv("Ética", [{ name: "Avaliação somativa -  Prova", points: 10, score: 7, stats: { mean: 6 } }])],
+  announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/1/discussion_topics/2" },
+                  { course: "Outra", title: "Link estranho", at: "x", unread: false, url: "javascript:alert(1)" }, { title: 5 }] });
+assert.deepStrictEqual(st.stats, { "abd:s2": { mean: 2.1, min: 0.6, max: 3 } }, "rescaled to the item scale; incomplete stats dropped");
+assert.deepStrictEqual(st.news, [{ course: "etica", courseName: "Ética", title: "Prova adiada", at: "2026-11-03", unread: true, url: "https://pucpr.instructure.com/courses/1/discussion_topics/2" },
+  { course: null, courseName: "Outra", title: "Link estranho", at: null, unread: false, url: null }]);
+assert.strictEqual(got.news, null, "no announcements field: unknown");
+ok("class stats are rescaled; announcements keep only Canvas links and text titles");
+
 // the name table matches the real Canvas listing: every rule hits exactly one assignment (Somativa III not created yet)
 const real = JSON.parse(fs.readFileSync(require("path").join(__dirname, "canvas-names.json"), "utf8"));
 const withScores = { v: 1, courses: real.courses.map(c => ({ name: c.name, assignments: c.assignments.map(a => ({ name: a.name, points: a.points, score: a.points })) })) };
@@ -162,5 +173,6 @@ assert.deepStrictEqual(odd.grades, { "abd:pj1": "0.5" }, "only known items with 
 assert(odd.missing.length === 4, "the other entries are reported: " + JSON.stringify(odd.missing));
 assert(C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, semester: "2027-1", grades: {} })).notes.some(n => /semestre/.test(n.reason)), "other semester flagged");
 ok("invalid backups are rejected; unknown, non-text and unparsable entries are skipped and listed");
-assert.deepStrictEqual(C.SEED, {}); assert(!/Enzo|~\//.test(html), "no personal data in the page"); ok("public page has no seed grades or personal notes");
+assert.deepStrictEqual(C.SEED, {}); const publicText = html.replace(/<dialog id="fb"[\s\S]*?<\/dialog>/, "").replace(/title="Mandar um feedback para o Enzo"/, "");   // the feedback button names its recipient on purpose
+assert(!/Enzo|~\//.test(publicText), "no personal data in the page outside the feedback dialog"); ok("public page has no seed grades or personal notes");
 console.log("all " + n + " checks passed");

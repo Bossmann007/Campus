@@ -24,7 +24,9 @@ Com o Canvas aberto, clique no ícone da extensão e em "Importar notas do Canva
 - o mínimo em cada prova se você tirar nota cheia no resto;
 - quais matérias já estão garantidas e quais ainda dependem de nota;
 - o que falta entregar nos próximos 14 dias e o que passou do prazo sem envio;
-- o prazo do Canvas ao lado da data do Plano de Ensino, e quais notas são novas desde a última importação.
+- o prazo do Canvas ao lado da data do Plano de Ensino, e quais notas são novas desde a última importação;
+- a sua nota comparada com a média da turma (quando o professor libera) e os avisos dos professores, com os não lidos em destaque;
+- um arquivo de calendário (.ics) com as avaliações e entregas.
 
 Privacidade: a extensão usa o login que você já tem no Canvas, não pede senha nem token, só lê (nunca grava no Canvas) e não envia nada para servidor nenhum. As notas ficam só no seu navegador.
 
@@ -37,5 +39,5 @@ Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure.
 - **activeTab:** ler a aba do Canvas só quando o usuário clica no botão da extensão.
 - **scripting:** executar, nessa aba e nesse momento, a leitura das notas pela API do Canvas com a sessão do próprio usuário.
 - **Código remoto:** não. Todo o código está no pacote.
-- **Dados tratados:** as notas, prazos, situação de entrega e marcações de entrega atrasada são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
+- **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma e títulos de avisos são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.
