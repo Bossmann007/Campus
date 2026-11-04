@@ -1067,33 +1067,10 @@ const NotasCore = (() => {
     };
     // Resting state for a student with grades: the next thing that counts, from the real numbers.
     api.idle = (text, lines) => { if (busy) return; run++; tag.textContent = "suas notas"; main.textContent = ""; bubble("bot", text, lines); };
-    // Before the first grade: the same flow with example data, on a loop, labelled as such.
-    api.demo = async () => {
-      const me = ++run, alive = () => me === run;
-      const EX = { imp:"precisa 9,8/10", abd:"falta 0,50 ponto", rpnd:"2 notas novas", web:"precisa 8,9/10", etica:"3 avisos novos", cscf:"na média da turma" };
-      while (alive()) {
-        tag.textContent = "demonstração · notas de exemplo"; main.style.opacity = ""; main.textContent = ""; api.side({}, false);
-        await wait(500); if (!alive()) return;
-        bubble("me", "Importar minhas notas do Canvas"); await wait(700); if (!alive()) return;
-        const typ = el("div", "bub bot enter"), ty = el("span", "typing"); ty.append(el("i"), el("i"), el("i")); typ.appendChild(ty); main.appendChild(typ);
-        await wait(900); if (!alive()) return; typ.remove();
-        const card = stepsCard("Lendo o Canvas"), steps = [["Notas", "12 notas encontradas"], ["Média da turma", "liberada em 9 avaliações"], ["Prazos", "7 entregas nos próximos 14 dias"], ["Avisos", "3 não lidos"]];
-        card.set(0, steps.length, true); main.appendChild(card);
-        for (let i = 0; i < steps.length; i++) { const r = stepRow(steps[i][0], ""); card.appendChild(r); await wait(650 + i * 120); if (!alive()) return;
-          r.done(fmt(0.3 + i * 0.2, 1) + "s", steps[i][1]); card.set(i + 1, steps.length, i + 1 < steps.length); if (!i) api.side(EX, true); }
-        card.setTitle("Leu o Canvas"); await wait(600); if (!alive()) return;
-        bubble("bot", "Pronto. O que importa agora:", ["Imperativa: 9,8 na Prova do RA2 (11/11)", "Banco de Dados: falta 0,50 ponto", "Ética: 3 avisos novos"]);
-        await wait(500); if (!alive()) return;
-        const ap = el("div", "apply-demo enter"); ap.appendChild(el("span", "btn primary sm", "Aplicar 12 notas")); main.appendChild(ap);
-        if (RM) return;
-        await wait(4200); if (!alive()) return; main.style.opacity = "0"; await wait(260);
-      }
-    };
     api.stop = () => { if (!busy) run++; };
     return api;
   })();
   $("demo-hero").appendChild(con.el);
-  let demoOn = false;
   // What matters next, as short lines, for any set of grades (used before and after applying an import).
   function nextLines(grades, n) {
     return C.upcoming(C.COURSES, grades, today, target()).filter(u => u.st.status !== "garantido").slice(0, n)
@@ -1118,8 +1095,8 @@ const NotasCore = (() => {
     const all = C.upcoming(C.COURSES, saved.grades, today, T), list = all.filter(u => u.st.status !== "garantido");
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     document.body.classList.toggle("fresh", !any);
-    if (!any && !demoOn && !con.used) { demoOn = true; con.demo(); }
-    if (any) { demoOn = false; const side = {};
+    if (!any) { con.side({}, false); if (!con.busy) con.idle("Ainda sem notas. Importe do Canvas ou lance uma nota: cada passo aparece aqui.", []); }
+    if (any) { const side = {};
       for (const c of C.COURSES) side[c.id] = $("pill-" + c.id).textContent;
       con.side(side, true);
       if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
