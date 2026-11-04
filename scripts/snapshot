@@ -1,0 +1,6 @@
+#!/bin/sh
+# Save the current page before any redesign, so a rejected look can be restored in one copy.
+set -eu
+cd "$(dirname "$0")/.."
+dest="old/index-$(date +%Y%m%d-%H%M%S).html"
+cp index.html "$dest" && echo "saved $dest"

@@ -1,0 +1,225 @@
+{
+  "_about": "Canvas PUCPR 2026/2 assignment names -> calculator items. Read-only listing from Canvas API on 2026-11-04 (one 2026/2 turma: Ciência da Computação, manhã). grade = mean(score / points_possible) * inMax over the listed assignments. 'manual' items have no single Canvas assignment.",
+  "courses": {
+    "imp": {
+      "match": "Programação Imperativa",
+      "items": {
+        "ex1": {
+          "kind": "average",
+          "names": [
+            "TDE 1:",
+            "TDE 2:",
+            "PBL01",
+            "PBL02",
+            "PBL03",
+            "PBL04",
+            "PBL05"
+          ],
+          "note": "equal weights assumed; Plano gives only the 10% total"
+        },
+        "p1": {
+          "kind": "single",
+          "names": [
+            "Prova do RA1"
+          ]
+        },
+        "ex2": {
+          "kind": "average",
+          "names": [
+            "PBL06",
+            "PBL07",
+            "PBL08",
+            "PBL09",
+            "PBL10"
+          ],
+          "note": "equal weights assumed"
+        },
+        "t2": {
+          "kind": "single",
+          "names": [
+            "Trabalho do RA2"
+          ],
+          "note": "Canvas due 18/11; calculator uses 17/11"
+        },
+        "p2": {
+          "kind": "single",
+          "names": [
+            "Prova do RA2"
+          ]
+        }
+      }
+    },
+    "abd": {
+      "match": "Arquitetura de Banco de Dados",
+      "items": {
+        "pj1": {
+          "kind": "single",
+          "names": [
+            "PjBL - Parte 1"
+          ]
+        },
+        "s1": {
+          "kind": "single",
+          "names": [
+            "Avaliação somativa RA1"
+          ]
+        },
+        "tde1": {
+          "kind": "manual",
+          "note": "no TDE assignment in Canvas"
+        },
+        "pj2": {
+          "kind": "single",
+          "names": [
+            "PjBL - Parte 2"
+          ]
+        },
+        "s2": {
+          "kind": "single",
+          "names": [
+            "Avaliação somativa RA2"
+          ],
+          "note": "Canvas: 3,0 points, confirms prova + TDE do RA2 together"
+        },
+        "pj3": {
+          "kind": "single",
+          "names": [
+            "Pjbl Parte 3"
+          ]
+        },
+        "s3": {
+          "kind": "single",
+          "names": [
+            "Avaliação somativa RA3"
+          ],
+          "note": "not in Canvas yet"
+        },
+        "tde3": {
+          "kind": "manual",
+          "note": "no TDE assignment in Canvas"
+        }
+      }
+    },
+    "rpnd": {
+      "match": "Resolução de Problemas de Natureza Discreta",
+      "items": {
+        "as1": {
+          "kind": "single",
+          "names": [
+            "AS 01"
+          ]
+        },
+        "as2": {
+          "kind": "single",
+          "names": [
+            "AS 02"
+          ]
+        },
+        "as3": {
+          "kind": "single",
+          "names": [
+            "AS 03"
+          ]
+        },
+        "as4": {
+          "kind": "single",
+          "names": [
+            "AS 04"
+          ]
+        },
+        "as5": {
+          "kind": "single",
+          "names": [
+            "AS 05"
+          ],
+          "note": "Canvas due 28/10; calculator uses 28/09 (Plano l.343)"
+        },
+        "as6": {
+          "kind": "single",
+          "names": [
+            "AS 06"
+          ]
+        },
+        "as7": {
+          "kind": "single",
+          "names": [
+            "AS 07"
+          ]
+        },
+        "as8": {
+          "kind": "single",
+          "names": [
+            "AS 08"
+          ]
+        }
+      }
+    },
+    "web": {
+      "match": "Programação WEB",
+      "items": {
+        "p1": {
+          "kind": "single",
+          "names": [
+            "Avaliação Somativa RA1 - GRUPO B e GRUPO A"
+          ],
+          "note": "Canvas 2,1 points; a separate 'REFAZER PROVA' (0,1) is not added"
+        },
+        "tde": {
+          "kind": "single",
+          "names": [
+            "Entrega TDE"
+          ]
+        },
+        "p23": {
+          "kind": "manual",
+          "note": "no RA2/RA3 exam in Canvas yet"
+        }
+      }
+    },
+    "etica": {
+      "match": "Ética",
+      "items": {
+        "ra1": {
+          "kind": "sum",
+          "names": [
+            "Aula 4 - TAREFA SOMATIVA",
+            "Aula 7 - TAREFA SOMATIVA",
+            "Avaliação somativa -  Prova"
+          ],
+          "factor": 0.23,
+          "note": "RA1 = soma das três notas (0-10) x 2,3 em pontos de 70; aqui x 0,23 em pontos de 7 (informado por um aluno, 2026-11-04)"
+        },
+        "ra2": {
+          "kind": "single",
+          "names": [
+            "TDE - TAREFA SOMATIVA - VÍDEO"
+          ],
+          "note": "Canvas due 11/11; calculator uses 10/11"
+        }
+      }
+    },
+    "cscf": {
+      "match": "Conectividade em Sistemas Ciberfísicos",
+      "items": {
+        "as1": {
+          "kind": "single",
+          "names": [
+            "AS01 - NOTAS"
+          ],
+          "pts": 10,
+          "note": "Canvas lists 0 points; the score is already on a 0-10 scale"
+        },
+        "as2": {
+          "kind": "manual",
+          "note": "not in Canvas yet"
+        },
+        "pj": {
+          "kind": "single",
+          "names": [
+            "Projeto CSCF"
+          ]
+        }
+      }
+    }
+  }
+}

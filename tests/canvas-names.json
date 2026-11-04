@@ -1,0 +1,447 @@
+{
+ "_about": "Assignment names and points from one PUCPR 2026/2 turma, Canvas API 2026-11-04. No grades.",
+ "courses": [
+  {
+   "name": "Arquitetura de Banco de Dados (Turma 2º BGCL1) - Ciência da Computação (Manhã) - 2026 / 2º Sem",
+   "assignments": [
+    {
+     "name": "Entrega atividade 13/08",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega Proposta Pjbl - 13/08",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega atividade 27/08",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega PjBL - Parte 1 03/09",
+     "points": 1.0
+    },
+    {
+     "name": "Atividade - 16/09",
+     "points": 0.0
+    },
+    {
+     "name": "Atividade - 24/09",
+     "points": 0.0
+    },
+    {
+     "name": "ENTREGA CERTIFICADOS POLIWEEK",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega PjBL - Parte 2 15/10",
+     "points": 2.0
+    },
+    {
+     "name": "Atividade - 15/10",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega Avaliação Formativa PARTE 1",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega Avaliação Formativa PARTE 2 ",
+     "points": 0.0
+    },
+    {
+     "name": "Atividade 29/10",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega Pjbl Parte 3 - 18/11",
+     "points": 1.0
+    },
+    {
+     "name": "Atividade - 08/10 ",
+     "points": 0.0
+    },
+    {
+     "name": "Avaliação somativa RA1 10/09",
+     "points": 1.25
+    },
+    {
+     "name": "Avaliação somativa RA2 22/10",
+     "points": 3.0
+    },
+    {
+     "name": "Entrega atividade - Avaliação formativa 03/09 - GABARITO",
+     "points": 0.0
+    }
+   ]
+  },
+  {
+   "name": "Conectividade em Sistemas Ciberfísicos (Turma 2º B) - Ciência da Computação (Manhã) - 2026 / 2º Sem",
+   "assignments": [
+    {
+     "name": "Formativa 2 - PACKET TRACER - INTRODUÇÃO (Grupo)",
+     "points": 0.25
+    },
+    {
+     "name": "3 - LOCAL AREA NETWORK (Individual)",
+     "points": 0.25
+    },
+    {
+     "name": "4 - PACKET TRACER - LAN (Grupo)",
+     "points": 0.5
+    },
+    {
+     "name": "9 - WAN - ROTEAMENTO (v2) (Individual)",
+     "points": 0.5
+    },
+    {
+     "name": "14 - WAN - CAMADA DE TRANSPORTE E DETALHAMENTO TCP",
+     "points": 0.5
+    },
+    {
+     "name": "TDE 2 - Atividade de Preparação para a Avaliação Somativa 01 - Resumo e folha de consulta (8ha)",
+     "points": 0.0
+    },
+    {
+     "name": "TDE 3 - Protocolos da Camada de Aplicação TCP/IP (4ha)",
+     "points": 0.0
+    },
+    {
+     "name": "TDE 4 - Processos, Threads e Multiprogramação (4ha)",
+     "points": 0.0
+    },
+    {
+     "name": "TDE 5 - Atividade de Preparação para a Avaliação Somativa 02 - Resumo e folha de consulta (4ha) ",
+     "points": 0.0
+    },
+    {
+     "name": "Projeto CSCF - 2026.2",
+     "points": 10.0
+    },
+    {
+     "name": "5 - GERENCIAMENTO DE RECURSOS (individual)",
+     "points": 0.0
+    },
+    {
+     "name": "6 - THREADS E PROCESSOS  (GRUPO)",
+     "points": 0.0
+    },
+    {
+     "name": "7 - PACKET TRACER - ENDEREÇOS IP",
+     "points": 0.0
+    },
+    {
+     "name": "8 - WAN - ENDEREÇOS IP E CAMADA DE REDE - R2",
+     "points": 0.0
+    },
+    {
+     "name": "10 - PACKET TRACER - ROTEAMENTO (Grupo)",
+     "points": 0.5
+    },
+    {
+     "name": "15 - Packet Tracer - WAN - DETALHAMENTO TCP",
+     "points": 0.0
+    },
+    {
+     "name": "16 - SOCKETS TCP",
+     "points": 0.5
+    },
+    {
+     "name": "17 - SOCKETS UDP",
+     "points": 0.5
+    },
+    {
+     "name": "18 - WAN - CAMADA DE APLICAÇÃO",
+     "points": 0.25
+    },
+    {
+     "name": "19 - PACKET TRACER CAMADA DE APLICAÇÃO",
+     "points": 0.5
+    },
+    {
+     "name": "20 - IoT SERVIDOR TCP MULTITHREAD",
+     "points": 0.0
+    },
+    {
+     "name": "21 - UDP - DESCOBERTA DE DISPOSITIVOS",
+     "points": 0.0
+    },
+    {
+     "name": "23 - IoT TCP CONSOLE INTERNA",
+     "points": 0.0
+    },
+    {
+     "name": "24 - IoT TCP CONSOLE REMOTA",
+     "points": 0.0
+    },
+    {
+     "name": "25 - SERVIÇO DE TRANSFERÊNCIA DE ARQUIVOS",
+     "points": 0.5
+    },
+    {
+     "name": "26 - DETALHAMENTO FTP",
+     "points": 0.25
+    },
+    {
+     "name": "27 - DETALHAMENTO DNS DHCP",
+     "points": 0.25
+    },
+    {
+     "name": "28 - PACKET TRACER DHCP e NAT",
+     "points": 0.5
+    },
+    {
+     "name": "29 - IoT UDP Transmissão confiável",
+     "points": 0.0
+    },
+    {
+     "name": "AS01 - NOTAS",
+     "points": 0.0
+    },
+    {
+     "name": "Atividade Desafio - Protocolos da Camada de Aplicação",
+     "points": 0.5
+    },
+    {
+     "name": "Atividade Desafio — Instalando e Testando um Broker MQTT Mosquitto",
+     "points": 0.0
+    },
+    {
+     "name": "Desafio 01 – A Letra \"A\" pelas Camadas OSI!",
+     "points": 0.0
+    },
+    {
+     "name": "Desafio 02 – Diagnóstico de Rede com Comandos Linux",
+     "points": 0.0
+    },
+    {
+     "name": "Desafio 03 – Rede local com HUB e SWITCH",
+     "points": null
+    },
+    {
+     "name": "Desafio 04 - Packet Tracer - Roteador e duas sub-redes",
+     "points": 0.0
+    },
+    {
+     "name": "Desafio 05 - Identificação de portas",
+     "points": 0.0
+    },
+    {
+     "name": "Formativa 1 - MODELO EM CAMADAS",
+     "points": 0.25
+    },
+    {
+     "name": "Lista de Exercícios – Endereçamento IP, Máscara e CIDR",
+     "points": 0.0
+    }
+   ]
+  },
+  {
+   "name": "Ética (Turma 2º B) - Ciência da Computação (Manhã) - 2026 / 2º Sem",
+   "assignments": [
+    {
+     "name": "Aula 3 TAREFA FORMATIVA - ENTREGA - O dilema do trem",
+     "points": 0.0
+    },
+    {
+     "name": "Aula 4 - TAREFA FORMATIVA - A justiça em Aristóteles",
+     "points": 0.0
+    },
+    {
+     "name": "Aula 4 - TAREFA SOMATIVA ENTREGA - A justiça em Aristóteles",
+     "points": 10.0
+    },
+    {
+     "name": "Aula 5 - TAREFA FORMATIVA  - Luc Ferry e a vida bem sucedida",
+     "points": 0.0
+    },
+    {
+     "name": "Aula 6 - TAREFA  FORMATIVA - Assistir o filme \"decisão de Risco\"",
+     "points": 0.0
+    },
+    {
+     "name": "Aula 7 - TAREFA SOMATIVA - O utilitarismo ",
+     "points": 10.0
+    },
+    {
+     "name": "Avaliação somativa -  Prova",
+     "points": 10.0
+    },
+    {
+     "name": "TDE - TAREFA SOMATIVA - VÍDEO",
+     "points": 10.0
+    }
+   ]
+  },
+  {
+   "name": "Programação Imperativa (Turma 2º B) - Ciência da Computação (Manhã) - 2026 / 2º Sem",
+   "assignments": [
+    {
+     "name": "PBL01",
+     "points": 10.0
+    },
+    {
+     "name": "PBL02",
+     "points": 10.0
+    },
+    {
+     "name": "TDE 1: Motivação para o estudo da linguagem C",
+     "points": 10.0
+    },
+    {
+     "name": "PBL03",
+     "points": 10.0
+    },
+    {
+     "name": "PBL04",
+     "points": 10.0
+    },
+    {
+     "name": "PBL05",
+     "points": 10.0
+    },
+    {
+     "name": "TDE 2: Boas práticas de codificação",
+     "points": 10.0
+    },
+    {
+     "name": "Prova do RA1",
+     "points": 10.0
+    },
+    {
+     "name": "PBL06",
+     "points": 10.0
+    },
+    {
+     "name": "PBL07",
+     "points": 10.0
+    },
+    {
+     "name": "PBL08",
+     "points": 10.0
+    },
+    {
+     "name": "PBL09",
+     "points": 10.0
+    },
+    {
+     "name": "POLIWEEK - Certificado",
+     "points": 0.0
+    },
+    {
+     "name": "PBL10",
+     "points": 10.0
+    },
+    {
+     "name": "Prova do RA2",
+     "points": 10.0
+    },
+    {
+     "name": "Trabalho do RA2",
+     "points": 10.0
+    },
+    {
+     "name": "Prova de Recuperação do RA2",
+     "points": 10.0
+    }
+   ]
+  },
+  {
+   "name": "Programação WEB (Turma 2º BGCL1) - Ciência da Computação (Manhã) - 2026 / 2º Sem",
+   "assignments": [
+    {
+     "name": "Entrega atividade 07/08",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega atividade 14/08",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega atividade 28/08",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega atividade 04/09",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega atividade 11/09",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega atividade 18/09 - Revisão",
+     "points": 0.0
+    },
+    {
+     "name": "Avaliação Somativa RA1 - GRUPO A",
+     "points": 0.0
+    },
+    {
+     "name": "Avaliação Somativa RA1 - GRUPO B e GRUPO A",
+     "points": 2.1
+    },
+    {
+     "name": "Entrega atividade - REFAZER PROVA",
+     "points": 0.1
+    },
+    {
+     "name": "Entrega Atividade 09/10",
+     "points": 0.0
+    },
+    {
+     "name": "Entrega TDE",
+     "points": 1.5
+    },
+    {
+     "name": "Entrega atividade 21/08",
+     "points": 0.0
+    }
+   ]
+  },
+  {
+   "name": "Resolução de Problemas de Natureza Discreta (Turma 2º B) - Ciência da Computação (Manhã) - 2026 / 2º Sem",
+   "assignments": [
+    {
+     "name": "AS 01",
+     "points": 10.0
+    },
+    {
+     "name": "AS 02",
+     "points": 10.0
+    },
+    {
+     "name": "AS 03",
+     "points": 10.0
+    },
+    {
+     "name": "AS 04",
+     "points": 10.0
+    },
+    {
+     "name": "Recuperação Parcial RA 01",
+     "points": 10.0
+    },
+    {
+     "name": "AS 06",
+     "points": 10.0
+    },
+    {
+     "name": "Certificado da POLIWEEK 2026",
+     "points": 0.0
+    },
+    {
+     "name": "AS 05",
+     "points": 10.0
+    },
+    {
+     "name": "AS 07",
+     "points": 10.0
+    },
+    {
+     "name": "AS 08",
+     "points": 10.0
+    }
+   ]
+  }
+ ]
+}
