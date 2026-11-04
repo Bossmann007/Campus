@@ -35,5 +35,5 @@ Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure.
 - **activeTab:** ler a aba do Canvas só quando o usuário clica no botão da extensão.
 - **scripting:** executar, nessa aba e nesse momento, a leitura das notas pela API do Canvas com a sessão do próprio usuário.
 - **Código remoto:** não. Todo o código está no pacote.
-- **Dados coletados:** marque "Informações educacionais" (notas) — tratadas apenas no dispositivo do usuário, não transmitidas ao desenvolvedor.
+- **Dados tratados:** as notas são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.
