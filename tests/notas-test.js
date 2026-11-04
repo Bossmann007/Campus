@@ -175,4 +175,11 @@ assert(C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, semester: "2027-
 ok("invalid backups are rejected; unknown, non-text and unparsable entries are skipped and listed");
 assert.deepStrictEqual(C.SEED, {}); const publicText = html.replace(/<dialog id="fb"[\s\S]*?<\/dialog>/, "").replace(/title="Mandar um feedback para o Enzo"/, "");   // the feedback button names its recipient on purpose
 assert(!/Enzo|~\//.test(publicText), "no personal data in the page outside the feedback dialog"); ok("public page has no seed grades or personal notes");
+// landing page: no personal data, forwards old extension links (#canvas=) to the app, and links the real download and video
+const landing = fs.readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
+assert(!/Enzo|~\//.test(landing), "no personal data on the landing page");
+assert(/if \(location\.hash\.startsWith\("#canvas="\)\) location\.replace\("\/app" \+ location\.hash\)/.test(landing), "old #canvas= links reach the app");
+assert(landing.includes('releases/latest/download/quanto-falta-extension.zip') && landing.includes('src="/media/demo.mp4"'), "download link and demo video");
+assert(fs.existsSync(require("path").join(__dirname, "..", "media", "demo.mp4")), "demo video is in the repo");
+ok("landing page is clean, forwards extension links and has the video");
 console.log("all " + n + " checks passed");

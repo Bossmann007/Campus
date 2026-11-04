@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; form-action 'none'; base-uri 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2230%22%20height%3D%2230%22%20rx%3D%229%22%20fill%3D%22%23202020%22/%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%227.2%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223.2%22/%3E%3Cpath%20d%3D%22m17.2%2018.6%203.3%203.4%206-7.2%22%20fill%3D%22none%22%20stroke%3D%22%233fd07f%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E">
+<meta name="description" content="Calculadora de notas da PUCPR 2026/2: quanto falta em cada prova para passar.">
+<title>Minhas matérias · Quanto falta</title>
+<style>
+  /* Radix Colors 3.0 scales (gray, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
+  :root { --bg:#f9f9f9; --surface:#fff; --sunk:#f0f0f0; --line:#e8e8e8; --line2:#d9d9d9; --txt:#202020; --muted:#646464; --faint:#838383; --field:#bbbbbb; --brand:#9be8be; --logo-check:#3fd07f; --warn-ink:#4f3422; --bad-ink:#5c271f; --acc-ink:#113264; --ok-ink:#203c25;
+          --acc:#0d74ce; --acc-fill:#0090ff; --acc-soft:#e6f4fe; --ok:#2a7e3b; --ok-soft:#e9f6e9; --warn:#ab6400; --warn-soft:#fff7c2; --bad:#d13415; --bad-soft:#feebe7;
+          --r:12px; --shadow:0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.02);
+          --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+          --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace; color-scheme:light; }
+  @media (prefers-color-scheme:dark) {
+    :root { --bg:#191919; --surface:#222222; --sunk:#2a2a2a; --line:#313131; --line2:#484848; --txt:#eeeeee; --muted:#b4b4b4; --faint:#7b7b7b; --field:#606060; --brand:#9be8be; --logo-check:#2fb36b; --warn-ink:#ffca16; --bad-ink:#ff977d; --acc-ink:#70b8ff; --ok-ink:#71d083;
+            --acc:#70b8ff; --acc-fill:#0090ff; --acc-soft:#0d2847; --ok:#71d083; --ok-soft:#1b2a1e; --warn:#ffca16; --warn-soft:#302008;
+            --bad:#ff977d; --bad-soft:#391714; --shadow:none; color-scheme:dark; }
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; scroll-padding-top:72px; }
+  body { margin:0; font-family:var(--sans); background:var(--bg); color:var(--txt); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  a { color:inherit; text-decoration:none; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+  .num { font-variant-numeric:tabular-nums; }
+
+  .top { position:sticky; top:12px; z-index:5; margin:12px auto 0; max-width:1032px; padding:0 12px; }
+  .top .wrap { display:flex; align-items:center; gap:16px; height:52px; padding:0 8px 0 16px; border-radius:999px;
+               background:color-mix(in srgb, var(--surface) 82%, transparent); border:1px solid var(--line); box-shadow:0 4px 16px rgba(0,0,0,.06);
+               -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+  .sem { color:var(--muted); font-size:13px; padding-left:12px; margin-left:4px; border-left:1px solid var(--line); }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:650; letter-spacing:-.01em; }
+  .logo { flex-shrink:0; }
+  .top .spacer { flex:1; }
+  .nav { display:flex; gap:2px; margin-left:8px; }
+  .nav a { color:var(--muted); font-size:13.5px; padding:6px 10px; border-radius:999px; transition:color .15s, background-color .15s; }
+  .nav a[aria-current="true"] { color:var(--txt); background:var(--sunk); }
+  @media (hover:hover) and (pointer:fine) { .nav a:hover { color:var(--txt); } }
+  .meta { display:flex; align-items:center; gap:2px; height:34px; padding:0 3px 0 12px; border:1px solid var(--line); border-radius:999px; background:var(--sunk); color:var(--muted); font-size:13px; cursor:help; }
+  .meta .ml { margin-right:6px; }
+  .meta input { width:40px; height:26px; padding:0; text-align:center; border:0; background:transparent; font-weight:600; color:var(--txt); font-family:var(--sans); }
+  .meta input:focus { box-shadow:none; } .meta:focus-within { border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-soft); }
+  .meta input.bad { color:var(--bad); box-shadow:none; }
+  .step { width:26px; height:26px; padding:0; display:grid; place-items:center; border-radius:999px; border:0; box-shadow:none; background:transparent; color:var(--muted); font-size:15px; line-height:1; }
+  @media (hover:hover) and (pointer:fine) { .step:hover { background:var(--surface); color:var(--txt); } }
+  .btn.sm { padding:7px 14px; font-size:13px; }
+  .top .wrap > * { white-space:nowrap; flex-shrink:0; } .top .spacer { flex-shrink:1; }
+  @media (max-width:1100px) { .sem { display:none; } }
+  @media (max-width:1000px) { .nav { display:none; } }
+  .iconbtn { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px; border-radius:999px; border:1px solid transparent; box-shadow:none;
+             background:transparent; color:var(--muted); font-size:13px; }
+  @media (hover:hover) and (pointer:fine) { .iconbtn:hover { color:var(--txt); background:var(--sunk); } }
+  dialog#fb { width:min(520px, calc(100vw - 32px)); border:1px solid var(--line); border-radius:var(--r); padding:0; background:var(--surface); color:var(--txt);
+              box-shadow:0 20px 50px rgba(0,0,0,.25); }
+  dialog#fb[open] { animation:pop .18s cubic-bezier(.23,1,.32,1); }
+  @keyframes pop { from { opacity:0; transform:scale(.96); } }
+  dialog#fb::backdrop { background:rgba(0,0,0,.45); }
+  .fbform { padding:20px 22px; display:grid; gap:10px; }
+  .fbform h2 { margin:0; font-size:17px; letter-spacing:-.01em; }
+  .fbform p { margin:0; font-size:13.5px; } .fbform .fine { font-size:12.5px; }
+  .fbform textarea { font-family:var(--sans); font-size:14px; }
+  button, .btn { font:inherit; font-size:13px; font-weight:500; color:var(--txt); background:var(--surface); border:1px solid var(--line);
+                 border-radius:999px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
+  button:active, .btn:active { transform:scale(.97); }
+  @media (hover:hover) and (pointer:fine) { button:hover { border-color:var(--line2); background:var(--sunk); } }
+  .linkbtn[aria-pressed="true"] { color:var(--acc); }
+
+  input { font-family:var(--mono); font-size:14px; font-variant-numeric:tabular-nums; color:var(--txt); background:var(--surface);
+          border:1px solid var(--field); border-radius:8px; padding:6px 8px; width:76px; transition:border-color .15s, box-shadow .15s; }
+  input::placeholder { color:var(--faint); }
+  input:focus { outline:none; border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-soft); }
+  input:focus-visible { box-shadow:0 0 0 2px var(--acc); }
+  :focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
+  input.bad { border-color:var(--bad); box-shadow:0 0 0 3px var(--bad-soft); }
+
+  .hero { padding:72px 0 8px; text-align:center; position:relative; isolation:isolate; }
+  .hero::before { content:""; position:absolute; z-index:-1; inset:-24px 0 0; pointer-events:none;
+                  background-image:radial-gradient(var(--line2) 1px, transparent 1px); background-size:22px 22px;
+                  -webkit-mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); }
+  .hero .lead { margin:0 auto; }
+  .hero details.how { margin-left:auto; margin-right:auto; }
+  .hero details.how ul { text-align:left; display:inline-block; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:500; color:var(--muted); border:1px solid var(--line);
+          background:var(--surface); border-radius:999px; padding:4px 12px; margin-bottom:20px; }
+  .dim { color:var(--faint); }
+  .feats[hidden] { display:none; }
+  body:not(.fresh) #flow, body.fresh #panorama, body.fresh #late-block, body.fresh .chead .badge, body.fresh .chead .figs, body.fresh .chead .bar { display:none; }
+  .start a { color:var(--acc); }
+  .start { display:none; } body.fresh .start { display:block; margin:0 0 12px; padding:14px 16px; border:1px dashed var(--line2); border-radius:var(--r); color:var(--muted); font-size:13.5px; }
+  .feats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:48px; }
+  .feat { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:18px 20px; }
+  .feat .ico { width:36px; height:36px; display:grid; place-items:center; border-radius:8px; background:var(--sunk); border:1px solid var(--line); color:var(--txt); }
+  .feat h3 { margin:14px 0 4px; font-size:14.5px; font-weight:600; letter-spacing:-.01em; }
+  .feat p { margin:0; color:var(--muted); font-size:13.5px; }
+  .tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+  .tile { display:grid; grid-template-columns:64px minmax(0,1fr); gap:14px; align-items:center; text-align:left; width:100%;
+          background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:16px; font-size:14px; }
+  .tile .nm { font-weight:600; letter-spacing:-.01em; display:block; }
+  .tile .nx { color:var(--muted); font-size:12.5px; display:block; margin:2px 0 8px; }
+  .ring { width:64px; height:64px; position:relative; }
+  .ring svg { width:64px; height:64px; transform:rotate(-90deg); }
+  .ring circle { fill:none; stroke-width:6; }
+  .ring .tr { stroke:var(--sunk); } .ring .er { stroke-linecap:round; transition:stroke-dasharray .28s cubic-bezier(.23,1,.32,1); }
+  .ring .mk { stroke:var(--txt); stroke-width:10; }
+  .ring b { position:absolute; inset:0; display:grid; place-items:center; font-size:15px; font-weight:650; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .focus { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 24px; align-items:center; margin:0;
+           background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:20px 22px; }
+  .focus[hidden] { display:none; }
+  .focus .k { grid-column:1 / -1; color:var(--muted); font-size:12.5px; }
+  .focus .t { font-size:22px; font-weight:650; letter-spacing:-.02em; line-height:1.2; }
+  .focus .s { color:var(--muted); font-size:13.5px; margin-top:4px; }
+  .focus .need { text-align:right; }
+  .focus .need .v { font-size:30px; font-weight:650; letter-spacing:-.02em; line-height:1.1; }
+  .focus .need .u { color:var(--muted); font-size:12px; }
+  .focus .then { grid-column:1 / -1; border-top:1px solid var(--line); margin-top:12px; padding-top:10px; color:var(--muted); font-size:13px; }
+  .focus .then a:hover { color:var(--acc); }
+  .hero.mine .lead, .hero.mine details.how { display:none; }
+  .hero.mine .focus { max-width:680px; margin:28px auto 0; text-align:left; }
+  .more { display:block; width:100%; border:0; border-top:1px solid var(--line); border-radius:0; box-shadow:none; padding:10px; color:var(--muted); }
+  .cta { display:flex; gap:10px; margin-top:26px; flex-wrap:wrap; justify-content:center; }
+  .btn { display:inline-flex; align-items:center; padding:10px 20px; font-size:14px; border-radius:999px; }
+  .btn:hover { border-color:var(--line2); background:var(--sunk); }
+  .btn.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); }
+  .btn.primary:hover { opacity:.88; background:var(--txt); }
+  .seg { display:inline-flex; background:var(--sunk); border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; }
+  .seg button { border:0; box-shadow:none; background:transparent; color:var(--muted); padding:5px 12px; border-radius:999px; font-size:12.5px; }
+  .seg button:hover { background:transparent; color:var(--txt); }
+  .seg button .c { color:var(--faint); margin-left:5px; font-variant-numeric:tabular-nums; }
+  .seg button[aria-pressed="true"] { background:var(--surface); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .hint.below { margin:-4px 0 12px; display:block; color:var(--muted); font-size:13px; }
+  h1 { font-size:clamp(38px,6.4vw,64px); line-height:1.02; letter-spacing:-.04em; font-weight:700; margin:0 0 16px; }
+  .lead { color:var(--muted); font-size:16px; max-width:60ch; margin:0; }
+  details.how { margin-top:14px; max-width:680px; }
+  details.how summary, .exthow summary, .pastebox summary { cursor:pointer; color:var(--muted); font-size:13px; font-weight:500; }
+  details.how summary:hover, .exthow summary:hover { color:var(--txt); }
+  .exthow[open] summary { margin-bottom:12px; }
+  .exthow + .exthow, .exthow + .pastebox, .canvasgo + .exthow { margin-top:8px; }
+  .canvasgo { align-items:center; margin:0 0 14px; } .canvasgo .muted { font-size:13px; }
+  .btn.bm { cursor:grab; border-style:dashed; border-color:var(--acc); color:var(--acc); padding:5px 14px; font-size:13px; }
+  .exthow code { font:12px var(--mono); background:var(--sunk); border:1px solid var(--line); border-radius:6px; padding:1px 5px; }
+  .exthow a { color:var(--acc); }
+  details.how ul { color:var(--muted); font-size:13px; padding-left:18px; margin:8px 0 0; }
+
+  section.block { margin-top:44px; }
+  .bhead { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .bhead h2 { font-size:15px; font-weight:650; letter-spacing:-.01em; margin:0; }
+  .bhead .hint { color:var(--muted); font-size:13px; }
+
+  .list { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden; }
+  .row { display:grid; grid-template-columns:92px minmax(0,1fr) 190px 90px; gap:16px; align-items:center; padding:12px 16px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:none; }
+  .row.head { padding-top:9px; padding-bottom:9px; background:var(--sunk); color:var(--muted); font-size:12px; font-weight:500; }
+  .row .title { font-weight:500; overflow-wrap:anywhere; }
+  .row .sub, .src { display:block; color:var(--muted); font-size:12.5px; }
+  .row .sub a:hover, a.title:hover { color:var(--acc); }
+  .row .wide > .badge { margin-top:4px; }
+  .empty { padding:18px 16px; color:var(--muted); }
+
+  .when { display:flex; flex-direction:column; gap:2px; }
+  .when .d { font-weight:600; }
+  .when .rel { font-size:12px; color:var(--muted); }
+  .when .rel.soon { color:var(--bad); font-weight:500; } .when .rel.week { color:var(--warn); font-weight:500; }
+  .flag { color:var(--warn); cursor:help; margin-left:4px; display:inline-flex; vertical-align:-1px; }
+  .vs { display:flex; align-items:center; gap:8px; margin-top:5px; cursor:help; }
+  .vsbar { position:relative; width:84px; height:6px; border-radius:999px; background:var(--sunk); flex-shrink:0; }
+  .vsbar i { position:absolute; top:0; bottom:0; }
+  .vsbar .rng { background:var(--line2); border-radius:999px; }
+  .vsbar .mean { width:2px; background:var(--muted); }
+  .vsbar .you { width:8px; height:8px; top:-1px; margin-left:-4px; border-radius:50%; background:var(--acc-fill); box-shadow:0 0 0 2px var(--surface); }
+  .vst { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .items [data-label="Precisa"] { flex-wrap:wrap; }
+  .cdate { font-size:12px; color:var(--acc); cursor:help; } .cdate:empty { display:none; }
+  .acc { color:var(--acc); background:var(--acc-soft); } .check + .badge { margin-left:8px; }
+
+  .badge { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:550; padding:2px 9px; border-radius:6px;
+           border:1px solid transparent; font-variant-numeric:tabular-nums; }
+  .ok { color:var(--ok); background:var(--ok-soft); } .warn { color:var(--warn); background:var(--warn-soft); }
+  .bad { color:var(--bad); background:var(--bad-soft); }
+  .badge.ok { color:var(--ok-ink); } .badge.warn { color:var(--warn-ink); } .badge.bad { color:var(--bad-ink); } .badge.acc { color:var(--acc-ink); } .done { color:var(--muted); background:var(--sunk); }
+  .muted { color:var(--muted); }
+  .note { display:block; font-size:12px; margin-top:3px; color:var(--warn); }
+
+  .fonte { display:none; }
+  body.src-on .fonte { display:block; }
+
+  .courses { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden; }
+  .card { border-top:1px solid var(--line); }
+  .card:first-child { border-top:0; }
+  @media (hover:hover) and (pointer:fine) { .chead:hover { background:var(--sunk); } }
+  .card.open .chead { background:var(--sunk); }
+  .chead { display:grid; grid-template-columns:auto minmax(0,1fr) auto 140px 136px; align-items:center; gap:18px; padding:14px 18px; cursor:pointer; user-select:none; }
+  .chead:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
+  .chead .cname { display:block; font-size:15px; font-weight:600; letter-spacing:-.01em; }
+  .csub { display:block; color:var(--muted); font-size:12.5px; margin-top:1px; }
+  .chead .badge { justify-self:end; white-space:nowrap; }
+  .chev { color:var(--faint); display:grid; transition:transform .2s cubic-bezier(.23,1,.32,1); }
+  .card.open .chev { transform:rotate(90deg); }
+  .figs { display:flex; gap:18px; }
+  .figs div { display:flex; flex-direction:column; min-width:52px; }
+  .figs .k { color:var(--muted); font-size:11.5px; }
+  .figs .v { font-size:15px; font-weight:600; letter-spacing:-.01em; }
+  .bar { height:6px; background:var(--sunk); border-radius:999px; position:relative; overflow:hidden; }
+  .bar span { position:absolute; top:0; bottom:0; transition:width .28s cubic-bezier(.23,1,.32,1), left .28s cubic-bezier(.23,1,.32,1); }
+  .bar .g { left:0; background:var(--acc-fill); border-radius:999px; }
+  .bar .f { background:color-mix(in srgb, var(--acc-fill) 24%, transparent); }
+  .bar .m { width:2px; background:var(--txt); }
+  .msg { font-size:13px; padding:9px 12px; border-radius:8px; }
+  .detail > .msg { margin:14px 18px 0; }
+  .detail { display:none; border-top:1px solid var(--line); }
+  .card.open .detail { display:block; }
+  .formula { padding:12px 18px 0; color:var(--muted); font-size:12.5px; }
+  .items .row { grid-template-columns:minmax(0,1fr) 84px 128px 190px 60px; padding-top:10px; padding-bottom:10px; }
+  .items [data-label="Nota"] { display:flex; align-items:center; white-space:nowrap; }
+  .items .row.graded .title { color:var(--muted); }
+  .check { color:var(--muted); font-size:12.5px; }
+  .items .row.head { background:transparent; border-top:1px solid var(--line); margin-top:10px; }
+  .scale { color:var(--muted); font-size:12px; margin-left:6px; }
+
+  .late { display:flex; flex-wrap:wrap; gap:6px; }
+  .import { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px 20px; box-shadow:var(--shadow); }
+  .steps { margin:0 0 14px; padding-left:20px; color:var(--muted); line-height:2; }
+  .steps li::marker { color:var(--txt); font-weight:600; }
+  .steps.ext { line-height:1.7; display:grid; gap:12px; }
+  .steps.ext b { color:var(--txt); font-weight:600; }
+  .steps.ext .acts { margin-top:8px; }
+  .exthelp, .pastebox { margin-top:8px; }
+  .exthelp summary { cursor:pointer; color:var(--acc); font-size:13px; }
+  .exthelp ol { margin:6px 0 4px; padding-left:18px; font-size:13.5px; }
+  .exthelp a { color:var(--acc); }
+  .pastebox textarea { margin-top:10px; }
+  textarea { width:100%; font:12.5px/1.4 var(--mono); color:var(--txt); background:var(--sunk); border:1px solid var(--line2); border-radius:8px; padding:10px 12px; resize:vertical; }
+  textarea:focus { outline:none; border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-soft); }
+  .acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .acts.backup { align-items:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); font-size:13.5px; }
+  #importout:not(:empty) { margin-top:14px; }
+  .imp-list { list-style:none; margin:10px 0; padding:0; display:grid; gap:4px; font-size:13.5px; }
+  .imp-list li { display:flex; gap:10px; justify-content:space-between; border-bottom:1px solid var(--line); padding:5px 0; }
+  .imp-list .chg { color:var(--warn); }
+  .late .badge { font-weight:500; }
+  .late-row { grid-template-columns:220px minmax(0,1fr) 90px !important; }
+.pend-row { grid-template-columns:92px minmax(0,1fr) !important; }
+
+
+  /* hero, openbot.run style: availability row, logo inside the headline */
+  .avail { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; font-size:12px; color:var(--muted);
+           border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:3px 12px 3px 3px; margin-bottom:26px; }
+  .avail .new { background:var(--txt); color:var(--bg); font-weight:700; font-size:10.5px; letter-spacing:.04em; border-radius:999px; padding:2px 8px; }
+  .avail b { color:var(--txt); font-weight:500; } .avail i { width:1px; height:12px; background:var(--line2); }
+  .hlogo { width:.92em; height:.92em; vertical-align:-.12em; margin:0 .04em; filter:drop-shadow(0 8px 24px rgba(0,0,0,.25)); }
+  .btn svg { margin-right:7px; }
+
+  /* demo window: a scripted import, like the product videos on openbot.run */
+  .demo-slot:empty { display:none; }
+  .demo-slot { margin-top:44px; }
+  .win { text-align:left; border:1px solid var(--line); border-radius:14px; background:var(--bg); box-shadow:0 30px 80px rgba(0,0,0,.35); overflow:hidden; }
+  .win-bar { display:flex; align-items:center; gap:14px; height:40px; padding:0 14px; border-bottom:1px solid var(--line); background:var(--surface); font-size:12.5px; }
+  .dots { display:flex; gap:7px; } .dots i { width:11px; height:11px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
+  .win-bar .tab { display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:8px; background:var(--sunk); color:var(--txt); }
+  .win-bar .sp { flex:1; } .win-bar .demo-tag { color:var(--faint); }
+  .win-body { display:grid; grid-template-columns:230px minmax(0,1fr); height:460px; }
+  .win-side { border-right:1px solid var(--line); background:var(--surface); padding:12px 10px; overflow:hidden; }
+  .win-side h4 { margin:6px 8px 8px; font-size:11.5px; color:var(--faint); font-weight:600; }
+  .srow { display:grid; grid-template-columns:30px minmax(0,1fr); gap:10px; align-items:center; padding:7px 8px; border-radius:10px; }
+  .srow .av { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:10px; font-weight:800; color:#141414; }
+  .srow b { display:block; font-size:13px; font-weight:600; } .srow small { display:block; font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .srow small.on { color:var(--txt); }
+  .win-main { position:relative; padding:18px 22px; overflow:hidden; display:flex; flex-direction:column; gap:12px; justify-content:flex-end; min-height:0; }
+  .win-main > * { flex-shrink:0; }   /* new messages push older ones up and out, like a chat */
+  .bub { max-width:78%; padding:10px 14px; border-radius:16px; font-size:13.5px; line-height:1.5; }
+  .bub.me { align-self:flex-end; background:var(--sunk); }
+  .bub.bot { align-self:flex-start; background:var(--surface); border:1px solid var(--line); }
+  .bub.bot ul { margin:6px 0 0; padding-left:18px; } .bub.bot li { margin:2px 0; }
+  .steps-card { border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:6px 4px; max-width:560px; }
+  .steps-head { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; padding:6px 12px 8px; }
+  .steps-head .cnt { font-weight:500; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; display:inline-flex; gap:6px; align-items:center; }
+  .stp { display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:10px; align-items:start; padding:5px 12px; font-size:13px; }
+  .stp .sub { display:block; color:var(--muted); font-size:12px; margin-top:1px; }
+  .stp .t { color:var(--faint); font-size:12px; font-variant-numeric:tabular-nums; }
+  .ico-s { width:16px; height:16px; margin-top:1px; display:grid; place-items:center; }
+  .spin { width:14px; height:14px; border-radius:50%; border:2px solid color-mix(in srgb, var(--acc) 25%, transparent); border-top-color:var(--acc); animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .ok-ic { color:var(--ok); }
+  .enter { animation:enter .32s cubic-bezier(.23,1,.32,1) both; }
+  @keyframes enter { from { opacity:0; transform:translateY(6px) scale(.98); filter:blur(2px); } }
+  .typing { display:inline-flex; gap:3px; } .typing i { width:5px; height:5px; border-radius:50%; background:var(--muted); animation:blink 1s infinite; }
+  .typing i:nth-child(2) { animation-delay:.15s; } .typing i:nth-child(3) { animation-delay:.3s; }
+  @keyframes blink { 50% { opacity:.25; } }
+  .apply-demo { align-self:flex-start; }
+  .apply-demo .btn { animation:glow 1.6s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow:0 0 0 6px color-mix(in srgb, var(--brand) 30%, transparent); } }
+  .win-main .fade { transition:opacity .25s ease-out; }
+
+  /* Canvas -> Quanto falta diagram */
+  .flow { text-align:center; margin-top:80px; }
+  .flow h2 { font-size:clamp(28px,4.6vw,46px); line-height:1.08; letter-spacing:-.035em; margin:0 0 12px; font-weight:700; }
+  .flow p { color:var(--muted); margin:0 auto; max-width:56ch; font-size:15.5px; }
+  .flow-row { display:flex; align-items:center; justify-content:center; gap:0; margin-top:84px; }
+  .node { display:grid; justify-items:center; gap:8px; font-size:12.5px; color:var(--muted); position:relative; }
+  .node .sq { width:64px; height:64px; border-radius:18px; display:grid; place-items:center; }
+  .node .canvas { background:#e4473a; color:#fff; font-weight:800; font-size:22px; }
+  .node .tip { position:absolute; bottom:calc(100% + 10px); white-space:nowrap; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:6px 10px; font-size:12px; color:var(--txt); }
+  .wire { width:min(260px,30vw); height:2px; margin:0 10px 22px; background-image:radial-gradient(circle, var(--line2) 1.2px, transparent 1.6px); background-size:10px 2px; position:relative; overflow:hidden; }
+  .wire::after { content:""; position:absolute; top:-3px; left:0; width:8px; height:8px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); animation:travel 2.2s cubic-bezier(.65,0,.35,1) infinite; }
+  @keyframes travel { from { transform:translateX(-10px); } to { transform:translateX(min(270px,31vw)); } }
+
+  /* real import: the same step list, with the real counts */
+  .impsteps { margin-bottom:12px; }
+  @media (max-width:820px) { .win-body { grid-template-columns:minmax(0,1fr); height:400px; } .win-side { display:none; } .bub { max-width:92%; } }
+  @media (prefers-reduced-motion:reduce) { .spin, .wire::after, .apply-demo .btn, .typing i { animation:none !important; } .enter { animation:none; } }
+  footer { margin:56px 0 40px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px; line-height:1.7; }
+  footer p { margin:0 0 6px; max-width:760px; }
+  .linkbtn { border:0; box-shadow:none; background:none; padding:0; color:var(--acc); font-size:12.5px; margin-top:4px; }
+
+  @media (max-width:820px) {
+    .focus { grid-template-columns:minmax(0,1fr); } .focus .need { text-align:left; }
+    .sem { display:none; } .nav { display:none; }
+    .feats { grid-template-columns:minmax(0,1fr); } .tiles { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    #summary { order:3; max-width:100%; overflow-x:auto; scrollbar-width:none; }
+    #summary button { flex-shrink:0; }
+    .chead { grid-template-columns:auto minmax(0,1fr) auto; gap:6px 12px; }
+    .chead .figs { grid-column:2 / -1; grid-row:2; }
+    .chead .bar { grid-column:2 / -1; grid-row:3; }
+    .items .row > [data-label="Mín"]:empty { display:none; }
+    .row, .items .row, .late-row, .pend-row { grid-template-columns:minmax(0,1fr) auto !important; gap:8px 12px; padding:14px 16px; }
+    .row.head { display:none; }
+    .row > .wide { grid-column:1 / -1; order:-1; }
+    .row > [data-label="Data"] { flex-direction:row; align-items:baseline; gap:8px; }
+    .row > [data-label="Precisa"], .row > [data-label="Mín"], .row > [data-label="Nota"] { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .row > [data-label="Precisa"]::before, .row > [data-label="Mín"]::before, .row > [data-label="Nota"]::before, .row > [data-label="Vale"]::before {
+      content:attr(data-label); font-size:12px; color:var(--faint); font-family:var(--sans); }
+  }
+  @media (max-width:520px) {
+    .tile { grid-template-columns:52px minmax(0,1fr); gap:10px; padding:12px; }
+    .ring, .ring svg { width:52px; height:52px; } .ring b { font-size:13.5px; }
+    .tile .badge { font-size:11.5px; white-space:nowrap; padding:2px 7px; }
+    .wrap { padding:0 16px; } .hero { padding-top:40px; } .brand b { display:none; } .hide-sm { display:none; }
+  }
+  @media (pointer:coarse) {
+    button, .btn, input, .seg button, .nav a { min-height:44px; }
+    .meta { height:44px; } .meta input { min-height:0; } .step { width:36px; height:36px; min-height:0; }
+    .row .sub a { display:inline-block; padding:6px 0; }
+  }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } html { scroll-behavior:auto; } }
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Quanto falta</b></a><span class="sem">PUCPR · 2026/2</span>
+  <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#materias">Matérias</a><a href="#proximas">Próximas</a></nav>
+  <div class="spacer"></div>
+  <div class="meta" title="Média final para passar. Na PUCPR é 7,0; mude se a sua matéria pedir outra.">
+    <span class="ml">Meta</span>
+    <button class="step" id="metadown" type="button" aria-label="Diminuir a meta em 0,5">−</button>
+    <input id="meta" inputmode="decimal" value="7" aria-label="Meta para passar (média final)">
+    <button class="step" id="metaup" type="button" aria-label="Aumentar a meta em 0,5">+</button>
+  </div>
+  <button class="iconbtn" id="fbbtn" type="button" title="Mandar um feedback para o Enzo"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg><span class="hide-sm">Feedback</span></button>
+  <a class="iconbtn" href="https://github.com/Bossmann007/quanto-falta-pucpr" target="_blank" rel="noopener noreferrer" title="Código no GitHub" aria-label="Código no GitHub"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+  <a class="btn primary sm" href="#canvas">Importar</a>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="avail"><span class="new">NOVO</span><span>Funciona no</span><b>Chrome</b><b>Brave</b><b>Edge</b><i></i><b>Canvas PUCPR 2026/2</b></div>
+    <h1 id="h1"><span id="h1a">Quanto falta</span> <svg class="hlogo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><br><span class="dim" id="h1b">pra passar?</span></h1>
+    <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
+    <div class="focus" id="focus" hidden></div>
+    <div class="cta"><a class="btn primary" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Baixar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
+    <details class="how"><summary>Como funciona</summary><ul>
+      <li>Lance a nota na escala do professor (aparece ao lado do campo). Vazio = ainda não saiu.</li>
+      <li><b>Precisa</b>: a mesma fração da nota máxima em tudo que falta, proporcional ao peso de cada item.</li>
+      <li><b>Mín</b>: o mínimo naquele item se você tirar nota cheia em todo o resto.</li>
+      <li>Avaliação com data passada e sem nota conta 0 até você lançar; aparece "≈" como estimativa.</li>
+      <li>Pesos dos Planos de Ensino; confira sempre no Canvas. Não é um sistema oficial da PUCPR.</li>
+    </ul></details>
+    <div class="demo-slot" id="demo-hero"></div>
+  </header>
+
+
+
+  <section class="block" id="panorama">
+    <div class="bhead"><h2>Panorama</h2><span class="hint">anel = pontos garantidos de 10; a marca é a sua meta</span></div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="block" id="todo" hidden>
+    <div class="bhead"><h2>Para entregar</h2><span class="hint" id="todoat"></span></div>
+    <div class="list" id="todolist"></div>
+  </section>
+
+  <section class="block" id="avisos" hidden>
+    <div class="bhead"><h2>Avisos dos professores</h2><span class="hint" id="avisosat"></span></div>
+    <div class="list" id="avisolist"></div>
+  </section>
+
+  <section class="block" id="materias">
+    <div class="bhead"><h2>Matérias</h2><div class="seg" role="group" aria-label="Filtrar matérias" id="summary"></div><button id="allbtn" type="button">Abrir todas</button></div>
+    <p class="start">Ainda sem notas. Abra uma matéria e lance a primeira, ou <a href="#canvas">importe do Canvas</a>: os números aparecem aqui.</p>
+    <div class="courses" id="cards"></div>
+  </section>
+
+  <section class="block" id="proximas">
+    <div class="bhead"><h2>Próximas avaliações</h2>
+      <button id="icsbtn" type="button" title="Baixa um arquivo .ics com as avaliações e entregas: abra no Google Agenda, Apple Calendário ou Outlook">Exportar para o calendário</button><div class="seg" role="group" aria-label="Filtrar avaliações" id="filter"><button type="button" data-f="all" aria-pressed="true">Todas</button><button type="button" data-f="exam" aria-pressed="false">Só provas</button><button type="button" data-f="week" aria-pressed="false">Próximos 7 dias</button></div></div>
+    <p class="hint below">≈ estimativa e * provisório: até você lançar as notas que já saíram.</p>
+    <div class="list" id="next"></div>
+  </section>
+
+  <section class="block" id="pendentes">
+    <div class="bhead"><h2>Entregas atrasadas no Canvas</h2><span class="hint" id="pendat"></span></div>
+    <div class="list" id="pend"></div>
+  </section>
+
+  <section class="block" id="late-block">
+    <div class="bhead"><h2>Faltam notas</h2><span class="hint">avaliações que já passaram sem nota: contam 0 até você lançar</span></div>
+    <div class="list" id="late"></div>
+  </section>
+
+  <section class="block" id="canvas">
+    <div class="bhead"><h2>Importar do Canvas</h2><span class="hint">sem senha e sem token: suas notas não passam por servidor nenhum</span></div>
+    <div class="import">
+      <div class="acts canvasgo"><a class="btn" href="https://pucpr.instructure.com/" target="_blank" rel="noopener noreferrer">Abrir o Canvas da PUCPR ↗</a><span class="muted">entre, clique na extensão (ou no favorito) e volte aqui</span></div>
+      <details class="exthow" id="exthow"><summary>Como importar pela extensão</summary>
+      <ol class="steps ext">
+        <li><b>Instale a extensão Quanto falta</b> no Chrome, Brave ou Edge (no computador).
+          <div class="acts"><a class="btn primary" id="extdl" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip">Baixar extensão</a></div>
+          <details class="exthelp"><summary>Como instalar (1 minuto)</summary><ol>
+            <li>Descompacte o arquivo baixado: fica uma pasta <b>quanto-falta-extension</b>.</li>
+            <li>Abra <b>chrome://extensions</b> (no Brave, brave://extensions; no Edge, edge://extensions).</li>
+            <li>Ligue o <b>Modo do desenvolvedor</b>, clique em <b>Carregar sem compactação</b> e escolha a pasta.</li>
+            <li>Fixe o ícone Q na barra (ícone de quebra-cabeça → alfinete).</li>
+          </ol><p class="muted">O código é aberto e só lê suas notas no Canvas: <a href="https://github.com/Bossmann007/quanto-falta-pucpr/tree/main/extension">veja a extensão no GitHub</a>.</p></details></li>
+        <li><b>Abra o Canvas da PUCPR</b>, já logado, clique no ícone Q e em <b>Importar notas do Canvas</b>.</li>
+        <li><b>Esta página abre sozinha</b> com as notas: confira e clique em Aplicar.</li>
+      </ol></details>
+      <details class="exthow" id="exthow-up"><summary>Como atualizar a extensão</summary>
+        <ol class="steps ext">
+          <li><b>Baixe a versão nova</b> pelo mesmo botão (sempre a mais recente).</li>
+          <li><b>Descompacte por cima da pasta antiga</b>, substituindo os arquivos.</li>
+          <li>Em <b>chrome://extensions</b>, clique em <b>↻ Recarregar</b> no Quanto falta. Se você apagou a pasta antiga, remova a extensão e carregue a pasta nova.</li>
+        </ol>
+        <p class="muted">Suas notas não se perdem: elas ficam salvas neste site, não na extensão. A versão instalada aparece embaixo do botão da extensão.</p>
+      </details>
+      <details class="exthow" id="bmhow"><summary>Sem extensão? Use um favorito</summary>
+        <ol class="steps ext">
+          <li>Arraste este botão para a barra de favoritos: <a id="bm" class="btn bm" title="Arraste para a barra de favoritos">Quanto falta</a>
+            <span class="muted">(não aparece a barra? <b>Cmd+Shift+B</b> no Mac ou <b>Ctrl+Shift+B</b> no Windows)</span></li>
+          <li>Ou crie à mão: <button id="bmcopy" class="btn sm" type="button">Copiar código do favorito</button>, adicione qualquer página aos favoritos, edite e troque o endereço pelo código.</li>
+          <li><b>Abra o Canvas</b> e clique no favorito: ele lê as notas e mostra <b>Abrir no Quanto falta</b>.</li>
+        </ol>
+        <p class="muted">Lê o mesmo que a extensão, com o seu login do Canvas, e não envia nada para servidor nenhum. Funciona em qualquer navegador de computador, inclusive Safari e Firefox.</p>
+      </details>
+      <details class="exthow" id="apitoken"><summary>Prefere usar o seu token da API do Canvas?</summary>
+        <ol class="steps ext">
+          <li>No Canvas: <b>Conta → Configurações → + Novo token de acesso</b>. Copie o token.</li>
+          <li>Baixe o script <a href="https://github.com/Bossmann007/quanto-falta-pucpr/blob/main/tools/canvas-export.py">canvas-export.py</a> e o <a href="https://github.com/Bossmann007/quanto-falta-pucpr/blob/main/tools/.env.example">.env.example</a> para a mesma pasta. Renomeie para <code>.env</code> e cole o token depois de <code>CANVAS_TOKEN=</code> (ou deixe sem: o script pede o token sem mostrar na tela).</li>
+          <li>Rode no seu computador: <code>python3 canvas-export.py | pbcopy</code> (Mac) ou <code>python canvas-export.py &gt; notas.json</code>.</li>
+          <li>Cole o texto em <b>Copiei o texto</b> logo abaixo e clique em Ler notas.</li>
+        </ol>
+        <p class="muted">O token dá acesso à sua conta inteira: ele fica só no seu computador, o script só lê, e nada passa por este site. Nunca compartilhe o arquivo <code>.env</code>; apague o token no Canvas quando terminar. Pelo navegador não dá: o Canvas da PUCPR bloqueia chamadas de outros sites.</p>
+      </details>
+      <details class="pastebox"><summary>Copiei o texto pela extensão ou pelo script</summary>
+        <textarea id="paste" rows="3" placeholder="Cole aqui o texto copiado pela extensão" aria-label="Texto copiado pela extensão" spellcheck="false"></textarea>
+        <div class="acts"><button id="readbtn" class="btn primary" type="button">Ler notas</button><button id="pastebtn" class="btn" type="button">Colar da área de transferência</button></div>
+      </details>
+      <div class="acts backup"><span class="muted">Backup das notas:</span><button id="exportbtn" class="btn" type="button">Exportar arquivo</button><button id="importfilebtn" class="btn" type="button">Importar arquivo</button><input id="importfile" type="file" accept=".json,application/json" hidden></div>
+      <div id="importout" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+
+<dialog id="fb" aria-labelledby="fbtitle">
+  <form method="dialog" class="fbform">
+    <h2 id="fbtitle">Feedback para o Enzo</h2>
+    <p class="muted">O que você mudaria, uma ideia ou algo que deu errado. A mensagem abre pronta no GitHub do projeto; lá é só clicar em <b>Create</b>.</p>
+    <textarea id="fbtext" rows="5" maxlength="1200" placeholder="Ex.: queria ver a média geral do semestre" aria-label="Sua mensagem"></textarea>
+    <p class="muted fine">Precisa de uma conta no GitHub (é grátis). A mensagem fica pública: não escreva notas, tokens nem dados pessoais.</p>
+    <div class="acts"><button id="fbsend" class="btn primary" type="button">Abrir no GitHub</button><button class="btn" value="cancel">Cancelar</button></div>
+  </form>
+</dialog>
+</div>
+
+<script id="core">
+// Pure functions and data only: no DOM, no storage, no network. Tested by a node script that evals this block.
+const NotasCore = (() => {
+  const EPS = 1e-9;
+  const r9 = x => Math.round(x * 1e9) / 1e9;
+  const P = c => "Plano de Ensino de " + c;
+
+  // Every item: max = points of the FINAL grade (course sum = 10); inMax = the scale the professor uses for that grade.
+  // date = the date used; dateSrc = where it came from; alt = a conflicting date; unv = date not verified.
+  const COURSES = [
+    { id:"imp", name:"Programação Imperativa", formula:"Pesos diretos na nota do semestre (10/30/10/10/40%)", src:P("Programação Imperativa") + " l.335-371",
+      items:[
+        { id:"ex1", name:"Exercícios do RA1 (TDE 1, TDE 2, PBL01–05)", max:1.0, inMax:10, date:"2026-09-13", dateSrc:"Plano: de 5/8 a 13/9", wSrc:"Plano l.341: 10%" },
+        { id:"p1", name:"Prova do RA1", max:3.0, inMax:10, exam:true, date:"2026-09-16", dateSrc:"Plano", wSrc:"Plano l.359: 30%" },
+        { id:"ex2", name:"Exercícios do RA2 (PBL06–10)", max:1.0, inMax:10, date:"2026-10-28", dateSrc:"Plano: de 23/9 a 28/10", alt:"Canvas: PBL10 até 03/11", unv:true, wSrc:"Plano l.360: 10%" },
+        { id:"t2", name:"Trabalho do RA2 (equipe)", max:1.0, inMax:10, date:"2026-11-17", dateSrc:"Canvas: 17/11 23:59", alt:"Plano l.349: 18/11", wSrc:"Plano l.361: 10%" },
+        { id:"p2", name:"Prova do RA2", max:4.0, inMax:10, exam:true, date:"2026-11-11", dateSrc:"Canvas: 11/11 14:10; Plano l.365", wSrc:"Plano l.371: 40%" } ] },
+    { id:"abd", name:"Arquitetura de Banco de Dados",
+      formula:"Final = 25% RA1 + 50% RA2 + 25% RA3; cada RA = 50% prova + 40% PjBL + 10% TDE. Notas em pontos da final.",
+      src:P("Arquitetura de Banco de Dados") + " l.365-446",
+      items:[
+        { id:"pj1", name:"RA1 · PjBL Parte I", max:1.0, inMax:1.0, date:"2026-09-03", dateSrc:"Plano", wSrc:"Plano: 40% de RA1 (25%) = 1,0 pt" },
+        { id:"s1", name:"RA1 · Somativa individual I", max:1.25, inMax:1.25, exam:true, date:"2026-09-10", dateSrc:"Plano", wSrc:"Plano: 50% de RA1 = 1,25 pt" },
+        { id:"tde1", name:"RA1 · TDE", max:0.25, inMax:0.25, date:"2026-11-12", dateSrc:"Plano l.436: TDE 12/11", unv:true, wSrc:"Plano: 10% de RA1 = 0,25 pt" },
+        { id:"pj2", name:"RA2 · PjBL Parte II", max:2.0, inMax:2.0, date:"2026-10-15", dateSrc:"Plano", wSrc:"Plano: 40% de RA2 (50%) = 2,0 pt" },
+        { id:"s2", name:"RA2 · Somativa II + TDE do RA2 (lance a soma)", max:3.0, inMax:3.0, exam:true, date:"2026-10-22", dateSrc:"Plano l.396",
+          wSrc:"Plano: 2,5 (prova) + 0,5 (TDE do RA2)" },
+        { id:"pj3", name:"RA3 · PjBL Parte III (entrega final)", max:1.0, inMax:1.0, date:"2026-11-18", dateSrc:"Canvas: 18/11 10:40", alt:"Plano l.426: 19/11", wSrc:"Plano: 40% de RA3 (25%) = 1,0 pt" },
+        { id:"s3", name:"RA3 · Somativa individual III", max:1.25, inMax:1.25, exam:true, date:"2026-11-19", dateSrc:"Plano l.416", wSrc:"Plano: 50% de RA3 = 1,25 pt" },
+        { id:"tde3", name:"RA3 · TDE", max:0.25, inMax:0.25, date:"2026-11-12", dateSrc:"Plano l.436: TDE 12/11", unv:true, wSrc:"Plano: 10% de RA3 = 0,25 pt" } ] },
+    { id:"rpnd", name:"Resolução de Problemas de Natureza Discreta", formula:"Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)",
+      src:P("RPND") + " l.315-374",
+      items:[
+        { id:"as1", name:"RA1 · AS 01 (grupo)", max:0.3, inMax:0.5, date:"2026-08-17", dateSrc:"Plano l.319", wSrc:"Plano: 0,5 de 10 no RA1" },
+        { id:"as2", name:"RA1 · AS 02 (grupo)", max:0.3, inMax:0.5, date:"2026-08-26", dateSrc:"Plano l.325", wSrc:"Plano: 0,5 de 10 no RA1" },
+        { id:"as3", name:"RA1 · AS 03 (grupo)", max:0.6, inMax:1.0, date:"2026-09-09", dateSrc:"Plano l.331", wSrc:"Plano: 1,0 de 10 no RA1" },
+        { id:"as4", name:"RA1 · AS 04 (grupo)", max:0.6, inMax:1.0, date:"2026-09-23", dateSrc:"Plano l.337", wSrc:"Plano: 1,0 de 10 no RA1" },
+        { id:"as5", name:"RA1 · AS 05 (individual)", max:4.2, inMax:7.0, exam:true, date:"2026-09-28", dateSrc:"Plano l.343", wSrc:"Plano: 7,0 de 10 no RA1" },
+        { id:"as6", name:"RA2 · AS 06 (grupo)", max:0.6, inMax:1.5, date:"2026-10-21", dateSrc:"Plano l.349", wSrc:"Plano: 1,5 de 10 no RA2" },
+        { id:"as7", name:"RA2 · AS 07 (grupo)", max:0.6, inMax:1.5, date:"2026-11-11", dateSrc:"Canvas: 11/11 14:10; Plano l.355", wSrc:"Plano: 1,5 de 10 no RA2" },
+        { id:"as8", name:"RA2 · AS 08 (individual)", max:2.8, inMax:7.0, exam:true, date:"2026-11-18", dateSrc:"Canvas: 18/11 14:10; Plano l.361", wSrc:"Plano: 7,0 de 10 no RA2" } ] },
+    { id:"web", name:"Programação WEB", formula:"Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE",
+      src:"PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376",
+      items:[
+        { id:"p1", name:"Prova do RA1", max:2.125, inMax:10, exam:true, date:"2026-09-28", dateSrc:"Plano", wSrc:"85% de RA1 (25%)" },
+        { id:"tde", name:"TDE (CRUD, conta nos 3 RAs)", max:1.5, inMax:10, date:"2026-11-06", dateSrc:"PDF do trabalho: 06/11 07:50", alt:"Plano l.368: 09/nov", unv:true, wSrc:"15% de cada RA" },
+        { id:"p23", name:"Prova do RA2 e do RA3 (uma prova, conta nos dois)", max:6.375, inMax:10, exam:true, date:"2026-11-13", dateSrc:"Cronograma: 13/11", alt:"Plano l.358: 16/nov", unv:true, wSrc:"85% de RA2 (40%) + 85% de RA3 (35%) = 3,4 + 2,975" } ] },
+    { id:"etica", name:"Ética", formula:"Final = 70% RA1 + 30% RA2; notas em pontos da final", src:P("Ética") + " l.208 e l.261",
+      items:[
+        { id:"ra1", name:"RA1 (prova e atividades)", max:7.0, inMax:7.0, exam:true, date:"2026-10-01", dateSrc:"Plano", wSrc:"Plano l.208: 70%" },
+        { id:"ra2", name:"RA2 · TDE vídeo (TBL)", max:3.0, inMax:3.0, date:"2026-11-10", dateSrc:"Prof.: link 10/11, apresenta 13/11", unv:true, wSrc:"Plano l.261: 30%" } ] },
+    { id:"cscf", name:"Conectividade em Sistemas Ciberfísicos", formula:"Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)", src:P("Conectividade") + " l.288-306 e l.554",
+      items:[
+        { id:"as1", name:"RA1 · Avaliação Somativa 1 (nota do RA1)", max:5.0, inMax:10, exam:true, date:"2026-09-21", dateSrc:"Data não confirmada no Plano", unv:true, wSrc:"Plano l.294: AS1 = 100% do RA1" },
+        { id:"as2", name:"RA2 · Avaliação Somativa 2", max:3.0, inMax:10, exam:true, date:"2026-11-09", dateSrc:"Aviso em aula: 09/11 07:50", unv:true, wSrc:"Plano l.300: 60% do RA2" },
+        { id:"pj", name:"RA2 · Projeto PjBL (MQTT)", max:2.0, inMax:10, date:"2026-11-09", dateSrc:"Canvas: 09/11 (hora a conferir)", unv:true, wSrc:"Plano l.306: 40% do RA2" } ] }
+  ];
+
+  // Public build: everyone starts empty; grades live only in each visitor's browser.
+  const SEED = {};
+
+  // "" or null -> null (not graded); bad text -> NaN; accepts a decimal comma.
+  function parseNum(raw) {
+    if (raw == null) return null;
+    const s = String(raw).trim().replace(",", ".");
+    if (s === "") return null;
+    return /^(\d+(\.\d*)?|\.\d+)$/.test(s) ? Number(s) : NaN;
+  }
+  // Points of the final for one grade; NaN when outside 0..inMax.
+  function itemPoints(item, raw) {
+    const n = parseNum(raw);
+    if (n === null) return null;
+    if (Number.isNaN(n) || n > item.inMax + EPS) return NaN;
+    return n / item.inMax * item.max;
+  }
+  const weightSum = c => r9(c.items.reduce((s, it) => s + it.max, 0));
+  const key = (c, it) => c.id + ":" + it.id;
+
+  // today: "YYYY-MM-DD" in local time. An item dated today is still upcoming.
+  function courseState(c, grades, today, target) {
+    let earned = 0, futureMax = 0, lateMax = 0;
+    const future = [], late = [], invalid = [];
+    for (const it of c.items) {
+      const p = itemPoints(it, grades[key(c, it)]);
+      if (Number.isNaN(p)) invalid.push(it);
+      if (p !== null && !Number.isNaN(p)) { earned += p; continue; }
+      if (it.date < today) { late.push(it); lateMax += it.max; }
+      else { future.push(it); futureMax += it.max; }
+    }
+    earned = r9(earned); futureMax = r9(futureMax); lateMax = r9(lateMax);
+    const need = r9(Math.max(0, target - earned));
+    const ceiling = r9(earned + futureMax);            // late items count 0
+    const ceilingIfLate = r9(ceiling + lateMax);       // late items still full
+    let status;
+    if (need <= EPS) status = "garantido";
+    else if (ceilingIfLate < target - EPS) status = "nao-da";
+    else if (ceiling < target - EPS) status = "depende-atrasadas";
+    else status = "precisa";
+    const fraction = need <= EPS ? 0 : futureMax > EPS ? need / futureMax : null;
+    const fractionIfLate = need <= EPS ? 0 : futureMax + lateMax > EPS ? need / (futureMax + lateMax) : null;
+    return { earned, futureMax, lateMax, need, ceiling, ceilingIfLate, status, fraction, fractionIfLate,
+             future, late, invalid, provisional: late.length > 0 || invalid.length > 0 };
+  }
+  // Same fraction of each pending item's maximum (so the weight of each item counts). Returned in the item's own scale.
+  function requiredFor(st, item) {
+    if (st.fraction == null) return null;
+    const f = st.fraction;
+    return { f, raw: f * item.inMax, of10: f * 10, impossible: f > 1 + EPS };
+  }
+  // Minimum on this item when every other upcoming item gets full marks.
+  function minimumFor(st, item, target) {
+    const f = Math.max(0, (target - st.earned - (st.futureMax - item.max)) / item.max);
+    return { f, raw: f * item.inMax, impossible: f > 1 + EPS };
+  }
+  function upcoming(courses, grades, today, target) {
+    const out = [];
+    for (const c of courses) {
+      const st = courseState(c, grades, today, target);
+      for (const it of st.future) out.push({ course:c, item:it, st, req:requiredFor(st, it), min:minimumFor(st, it, target) });
+    }
+    return out.sort((a, b) => a.item.date.localeCompare(b.item.date) || a.course.name.localeCompare(b.course.name));
+  }
+  const pad = n => String(n).padStart(2, "0");
+  const localISO = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  function fullMarks(courses) {
+    const g = {};
+    for (const c of courses) for (const it of c.items) g[key(c, it)] = String(it.inMax);
+    return g;
+  }
+
+  // Canvas assignment names per item (canvas/mapping.json, read from one 2026/2 turma on 2026-11-04).
+  // one: one assignment; avg: mean of score/points over all parts; sum: (each part on 0-10) summed times factor, already in the item's scale; pts: scale to use when Canvas lists 0 points; missing ids are typed by hand.
+  const CANVAS = {
+    imp:   { match:"Programação Imperativa", items:{ ex1:{ avg:["TDE 1:", "TDE 2:", "PBL01", "PBL02", "PBL03", "PBL04", "PBL05"] }, p1:{ one:"Prova do RA1" },
+             ex2:{ avg:["PBL06", "PBL07", "PBL08", "PBL09", "PBL10"] }, t2:{ one:"Trabalho do RA2" }, p2:{ one:"Prova do RA2" } } },
+    abd:   { match:"Arquitetura de Banco de Dados", items:{ pj1:{ one:"PjBL - Parte 1" }, s1:{ one:"Avaliação somativa RA1" }, pj2:{ one:"PjBL - Parte 2" },
+             s2:{ one:"Avaliação somativa RA2" }, pj3:{ one:"Pjbl Parte 3" }, s3:{ one:"Avaliação somativa RA3" } } },
+    rpnd:  { match:"Resolução de Problemas de Natureza Discreta", items:{ as1:{ one:"AS 01" }, as2:{ one:"AS 02" }, as3:{ one:"AS 03" }, as4:{ one:"AS 04" },
+             as5:{ one:"AS 05" }, as6:{ one:"AS 06" }, as7:{ one:"AS 07" }, as8:{ one:"AS 08" } } },
+    web:   { match:"Programação WEB", items:{ p1:{ one:"Avaliação Somativa RA1 - GRUPO B e GRUPO A" }, tde:{ one:"Entrega TDE" } } },
+    etica: { match:"Ética", items:{ ra1:{ sum:["Aula 4 - TAREFA SOMATIVA", "Aula 7 - TAREFA SOMATIVA", "Avaliação somativa -  Prova"], factor:0.23 },
+             ra2:{ one:"TDE - TAREFA SOMATIVA - VÍDEO" } } },
+    cscf:  { match:"Conectividade em Sistemas Ciberfísicos", items:{ as1:{ one:"AS01 - NOTAS", pts:10 }, pj:{ one:"Projeto CSCF" } } }
+  };
+  const str = x => typeof x === "string" ? x : null;
+  const num = x => typeof x === "number" && Number.isFinite(x) ? x : null;
+  // Extension export -> { grades: {"course:item": "x"}, missing: [{key, reason}], notes: [{key, reason}] }. Never evaluates input.
+  function fromCanvas(input) {
+    let data = input;
+    if (typeof input === "string") { try { data = JSON.parse(input); } catch (e) { throw new Error("formato inválido: não é o texto copiado do Canvas"); } }
+    if (!data || typeof data !== "object" || !Array.isArray(data.courses)) throw new Error("formato inválido: falta a lista de matérias");
+    const courses = data.courses.map(c => {
+      if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
+      return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
+        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
+        submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false,
+        stats:a.stats && typeof a.stats === "object" && [a.stats.mean, a.stats.min, a.stats.max].every(x => num(x) !== null) ? { mean:a.stats.mean, min:a.stats.min, max:a.stats.max } : null })) };
+    });
+    // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
+    const pending = [];
+    for (const cv of courses) {
+      const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
+      for (const a of cv.assignments) if (a.missing) pending.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
+    }
+    pending.sort((x, y) => (x.due || "9") < (y.due || "9") ? -1 : (x.due || "9") > (y.due || "9") ? 1 : 0);
+    const known = courses.some(cv => cv.assignments.some(a => a.flagged));   // older exports have no flag: unknown, not "none"
+    // Not handed in yet and not late: everything with a due date, soonest first; the page keeps the next two weeks.
+    const todo = [];
+    for (const cv of courses) {
+      const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
+      for (const a of cv.assignments) if (a.hasSub && !a.submitted && !a.missing && !a.offline && a.due) todo.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
+    }
+    todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
+    const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {}, stats = {};
+    const knownStats = Array.isArray(data.courses) && data.courses.some(c => c && Array.isArray(c.assignments) && c.assignments.some(a => a && "stats" in a));
+    const grades = {}, missing = [], notes = [];
+    for (const c of COURSES) {
+      const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
+      for (const it of c.items) {
+        const k = key(c, it), rule = map && map.items[it.id];
+        if (!rule) { missing.push({ key:k, reason:"lance à mão: não há uma avaliação equivalente no Canvas" }); continue; }
+        if (!cv) { missing.push({ key:k, reason:cvs.length > 1 ? "a matéria aparece em mais de uma turma no Canvas: lance à mão" : "matéria não veio do Canvas" }); continue; }
+        const parts = (rule.avg || rule.sum || [rule.one]).map(n => cv.assignments.filter(a => a.name.includes(n)));
+        if (parts.some(p => p.length !== 1)) { missing.push({ key:k, reason:"avaliação não está no Canvas (ou aparece repetida)" }); continue; }
+        const got = parts.map(p => p[0]);
+        if (rule.one && got[0].due) dates[k] = got[0].due;   // Canvas due date of a single-assignment item
+        if (got.some(a => a.score === null)) { missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
+        const pts = a => rule.pts && !(a.points > 0) ? rule.pts : a.points;
+        if (got.some(a => !(pts(a) > 0))) { missing.push({ key:k, reason:"avaliação sem pontuação no Canvas" }); continue; }
+        if (rule.one && got[0].stats && pts(got[0]) > 0) {   // class mean/min/max on the item's own scale
+          const sc = x => r9(Math.round(Math.min(1, Math.max(0, x / pts(got[0]))) * it.inMax * 1000) / 1000), s = got[0].stats;
+          stats[k] = { mean:sc(s.mean), min:sc(s.min), max:sc(s.max) };
+        }
+        let f = rule.sum ? got.reduce((s, a) => s + a.score / pts(a) * 10, 0) * rule.factor / it.inMax
+                         : got.reduce((s, a) => s + a.score / pts(a), 0) / got.length;
+        if (f > 1 + EPS) { notes.push({ key:k, reason:"nota acima do máximo no Canvas: usei a nota cheia" }); f = 1; }
+        grades[k] = String(r9(Math.round(Math.max(0, f) * it.inMax * 1000) / 1000));
+      }
+    }
+    const ext = data.ext === "script" || data.ext === "bookmarklet" || (str(data.ext) !== null && /^\d+(\.\d+){0,3}$/.test(data.ext)) ? data.ext : null;   // "script": tools/canvas-export.py
+    // Announcements: plain text only; links kept only when they point into the PUCPR Canvas.
+    const news = !Array.isArray(data.announcements) ? null : data.announcements.filter(a => a && str(a.title) !== null).slice(0, 50).map(a => {
+      const cn = str(a.course) || "", ours = COURSES.find(c => CANVAS[c.id] && cn.startsWith(CANVAS[c.id].match));
+      const url = str(a.url) !== null && /^https:\/\/pucpr\.instructure\.com\//.test(a.url) ? a.url : null;
+      return { course:ours ? ours.id : null, courseName:cn.split(" (")[0].split(" - ")[0], title:a.title.slice(0, 200),
+               at:str(a.at) !== null && !Number.isNaN(Date.parse(a.at)) ? localISO(new Date(a.at)) : null, unread:a.unread === true, url };
+    }).sort((x, y) => (y.unread - x.unread) || ((y.at || "") > (x.at || "") ? 1 : -1));
+    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates, stats:knownStats ? stats : null, news, ext,
+             extOld: ext !== "script" && ext !== "bookmarklet" && (!ext || verLess(ext, EXT_LATEST)) };
+  }
+
+  // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
+  const EXT_LATEST = "0.6.0";
+  const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+
+  // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
+  const SEMESTER = "2026-2";
+  const itemByKey = k => { const [cid, iid] = String(k).split(":"); const c = COURSES.find(x => x.id === cid); return c && c.items.find(i => i.id === iid) || null; };
+  function toBackup(grades, meta) {
+    const out = {};
+    for (const c of COURSES) for (const it of c.items) { const v = grades[key(c, it)]; if (typeof v === "string" && v.trim() !== "") out[key(c, it)] = v.trim(); }
+    return JSON.stringify({ app:"quanto-falta", v:1, semester:SEMESTER, exported:new Date().toISOString().slice(0, 10), meta:String(meta), grades:out }, null, 1);
+  }
+  function fromBackup(text) {
+    let d;
+    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Quanto falta"); }
+    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Quanto falta");
+    const grades = {}, missing = [], notes = [];
+    if (d.semester !== SEMESTER) notes.push({ key:"", reason:"backup de outro semestre (" + String(d.semester) + "): confira antes de aplicar" });
+    for (const k of Object.keys(d.grades)) {
+      const it = itemByKey(k), v = d.grades[k];
+      if (!it) { missing.push({ key:k, reason:"avaliação que não existe nesta calculadora" }); continue; }
+      if (typeof v !== "string") { missing.push({ key:k, reason:"nota em formato estranho, ignorada" }); continue; }
+      const p = itemPoints(it, v);
+      if (p === null || Number.isNaN(p)) { missing.push({ key:k, reason:"nota fora da escala, ignorada" }); continue; }
+      grades[k] = v;
+    }
+    return { grades, missing, notes, meta: typeof d.meta === "string" ? d.meta : null };
+  }
+  return { COURSES, SEED, CANVAS, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks };
+})();
+</script>
+<script id="ui">
+(() => {
+  const C = NotasCore, LS = "notas-pucpr-2026-2";
+  const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
+  const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(LS)); } catch (e) { saved = null; }
+  if (!saved || typeof saved !== "object" || !saved.grades || typeof saved.grades !== "object" || Array.isArray(saved.grades))
+    saved = { grades: Object.assign({}, C.SEED), meta: "7" };
+  if (typeof saved.meta !== "string") saved.meta = "7";
+  if (!saved.open || typeof saved.open !== "object") saved.open = {};
+  if (!saved.pending || typeof saved.pending.at !== "string" || !Array.isArray(saved.pending.list)) delete saved.pending;
+  if (!saved.todo || typeof saved.todo.at !== "string" || !Array.isArray(saved.todo.list)) delete saved.todo;
+  if (!saved.cdates || typeof saved.cdates !== "object" || Array.isArray(saved.cdates)) saved.cdates = {};
+  if (!Array.isArray(saved.fresh)) saved.fresh = [];
+  if (!saved.stats || typeof saved.stats !== "object" || Array.isArray(saved.stats)) saved.stats = {};
+  if (!saved.news || typeof saved.news.at !== "string" || !Array.isArray(saved.news.list)) delete saved.news;
+  const ISO = /^\d{4}-\d\d-\d\d$/;
+  const store = () => { try { localStorage.setItem(LS, JSON.stringify(saved)); } catch (e) {} };
+
+  const $ = id => document.getElementById(id);
+  const metaEl = $("meta");
+  metaEl.value = saved.meta;
+  let today = C.localISO(new Date());   // refreshed on every calc (tab left open past midnight)
+  const dec = n => n >= 5 ? 1 : 2;
+  const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits:d, maximumFractionDigits:d });
+  const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
+  const exact = n => n.toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:3 });   // earned/ceiling never rounded up
+  const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+  const days = iso => Math.round((Date.parse(iso) - Date.parse(today)) / 864e5);
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function cell(label, cls, text) { const d = el("div", cls, text); if (label) d.dataset.label = label; return d; }
+  const badge = (cls, text) => el("span", "badge " + cls, text);
+  const tone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
+
+  function reqText(req, it, st) {
+    if (!req) return "—";
+    if (st && st.status === "depende-atrasadas") {   // estimate: late grades at the same fraction as the rest
+      const f = st.fractionIfLate;
+      if (f == null || f > 1 + 1e-9) return "não dá";
+      return "≈ " + reqText({ f, raw: f * it.inMax, of10: f * 10, impossible: false }, it);
+    }
+    if (req.f <= 1e-9) return "0";
+    if (req.impossible) return "não dá";
+    return it.inMax === 10 ? up(req.raw, 1) : up(req.raw, dec(it.inMax)) + " de " + fmt(it.inMax, dec(it.inMax)) + " · " + up(req.of10, 1) + "/10";
+  }
+  const minText = (m, it) => m.impossible ? "não dá" : m.f <= 1e-9 ? "0" : up(m.raw, dec(it.inMax));
+  function srcText(it) { return it.dateSrc + (it.alt ? " · outra fonte: " + it.alt : "") + (it.unv ? " · não verificada" : ""); }
+  // Class mean/min/max from Canvas for one item, already on the item's scale.
+  const classStat = (k, it) => { const v = saved.stats[k];
+    return v && [v.mean, v.min, v.max].every(x => typeof x === "number" && x >= 0 && x <= it.inMax + 1e-9) ? v : null; };
+  function classBar(cs, raw, it) {
+    const pct = x => Math.max(0, Math.min(100, x / it.inMax * 100)) + "%", w = el("div", "vs");
+    const bar = el("span", "vsbar"), rng = el("i", "rng"), mean = el("i", "mean"), you = el("i", "you");
+    rng.style.left = pct(cs.min); rng.style.width = "calc(" + pct(cs.max) + " - " + pct(cs.min) + ")"; mean.style.left = pct(cs.mean); you.style.left = pct(raw);
+    bar.append(rng, mean, you);
+    const d = raw - cs.mean, dec2 = dec(it.inMax);
+    w.append(bar, el("span", "vst", "turma " + fmt(cs.mean, dec2) + " · você " + (d >= 0 ? "+" : "−") + fmt(Math.abs(d), dec2)));
+    w.title = "Turma no Canvas: média " + fmt(cs.mean, dec2) + ", mínima " + fmt(cs.min, dec2) + ", máxima " + fmt(cs.max, dec2);
+    return w;
+  }
+  // The Canvas due date for this item, when the last import had one and it differs from the Plano date.
+  const canvasDate = (k, it) => { const v = saved.cdates[k]; return typeof v === "string" && ISO.test(v) && v !== it.date ? "Canvas: " + dmy(v) : ""; };
+  function whenCell(it, k) {
+    const d = days(it.date), w = cell("Data", "when");
+    const top = el("span", "d num", dmy(it.date));
+    if (it.unv || it.alt) { const f = el("span", "flag"); f.innerHTML = ALERT; f.title = "Data a conferir: " + srcText(it); f.setAttribute("aria-label", "data a conferir"); top.appendChild(f); }
+    w.append(top, el("span", "rel" + (d >= 0 && d <= 3 ? " soon" : d >= 0 && d <= 7 ? " week" : ""),
+      d === 0 ? "hoje" : d === 1 ? "amanhã" : d > 0 ? "em " + d + " dias" : d >= -7 ? "há " + -d + " dias" : "passou"));
+    const cd = el("span", "cdate", k ? canvasDate(k, it) : ""); if (k) cd.id = "cd-" + k; cd.title = "Prazo no Canvas na última importação; a conta usa a data do Plano de Ensino";
+    w.append(cd, el("span", "src fonte", srcText(it)));
+    return w;
+  }
+  function needBadge(st, it) {
+    if (st.status === "garantido") return badge("ok", "garantido");
+    const dep = st.status === "depende-atrasadas", req = C.requiredFor(st, it);
+    return badge(dep ? "warn" : req.impossible ? "bad" : tone(req.f), reqText(req, it, st));
+  }
+  function target() {
+    const n = C.parseNum(metaEl.value), ok = n != null && !Number.isNaN(n) && n <= 10;
+    metaEl.classList.toggle("bad", !ok); metaEl.title = ok ? "" : "Meta inválida: usando 7,0";
+    return ok ? n : 7;
+  }
+
+  let filter = "all", cardFilter = "all", showAll = false, showAllPend = false, showAllNews = false;
+  const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
+  function build() {
+    const main = $("cards");
+    for (const c of C.COURSES) {
+      const card = el("article", "card"); card.id = "card-" + c.id;
+      const head = el("div", "chead"); head.tabIndex = 0; head.setAttribute("role", "button");
+      const pill = badge("done", "…"); pill.id = "pill-" + c.id;
+      const ttl = el("div"), sub = el("span", "csub"); sub.id = "sub-" + c.id; ttl.append(el("span", "cname", c.name), sub); head.setAttribute("aria-label", c.name);
+      const figs = el("div", "figs"); figs.id = "figs-" + c.id;
+      const bar = el("div", "bar"); bar.append(el("span", "g"), el("span", "f"), el("span", "m")); bar.id = "bar-" + c.id;
+      const chev = el("span", "chev"); chev.innerHTML = CHEV;   // static markup, no data
+      head.append(chev, ttl, figs, bar, pill);
+      const setOpen = on => { card.classList.toggle("open", on); head.setAttribute("aria-expanded", on); saved.open[c.id] = on; store(); syncAll(); };
+      card.setOpen = setOpen;
+      head.addEventListener("click", () => setOpen(!card.classList.contains("open")));
+      head.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!card.classList.contains("open")); } });
+      card.classList.toggle("open", !!saved.open[c.id]); head.setAttribute("aria-expanded", !!saved.open[c.id]);
+
+      const msg = el("div", "msg"); msg.id = "msg-" + c.id;
+      const detail = el("div", "detail");
+      detail.append(msg, el("div", "formula", c.formula), el("div", "formula fonte", "Pesos: " + c.src));
+      const items = el("div", "items"), hr = el("div", "row head");
+      ["Avaliação", "Data", "Nota", "Precisa", "Mín"].forEach(x => hr.appendChild(el("div", null, x)));
+      items.appendChild(hr);
+      for (const it of c.items) {
+        const k = C.key(c, it), row = el("div", "row"); row.id = "row-" + k;
+        const name = cell(null, "wide");
+        name.append(el("span", "title", it.name + (it.exam ? " · prova" : "")),
+          el("span", "sub", "vale " + fmt(it.max, 3).replace(/0+$/, "").replace(/,$/, "") + " da final"), el("span", "src fonte", it.wSrc));
+        const g = cell("Nota"), inp = el("input");
+        inp.inputMode = "decimal"; inp.placeholder = "—"; inp.value = saved.grades[k] == null ? "" : String(saved.grades[k]); inp.id = "in-" + k;
+        inp.setAttribute("aria-label", "Nota de " + it.name + ", " + c.name);
+        inp.addEventListener("input", () => { saved.grades[k] = inp.value; saved.fresh = saved.fresh.filter(x => x !== k); store(); calc(); });
+        g.append(inp, el("span", "scale", "/ " + fmt(it.inMax, dec(it.inMax))));
+        const rq = cell("Precisa"); rq.id = "rq-" + k;
+        const mn = cell("Mín", "muted num"); mn.id = "mn-" + k;
+        row.append(name, whenCell(it, k), g, rq, mn); items.appendChild(row);
+      }
+      detail.appendChild(items);
+      card.append(head, detail); main.appendChild(card);
+    }
+
+    const foot = $("foot");
+    foot.append(el("p", null, "Feito por um aluno para a turma. Não é um sistema oficial da PUCPR: confira pesos e datas no Canvas e no Plano de Ensino."),
+      el("p", null, "Suas notas ficam salvas só neste navegador (localStorage). Nada é enviado para servidor nenhum."),
+      el("p", null, "Recuperação (só informação, não simulada): os Planos permitem recuperar um único RA com média abaixo de 7,0. Conectividade: recuperação estendida para final entre 4,0 e 7,0, com teto 7,0."));
+
+    metaEl.addEventListener("input", () => { saved.meta = metaEl.value; store(); calc(); });
+    let metaT;
+    const metaRun = () => { clearTimeout(metaT); metaT = setTimeout(() => { const T = target(), st = C.COURSES.map(c => C.courseState(c, saved.grades, today, T));
+      con.run({ ask:"Mudar a meta para " + fmt(T, 1), title:"Recalculando", doneTitle:"Recalculado", steps:[["6 matérias", st.filter(x => x.status === "garantido").length + " garantidas, " + st.filter(x => x.status === "precisa").length + " precisam de nota"]],
+        text:"Com a meta " + fmt(T, 1) + ":", lines:nextLines(saved.grades, 2) }); }, 450); };
+    metaEl.addEventListener("input", metaRun);
+    const stepMeta = d => { const n = Math.min(10, Math.max(0, Math.round((target() + d) * 2) / 2));
+      metaEl.value = fmt(n, 1); saved.meta = metaEl.value; store(); calc(); metaRun(); };
+    $("metadown").addEventListener("click", () => stepMeta(-0.5)); $("metaup").addEventListener("click", () => stepMeta(0.5));
+    metaEl.addEventListener("keydown", e => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); stepMeta(e.key === "ArrowUp" ? 0.5 : -0.5); } });
+    // Feedback: opens a prefilled issue form on GitHub (the site has no server; the student sends it from their own account).
+    const fb = $("fb");
+    $("fbbtn").addEventListener("click", () => { fb.showModal(); $("fbtext").focus(); });
+    fb.addEventListener("click", e => { if (e.target === fb) fb.close(); });   // click on the backdrop closes
+    $("fbsend").addEventListener("click", () => {
+      const t = $("fbtext").value.trim(); if (!t) { $("fbtext").focus(); return; }
+      const q = new URLSearchParams({ template:"feedback.yml", title:"Feedback: " + t.split(/\s+/).slice(0, 8).join(" ").slice(0, 70), mensagem:t.slice(0, 1200), origem:"site, " + today });
+      window.open("https://github.com/Bossmann007/quanto-falta-pucpr/issues/new?" + q, "_blank", "noopener,noreferrer");
+      fb.close(); $("fbtext").value = "";
+    });
+    $("icsbtn").addEventListener("click", () => {
+      const esc = t => String(t).replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, " ");
+      const day = iso => iso.replace(/-/g, ""), next = iso => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + 1); return day(C.localISO(d)); };
+      const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+      const add = (id, date, title, desc) => ev.push("BEGIN:VEVENT", "UID:" + id + "@quanto-falta", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + day(date), "DTEND;VALUE=DATE:" + next(date),
+        "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
+      for (const u of C.upcoming(C.COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Quanto falta: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
+      if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
+        .forEach(t => add("todo-" + [...(t.courseName + "|" + t.name)].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 7).toString(36) + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
+      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Quanto falta//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Quanto falta"].concat(ev, "END:VCALENDAR").join("\r\n");
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      const nTodo = ev.filter(x => x.startsWith("UID:todo-")).length, nAll = ev.filter(x => x.startsWith("UID:")).length;
+      con.run({ ask:"Exportar para o calendário", title:"Montando o calendário", doneTitle:"Calendário pronto", steps:[["Avaliações", pl(nAll - nTodo, "evento", "eventos")], ["Prazos do Canvas", pl(nTodo, "entrega", "entregas")], ["Arquivo .ics", "baixado"]],
+        text:"Abra o arquivo no Google Agenda, no Calendário da Apple ou no Outlook.", scroll:true });
+    });
+    const links = [...$("nav").querySelectorAll("a")];
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting)
+        links.forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + e.target.id)); }, { rootMargin:"-45% 0px -50% 0px" });
+      links.forEach(a => { const t = document.getElementById(a.getAttribute("href").slice(1)); if (t) io.observe(t); });
+    }
+    for (const b of $("filter").children) b.addEventListener("click", () => {
+      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); });
+    $("startbtn").addEventListener("click", () => { const first = document.querySelector(".card"); if (first && !document.querySelector(".card.open")) first.setOpen(true); });
+    const sb = el("button", "linkbtn", "Mostrar de onde vêm os pesos e as datas"); sb.type = "button"; sb.setAttribute("aria-pressed", "false");
+    sb.addEventListener("click", () => { const on = document.body.classList.toggle("src-on"); sb.setAttribute("aria-pressed", on);
+      sb.textContent = on ? "Esconder as fontes" : "Mostrar de onde vêm os pesos e as datas"; });
+    foot.appendChild(sb);
+    const all = $("allbtn"); syncAll();
+    all.addEventListener("click", () => { const cards = [...document.querySelectorAll(".card")], on = cards.some(x => !x.classList.contains("open"));
+      cards.forEach(x => x.setOpen(on)); });
+    const openHash = () => { const t = document.getElementById(location.hash.slice(1)); if (t && t.setOpen) t.setOpen(true); if (t && t.tagName === "DETAILS") t.open = true; };
+    window.addEventListener("hashchange", openHash); openHash();
+    document.addEventListener("click", e => { const a = e.target.closest('a[href^="#card-"]'); if (!a) return;
+      const card = document.getElementById(a.getAttribute("href").slice(1)); if (card) card.setOpen(true); });   // same hash twice fires no hashchange
+  }
+
+  function calc() {
+    today = C.localISO(new Date());
+    const T = target();
+    const groups = { garantido:[], precisa:[], "depende-atrasadas":[], "nao-da":[] };
+    const states = {};
+    for (const c of C.COURSES) {
+      const st = states[c.id] = C.courseState(c, saved.grades, today, T);
+      groups[st.status].push(SHORT[c.id]);
+
+      const figs = $("figs-" + c.id); figs.textContent = "";
+      [["Garantido", exact(st.earned)], ["Faltam", st.need <= 1e-9 ? "0" : up(st.need, 2)], ["Teto", exact(st.ceiling)]].forEach(([k, v]) => {
+        const d = el("div"); d.append(el("span", "k", k), el("span", "v num", v)); figs.appendChild(d); });
+      const nGraded = c.items.filter(it => { const p = C.itemPoints(it, saved.grades[C.key(c, it)]); return p !== null && !Number.isNaN(p); }).length;
+      const nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
+      const nFresh = c.items.filter(it => saved.fresh.includes(C.key(c, it))).length;
+      const [g, f, m] = $("bar-" + c.id).children;
+      g.style.width = Math.min(100, st.earned * 10) + "%";
+      g.style.background = "var(--" + (st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction)) + ")";
+      f.style.left = Math.min(100, st.earned * 10) + "%"; f.style.width = st.futureMax * 10 + "%";
+      m.style.left = Math.min(99.5, T * 10) + "%";
+
+      let above = 0, compared = 0;
+      for (const it of c.items) {
+        const k = C.key(c, it), inp = $("in-" + k), rq = $("rq-" + k), mn = $("mn-" + k);
+        const p = C.itemPoints(it, saved.grades[k]);
+        inp.classList.toggle("bad", Number.isNaN(p)); inp.title = Number.isNaN(p) ? "Fora de 0 a " + fmt(it.inMax, 2) + " ou não é número: ignorada" : "";
+        rq.textContent = ""; mn.textContent = "";
+        const graded = p !== null && !Number.isNaN(p); $("row-" + k).classList.toggle("graded", graded);
+        $("cd-" + k).textContent = canvasDate(k, it);
+        if (graded) { rq.appendChild(el("span", "check", "✓ lançada")); if (saved.fresh.includes(k)) rq.appendChild(badge("acc", "nova"));
+          const cs = classStat(k, it); if (cs) { const raw = C.parseNum(saved.grades[k]); rq.appendChild(classBar(cs, raw, it)); if (raw >= cs.mean) above++; compared++; }
+          continue; }
+        if (st.late.includes(it)) { rq.appendChild(badge("warn", "falta a nota")); continue; }
+        rq.appendChild(needBadge(st, it));
+        mn.textContent = st.status === "garantido" || st.status === "depende-atrasadas" ? "—" : minText(C.minimumFor(st, it, T), it);
+      }
+
+      const vsTurma = compared ? " · na média da turma ou acima em " + above + " de " + compared : "";
+      $("sub-" + c.id).textContent = nGraded + " de " + c.items.length + " lançadas" + (nFresh ? " · " + nFresh + (nFresh === 1 ? " nova" : " novas") : "") + vsTurma + (nx ? " · próxima: " + nx.name + ", " + (days(nx.date) === 0 ? "hoje" : days(nx.date) === 1 ? "amanhã" : "em " + days(nx.date) + " dias") : "");
+      let cls, text;
+      if (st.status === "garantido") { cls = "ok"; text = "Passou: " + fmt(st.earned, 2) + " já garantidos, mesmo com zero no resto."; }
+      else if (st.status === "nao-da") { cls = "bad"; text = "Mesmo com nota cheia em tudo chega a " + fmt(st.ceilingIfLate, 2) + ". Caminho: recuperação de um RA."; }
+      else if (st.status === "depende-atrasadas") { cls = "warn"; text = "Só com o que falta não chega (teto " + fmt(st.ceiling, 2) + "). Lance as notas que já saíram."; }
+      else { cls = tone(st.fraction);
+             text = "Faltam " + up(st.need, 2) + " pontos: " + up(st.fraction * 10, 1) + " em 10 em cada item que falta."; }
+      if (st.late.length && st.status !== "garantido") text = (st.late.length === 1 ? "1 nota antiga sem lançar conta 0" : st.late.length + " notas antigas sem lançar contam 0") +
+        (st.fractionIfLate != null ? (st.fractionIfLate > 1 + 1e-9 ? " (não dá nem com nota cheia)" : " (se forem iguais ao resto: " + up(st.fractionIfLate * 10, 1) + " em 10)") : "") + ". " + text;
+      if (st.invalid.length) text = (st.invalid.length === 1 ? "1 nota inválida ignorada: " : st.invalid.length + " notas inválidas ignoradas: ") + st.invalid.map(i => i.name).join(", ") + ". " + text;
+      const box = $("msg-" + c.id); box.className = "msg " + cls; box.textContent = text;
+      const label = { garantido:"garantido", "nao-da":"recuperação", "depende-atrasadas":"faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10";
+      const pill = $("pill-" + c.id); pill.className = "badge " + cls; pill.textContent = label;
+    }
+
+    const sum = $("summary"); sum.textContent = "";
+    if (!groups[cardFilter] || !groups[cardFilter].length) cardFilter = "all";
+    [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
+      const count = n != null ? n : groups[k].length; if (!count) return;
+      const b = el("button", null, l); b.type = "button"; b.setAttribute("aria-pressed", k === cardFilter);
+      b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); }); sum.appendChild(b); });
+    for (const c of C.COURSES) $("card-" + c.id).hidden = cardFilter !== "all" && states[c.id].status !== cardFilter;
+
+    const next = $("next"); next.textContent = "";
+    const hr = el("div", "row head"); ["Data", "Avaliação", "Precisa", "Mín"].forEach(x => hr.appendChild(el("div", null, x))); next.appendChild(hr);
+    const list = C.upcoming(C.COURSES, saved.grades, today, T)
+      .filter(u => filter === "all" || (filter === "exam" ? u.item.exam : days(u.item.date) <= 7));
+    if (!list.length) next.appendChild(el("div", "empty", filter === "all" ? "Nada pendente." : "Nada neste filtro."));
+    for (const u of showAll ? list : list.slice(0, 6)) {
+      const row = el("div", "row"), name = cell(null, "wide"), a = el("a", null, u.course.name), sub = el("span", "sub");
+      a.href = "#card-" + u.course.id; sub.appendChild(a);
+      name.append(el("span", "title", u.item.name + (u.item.exam ? " · prova" : "")), sub);
+      const rq = cell("Precisa"); rq.appendChild(needBadge(u.st, u.item));
+      if (u.st.provisional && u.st.status === "precisa") { const fl = el("span", "flag", "*"); fl.title = "Provisório: notas antigas sem lançar contam 0"; rq.appendChild(fl); }
+      row.append(whenCell(u.item, C.key(u.course, u.item)), name, rq,
+        cell("Mín", "muted num", u.st.status === "garantido" || u.st.status === "depende-atrasadas" ? "—" : minText(u.min, u.item)));
+      next.appendChild(row);
+    }
+
+    if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
+      b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
+    renderFocus(T); renderTiles(states, T); renderTodo(); renderNews();
+    const late = $("late"); late.textContent = "";
+    const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
+    let any = false;
+    for (const c of C.COURSES) {
+      const st = states[c.id];
+      if (!st.late.length) continue;
+      any = true;
+      const row = el("div", "row late-row"), mt = cell(null, "wide"), a = el("a", "title", c.name); a.href = "#card-" + c.id; mt.appendChild(a);
+      const items = cell(null, "late wide");
+      for (const it of st.late) items.appendChild(badge("done", dmy(it.date) + " · " + it.name));
+      row.append(mt, items, cell("Vale", "muted num", fmt(st.lateMax, 2) + " pts"));
+      late.appendChild(row);
+    }
+    if (!any) late.appendChild(el("div", "empty", "Nenhuma. Tudo lançado."));
+    renderPending();
+  }
+
+
+  // ---- live console: the window runs each tool with the student's real data; example data only before the first grade ----
+  const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = ms => new Promise(r => setTimeout(r, RM ? 0 : ms));
+  const CHECK = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const COLORS = { imp:"#f5a25b", abd:"#7cc4fa", rpnd:"#c8a6f7", web:"#f7c948", etica:"#f28fb1", cscf:"#7ee0d0" };
+  function stepRow(title, sub) {
+    const r = el("div", "stp enter"), ic = el("span", "ico-s"), tx = el("div"), t = el("span", "t");
+    ic.appendChild(el("span", "spin")); tx.append(el("span", null, title), el("span", "sub", sub)); r.append(ic, tx, t);
+    r.done = (secs, sub2) => { ic.className = "ico-s ok-ic"; ic.innerHTML = CHECK; t.textContent = secs; if (sub2 != null) tx.lastChild.textContent = sub2; };   // static icon markup
+    return r;
+  }
+  function stepsCard(title) {
+    const c = el("div", "steps-card enter"), h = el("div", "steps-head"), cnt = el("span", "cnt"), ttl = el("span", null, title);
+    h.append(ttl, cnt); c.appendChild(h);
+    c.set = (n, total, running) => { cnt.textContent = ""; if (running) cnt.appendChild(el("span", "spin")); cnt.append(n + " de " + total); };
+    c.setTitle = t => { ttl.textContent = t; };
+    return c;
+  }
+  const con = (() => {
+    const w = el("div", "win"), bar = el("div", "win-bar"), dots = el("span", "dots"), tab = el("span", "tab"), tag = el("span", "demo-tag");
+    dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    tab.append(" Quanto falta"); bar.append(dots, tab, el("span", "sp"), tag);
+    const body = el("div", "win-body"), side = el("div", "win-side"), main = el("div", "win-main fade");
+    main.setAttribute("aria-live", "polite");
+    side.appendChild(el("h4", null, "Matérias · 2026/2"));
+    const smalls = {};
+    for (const c of C.COURSES) { const r = el("a", "srow"), av = el("span", "av", SHORT[c.id].slice(0, 2).toUpperCase()), t = el("div"), sm = el("small", null, "—");
+      r.href = "#card-" + c.id; av.style.background = COLORS[c.id]; t.append(el("b", null, SHORT[c.id]), sm); r.append(av, t); side.appendChild(r); smalls[c.id] = sm; }
+    body.append(side, main); w.append(bar, body);
+    let run = 0, busy = false, used = false;
+    const api = { el:w, get busy() { return busy; }, get used() { return used; } };
+    api.side = (texts, on) => { for (const id in smalls) { smalls[id].textContent = texts[id] || "—"; smalls[id].className = on ? "on" : ""; } };
+    const bubble = (cls, text, lines) => { const b = el("div", "bub " + cls + " enter"); b.append(text);
+      if (lines && lines.length) { const ul = el("ul"); lines.forEach(x => ul.appendChild(el("li", null, x))); b.appendChild(ul); } main.appendChild(b); return b; };
+    // One tool run: the student's request, the steps with real counts, the result and an optional action.
+    api.run = async ({ ask, title, doneTitle, steps, text, lines, action, scroll }) => {
+      const me = ++run, alive = () => me === run; busy = true; used = true; tag.textContent = "ao vivo";
+      main.textContent = ""; if (scroll) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
+      bubble("me", ask); await wait(300); if (!alive()) return;
+      const card = stepsCard(title); card.set(0, steps.length, true); main.appendChild(card);
+      const t0 = performance.now();
+      for (let i = 0; i < steps.length; i++) {
+        const r = stepRow(steps[i][0], ""); card.appendChild(r); await wait(240); if (!alive()) return;
+        r.done(fmt((performance.now() - t0) / 1000, 1) + "s", steps[i][1]); card.set(i + 1, steps.length, i + 1 < steps.length);
+      }
+      card.setTitle(doneTitle || title); await wait(200); if (!alive()) return;
+      if (text) bubble("bot", text, lines);
+      if (action) { const ap = el("div", "apply-demo enter"), btn = el("button", "btn primary sm", action.label); btn.type = "button";
+        btn.addEventListener("click", () => { if (!action.live || action.live()) action.onClick(); ap.remove(); }); ap.appendChild(btn); if (!action.live || action.live()) main.appendChild(ap); }
+      busy = false;
+    };
+    // Resting state for a student with grades: the next thing that counts, from the real numbers.
+    api.idle = (text, lines) => { if (busy) return; run++; tag.textContent = "suas notas"; main.textContent = ""; bubble("bot", text, lines); };
+    // Before the first grade: the same flow with example data, on a loop, labelled as such.
+    api.demo = async () => {
+      const me = ++run, alive = () => me === run;
+      const EX = { imp:"precisa 9,8/10", abd:"falta 0,50 ponto", rpnd:"2 notas novas", web:"precisa 8,9/10", etica:"3 avisos novos", cscf:"na média da turma" };
+      while (alive()) {
+        tag.textContent = "demonstração · notas de exemplo"; main.style.opacity = ""; main.textContent = ""; api.side({}, false);
+        await wait(500); if (!alive()) return;
+        bubble("me", "Importar minhas notas do Canvas"); await wait(700); if (!alive()) return;
+        const typ = el("div", "bub bot enter"), ty = el("span", "typing"); ty.append(el("i"), el("i"), el("i")); typ.appendChild(ty); main.appendChild(typ);
+        await wait(900); if (!alive()) return; typ.remove();
+        const card = stepsCard("Lendo o Canvas"), steps = [["Notas", "12 notas encontradas"], ["Média da turma", "liberada em 9 avaliações"], ["Prazos", "7 entregas nos próximos 14 dias"], ["Avisos", "3 não lidos"]];
+        card.set(0, steps.length, true); main.appendChild(card);
+        for (let i = 0; i < steps.length; i++) { const r = stepRow(steps[i][0], ""); card.appendChild(r); await wait(650 + i * 120); if (!alive()) return;
+          r.done(fmt(0.3 + i * 0.2, 1) + "s", steps[i][1]); card.set(i + 1, steps.length, i + 1 < steps.length); if (!i) api.side(EX, true); }
+        card.setTitle("Leu o Canvas"); await wait(600); if (!alive()) return;
+        bubble("bot", "Pronto. O que importa agora:", ["Imperativa: 9,8 na Prova do RA2 (11/11)", "Banco de Dados: falta 0,50 ponto", "Ética: 3 avisos novos"]);
+        await wait(500); if (!alive()) return;
+        const ap = el("div", "apply-demo enter"); ap.appendChild(el("span", "btn primary sm", "Aplicar 12 notas")); main.appendChild(ap);
+        if (RM) return;
+        await wait(4200); if (!alive()) return; main.style.opacity = "0"; await wait(260);
+      }
+    };
+    api.stop = () => { if (!busy) run++; };
+    return api;
+  })();
+  $("demo-hero").appendChild(con.el);
+  let demoOn = false;
+  // What matters next, as short lines, for any set of grades (used before and after applying an import).
+  function nextLines(grades, n) {
+    return C.upcoming(C.COURSES, grades, today, target()).filter(u => u.st.status !== "garantido").slice(0, n)
+      .map(u => SHORT[u.course.id] + ": " + reqText(u.req, u.item, u.st) + " em " + u.item.name + " (" + dmy(u.item.date) + ")");
+  }
+  const pl = (n, one, many) => n + " " + (n === 1 ? one : many);
+  function importRun(res, ask, applyBtn, fromLink) {
+    const steps = [["Notas", pl(Object.keys(res.grades).length, "nota encontrada", "notas encontradas")]];
+    if (res.stats) steps.push(["Média da turma", pl(Object.keys(res.stats).length, "avaliação com média da turma", "avaliações com média da turma")]);
+    if (res.todo) steps.push(["Prazos", pl(res.todo.filter(t => t.due >= today && days(t.due) <= 14).length, "entrega", "entregas") + " nos próximos 14 dias"]);
+    if (res.pending) steps.push(["Atrasadas", res.pending.length + " sem entrega no Canvas"]);
+    if (res.news) steps.push(["Avisos", pl(res.news.length, "aviso", "avisos") + ", " + pl(res.news.filter(n => n.unread).length, "não lido", "não lidos")]);
+    const merged = Object.assign({}, saved.grades, res.grades), n = Object.keys(res.grades).length;
+    con.run({ ask, title:"Lendo", doneTitle:"Pronto: confira antes de aplicar", steps, scroll:true,
+      text:(fromLink ? "Estas notas chegaram por um link: aplique só se foi você que clicou na extensão agora. " : "") + (n ? "Com essas notas, o que importa agora:" : "Nenhuma nota nova para aplicar."), lines:n ? nextLines(merged, 3) : [],
+      action:n && applyBtn ? { label:"Aplicar " + n + " notas", onClick:() => applyBtn.click(), live:() => applyBtn.isConnected } : null });
+  }
+  // Hero for returning students: the next assessment that still matters and what it needs, then the two after it.
+  function renderFocus(T) {
+    const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
+    const any = Object.keys(saved.grades).some(k => String(saved.grades[k]).trim() !== "");
+    const all = C.upcoming(C.COURSES, saved.grades, today, T), list = all.filter(u => u.st.status !== "garantido");
+    hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
+    document.body.classList.toggle("fresh", !any);
+    if (!any && !demoOn && !con.used) { demoOn = true; con.demo(); }
+    if (any) { demoOn = false; const side = {};
+      for (const c of C.COURSES) side[c.id] = $("pill-" + c.id).textContent;
+      con.side(side, true);
+      if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
+    const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
+    $("h1a").textContent = !any ? "Quanto falta" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
+    $("h1b").textContent = !any ? "pra passar?" : open ? "pra fechar o semestre." : "bom descanso.";
+    const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
+    sb.textContent = any ? "Ver minhas matérias" : "Lançar minhas notas";
+    box.textContent = ""; if (box.hidden) return;
+    const u = list[0], d = days(u.item.date), when = d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias";
+    const left = el("div"), need = el("div", "need");
+    left.append(el("div", "t", u.item.name), el("div", "s", (SHORT[u.course.id] || u.course.name) + " · " + dmy(u.item.date) + ", " + when));
+    const st = u.st, dep = st.status === "depende-atrasadas";
+    const v = st.status === "nao-da" || u.req.impossible ? "não dá" : dep ? (st.fractionIfLate == null || st.fractionIfLate > 1 + 1e-9 ? "não dá" : "≈ " + up(st.fractionIfLate * 10, 1)) : up(u.req.of10, 1);
+    const tn = v === "não dá" ? "bad" : dep ? "warn" : tone(u.req.f);
+    const vv = el("div", "v num", v); vv.style.color = "var(--" + tn + ")";
+    need.append(vv, el("div", "u", v === "não dá" ? "nem com nota cheia" : "precisa, em 10" + (dep ? " (faltam notas antigas)" : "")));
+    box.append(el("div", "k", "Próxima avaliação que conta"), left, need);
+    const rest = list.slice(1, 3);
+    if (rest.length) { const t = el("div", "then", "Depois: ");
+      rest.forEach((r, i) => { const a = el("a", null, r.item.name + " (" + (SHORT[r.course.id] || r.course.name) + ", " + dmy(r.item.date) + ")"); a.href = "#card-" + r.course.id; if (i) t.append(" · "); t.appendChild(a); });
+      box.appendChild(t); }
+  }
+
+  // One tile per course: ring = points earned of 10 (lighter: still possible), tick = the goal.
+  function renderTiles(states, T) {
+    const box = $("tiles"), R = 26, L = 2 * Math.PI * R; box.textContent = "";
+    const NS = "http://www.w3.org/2000/svg";
+    const arc = (cls, from, len) => { const c = document.createElementNS(NS, "circle");
+      c.setAttribute("class", cls); c.setAttribute("cx", 32); c.setAttribute("cy", 32); c.setAttribute("r", R);
+      c.setAttribute("stroke-dasharray", Math.max(0, len) + " " + L); c.setAttribute("stroke-dashoffset", -from); return c; };
+    for (const c of C.COURSES) {
+      const st = states[c.id], e = Math.min(10, st.earned) / 10 * L, f = Math.min(10 - Math.min(10, st.earned), st.futureMax) / 10 * L;
+      const cls = st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction);
+      const t = el("a", "tile"); t.href = "#card-" + c.id;
+      const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
+      const er = arc("er", 0, e), fu = arc("fu", e, f); er.style.stroke = "var(--" + cls + ")"; fu.style.stroke = "color-mix(in srgb, var(--" + cls + ") 22%, transparent)";
+      svg.append(arc("tr", 0, L), fu); if (e > 0.5) svg.appendChild(er); svg.appendChild(arc("mk", Math.min(T, 9.9) / 10 * L, 2));
+      ring.append(svg, el("b", null, st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1)));
+      const txt = el("span"), nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
+      txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
+      t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
+    }
+  }
+
+  // Announcements from the last 60 days (snapshot): unread first; titles link to Canvas only.
+  function renderNews() {
+    const nw = saved.news, box = $("avisolist"); $("avisos").hidden = !nw; box.textContent = ""; if (!nw) return;
+    const list = nw.list.filter(a => a && typeof a.title === "string"), unread = list.filter(a => a.unread).length;
+    $("avisosat").textContent = (unread ? unread + (unread === 1 ? " não lido" : " não lidos") + " · " : "") + "lido do Canvas em " + dmy(nw.at);
+    for (const a of showAllNews ? list : list.slice(0, 5)) {
+      const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
+      const ours = C.COURSES.find(c => c.id === a.course); sub.textContent = ours ? SHORT[ours.id] : String(a.courseName || "");
+      // The link is rebuilt from two numbers; no imported text reaches href.
+      const m = typeof a.url === "string" ? /^https:\/\/pucpr\.instructure\.com\/courses\/(\d+)\/discussion_topics\/(\d+)$/.exec(a.url) : null;
+      const t = m ? el("a", "title", a.title) : el("span", "title", a.title);
+      if (m) { t.href = "https://pucpr.instructure.com/courses/" + Number(m[1]) + "/discussion_topics/" + Number(m[2]); t.target = "_blank"; t.rel = "noopener noreferrer"; }
+      name.append(t, sub); if (a.unread) name.appendChild(badge("acc", "não lido"));
+      row.append(cell("Data", "muted num", typeof a.at === "string" && ISO.test(a.at) ? dmy(a.at) : "—"), name); box.appendChild(row);
+    }
+    if (!showAllNews && list.length > 5) { const b = el("button", "more", "Ver todos (" + list.length + ")"); b.type = "button";
+      b.addEventListener("click", () => { showAllNews = true; renderNews(); }); box.appendChild(b); }
+    if (!list.length) box.appendChild(el("div", "empty", "Nenhum aviso nos últimos 60 dias."));
+  }
+
+  // Canvas assignments not handed in yet, due in the next 14 days (a snapshot from the last import).
+  function renderTodo() {
+    const td = saved.todo, box = $("todolist"); $("todo").hidden = !td; box.textContent = ""; if (!td) return;
+    const list = td.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0 && days(t.due) <= 14);
+    $("todoat").textContent = list.length + (list.length === 1 ? " entrega" : " entregas") + " nos próximos 14 dias · lido do Canvas em " + dmy(td.at);
+    const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
+    for (const t of list) {
+      const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub"), d = days(t.due);
+      const ours = C.COURSES.find(c => c.id === t.course);
+      if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); } else sub.textContent = String(t.courseName || "");
+      name.append(el("span", "title", t.name), sub);
+      const w = cell("Prazo", "when"); w.append(el("span", "d num", dmy(t.due)), el("span", "rel" + (d <= 3 ? " soon" : d <= 7 ? " week" : ""), d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias"));
+      row.append(w, name); box.appendChild(row);
+    }
+    if (!list.length) box.appendChild(el("div", "empty", "Nada para entregar nos próximos 14 dias."));
+  }
+
+  // What Canvas marked as missing at the last import (a snapshot: it does not refresh by itself).
+  function renderPending() {
+    const box = $("pend"), pd = saved.pending; box.textContent = "";
+    $("pendat").textContent = pd ? "lido do Canvas em " + dmy(pd.at) + "; importe de novo para atualizar" : "";
+    $("pendentes").hidden = !pd; if (!pd) return;
+    const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
+    const okList = pd.list.filter(p => p && typeof p.name === "string");
+    for (const p of showAllPend ? okList : okList.slice(0, 6)) {
+      if (!p || typeof p.name !== "string") continue;
+      const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
+      const ours = C.COURSES.find(c => c.id === p.course);   // link built from our own ids only, never from imported text
+      if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); }
+      else sub.textContent = String(p.courseName || "");
+      name.append(el("span", "title", p.name), sub);
+      row.append(cell("Prazo", "muted num", typeof p.due === "string" && /^\d{4}-\d\d-\d\d$/.test(p.due) ? dmy(p.due) : "sem data"), name);
+      box.appendChild(row);
+    }
+    if (!showAllPend && okList.length > 6) { const b = el("button", "more", "Ver todas (" + okList.length + ")"); b.type = "button";
+      b.addEventListener("click", () => { showAllPend = true; renderPending(); }); box.appendChild(b); }
+    if (!pd.list.length) box.appendChild(el("div", "empty", "Nenhuma. O Canvas não marcou nada como atrasado."));
+  }
+
+  // Bookmarklet: runs collectCanvasGrades (a verbatim copy of extension/collect.js, checked by tests) on the Canvas tab,
+  // then offers "Abrir no Quanto falta" with the same #canvas= hand-off as the extension. Read-only, same origin, no third party.
+  const COLLECT_SRC = '// Runs inside the student\'s Canvas tab (injected with chrome.scripting on click): same-origin, read-only GETs.\n// Returns { v:1, courses:[{ name, assignments:[{ name, points, score, due, missing, submitted, online, stats }] }], announcements } for 2026/2 courses, or { error } (never rejects).\nasync function collectCanvasGrades() {\n  const get = async url => {\n    const out = [];\n    while (url) {\n      const r = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });\n      if (!r.ok) throw new Error("o Canvas respondeu " + r.status);\n      out.push(...JSON.parse((await r.text()).replace(/^while\\(1\\);/, "")));\n      const m = /<([^>]+)>;\\s*rel="next"/.exec(r.headers.get("Link") || "");\n      url = m ? m[1] : null;\n      if (url && new URL(url, location.href).origin !== location.origin) throw new Error("o Canvas indicou uma página fora do Canvas");\n    }\n    return out;\n  };\n  try {\n  const cs = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string" && /2026 \\/ 2/.test(c.name));\n  const courses = [];\n  for (const c of cs) {\n    const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100");\n    courses.push({ name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible,\n      score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,\n      due: a.due_at || null, missing: !!(a.submission && a.submission.missing),\n      submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),\n      online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),\n      stats: a.score_statistics && typeof a.score_statistics.mean === "number"\n        ? { mean: a.score_statistics.mean, min: a.score_statistics.min, max: a.score_statistics.max } : null })) });\n  }\n  // Professors\' announcements from the last 60 days; optional, a failure here never blocks the grades.\n  let announcements = null;\n  try {\n    const since = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10), until = new Date(Date.now() + 864e5).toISOString().slice(0, 10);   // Canvas caps the window when end_date is left out\n    const an = cs.length ? await get("/api/v1/announcements?" + cs.map(c => "context_codes[]=course_" + c.id).join("&") + "&start_date=" + since + "&end_date=" + until + "&per_page=50") : [];\n    const names = Object.fromEntries(cs.map(c => ["course_" + c.id, c.name]));\n    announcements = an.slice(0, 50).map(a => ({ course: names[a.context_code] || "", title: a.title, at: a.posted_at || null, unread: a.read_state === "unread", url: a.html_url || null }));\n  } catch (e) { announcements = null; }\n  return { v: 1, courses, announcements };\n  } catch (e) { return { error: String(e && e.message || e) }; }\n}\n';
+  function bookmarkletPanel(collect, app) {
+    if (!/(^|\.)instructure\.com$/.test(location.hostname)) { alert("Abra o Canvas da PUCPR (pucpr.instructure.com) e clique de novo neste favorito."); return; }
+    const box = document.createElement("div");
+    box.setAttribute("style", "position:fixed;z-index:2147483647;top:16px;right:16px;width:340px;max-width:calc(100vw - 32px);background:#1f1f1f;color:#eee;border:1px solid #3a3a3a;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.4);padding:16px;font:14px/1.45 system-ui,sans-serif");
+    const msg = document.createElement("p"); msg.style.margin = "0 0 10px"; msg.textContent = "Quanto falta: lendo suas notas no Canvas…"; box.appendChild(msg); document.body.appendChild(box);
+    const btn = (t, primary) => { const b = document.createElement("a"); b.textContent = t; b.setAttribute("style", "display:block;text-align:center;margin-top:8px;padding:8px 12px;border-radius:999px;cursor:pointer;text-decoration:none;border:1px solid #3a3a3a;" + (primary ? "background:#eee;color:#191919" : "background:#262626;color:#eee")); return b; };
+    collect().then(res => {
+      if (res.error) { msg.textContent = "Não consegui ler as notas: " + res.error + ". Confira se você está logado no Canvas."; return; }
+      const txt = JSON.stringify(Object.assign({ ext: "bookmarklet" }, res)), bytes = new TextEncoder().encode(txt); let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const graded = res.courses.reduce((n, c) => n + c.assignments.filter(a => a.score !== null).length, 0);
+      msg.textContent = res.courses.length + " matérias lidas, " + graded + " avaliações com nota.";
+      const open = btn("Abrir no Quanto falta", true); open.href = app + "#canvas=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); open.target = "_blank"; open.rel = "noopener";
+      const copy = btn("Copiar texto"); copy.onclick = () => navigator.clipboard.writeText(txt).then(() => { copy.textContent = "Copiado"; }, () => { copy.textContent = "O Canvas bloqueou a cópia: use Abrir no Quanto falta"; });
+      const close = btn("Fechar"); close.onclick = () => box.remove();
+      box.append(open, copy, close);
+    });
+  }
+  const bookmarkletHref = () => "javascript:" + encodeURIComponent("(" + bookmarkletPanel.toString() + ")((function () {\n" + COLLECT_SRC + "\nreturn collectCanvasGrades;\n})(), " + JSON.stringify("https://falta-quanto.vercel.app/app") + ")");   // always production: a preview or local origin would go stale
+
+  function buildImport() {
+    $("bm").href = bookmarkletHref();
+    $("bm").addEventListener("click", e => { e.preventDefault(); alert("Arraste este botão para a barra de favoritos. Depois clique nele com o Canvas aberto."); });
+    $("bmcopy").addEventListener("click", e => { const b = e.currentTarget;
+      navigator.clipboard.writeText($("bm").href).then(() => { b.textContent = "Código copiado"; }, () => { b.textContent = "Não deu para copiar: arraste o botão"; }); });
+    const out = $("importout"), ta = $("paste");
+    const itemOf = k => { const [cid, iid] = k.split(":"), c = C.COURSES.find(x => x.id === cid); return { c, it:c.items.find(i => i.id === iid) }; };
+    const label = k => { if (!k) return "Arquivo"; if (!C.itemByKey(k)) return k; const { c, it } = itemOf(k); return (SHORT[c.id] || c.name) + ": " + it.name; };
+    $("pastebtn").addEventListener("click", () => {
+      if (!navigator.clipboard || !navigator.clipboard.readText) { out.textContent = "Seu navegador não deixa ler a área de transferência. Cole no campo com Ctrl+V ou Cmd+V."; return; }
+      navigator.clipboard.readText().then(t => { ta.value = t; read(); }, () => { out.textContent = "Sem permissão para ler a área de transferência. Cole no campo com Ctrl+V ou Cmd+V."; });
+    });
+    $("readbtn").addEventListener("click", read);
+    $("exportbtn").addEventListener("click", () => {
+      const blob = new Blob([C.toBackup(saved.grades, saved.meta)], { type:"application/json" }), a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "quanto-falta-notas-" + C.SEMESTER + ".json";
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      out.textContent = ""; out.appendChild(el("div", "msg ok", "Arquivo salvo. Guarde-o para levar suas notas a outro navegador."));
+      const ng = Object.values(saved.grades).filter(v => String(v).trim() !== "").length;
+      con.run({ ask:"Exportar um backup das minhas notas", title:"Exportando", doneTitle:"Backup salvo", steps:[["Notas", pl(ng, "nota", "notas")], ["Meta", "meta " + saved.meta], ["Arquivo", "quanto-falta-notas-" + C.SEMESTER + ".json"]],
+        text:"Guarde o arquivo: em outro navegador, use Importar arquivo.", scroll:true });
+    });
+    $("importfilebtn").addEventListener("click", () => $("importfile").click());
+    $("importfile").addEventListener("change", e => {
+      const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+      out.textContent = "";
+      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Quanto falta.")); return; }
+      f.text().then(t => {
+        let res;
+        try { res = C.fromBackup(t); } catch (err) { out.appendChild(el("div", "msg bad", "Não reconheci esse arquivo (" + err.message + ").")); return; }
+        preview(res, "Ignorado do arquivo", () => {});
+        importRun(res, "Importar o backup " + f.name, [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
+      });
+    });
+    // Extension hand-off: #canvas=<base64url JSON>. The hash never reaches a server; it is read here and removed from the address.
+    if (location.hash.startsWith("#canvas=")) {
+      try {
+        const b = atob(location.hash.slice(8).replace(/-/g, "+").replace(/_/g, "/"));
+        ta.value = new TextDecoder().decode(Uint8Array.from(b, ch => ch.charCodeAt(0)));
+      } catch (e) { ta.value = ""; out.appendChild(el("div", "msg bad", "O link da extensão veio incompleto. Clique em Importar de novo.")); }
+      history.replaceState(null, "", location.pathname + location.search + "#canvas");
+      if (ta.value) { read(true); out.prepend(el("div", "muted", "Estas notas chegaram por um link. Se não foi você que clicou na extensão agora, não aplique.")); }
+    }
+    function read(fromLink) {
+      out.textContent = "";
+      let res;
+      try { res = C.fromCanvas(ta.value.trim()); } catch (e) { out.appendChild(el("div", "msg bad", "Não reconheci esse texto (" + e.message + "). Copie de novo pela extensão no Canvas.")); return; }
+      preview(res, "Sem nota do Canvas", () => { ta.value = ""; });
+      importRun(res, res.ext === "script" ? "Ler o texto do script com o meu token" : res.ext === "bookmarklet" ? "Importar pelo favorito do Canvas" : "Importar minhas notas do Canvas", [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)), fromLink);
+    }
+    function preview(res, extraTitle, afterApply) {
+      const keys = Object.keys(res.grades), pend = res.pending;
+      if (res.extOld) { const n = el("div", "msg warn");
+        n.append("Sua extensão está desatualizada" + (res.ext ? " (v" + res.ext + ")" : "") + ". A v" + C.EXT_LATEST + " traz a média da turma, os avisos e a lista Para entregar. ");
+        const a = el("a", null, "Como atualizar"); a.href = "#exthow-up"; n.appendChild(a); out.appendChild(n); }
+      const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); }
+        if (res.todo) saved.todo = { at:today, list:res.todo };
+        if (res.dates) saved.cdates = res.dates;
+        if (res.stats) saved.stats = res.stats;
+        if (res.news) saved.news = { at:today, list:res.news }; };
+      const pendNote = pend ? " " + (pend.length ? pend.length + " entrega(s) que o Canvas marca como não entregue(s) vão para Entregas atrasadas." : "O Canvas não marca nenhuma entrega como atrasada.") : "";
+      if (!keys.length) {
+        out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão." + pendNote));
+        if (pend) { const b = el("button", "btn primary", "Atualizar entregas atrasadas"); b.type = "button";
+          b.addEventListener("click", () => { savePending(); store(); calc(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas atrasadas atualizadas.")); });
+          out.appendChild(b); }
+      }
+      else {
+        out.appendChild(el("div", null, keys.length + " notas encontradas. Confira antes de aplicar:" + pendNote));
+        const ul = el("ul", "imp-list");
+        for (const k of keys) {
+          const li = el("li"), old = saved.grades[k], v = res.grades[k];
+          li.append(el("span", null, label(k)), el("span", "num" + (old && old !== v ? " chg" : ""), (old && old !== v ? old + " → " : "") + v.replace(".", ",")));
+          ul.appendChild(li);
+        }
+        out.appendChild(ul);
+        const apply = el("button", "btn primary", "Aplicar " + keys.length + " notas"); apply.type = "button";
+        apply.addEventListener("click", () => {
+          const hadImport = !!(saved.pending || saved.todo);   // the first import would mark every grade as new
+          saved.fresh = hadImport ? keys.filter(k => C.parseNum(saved.grades[k]) !== C.parseNum(res.grades[k])) : [];
+          for (const k of keys) { saved.grades[k] = res.grades[k]; const inp = $("in-" + k); if (inp) inp.value = res.grades[k]; }
+          if (res.meta != null) { saved.meta = res.meta; metaEl.value = res.meta; }
+          savePending(); store(); calc(); afterApply(); out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));
+          if (res.missing.length) out.appendChild(el("div", "muted", res.missing.length + " avaliações continuam para lançar à mão nas matérias."));
+        });
+        out.appendChild(apply);
+      }
+      const extra = res.notes.concat(res.missing);
+      if (extra.length) {
+        const d = el("details"), sm = el("summary", null, extraTitle + " (" + extra.length + ")"); d.appendChild(sm);
+        const ul = el("ul", "imp-list");
+        for (const m of extra) { const li = el("li"); li.append(el("span", null, label(m.key)), el("span", "muted", m.reason)); ul.appendChild(li); }
+        d.appendChild(ul); d.style.marginTop = "12px"; out.appendChild(d);
+      }
+    }
+  }
+  build(); buildImport(); calc();
+})();
+</script>
+</body>
+</html>

@@ -22,7 +22,7 @@ global.fetch = async url => {
 const collect = new Function(fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();
 const popupSrc = fs.readFileSync(path.join(dir, "popup.js"), "utf8");
 const b64url = new Function(popupSrc.match(/function b64url[\s\S]*?\n\}/)[0] + "\nreturn b64url;")();   // Node's own btoa, like the browser
-const page2 = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+const page2 = fs.readFileSync(path.join(__dirname, "..", "app.html"), "utf8");
 const decodeLines = page2.match(/const b = atob\(location\.hash[^\n]*\n[^\n]*TextDecoder[^\n]*/);
 assert(decodeLines, "index.html hash decode found");
 const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLines[0]); return ta.value; };   // runs index.html's own lines
@@ -31,6 +31,27 @@ const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLine
   assert.deepStrictEqual(out, { v: 1, courses: [{ name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
     { name: "Avaliação somativa -  Prova", points: 10, score: 7, due: null, missing: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, score: null, due: "2026-11-11T02:59:59Z", missing: true, submitted: false, online: false, stats: null }] }],
     announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1" }] });
+  // Bookmarklet on the app page: its collector is the extension's file, verbatim, and its panel hands off like the popup.
+  const lit = page2.match(/const COLLECT_SRC = ('(?:[^'\\]|\\.)*');/);
+  assert(lit, "bookmarklet collector found in app.html");
+  assert.strictEqual(eval(lit[1]), fs.readFileSync(path.join(dir, "collect.js"), "utf8"), "bookmarklet collector is identical to extension/collect.js");
+  const panelSrc = page2.match(/function bookmarkletPanel[\s\S]*?\n  \}\n/)[0];
+  const made = [];
+  const fakeEl = () => { const e = { kids: [], style: {}, setAttribute() {}, appendChild(c) { this.kids.push(c); }, append(...c) { this.kids.push(...c); }, remove() {} }; made.push(e); return e; };
+  const sandbox = new Function("location", "document", "TextEncoder", "btoa", "alert", "navigator", panelSrc + "\nreturn bookmarkletPanel;");
+  const panel = sandbox({ hostname: "pucpr.instructure.com" }, { createElement: fakeEl, body: { appendChild() {} } }, TextEncoder, btoa, () => { throw new Error("alert"); }, {});
+  panel(collect, "https://falta-quanto.vercel.app/app"); await new Promise(r => setTimeout(r, 20));
+  const open = made.find(e => typeof e.href === "string");
+  assert(open && open.href.startsWith("https://falta-quanto.vercel.app/app#canvas="), "bookmarklet offers the app link");
+  const sent = JSON.parse(decodeHash(open.href.slice(open.href.indexOf("#"))));
+  assert.strictEqual(sent.ext, "bookmarklet"); assert.strictEqual(sent.courses.length, 1); assert.strictEqual(sent.announcements.length, 1);
+  assert.strictEqual(open.target, "_blank"); assert.strictEqual(open.rel, "noopener");
+  // The javascript: URL itself, built the way the page builds it, must be valid code.
+  const hrefSrc = page2.match(/const bookmarkletHref = [^\n]*/)[0];
+  const href = new Function("COLLECT_SRC", "bookmarkletPanel", "location", hrefSrc + "\nreturn bookmarkletHref();")(eval(lit[1]), sandbox({}, {}, TextEncoder, btoa, () => {}, {}), { origin: "https://falta-quanto.vercel.app" });
+  const scheme = href.slice(0, href.indexOf(":"));   // a bookmarklet is a javascript: URL by design; this asserts it, it does not filter input
+  assert.strictEqual(scheme, "javascript"); new Function(decodeURIComponent(href.slice(scheme.length + 1)));   // throws on a syntax error
+  assert(decodeURIComponent(href).includes('"https://falta-quanto.vercel.app/app"'), "bookmarklet opens the app");
   const big = JSON.stringify({ v: 1, courses: Array.from({ length: 8 }, (_, i) => ({ name: "Matéria " + i + " ção", assignments: Array.from({ length: 60 }, (_, j) => ({ name: "Avaliação " + j + " é", points: 10, score: j, due: "2026-11-11T02:59:59Z", missing: false })) })) });
   const enc = b64url(big);
   assert(/^[A-Za-z0-9_-]+$/.test(enc), "url-safe");
@@ -40,8 +61,7 @@ const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLine
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
   assert.deepStrictEqual(await collect(), { error: "o Canvas respondeu 401" });
-  assert(!/javascript:|canvasExport/.test(page2), "no bookmarklet left on the site");
   assert(page2.includes('href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
   assert(/cp "\$out" dist\/quanto-falta-extension\.zip/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "package script writes the stable name");
-  console.log("extension ok: MV3, activeTab+scripting only, collect + pagination, url-safe hand-off decoded by index.html's own code, " + big.length + " chars, off-origin and 401 returned as errors");
+  console.log("extension ok: MV3, activeTab+scripting only, collect + pagination, url-safe hand-off decoded by index.html's own code, " + big.length + " chars, off-origin and 401 returned as errors; bookmarklet uses the same collector and hand-off");
 })().catch(e => { console.error(e); process.exit(1); });

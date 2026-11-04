@@ -1,0 +1,19 @@
+#!/bin/sh
+# Render media/demo.mp4 (and a poster) from video/scene.html: one headless frame per step of virtual time.
+# The scene shows a mock Canvas tab, then the real app.html importing made-up grades. Needs Brave or Chrome and ffmpeg.
+set -eu
+cd "$(dirname "$0")/.."
+B="${BROWSER:-/Applications/Brave Browser.app/Contents/MacOS/Brave Browser}"
+fps=20; secs=15; tmp=$(mktemp -d)
+n=$((fps * secs)); i=0
+while [ $i -lt $n ]; do
+  t=$((i * 1000 / fps + 50))
+  "$B" --headless --disable-gpu --hide-scrollbars --allow-file-access-from-files --force-device-scale-factor=1 \
+    --virtual-time-budget=$t --window-size=1280,720 --screenshot="$tmp/$(printf %04d $i).png" "file://$PWD/video/scene.html" 2>/dev/null
+  i=$((i + 1))
+done
+mkdir -p media
+ffmpeg -loglevel error -y -framerate $fps -i "$tmp/%04d.png" -c:v libx264 -pix_fmt yuv420p -crf 26 -preset slow -movflags +faststart media/demo.mp4
+cp "$tmp/$(printf %04d $((fps * 12)))" media/demo-poster.png 2>/dev/null || cp "$tmp/0240.png" media/demo-poster.png
+rm -rf "$tmp"
+ls -la media

@@ -3,4 +3,4 @@
 set -eu
 cd "$(dirname "$0")/.."
 dest="old/index-$(date +%Y%m%d-%H%M%S).html"
-cp index.html "$dest" && echo "saved $dest"
+cp app.html "$dest" && echo "saved $dest"
