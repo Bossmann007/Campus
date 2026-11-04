@@ -675,7 +675,8 @@ const NotasCore = (() => {
     for (const p of pd.list) {
       if (!p || typeof p.name !== "string") continue;
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
-      if (C.COURSES.some(c => c.id === p.course)) { const a = el("a", null, SHORT[p.course]); a.href = "#card-" + p.course; sub.appendChild(a); }
+      const ours = C.COURSES.find(c => c.id === p.course);   // link built from our own ids only, never from imported text
+      if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); }
       else sub.textContent = String(p.courseName || "");
       name.append(el("span", "title", p.name), sub);
       row.append(cell("Prazo", "muted num", typeof p.due === "string" && /^\d{4}-\d\d-\d\d$/.test(p.due) ? dmy(p.due) : "sem data"), name);
