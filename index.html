@@ -3,18 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2230%22%20height%3D%2230%22%20rx%3D%229%22%20fill%3D%22%239be8be%22/%3E%3Cellipse%20cx%3D%2211.6%22%20cy%3D%2214%22%20rx%3D%222.9%22%20ry%3D%223.5%22%20fill%3D%22%23141414%22/%3E%3Cellipse%20cx%3D%2220.4%22%20cy%3D%2214%22%20rx%3D%222.9%22%20ry%3D%223.5%22%20fill%3D%22%23141414%22/%3E%3Cpath%20d%3D%22M12.3%2021.2c2.2%201.9%205.2%201.9%207.4%200%22%20stroke%3D%22%23141414%22%20stroke-width%3D%221.9%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E">
 <meta name="description" content="Calculadora de notas da PUCPR 2026/2: quanto falta em cada prova para passar.">
 <title>Quanto falta · PUCPR 2026/2</title>
 <style>
-  /* Radix Colors 3.0 scales (slate, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
-  :root { --bg:#f9f9fb; --surface:#fff; --sunk:#f0f0f3; --line:#e8e8ec; --line2:#d9d9e0; --txt:#1c2024; --muted:#60646c; --faint:#80838d; --field:#b9bbc6; --warn-ink:#4f3422; --bad-ink:#5c271f; --acc-ink:#113264; --ok-ink:#203c25;
+  /* Radix Colors 3.0 scales (gray, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
+  :root { --bg:#f9f9f9; --surface:#fff; --sunk:#f0f0f0; --line:#e8e8e8; --line2:#d9d9d9; --txt:#202020; --muted:#646464; --faint:#838383; --field:#bbbbbb; --brand:#9be8be; --warn-ink:#4f3422; --bad-ink:#5c271f; --acc-ink:#113264; --ok-ink:#203c25;
           --acc:#0d74ce; --acc-fill:#0090ff; --acc-soft:#e6f4fe; --ok:#2a7e3b; --ok-soft:#e9f6e9; --warn:#ab6400; --warn-soft:#fff7c2; --bad:#d13415; --bad-soft:#feebe7;
           --r:12px; --shadow:0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.02);
           --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
           --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace; color-scheme:light; }
   @media (prefers-color-scheme:dark) {
-    :root { --bg:#111113; --surface:#18191b; --sunk:#212225; --line:#2e3135; --line2:#43484e; --txt:#edeef0; --muted:#b0b4ba; --faint:#777b84; --field:#5a6169; --warn-ink:#ffca16; --bad-ink:#ff977d; --acc-ink:#70b8ff; --ok-ink:#71d083;
+    :root { --bg:#191919; --surface:#222222; --sunk:#2a2a2a; --line:#313131; --line2:#484848; --txt:#eeeeee; --muted:#b4b4b4; --faint:#7b7b7b; --field:#606060; --brand:#9be8be; --warn-ink:#ffca16; --bad-ink:#ff977d; --acc-ink:#70b8ff; --ok-ink:#71d083;
             --acc:#70b8ff; --acc-fill:#0090ff; --acc-soft:#0d2847; --ok:#71d083; --ok-soft:#1b2a1e; --warn:#ffca16; --warn-soft:#302008;
             --bad:#ff977d; --bad-soft:#391714; --shadow:none; color-scheme:dark; }
   }
@@ -31,7 +32,7 @@
                -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
   .sem { color:var(--muted); font-size:13px; padding-left:12px; margin-left:4px; border-left:1px solid var(--line); }
   .brand { display:flex; align-items:center; gap:8px; font-weight:650; letter-spacing:-.01em; }
-  .logo { width:22px; height:22px; border-radius:6px; background:var(--txt); color:var(--bg); display:grid; place-items:center; font-size:12px; font-weight:800; }
+  .logo { flex-shrink:0; }
   .top .spacer { flex:1; }
   .nav { display:flex; gap:2px; margin-left:8px; }
   .nav a { color:var(--muted); font-size:13.5px; padding:6px 10px; border-radius:999px; transition:color .15s, background-color .15s; }
@@ -85,7 +86,7 @@
           background:var(--surface); border-radius:999px; padding:4px 12px; margin-bottom:20px; }
   .dim { color:var(--faint); }
   .feats[hidden] { display:none; }
-  body.fresh #panorama, body.fresh #late-block, body.fresh .chead .badge, body.fresh .chead .figs, body.fresh .chead .bar { display:none; }
+  body:not(.fresh) #flow, body.fresh #panorama, body.fresh #late-block, body.fresh .chead .badge, body.fresh .chead .figs, body.fresh .chead .bar { display:none; }
   .start a { color:var(--acc); }
   .start { display:none; } body.fresh .start { display:block; margin:0 0 12px; padding:14px 16px; border:1px dashed var(--line2); border-radius:var(--r); color:var(--muted); font-size:13.5px; }
   .feats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:48px; }
@@ -239,6 +240,72 @@
   .late-row { grid-template-columns:220px minmax(0,1fr) 90px !important; }
 .pend-row { grid-template-columns:92px minmax(0,1fr) !important; }
 
+
+  /* hero, openbot.run style: availability row, logo inside the headline */
+  .avail { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; font-size:12px; color:var(--muted);
+           border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:3px 12px 3px 3px; margin-bottom:26px; }
+  .avail .new { background:var(--txt); color:var(--bg); font-weight:700; font-size:10.5px; letter-spacing:.04em; border-radius:999px; padding:2px 8px; }
+  .avail b { color:var(--txt); font-weight:500; } .avail i { width:1px; height:12px; background:var(--line2); }
+  .hlogo { width:.92em; height:.92em; vertical-align:-.12em; margin:0 .04em; filter:drop-shadow(0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent)); }
+  .btn svg { margin-right:7px; }
+
+  /* demo window: a scripted import, like the product videos on openbot.run */
+  .demo-slot:empty { display:none; }
+  .demo-slot { margin-top:44px; }
+  .win { text-align:left; border:1px solid var(--line); border-radius:14px; background:var(--bg); box-shadow:0 30px 80px rgba(0,0,0,.35); overflow:hidden; }
+  .win-bar { display:flex; align-items:center; gap:14px; height:40px; padding:0 14px; border-bottom:1px solid var(--line); background:var(--surface); font-size:12.5px; }
+  .dots { display:flex; gap:7px; } .dots i { width:11px; height:11px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
+  .win-bar .tab { display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:8px; background:var(--sunk); color:var(--txt); }
+  .win-bar .sp { flex:1; } .win-bar .demo-tag { color:var(--faint); }
+  .win-body { display:grid; grid-template-columns:230px minmax(0,1fr); min-height:330px; max-height:460px; }
+  .win-side { border-right:1px solid var(--line); background:var(--surface); padding:12px 10px; overflow:hidden; }
+  .win-side h4 { margin:6px 8px 8px; font-size:11.5px; color:var(--faint); font-weight:600; }
+  .srow { display:grid; grid-template-columns:30px minmax(0,1fr); gap:10px; align-items:center; padding:7px 8px; border-radius:10px; }
+  .srow .av { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:10px; font-weight:800; color:#141414; }
+  .srow b { display:block; font-size:13px; font-weight:600; } .srow small { display:block; font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .srow small.on { color:var(--txt); }
+  .win-main { position:relative; padding:18px 22px; overflow:hidden; display:flex; flex-direction:column; gap:12px; justify-content:flex-end; }
+  .bub { max-width:78%; padding:10px 14px; border-radius:16px; font-size:13.5px; line-height:1.5; }
+  .bub.me { align-self:flex-end; background:var(--sunk); }
+  .bub.bot { align-self:flex-start; background:var(--surface); border:1px solid var(--line); }
+  .bub.bot ul { margin:6px 0 0; padding-left:18px; } .bub.bot li { margin:2px 0; }
+  .steps-card { border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:6px 4px; max-width:560px; }
+  .steps-head { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; padding:6px 12px 8px; }
+  .steps-head .cnt { font-weight:500; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; display:inline-flex; gap:6px; align-items:center; }
+  .stp { display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:10px; align-items:start; padding:7px 12px; font-size:13px; }
+  .stp .sub { display:block; color:var(--muted); font-size:12px; margin-top:1px; }
+  .stp .t { color:var(--faint); font-size:12px; font-variant-numeric:tabular-nums; }
+  .ico-s { width:16px; height:16px; margin-top:1px; display:grid; place-items:center; }
+  .spin { width:14px; height:14px; border-radius:50%; border:2px solid color-mix(in srgb, var(--acc) 25%, transparent); border-top-color:var(--acc); animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .ok-ic { color:var(--ok); }
+  .enter { animation:enter .32s cubic-bezier(.23,1,.32,1) both; }
+  @keyframes enter { from { opacity:0; transform:translateY(6px) scale(.98); filter:blur(2px); } }
+  .typing { display:inline-flex; gap:3px; } .typing i { width:5px; height:5px; border-radius:50%; background:var(--muted); animation:blink 1s infinite; }
+  .typing i:nth-child(2) { animation-delay:.15s; } .typing i:nth-child(3) { animation-delay:.3s; }
+  @keyframes blink { 50% { opacity:.25; } }
+  .apply-demo { align-self:flex-start; }
+  .apply-demo .btn { animation:glow 1.6s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow:0 0 0 6px color-mix(in srgb, var(--brand) 30%, transparent); } }
+  .win-main .fade { transition:opacity .25s ease-out; }
+
+  /* Canvas -> Quanto falta diagram */
+  .flow { text-align:center; margin-top:80px; }
+  .flow h2 { font-size:clamp(28px,4.6vw,46px); line-height:1.08; letter-spacing:-.035em; margin:0 0 12px; font-weight:700; }
+  .flow p { color:var(--muted); margin:0 auto; max-width:56ch; font-size:15.5px; }
+  .flow-row { display:flex; align-items:center; justify-content:center; gap:0; margin-top:84px; }
+  .node { display:grid; justify-items:center; gap:8px; font-size:12.5px; color:var(--muted); position:relative; }
+  .node .sq { width:64px; height:64px; border-radius:18px; display:grid; place-items:center; }
+  .node .canvas { background:#e4473a; color:#fff; font-weight:800; font-size:22px; }
+  .node .tip { position:absolute; bottom:calc(100% + 10px); white-space:nowrap; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:6px 10px; font-size:12px; color:var(--txt); }
+  .wire { width:min(260px,30vw); height:2px; margin:0 10px 22px; background-image:radial-gradient(circle, var(--line2) 1.2px, transparent 1.6px); background-size:10px 2px; position:relative; overflow:hidden; }
+  .wire::after { content:""; position:absolute; top:-3px; left:0; width:8px; height:8px; border-radius:50%; background:var(--brand); box-shadow:0 0 12px var(--brand); animation:travel 2.2s cubic-bezier(.65,0,.35,1) infinite; }
+  @keyframes travel { from { transform:translateX(-10px); } to { transform:translateX(min(270px,31vw)); } }
+
+  /* real import: the same step list, with the real counts */
+  .impsteps { margin-bottom:12px; }
+  @media (max-width:820px) { .win-body { grid-template-columns:minmax(0,1fr); min-height:300px; } .win-side { display:none; } .bub { max-width:92%; } }
+  @media (prefers-reduced-motion:reduce) { .spin, .wire::after, .apply-demo .btn, .typing i { animation:none !important; } .enter { animation:none; } }
   footer { margin:56px 0 40px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px; line-height:1.7; }
   footer p { margin:0 0 6px; max-width:760px; }
   .linkbtn { border:0; box-shadow:none; background:none; padding:0; color:var(--acc); font-size:12.5px; margin-top:4px; }
@@ -277,7 +344,7 @@
 </head>
 <body>
 <div class="top"><div class="wrap">
-  <a class="brand" href="#"><span class="logo">Q</span><b>Quanto falta</b></a><span class="sem">PUCPR · 2026/2</span>
+  <a class="brand" href="#"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--brand)"/><ellipse cx="11.6" cy="14" rx="2.9" ry="3.5" fill="#141414"/><ellipse cx="20.4" cy="14" rx="2.9" ry="3.5" fill="#141414"/><circle cx="12.5" cy="12.7" r=".95" fill="#fff"/><circle cx="21.3" cy="12.7" r=".95" fill="#fff"/><path d="M12.3 21.2c2.2 1.9 5.2 1.9 7.4 0" stroke="#141414" stroke-width="1.9" fill="none" stroke-linecap="round"/></svg><b>Quanto falta</b></a><span class="sem">PUCPR · 2026/2</span>
   <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#materias">Matérias</a><a href="#proximas">Próximas</a></nav>
   <div class="spacer"></div>
   <div class="meta" title="Média final para passar. Na PUCPR é 7,0; mude se a sua matéria pedir outra.">
@@ -293,11 +360,11 @@
 
 <div class="wrap">
   <header class="hero">
-    <a class="pill" href="#materias">PUCPR · 2026/2 · 6 matérias</a>
-    <h1 id="h1"><span id="h1a">Quanto falta</span><br><span class="dim" id="h1b">pra passar?</span></h1>
+    <div class="avail"><span class="new">NOVO</span><span>Funciona no</span><b>Chrome</b><b>Brave</b><b>Edge</b><i></i><b>Canvas PUCPR 2026/2</b></div>
+    <h1 id="h1"><span id="h1a">Quanto falta</span> <svg class="hlogo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--brand)"/><ellipse cx="11.6" cy="14" rx="2.9" ry="3.5" fill="#141414"/><ellipse cx="20.4" cy="14" rx="2.9" ry="3.5" fill="#141414"/><circle cx="12.5" cy="12.7" r=".95" fill="#fff"/><circle cx="21.3" cy="12.7" r=".95" fill="#fff"/><path d="M12.3 21.2c2.2 1.9 5.2 1.9 7.4 0" stroke="#141414" stroke-width="1.9" fill="none" stroke-linecap="round"/></svg><br><span class="dim" id="h1b">pra passar?</span></h1>
     <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
     <div class="focus" id="focus" hidden></div>
-    <div class="cta"><a class="btn primary" href="#materias" id="startbtn">Lançar minhas notas</a><a class="btn" href="#canvas">Importar do Canvas</a></div>
+    <div class="cta"><a class="btn primary" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Baixar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
     <details class="how"><summary>Como funciona</summary><ul>
       <li>Lance a nota na escala do professor (aparece ao lado do campo). Vazio = ainda não saiu.</li>
       <li><b>Precisa</b>: a mesma fração da nota máxima em tudo que falta, proporcional ao peso de cada item.</li>
@@ -305,12 +372,23 @@
       <li>Avaliação com data passada e sem nota conta 0 até você lançar; aparece "≈" como estimativa.</li>
       <li>Pesos dos Planos de Ensino; confira sempre no Canvas. Não é um sistema oficial da PUCPR.</li>
     </ul></details>
+    <div class="demo-slot" id="demo-hero"></div>
   </header>
 
   <section class="feats" id="feats">
     <div class="feat"><span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6" fill="currentColor"/></svg></span><h3>O mínimo em cada prova</h3><p>Com os pesos dos Planos de Ensino, já com o que você tirou.</p></div>
     <div class="feat"><span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></span><h3>Notas direto do Canvas</h3><p>Uma extensão lê suas notas em um clique, sem senha nem token.</p></div>
     <div class="feat"><span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><h3>Fica só com você</h3><p>Sem conta e sem servidor: tudo fica salvo no seu navegador.</p></div>
+  </section>
+
+  <section class="flow" id="flow">
+    <h2>Do Canvas para cá.<br><span class="dim">Sem servidor no meio.</span></h2>
+    <p>A extensão lê suas notas, prazos, médias da turma e avisos com o login que você já tem, e abre esta página com tudo. Nada passa por servidor nenhum.</p>
+    <div class="flow-row">
+      <div class="node"><span class="tip">12 notas · 7 prazos · 3 avisos</span><span class="sq canvas">C</span>Canvas PUCPR</div>
+      <span class="wire" aria-hidden="true"></span>
+      <div class="node"><span class="sq"><svg viewBox="0 0 32 32" width="64" height="64" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--brand)"/><ellipse cx="11.6" cy="14" rx="2.9" ry="3.5" fill="#141414"/><ellipse cx="20.4" cy="14" rx="2.9" ry="3.5" fill="#141414"/><circle cx="12.5" cy="12.7" r=".95" fill="#fff"/><circle cx="21.3" cy="12.7" r=".95" fill="#fff"/><path d="M12.3 21.2c2.2 1.9 5.2 1.9 7.4 0" stroke="#141414" stroke-width="1.9" fill="none" stroke-linecap="round"/></svg></span>Quanto falta</div>
+    </div>
   </section>
 
   <section class="block" id="panorama">
@@ -780,8 +858,13 @@ const NotasCore = (() => {
       el("p", null, "Recuperação (só informação, não simulada): os Planos permitem recuperar um único RA com média abaixo de 7,0. Conectividade: recuperação estendida para final entre 4,0 e 7,0, com teto 7,0."));
 
     metaEl.addEventListener("input", () => { saved.meta = metaEl.value; store(); calc(); });
+    let metaT;
+    const metaRun = () => { clearTimeout(metaT); metaT = setTimeout(() => { const T = target(), st = C.COURSES.map(c => C.courseState(c, saved.grades, today, T));
+      con.run({ ask:"Mudar a meta para " + fmt(T, 1), title:"Recalculando", doneTitle:"Recalculado", steps:[["6 matérias", st.filter(x => x.status === "garantido").length + " garantidas, " + st.filter(x => x.status === "precisa").length + " precisam de nota"]],
+        text:"Com a meta " + fmt(T, 1) + ":", lines:nextLines(saved.grades, 2) }); }, 450); };
+    metaEl.addEventListener("input", metaRun);
     const stepMeta = d => { const n = Math.min(10, Math.max(0, Math.round((target() + d) * 2) / 2));
-      metaEl.value = fmt(n, 1); saved.meta = metaEl.value; store(); calc(); };
+      metaEl.value = fmt(n, 1); saved.meta = metaEl.value; store(); calc(); metaRun(); };
     $("metadown").addEventListener("click", () => stepMeta(-0.5)); $("metaup").addEventListener("click", () => stepMeta(0.5));
     metaEl.addEventListener("keydown", e => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); stepMeta(e.key === "ArrowUp" ? 0.5 : -0.5); } });
     // Feedback: opens a prefilled issue form on GitHub (the site has no server; the student sends it from their own account).
@@ -806,6 +889,9 @@ const NotasCore = (() => {
       const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Quanto falta//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Quanto falta"].concat(ev, "END:VCALENDAR").join("\r\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      const nTodo = ev.filter(x => x.startsWith("UID:todo-")).length, nAll = ev.filter(x => x.startsWith("UID:")).length;
+      con.run({ ask:"Exportar para o calendário", title:"Montando o calendário", doneTitle:"Calendário pronto", steps:[["Avaliações", pl(nAll - nTodo, "evento", "eventos")], ["Prazos do Canvas", pl(nTodo, "entrega", "entregas")], ["Arquivo .ics", "baixado"]],
+        text:"Abra o arquivo no Google Agenda, no Calendário da Apple ou no Outlook.", scroll:true });
     });
     const links = [...$("nav").querySelectorAll("a")];
     if ("IntersectionObserver" in window) {
@@ -926,6 +1012,104 @@ const NotasCore = (() => {
     renderPending();
   }
 
+
+  // ---- live console: the window runs each tool with the student's real data; example data only before the first grade ----
+  const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = ms => new Promise(r => setTimeout(r, RM ? 0 : ms));
+  const CHECK = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const COLORS = { imp:"#f5a25b", abd:"#7cc4fa", rpnd:"#c8a6f7", web:"#f7c948", etica:"#f28fb1", cscf:"#7ee0d0" };
+  function stepRow(title, sub) {
+    const r = el("div", "stp enter"), ic = el("span", "ico-s"), tx = el("div"), t = el("span", "t");
+    ic.appendChild(el("span", "spin")); tx.append(el("span", null, title), el("span", "sub", sub)); r.append(ic, tx, t);
+    r.done = (secs, sub2) => { ic.className = "ico-s ok-ic"; ic.innerHTML = CHECK; t.textContent = secs; if (sub2 != null) tx.lastChild.textContent = sub2; };   // static icon markup
+    return r;
+  }
+  function stepsCard(title) {
+    const c = el("div", "steps-card enter"), h = el("div", "steps-head"), cnt = el("span", "cnt"), ttl = el("span", null, title);
+    h.append(ttl, cnt); c.appendChild(h);
+    c.set = (n, total, running) => { cnt.textContent = ""; if (running) cnt.appendChild(el("span", "spin")); cnt.append(n + " de " + total); };
+    c.setTitle = t => { ttl.textContent = t; };
+    return c;
+  }
+  const con = (() => {
+    const w = el("div", "win"), bar = el("div", "win-bar"), dots = el("span", "dots"), tab = el("span", "tab"), tag = el("span", "demo-tag");
+    dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--brand)"/></svg>';
+    tab.append(" Quanto falta"); bar.append(dots, tab, el("span", "sp"), tag);
+    const body = el("div", "win-body"), side = el("div", "win-side"), main = el("div", "win-main fade");
+    main.setAttribute("aria-live", "polite");
+    side.appendChild(el("h4", null, "Matérias · 2026/2"));
+    const smalls = {};
+    for (const c of C.COURSES) { const r = el("a", "srow"), av = el("span", "av", SHORT[c.id].slice(0, 2).toUpperCase()), t = el("div"), sm = el("small", null, "—");
+      r.href = "#card-" + c.id; av.style.background = COLORS[c.id]; t.append(el("b", null, SHORT[c.id]), sm); r.append(av, t); side.appendChild(r); smalls[c.id] = sm; }
+    body.append(side, main); w.append(bar, body);
+    let run = 0, busy = false, used = false;
+    const api = { el:w, get busy() { return busy; }, get used() { return used; } };
+    api.side = (texts, on) => { for (const id in smalls) { smalls[id].textContent = texts[id] || "—"; smalls[id].className = on ? "on" : ""; } };
+    const bubble = (cls, text, lines) => { const b = el("div", "bub " + cls + " enter"); b.append(text);
+      if (lines && lines.length) { const ul = el("ul"); lines.forEach(x => ul.appendChild(el("li", null, x))); b.appendChild(ul); } main.appendChild(b); return b; };
+    // One tool run: the student's request, the steps with real counts, the result and an optional action.
+    api.run = async ({ ask, title, doneTitle, steps, text, lines, action, scroll }) => {
+      const me = ++run, alive = () => me === run; busy = true; used = true; tag.textContent = "ao vivo";
+      main.textContent = ""; if (scroll) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
+      bubble("me", ask); await wait(300); if (!alive()) return;
+      const card = stepsCard(title); card.set(0, steps.length, true); main.appendChild(card);
+      const t0 = performance.now();
+      for (let i = 0; i < steps.length; i++) {
+        const r = stepRow(steps[i][0], ""); card.appendChild(r); await wait(240); if (!alive()) return;
+        r.done(fmt((performance.now() - t0) / 1000, 1) + "s", steps[i][1]); card.set(i + 1, steps.length, i + 1 < steps.length);
+      }
+      card.setTitle(doneTitle || title); await wait(200); if (!alive()) return;
+      if (text) bubble("bot", text, lines);
+      if (action) { const ap = el("div", "apply-demo enter"), btn = el("button", "btn primary sm", action.label); btn.type = "button";
+        btn.addEventListener("click", () => { action.onClick(); ap.remove(); }); ap.appendChild(btn); main.appendChild(ap); }
+      busy = false;
+    };
+    // Resting state for a student with grades: the next thing that counts, from the real numbers.
+    api.idle = (text, lines) => { if (busy) return; run++; tag.textContent = "suas notas"; main.textContent = ""; bubble("bot", text, lines); };
+    // Before the first grade: the same flow with example data, on a loop, labelled as such.
+    api.demo = async () => {
+      const me = ++run, alive = () => me === run;
+      const EX = { imp:"precisa 9,8/10", abd:"falta 0,50 ponto", rpnd:"2 notas novas", web:"precisa 8,9/10", etica:"3 avisos novos", cscf:"na média da turma" };
+      while (alive()) {
+        tag.textContent = "demonstração · notas de exemplo"; main.style.opacity = ""; main.textContent = ""; api.side({}, false);
+        await wait(500); if (!alive()) return;
+        bubble("me", "Importar minhas notas do Canvas"); await wait(700); if (!alive()) return;
+        const typ = el("div", "bub bot enter"), ty = el("span", "typing"); ty.append(el("i"), el("i"), el("i")); typ.appendChild(ty); main.appendChild(typ);
+        await wait(900); if (!alive()) return; typ.remove();
+        const card = stepsCard("Lendo o Canvas"), steps = [["Notas", "12 notas encontradas"], ["Média da turma", "liberada em 9 avaliações"], ["Prazos", "7 entregas nos próximos 14 dias"], ["Avisos", "3 não lidos"]];
+        card.set(0, steps.length, true); main.appendChild(card);
+        for (let i = 0; i < steps.length; i++) { const r = stepRow(steps[i][0], ""); card.appendChild(r); await wait(650 + i * 120); if (!alive()) return;
+          r.done(fmt(0.3 + i * 0.2, 1) + "s", steps[i][1]); card.set(i + 1, steps.length, i + 1 < steps.length); if (!i) api.side(EX, true); }
+        card.setTitle("Leu o Canvas"); await wait(600); if (!alive()) return;
+        bubble("bot", "Pronto. O que importa agora:", ["Imperativa: 9,8 na Prova do RA2 (11/11)", "Banco de Dados: falta 0,50 ponto", "Ética: 3 avisos novos"]);
+        await wait(500); if (!alive()) return;
+        const ap = el("div", "apply-demo enter"); ap.appendChild(el("span", "btn primary sm", "Aplicar 12 notas")); main.appendChild(ap);
+        if (RM) return;
+        await wait(4200); if (!alive()) return; main.style.opacity = "0"; await wait(260);
+      }
+    };
+    api.stop = () => { if (!busy) run++; };
+    return api;
+  })();
+  $("demo-hero").appendChild(con.el);
+  let demoOn = false;
+  // What matters next, as short lines, for any set of grades (used before and after applying an import).
+  function nextLines(grades, n) {
+    return C.upcoming(C.COURSES, grades, today, target()).filter(u => u.st.status !== "garantido").slice(0, n)
+      .map(u => SHORT[u.course.id] + ": " + reqText(u.req, u.item, u.st) + " em " + u.item.name + " (" + dmy(u.item.date) + ")");
+  }
+  const pl = (n, one, many) => n + " " + (n === 1 ? one : many);
+  function importRun(res, ask, applyBtn) {
+    const steps = [["Notas", pl(Object.keys(res.grades).length, "nota encontrada", "notas encontradas")]];
+    if (res.stats) steps.push(["Média da turma", pl(Object.keys(res.stats).length, "avaliação com média da turma", "avaliações com média da turma")]);
+    if (res.todo) steps.push(["Prazos", pl(res.todo.filter(t => t.due >= today && days(t.due) <= 14).length, "entrega", "entregas") + " nos próximos 14 dias"]);
+    if (res.pending) steps.push(["Atrasadas", res.pending.length + " sem entrega no Canvas"]);
+    if (res.news) steps.push(["Avisos", pl(res.news.length, "aviso", "avisos") + ", " + pl(res.news.filter(n => n.unread).length, "não lido", "não lidos")]);
+    const merged = Object.assign({}, saved.grades, res.grades), n = Object.keys(res.grades).length;
+    con.run({ ask, title:"Lendo", doneTitle:"Pronto: confira antes de aplicar", steps, scroll:true,
+      text:n ? "Com essas notas, o que importa agora:" : "Nenhuma nota nova para aplicar.", lines:n ? nextLines(merged, 3) : [],
+      action:n && applyBtn ? { label:"Aplicar " + n + " notas", onClick:() => applyBtn.click() } : null });
+  }
   // Hero for returning students: the next assessment that still matters and what it needs, then the two after it.
   function renderFocus(T) {
     const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
@@ -934,6 +1118,11 @@ const NotasCore = (() => {
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     $("feats").hidden = any;
     document.body.classList.toggle("fresh", !any);
+    if (!any && !demoOn && !con.used) { demoOn = true; con.demo(); }
+    if (any) { demoOn = false; const side = {};
+      for (const c of C.COURSES) side[c.id] = $("pill-" + c.id).textContent;
+      con.side(side, true);
+      if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
     const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
     $("h1a").textContent = !any ? "Quanto falta" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
     $("h1b").textContent = !any ? "pra passar?" : open ? "pra fechar o semestre." : "bom descanso.";
@@ -1047,6 +1236,9 @@ const NotasCore = (() => {
       a.href = URL.createObjectURL(blob); a.download = "quanto-falta-notas-" + C.SEMESTER + ".json";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       out.textContent = ""; out.appendChild(el("div", "msg ok", "Arquivo salvo. Guarde-o para levar suas notas a outro navegador."));
+      const ng = Object.values(saved.grades).filter(v => String(v).trim() !== "").length;
+      con.run({ ask:"Exportar um backup das minhas notas", title:"Exportando", doneTitle:"Backup salvo", steps:[["Notas", pl(ng, "nota", "notas")], ["Meta", "meta " + saved.meta], ["Arquivo", "quanto-falta-notas-" + C.SEMESTER + ".json"]],
+        text:"Guarde o arquivo: em outro navegador, use Importar arquivo.", scroll:true });
     });
     $("importfilebtn").addEventListener("click", () => $("importfile").click());
     $("importfile").addEventListener("change", e => {
@@ -1057,6 +1249,7 @@ const NotasCore = (() => {
         let res;
         try { res = C.fromBackup(t); } catch (err) { out.appendChild(el("div", "msg bad", "Não reconheci esse arquivo (" + err.message + ").")); return; }
         preview(res, "Ignorado do arquivo", () => {});
+        importRun(res, "Importar o backup " + f.name, [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
       });
     });
     // Extension hand-off: #canvas=<base64url JSON>. The hash never reaches a server; it is read here and removed from the address.
@@ -1073,6 +1266,7 @@ const NotasCore = (() => {
       let res;
       try { res = C.fromCanvas(ta.value.trim()); } catch (e) { out.appendChild(el("div", "msg bad", "Não reconheci esse texto (" + e.message + "). Copie de novo pela extensão no Canvas.")); return; }
       preview(res, "Sem nota do Canvas", () => { ta.value = ""; });
+      importRun(res, res.ext === "script" ? "Ler o texto do script com o meu token" : "Importar minhas notas do Canvas", [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
     }
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;
