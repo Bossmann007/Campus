@@ -476,7 +476,7 @@
   <form method="dialog" class="fbform">
     <h2 id="fbtitle">Feedback para o Enzo</h2>
     <p class="muted">O que você mudaria, uma ideia ou algo que deu errado. A mensagem abre pronta no GitHub do projeto; lá é só clicar em <b>Create</b>.</p>
-    <textarea id="fbtext" rows="5" maxlength="2000" placeholder="Ex.: queria ver a média geral do semestre" aria-label="Sua mensagem"></textarea>
+    <textarea id="fbtext" rows="5" maxlength="1200" placeholder="Ex.: queria ver a média geral do semestre" aria-label="Sua mensagem"></textarea>
     <p class="muted fine">Precisa de uma conta no GitHub (é grátis). A mensagem fica pública: não escreva notas, tokens nem dados pessoais.</p>
     <div class="acts"><button id="fbsend" class="btn primary" type="button">Abrir no GitHub</button><button class="btn" value="cancel">Cancelar</button></div>
   </form>
@@ -657,6 +657,7 @@ const NotasCore = (() => {
     }
     todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
     const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {}, stats = {};
+    const knownStats = Array.isArray(data.courses) && data.courses.some(c => c && Array.isArray(c.assignments) && c.assignments.some(a => a && "stats" in a));
     const grades = {}, missing = [], notes = [];
     for (const c of COURSES) {
       const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
@@ -689,7 +690,7 @@ const NotasCore = (() => {
       return { course:ours ? ours.id : null, courseName:cn.split(" (")[0].split(" - ")[0], title:a.title.slice(0, 200),
                at:str(a.at) !== null && !Number.isNaN(Date.parse(a.at)) ? localISO(new Date(a.at)) : null, unread:a.unread === true, url };
     }).sort((x, y) => (y.unread - x.unread) || ((y.at || "") > (x.at || "") ? 1 : -1));
-    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates, stats, news, ext,
+    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates, stats:knownStats ? stats : null, news, ext,
              extOld: ext !== "script" && (!ext || verLess(ext, EXT_LATEST)) };
   }
 
@@ -873,7 +874,7 @@ const NotasCore = (() => {
     fb.addEventListener("click", e => { if (e.target === fb) fb.close(); });   // click on the backdrop closes
     $("fbsend").addEventListener("click", () => {
       const t = $("fbtext").value.trim(); if (!t) { $("fbtext").focus(); return; }
-      const q = new URLSearchParams({ template:"feedback.yml", title:"Feedback: " + t.split(/\s+/).slice(0, 8).join(" ").slice(0, 70), mensagem:t.slice(0, 2000), origem:"site, " + today });
+      const q = new URLSearchParams({ template:"feedback.yml", title:"Feedback: " + t.split(/\s+/).slice(0, 8).join(" ").slice(0, 70), mensagem:t.slice(0, 1200), origem:"site, " + today });
       window.open("https://github.com/Bossmann007/quanto-falta-pucpr/issues/new?" + q, "_blank", "noopener,noreferrer");
       fb.close(); $("fbtext").value = "";
     });
@@ -885,7 +886,7 @@ const NotasCore = (() => {
         "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
       for (const u of C.upcoming(C.COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Quanto falta: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
       if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
-        .forEach((t, i) => add("todo-" + i + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
+        .forEach(t => add("todo-" + [...(t.courseName + "|" + t.name)].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 7).toString(36) + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
       const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Quanto falta//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Quanto falta"].concat(ev, "END:VCALENDAR").join("\r\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -1061,7 +1062,7 @@ const NotasCore = (() => {
       card.setTitle(doneTitle || title); await wait(200); if (!alive()) return;
       if (text) bubble("bot", text, lines);
       if (action) { const ap = el("div", "apply-demo enter"), btn = el("button", "btn primary sm", action.label); btn.type = "button";
-        btn.addEventListener("click", () => { action.onClick(); ap.remove(); }); ap.appendChild(btn); main.appendChild(ap); }
+        btn.addEventListener("click", () => { if (!action.live || action.live()) action.onClick(); ap.remove(); }); ap.appendChild(btn); if (!action.live || action.live()) main.appendChild(ap); }
       busy = false;
     };
     // Resting state for a student with grades: the next thing that counts, from the real numbers.
@@ -1099,7 +1100,7 @@ const NotasCore = (() => {
       .map(u => SHORT[u.course.id] + ": " + reqText(u.req, u.item, u.st) + " em " + u.item.name + " (" + dmy(u.item.date) + ")");
   }
   const pl = (n, one, many) => n + " " + (n === 1 ? one : many);
-  function importRun(res, ask, applyBtn) {
+  function importRun(res, ask, applyBtn, fromLink) {
     const steps = [["Notas", pl(Object.keys(res.grades).length, "nota encontrada", "notas encontradas")]];
     if (res.stats) steps.push(["Média da turma", pl(Object.keys(res.stats).length, "avaliação com média da turma", "avaliações com média da turma")]);
     if (res.todo) steps.push(["Prazos", pl(res.todo.filter(t => t.due >= today && days(t.due) <= 14).length, "entrega", "entregas") + " nos próximos 14 dias"]);
@@ -1107,8 +1108,8 @@ const NotasCore = (() => {
     if (res.news) steps.push(["Avisos", pl(res.news.length, "aviso", "avisos") + ", " + pl(res.news.filter(n => n.unread).length, "não lido", "não lidos")]);
     const merged = Object.assign({}, saved.grades, res.grades), n = Object.keys(res.grades).length;
     con.run({ ask, title:"Lendo", doneTitle:"Pronto: confira antes de aplicar", steps, scroll:true,
-      text:n ? "Com essas notas, o que importa agora:" : "Nenhuma nota nova para aplicar.", lines:n ? nextLines(merged, 3) : [],
-      action:n && applyBtn ? { label:"Aplicar " + n + " notas", onClick:() => applyBtn.click() } : null });
+      text:(fromLink ? "Estas notas chegaram por um link: aplique só se foi você que clicou na extensão agora. " : "") + (n ? "Com essas notas, o que importa agora:" : "Nenhuma nota nova para aplicar."), lines:n ? nextLines(merged, 3) : [],
+      action:n && applyBtn ? { label:"Aplicar " + n + " notas", onClick:() => applyBtn.click(), live:() => applyBtn.isConnected } : null });
   }
   // Hero for returning students: the next assessment that still matters and what it needs, then the two after it.
   function renderFocus(T) {
@@ -1259,14 +1260,14 @@ const NotasCore = (() => {
         ta.value = new TextDecoder().decode(Uint8Array.from(b, ch => ch.charCodeAt(0)));
       } catch (e) { ta.value = ""; out.appendChild(el("div", "msg bad", "O link da extensão veio incompleto. Clique em Importar de novo.")); }
       history.replaceState(null, "", location.pathname + location.search + "#canvas");
-      if (ta.value) { read(); out.prepend(el("div", "muted", "Estas notas chegaram por um link. Se não foi você que clicou na extensão agora, não aplique.")); $("canvas").scrollIntoView(); }
+      if (ta.value) { read(true); out.prepend(el("div", "muted", "Estas notas chegaram por um link. Se não foi você que clicou na extensão agora, não aplique.")); }
     }
-    function read() {
+    function read(fromLink) {
       out.textContent = "";
       let res;
       try { res = C.fromCanvas(ta.value.trim()); } catch (e) { out.appendChild(el("div", "msg bad", "Não reconheci esse texto (" + e.message + "). Copie de novo pela extensão no Canvas.")); return; }
       preview(res, "Sem nota do Canvas", () => { ta.value = ""; });
-      importRun(res, res.ext === "script" ? "Ler o texto do script com o meu token" : "Importar minhas notas do Canvas", [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
+      importRun(res, res.ext === "script" ? "Ler o texto do script com o meu token" : "Importar minhas notas do Canvas", [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)), fromLink);
     }
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;

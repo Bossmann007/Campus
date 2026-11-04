@@ -62,10 +62,12 @@ def main():
             an = get(token, BASE + "/api/v1/announcements?" + "&".join(f"context_codes[]=course_{c['id']}" for c in courses) + f"&start_date={since}&end_date={until}&per_page=50") if courses else []
             data["announcements"] = [{"course": names.get(a.get("context_code"), ""), "title": a.get("title"), "at": a.get("posted_at"),
                                       "unread": a.get("read_state") == "unread", "url": a.get("html_url")} for a in an[:50]]
-        except urllib.error.HTTPError:
+        except (urllib.error.URLError, ValueError):   # announcements are optional: keep the grades
             data["announcements"] = None
     except urllib.error.HTTPError as e:
         sys.exit(f"o Canvas respondeu {e.code}" + (": confira o token" if e.code == 401 else ""))
+    except (urllib.error.URLError, ValueError) as e:
+        sys.exit(f"não consegui ler o Canvas: {e}")
     print(json.dumps(data, ensure_ascii=False))
     print(f"{len(courses)} matérias lidas. Cole o texto no Quanto falta.", file=sys.stderr)
 

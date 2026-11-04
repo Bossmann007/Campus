@@ -3,3 +3,4 @@
 # personal versions with real grades: never published
 old/
 dist/
+__pycache__/
