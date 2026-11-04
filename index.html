@@ -150,6 +150,7 @@
   textarea { width:100%; font:12.5px/1.4 var(--mono); color:var(--txt); background:var(--sunk); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; resize:vertical; }
   textarea:focus { outline:none; border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-soft); }
   .acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .acts.backup { align-items:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); font-size:13.5px; }
   #importout:not(:empty) { margin-top:14px; }
   .imp-list { list-style:none; margin:10px 0; padding:0; display:grid; gap:4px; font-size:13.5px; }
   .imp-list li { display:flex; gap:10px; justify-content:space-between; border-bottom:1px solid var(--line); padding:5px 0; }
@@ -216,6 +217,7 @@
       </ol>
       <textarea id="paste" rows="3" placeholder="Cole aqui o texto copiado do Canvas" aria-label="Texto copiado do Canvas" spellcheck="false"></textarea>
       <div class="acts"><button id="readbtn" class="btn primary" type="button">Ler notas</button><button id="pastebtn" class="btn" type="button">Colar da área de transferência</button></div>
+      <div class="acts backup"><span class="muted">Backup das notas:</span><button id="exportbtn" class="btn" type="button">Exportar arquivo</button><button id="importfilebtn" class="btn" type="button">Importar arquivo</button><input id="importfile" type="file" accept=".json,application/json" hidden></div>
       <div id="importout" aria-live="polite"></div>
     </div>
   </section>
@@ -416,7 +418,32 @@ const NotasCore = (() => {
     }
     return { grades, missing, notes };
   }
-  return { COURSES, SEED, CANVAS, fromCanvas, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks };
+
+  // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
+  const SEMESTER = "2026-2";
+  const itemByKey = k => { const [cid, iid] = String(k).split(":"); const c = COURSES.find(x => x.id === cid); return c && c.items.find(i => i.id === iid) || null; };
+  function toBackup(grades, meta) {
+    const out = {};
+    for (const c of COURSES) for (const it of c.items) { const v = grades[key(c, it)]; if (typeof v === "string" && v.trim() !== "") out[key(c, it)] = v.trim(); }
+    return JSON.stringify({ app:"quanto-falta", v:1, semester:SEMESTER, exported:new Date().toISOString().slice(0, 10), meta:String(meta), grades:out }, null, 1);
+  }
+  function fromBackup(text) {
+    let d;
+    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Quanto falta"); }
+    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Quanto falta");
+    const grades = {}, missing = [], notes = [];
+    if (d.semester !== SEMESTER) notes.push({ key:"", reason:"backup de outro semestre (" + String(d.semester) + "): confira antes de aplicar" });
+    for (const k of Object.keys(d.grades)) {
+      const it = itemByKey(k), v = d.grades[k];
+      if (!it) { missing.push({ key:k, reason:"avaliação que não existe nesta calculadora" }); continue; }
+      if (typeof v !== "string") { missing.push({ key:k, reason:"nota em formato estranho, ignorada" }); continue; }
+      const p = itemPoints(it, v);
+      if (p === null || Number.isNaN(p)) { missing.push({ key:k, reason:"nota fora da escala, ignorada" }); continue; }
+      grades[k] = v;
+    }
+    return { grades, missing, notes, meta: typeof d.meta === "string" ? d.meta : null };
+  }
+  return { COURSES, SEED, CANVAS, fromCanvas, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks };
 })();
 </script>
 <script id="ui">
@@ -668,12 +695,29 @@ const NotasCore = (() => {
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done, () => { ta.value = code; ta.select(); document.execCommand("copy"); done(); });
       else { ta.value = code; ta.select(); document.execCommand("copy"); done(); } });
     const itemOf = k => { const [cid, iid] = k.split(":"), c = C.COURSES.find(x => x.id === cid); return { c, it:c.items.find(i => i.id === iid) }; };
-    const label = k => { const { c, it } = itemOf(k); return (SHORT[c.id] || c.name) + ": " + it.name; };
+    const label = k => { if (!k) return "Arquivo"; if (!C.itemByKey(k)) return k; const { c, it } = itemOf(k); return (SHORT[c.id] || c.name) + ": " + it.name; };
     $("pastebtn").addEventListener("click", () => {
       if (!navigator.clipboard || !navigator.clipboard.readText) { out.textContent = "Seu navegador não deixa ler a área de transferência. Cole no campo com Ctrl+V ou Cmd+V."; return; }
       navigator.clipboard.readText().then(t => { ta.value = t; read(); }, () => { out.textContent = "Sem permissão para ler a área de transferência. Cole no campo com Ctrl+V ou Cmd+V."; });
     });
     $("readbtn").addEventListener("click", read);
+    $("exportbtn").addEventListener("click", () => {
+      const blob = new Blob([C.toBackup(saved.grades, saved.meta)], { type:"application/json" }), a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "quanto-falta-notas-" + C.SEMESTER + ".json";
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      out.textContent = ""; out.appendChild(el("div", "msg ok", "Arquivo salvo. Guarde-o para levar suas notas a outro navegador."));
+    });
+    $("importfilebtn").addEventListener("click", () => $("importfile").click());
+    $("importfile").addEventListener("change", e => {
+      const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+      out.textContent = "";
+      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Quanto falta.")); return; }
+      f.text().then(t => {
+        let res;
+        try { res = C.fromBackup(t); } catch (err) { out.appendChild(el("div", "msg bad", "Não reconheci esse arquivo (" + err.message + ").")); return; }
+        preview(res, "Ignorado do arquivo", () => {});
+      });
+    });
     // Extension hand-off: #canvas=<base64url JSON>. The hash never reaches a server; it is read here and removed from the address.
     if (location.hash.startsWith("#canvas=")) {
       try {
@@ -687,6 +731,9 @@ const NotasCore = (() => {
       out.textContent = "";
       let res;
       try { res = C.fromCanvas(ta.value.trim()); } catch (e) { out.appendChild(el("div", "msg bad", "Não reconheci esse texto (" + e.message + "). Copie de novo pelo favorito no Canvas.")); return; }
+      preview(res, "Sem nota do Canvas", () => { ta.value = ""; });
+    }
+    function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades);
       if (!keys.length) { out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão.")); }
       else {
@@ -701,14 +748,15 @@ const NotasCore = (() => {
         const apply = el("button", "btn primary", "Aplicar " + keys.length + " notas"); apply.type = "button";
         apply.addEventListener("click", () => {
           for (const k of keys) { saved.grades[k] = res.grades[k]; const inp = $("in-" + k); if (inp) inp.value = res.grades[k]; }
-          store(); calc(); ta.value = ""; out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));
+          if (res.meta != null) { saved.meta = res.meta; metaEl.value = res.meta; }
+          store(); calc(); afterApply(); out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));
           if (res.missing.length) out.appendChild(el("div", "muted", res.missing.length + " avaliações continuam para lançar à mão nas matérias."));
         });
         out.appendChild(apply);
       }
       const extra = res.notes.concat(res.missing);
       if (extra.length) {
-        const d = el("details"), sm = el("summary", null, "Sem nota do Canvas (" + extra.length + ")"); d.appendChild(sm);
+        const d = el("details"), sm = el("summary", null, extraTitle + " (" + extra.length + ")"); d.appendChild(sm);
         const ul = el("ul", "imp-list");
         for (const m of extra) { const li = el("li"); li.append(el("span", null, label(m.key)), el("span", "muted", m.reason)); ul.appendChild(li); }
         d.appendChild(ul); d.style.marginTop = "12px"; out.appendChild(d);
