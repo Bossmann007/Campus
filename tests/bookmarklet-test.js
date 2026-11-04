@@ -27,7 +27,7 @@ setTimeout(() => {
 // error paths: wrong site alerts and stops; a Canvas error (logged out) is shown in the box, not thrown
 setTimeout(() => {
   let alerted = ""; global.alert = m => { alerted = m; };
-  global.location = { hostname: "quanto-falta-pucpr.vercel.app" }; nodes.length = 0; calls.length = 0;
+  global.location = { hostname: "falta-quanto.vercel.app" }; nodes.length = 0; calls.length = 0;
   eval(src);
   assert(/Abra o Canvas/.test(alerted) && calls.length === 0 && nodes.length === 0, "wrong host stops before any request");
   global.location = { hostname: "pucpr.instructure.com", href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };
