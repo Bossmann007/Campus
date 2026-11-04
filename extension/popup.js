@@ -1,5 +1,5 @@
 // Popup: inject collectCanvasGrades into the active Canvas tab, then hand the result to the calculator page.
-const SITE = "https://quanto-falta-pucpr.vercel.app/";   // preview/production URL; the page reads #canvas=<data> locally (hash never reaches a server)
+const SITE = "https://falta-quanto.vercel.app/";   // preview/production URL; the page reads #canvas=<data> locally (hash never reaches a server)
 const $ = id => document.getElementById(id);
 const say = (text, cls) => { $("status").textContent = text; $("status").className = cls || ""; };
 function b64url(s) {   // chunked: a spread of a long export would overflow the argument limit

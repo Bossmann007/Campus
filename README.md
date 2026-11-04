@@ -18,4 +18,4 @@ Calculadora "Quanto falta pra passar" for PUCPR 2026/2: one static page (`index.
 - `old/`: local personal versions with real grades; git-ignored, never published.
 - `referencias/`: design reference links (`README.md`, `links.html`); not deployed.
 
-Deploy: Vercel project `quanto-falta-pucpr` (https://quanto-falta-pucpr.vercel.app) serves only `index.html` with the headers in `vercel.json` (`.vercelignore` whitelist). Production deploys need Enzo's approval each time.
+Deploy: Vercel project `falta-quanto` (https://falta-quanto.vercel.app) serves only `index.html` with the headers in `vercel.json` (`.vercelignore` whitelist). Production deploys need Enzo's approval each time.
