@@ -22,7 +22,8 @@ Com o Canvas aberto, clique no ícone da extensão e em "Importar notas do Canva
 
 - quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino;
 - o mínimo em cada prova se você tirar nota cheia no resto;
-- quais matérias já estão garantidas e quais ainda dependem de nota.
+- quais matérias já estão garantidas e quais ainda dependem de nota;
+- as entregas que o Canvas marca como não entregues, com o prazo.
 
 Privacidade: a extensão usa o login que você já tem no Canvas, não pede senha nem token, só lê (nunca grava no Canvas) e não envia nada para servidor nenhum. As notas ficam só no seu navegador.
 
@@ -35,5 +36,5 @@ Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure.
 - **activeTab:** ler a aba do Canvas só quando o usuário clica no botão da extensão.
 - **scripting:** executar, nessa aba e nesse momento, a leitura das notas pela API do Canvas com a sessão do próprio usuário.
 - **Código remoto:** não. Todo o código está no pacote.
-- **Dados tratados:** as notas são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
+- **Dados tratados:** as notas, prazos e marcações de entrega pendente são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.

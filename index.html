@@ -157,6 +157,7 @@
   .imp-list .chg { color:var(--warn); }
   .late .badge { font-weight:500; }
   .late-row { grid-template-columns:220px minmax(0,1fr) 90px !important; }
+.pend-row { grid-template-columns:92px minmax(0,1fr) !important; }
 
   footer { margin:56px 0 40px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px; line-height:1.7; }
   footer p { margin:0 0 6px; max-width:760px; }
@@ -164,7 +165,7 @@
   @media (max-width:820px) {
     .stats { grid-template-columns:repeat(2,1fr); }
     .courses { grid-template-columns:minmax(0,1fr); }
-    .row, .items .row, .late-row { grid-template-columns:minmax(0,1fr) auto !important; gap:8px 12px; padding:14px 16px; }
+    .row, .items .row, .late-row, .pend-row { grid-template-columns:minmax(0,1fr) auto !important; gap:8px 12px; padding:14px 16px; }
     .row.head { display:none; }
     .row > .wide { grid-column:1 / -1; order:-1; }
     .row > [data-label="Data"] { flex-direction:row; align-items:baseline; gap:8px; }
@@ -227,6 +228,11 @@
       <div class="seg" role="tablist" id="filter"><button role="tab" data-f="all" aria-selected="true">Todas</button><button role="tab" data-f="exam" aria-selected="false">Só provas</button><button role="tab" data-f="week" aria-selected="false">Próximos 7 dias</button></div></div>
     <p class="hint below">≈ estimativa e * provisório: até você lançar as notas que já saíram.</p>
     <div class="list" id="next"></div>
+  </section>
+
+  <section class="block" id="pendentes">
+    <div class="bhead"><h2>Entregas pendentes no Canvas</h2><span class="hint" id="pendat"></span></div>
+    <div class="list" id="pend"></div>
   </section>
 
   <section class="block" id="materias">
@@ -395,8 +401,16 @@ const NotasCore = (() => {
     if (!data || typeof data !== "object" || !Array.isArray(data.courses)) throw new Error("formato inválido: falta a lista de matérias");
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
-      return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score) })) };
+      return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
+        due:str(a.due) !== null && !Number.isNaN(Date.parse(a.due)) ? localISO(new Date(a.due)) : null, missing:a.missing === true })) };
     });
+    // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
+    const pending = [];
+    for (const cv of courses) {
+      const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
+      for (const a of cv.assignments) if (a.missing) pending.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
+    }
+    pending.sort((x, y) => (x.due || "9") < (y.due || "9") ? -1 : (x.due || "9") > (y.due || "9") ? 1 : 0);
     const grades = {}, missing = [], notes = [];
     for (const c of COURSES) {
       const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
@@ -416,7 +430,7 @@ const NotasCore = (() => {
         grades[k] = String(r9(Math.round(Math.max(0, f) * it.inMax * 1000) / 1000));
       }
     }
-    return { grades, missing, notes };
+    return { grades, missing, notes, pending };
   }
 
   // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
@@ -456,6 +470,7 @@ const NotasCore = (() => {
     saved = { grades: Object.assign({}, C.SEED), meta: "7" };
   if (typeof saved.meta !== "string") saved.meta = "7";
   if (!saved.open || typeof saved.open !== "object") saved.open = {};
+  if (!saved.pending || typeof saved.pending.at !== "string" || !Array.isArray(saved.pending.list)) delete saved.pending;
   const store = () => { try { localStorage.setItem(LS, JSON.stringify(saved)); } catch (e) {} };
 
   const $ = id => document.getElementById(id);
@@ -647,6 +662,25 @@ const NotasCore = (() => {
       late.appendChild(row);
     }
     if (!any) late.appendChild(el("div", "empty", "Nenhuma. Tudo lançado."));
+    renderPending();
+  }
+
+  // What Canvas marked as missing at the last import (a snapshot: it does not refresh by itself).
+  function renderPending() {
+    const box = $("pend"), pd = saved.pending; box.textContent = "";
+    $("pendat").textContent = pd ? "lido do Canvas em " + dmy(pd.at) + "; importe de novo para atualizar" : "";
+    if (!pd) { box.appendChild(el("div", "empty", "Importe do Canvas para ver o que o Canvas marca como não entregue.")); return; }
+    const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
+    for (const p of pd.list) {
+      if (!p || typeof p.name !== "string") continue;
+      const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
+      if (C.COURSES.some(c => c.id === p.course)) { const a = el("a", null, SHORT[p.course]); a.href = "#card-" + p.course; sub.appendChild(a); }
+      else sub.textContent = String(p.courseName || "");
+      name.append(el("span", "title", p.name), sub);
+      row.append(cell("Prazo", "muted num", typeof p.due === "string" && /^\d{4}-\d\d-\d\d$/.test(p.due) ? dmy(p.due) : "sem data"), name);
+      box.appendChild(row);
+    }
+    if (!pd.list.length) box.appendChild(el("div", "empty", "Nenhuma. O Canvas não marcou nada como não entregue."));
   }
 
   // Bookmarklet: runs on the student's own Canvas tab, same origin, read-only GETs; shows the export for them to copy.
@@ -668,7 +702,7 @@ const NotasCore = (() => {
         const courses = [];
         for (const c of cs) {
           const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&per_page=100");
-          courses.push({ name:c.name, assignments:as.map(a => ({ name:a.name, points:a.points_possible, score:a.submission && typeof a.submission.score === "number" ? a.submission.score : null })) });
+          courses.push({ name:c.name, assignments:as.map(a => ({ name:a.name, points:a.points_possible, score:a.submission && typeof a.submission.score === "number" ? a.submission.score : null, due:a.due_at || null, missing:!!(a.submission && a.submission.missing) })) });
         }
         const txt = JSON.stringify({ v:1, courses });
         box.textContent = "";
@@ -734,10 +768,17 @@ const NotasCore = (() => {
       preview(res, "Sem nota do Canvas", () => { ta.value = ""; });
     }
     function preview(res, extraTitle, afterApply) {
-      const keys = Object.keys(res.grades);
-      if (!keys.length) { out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão.")); }
+      const keys = Object.keys(res.grades), pend = res.pending;
+      const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); } };
+      const pendNote = pend ? " " + (pend.length ? pend.length + " entrega(s) que o Canvas marca como não entregue(s) vão para Entregas pendentes." : "O Canvas não marca nenhuma entrega como pendente.") : "";
+      if (!keys.length) {
+        out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão." + pendNote));
+        if (pend) { const b = el("button", "btn primary", "Atualizar entregas pendentes"); b.type = "button";
+          b.addEventListener("click", () => { savePending(); store(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas pendentes atualizadas.")); });
+          out.appendChild(b); }
+      }
       else {
-        out.appendChild(el("div", null, keys.length + " notas encontradas. Confira antes de aplicar:"));
+        out.appendChild(el("div", null, keys.length + " notas encontradas. Confira antes de aplicar:" + pendNote));
         const ul = el("ul", "imp-list");
         for (const k of keys) {
           const li = el("li"), old = saved.grades[k], v = res.grades[k];
@@ -749,7 +790,7 @@ const NotasCore = (() => {
         apply.addEventListener("click", () => {
           for (const k of keys) { saved.grades[k] = res.grades[k]; const inp = $("in-" + k); if (inp) inp.value = res.grades[k]; }
           if (res.meta != null) { saved.meta = res.meta; metaEl.value = res.meta; }
-          store(); calc(); afterApply(); out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));
+          savePending(); store(); calc(); afterApply(); out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));
           if (res.missing.length) out.appendChild(el("div", "muted", res.missing.length + " avaliações continuam para lançar à mão nas matérias."));
         });
         out.appendChild(apply);
