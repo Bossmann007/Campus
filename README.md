@@ -15,7 +15,6 @@ Calculadora "Quanto falta pra passar" for PUCPR 2026/2: one static page (`index.
 - `scripts/verify`: exit 0 = core tests pass and the UI script parses.
 - `scripts/snapshot`: copy `index.html` into `old/` before any redesign.
 - `extension/`: Chrome MV3 extension (popup + `collect.js`) that reads the student's own Canvas grades and opens the page with them. Load unpacked from `chrome://extensions` for testing.
-- `old/`: local personal versions with real grades; git-ignored, never published.
 - `referencias/`: design reference links (`README.md`, `links.html`); not deployed.
 
 Deploy: Vercel project `faltaquanto`, domain https://falta-quanto.vercel.app, serves only `index.html` with the headers in `vercel.json` (`.vercelignore` whitelist). Production deploys need Enzo's approval each time.
