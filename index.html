@@ -1174,8 +1174,10 @@ const NotasCore = (() => {
     for (const a of showAllNews ? list : list.slice(0, 5)) {
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
       const ours = C.COURSES.find(c => c.id === a.course); sub.textContent = ours ? SHORT[ours.id] : String(a.courseName || "");
-      const t = typeof a.url === "string" && /^https:\/\/pucpr\.instructure\.com\//.test(a.url) ? el("a", "title", a.title) : el("span", "title", a.title);
-      if (t.tagName === "A") { t.href = a.url; t.target = "_blank"; t.rel = "noopener noreferrer"; }
+      // The link is rebuilt from two numbers; no imported text reaches href.
+      const m = typeof a.url === "string" ? /^https:\/\/pucpr\.instructure\.com\/courses\/(\d+)\/discussion_topics\/(\d+)$/.exec(a.url) : null;
+      const t = m ? el("a", "title", a.title) : el("span", "title", a.title);
+      if (m) { t.href = "https://pucpr.instructure.com/courses/" + Number(m[1]) + "/discussion_topics/" + Number(m[2]); t.target = "_blank"; t.rel = "noopener noreferrer"; }
       name.append(t, sub); if (a.unread) name.appendChild(badge("acc", "não lido"));
       row.append(cell("Data", "muted num", typeof a.at === "string" && ISO.test(a.at) ? dmy(a.at) : "—"), name); box.appendChild(row);
     }
