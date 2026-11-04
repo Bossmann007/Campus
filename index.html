@@ -7,15 +7,16 @@
 <meta name="description" content="Calculadora de notas da PUCPR 2026/2: quanto falta em cada prova para passar.">
 <title>Quanto falta · PUCPR 2026/2</title>
 <style>
-  :root { --bg:#fafafa; --surface:#fff; --sunk:#f4f4f5; --line:#e7e7ea; --line2:#d4d4d8; --txt:#0a0a0b; --muted:#71717a; --faint:#a1a1aa;
-          --acc:#2563eb; --acc-soft:#eff6ff; --ok:#15803d; --ok-soft:#f0fdf4; --warn:#b45309; --warn-soft:#fffbeb; --bad:#b91c1c; --bad-soft:#fef2f2;
+  /* Radix Colors 3.0 scales (slate, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
+  :root { --bg:#f9f9fb; --surface:#fff; --sunk:#f0f0f3; --line:#e8e8ec; --line2:#d9d9e0; --txt:#1c2024; --muted:#60646c; --faint:#8b8d98;
+          --acc:#0d74ce; --acc-fill:#0090ff; --acc-soft:#e6f4fe; --ok:#2a7e3b; --ok-soft:#e9f6e9; --warn:#ab6400; --warn-soft:#fff7c2; --bad:#d13415; --bad-soft:#feebe7;
           --r:12px; --shadow:0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.02);
           --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
           --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace; color-scheme:light; }
   @media (prefers-color-scheme:dark) {
-    :root { --bg:#09090b; --surface:#111113; --sunk:#18181b; --line:#232327; --line2:#2e2e33; --txt:#fafafa; --muted:#a1a1aa; --faint:#63636b;
-            --acc:#60a5fa; --acc-soft:rgba(96,165,250,.12); --ok:#4ade80; --ok-soft:rgba(74,222,128,.1); --warn:#fbbf24; --warn-soft:rgba(251,191,36,.1);
-            --bad:#f87171; --bad-soft:rgba(248,113,113,.1); --shadow:none; color-scheme:dark; }
+    :root { --bg:#111113; --surface:#18191b; --sunk:#212225; --line:#2e3135; --line2:#43484e; --txt:#edeef0; --muted:#b0b4ba; --faint:#696e77;
+            --acc:#70b8ff; --acc-fill:#0090ff; --acc-soft:#0d2847; --ok:#71d083; --ok-soft:#1b2a1e; --warn:#ffca16; --warn-soft:#302008;
+            --bad:#ff977d; --bad-soft:#391714; --shadow:none; color-scheme:dark; }
   }
   * { box-sizing:border-box; }
   html { scroll-behavior:smooth; scroll-padding-top:72px; }
@@ -154,8 +155,8 @@
   .figs .v { font-size:15px; font-weight:600; letter-spacing:-.01em; }
   .bar { height:6px; background:var(--sunk); border-radius:999px; position:relative; overflow:hidden; }
   .bar span { position:absolute; top:0; bottom:0; transition:width .28s cubic-bezier(.23,1,.32,1), left .28s cubic-bezier(.23,1,.32,1); }
-  .bar .g { left:0; background:var(--acc); border-radius:999px; }
-  .bar .f { background:color-mix(in srgb, var(--acc) 22%, transparent); }
+  .bar .g { left:0; background:var(--acc-fill); border-radius:999px; }
+  .bar .f { background:color-mix(in srgb, var(--acc-fill) 24%, transparent); }
   .bar .m { width:2px; background:var(--txt); }
   .msg { font-size:13px; padding:9px 12px; border-radius:8px; }
   .detail > .msg { margin:14px 18px 0; }
