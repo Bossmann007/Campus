@@ -231,7 +231,7 @@
   </section>
 
   <section class="block" id="pendentes">
-    <div class="bhead"><h2>Entregas pendentes no Canvas</h2><span class="hint" id="pendat"></span></div>
+    <div class="bhead"><h2>Entregas atrasadas no Canvas</h2><span class="hint" id="pendat"></span></div>
     <div class="list" id="pend"></div>
   </section>
 
@@ -402,7 +402,7 @@ const NotasCore = (() => {
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
-        due:str(a.due) !== null && !Number.isNaN(Date.parse(a.due)) ? localISO(new Date(a.due)) : null, missing:a.missing === true, flagged:"missing" in a })) };
+        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a })) };
     });
     // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
     const pending = [];
@@ -431,7 +431,7 @@ const NotasCore = (() => {
         grades[k] = String(r9(Math.round(Math.max(0, f) * it.inMax * 1000) / 1000));
       }
     }
-    return { grades, missing, notes, pending: known ? pending : null };
+    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null };
   }
 
   // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
@@ -670,7 +670,7 @@ const NotasCore = (() => {
   function renderPending() {
     const box = $("pend"), pd = saved.pending; box.textContent = "";
     $("pendat").textContent = pd ? "lido do Canvas em " + dmy(pd.at) + "; importe de novo para atualizar" : "";
-    if (!pd) { box.appendChild(el("div", "empty", "Importe do Canvas para ver o que o Canvas marca como não entregue.")); return; }
+    if (!pd) { box.appendChild(el("div", "empty", "Importe do Canvas para ver o que passou do prazo sem entrega.")); return; }
     const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
     for (const p of pd.list) {
       if (!p || typeof p.name !== "string") continue;
@@ -681,7 +681,7 @@ const NotasCore = (() => {
       row.append(cell("Prazo", "muted num", typeof p.due === "string" && /^\d{4}-\d\d-\d\d$/.test(p.due) ? dmy(p.due) : "sem data"), name);
       box.appendChild(row);
     }
-    if (!pd.list.length) box.appendChild(el("div", "empty", "Nenhuma. O Canvas não marcou nada como não entregue."));
+    if (!pd.list.length) box.appendChild(el("div", "empty", "Nenhuma. O Canvas não marcou nada como atrasado."));
   }
 
   // Bookmarklet: runs on the student's own Canvas tab, same origin, read-only GETs; shows the export for them to copy.
@@ -771,11 +771,11 @@ const NotasCore = (() => {
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;
       const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); } };
-      const pendNote = pend ? " " + (pend.length ? pend.length + " entrega(s) que o Canvas marca como não entregue(s) vão para Entregas pendentes." : "O Canvas não marca nenhuma entrega como pendente.") : "";
+      const pendNote = pend ? " " + (pend.length ? pend.length + " entrega(s) que o Canvas marca como não entregue(s) vão para Entregas atrasadas." : "O Canvas não marca nenhuma entrega como atrasada.") : "";
       if (!keys.length) {
         out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão." + pendNote));
-        if (pend) { const b = el("button", "btn primary", "Atualizar entregas pendentes"); b.type = "button";
-          b.addEventListener("click", () => { savePending(); store(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas pendentes atualizadas.")); });
+        if (pend) { const b = el("button", "btn primary", "Atualizar entregas atrasadas"); b.type = "button";
+          b.addEventListener("click", () => { savePending(); store(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas atrasadas atualizadas.")); });
           out.appendChild(b); }
       }
       else {
