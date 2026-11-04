@@ -47,7 +47,7 @@
   @media (hover:hover) and (pointer:fine) { .step:hover { background:var(--surface); color:var(--txt); } }
   .btn.sm { padding:7px 14px; font-size:13px; }
   .top .wrap > * { white-space:nowrap; flex-shrink:0; } .top .spacer { flex-shrink:1; }
-  @media (max-width:1100px) { .sem { display:none; } }
+  @media (max-width:1320px) { .sem { display:none; } }
   @media (max-width:1000px) { .nav { display:none; } }
   .iconbtn { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px; border-radius:999px; border:1px solid transparent; box-shadow:none;
              background:transparent; color:var(--muted); font-size:13px; }
@@ -309,6 +309,27 @@
   .impsteps { margin-bottom:12px; }
   @media (max-width:820px) { .win-body { grid-template-columns:minmax(0,1fr); height:400px; } .win-side { display:none; } .bub { max-width:92%; } }
   @media (prefers-reduced-motion:reduce) { .spin, .wire::after, .apply-demo .btn, .typing i { animation:none !important; } .enter { animation:none; } }
+  /* calendar page */
+  #calendario { display:none; }
+  body.cal #calendario { display:block; }
+  body.cal .hero, body.cal main > section:not(#calendario), body.cal .wrap > section:not(#calendario) { display:none !important; }
+  .back { display:inline-block; color:var(--muted); font-size:13px; margin-bottom:10px; } .back:hover { color:var(--txt); }
+  .calnav { margin:0; align-items:center; } .calnav button:not(.btn) { min-width:34px; }
+  .calgrid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; background:var(--surface); }
+  .calgrid .dow { padding:8px 10px; font-size:12px; color:var(--muted); background:var(--sunk); border-bottom:1px solid var(--line); }
+  .cday { min-height:108px; padding:6px 6px 8px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .cday:nth-child(7n) { border-right:0; }
+  .cday .n { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding:2px 4px; align-self:flex-start; border-radius:999px; }
+  .cday.out { background:color-mix(in srgb, var(--sunk) 55%, transparent); } .cday.out .n { color:var(--faint); }
+  .cday.today .n { background:var(--txt); color:var(--bg); font-weight:700; }
+  .chip { display:block; font-size:11.5px; line-height:1.35; padding:3px 6px; border-radius:6px; background:var(--sunk); border-left:3px solid var(--c, var(--line2));
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--txt); }
+  .chip.done { color:var(--muted); text-decoration:line-through; } .chip.todo { background:transparent; border:1px dashed var(--line2); border-left:3px solid var(--c, var(--line2)); }
+  .chip b { font-weight:600; }
+  .agday { display:grid; grid-template-columns:110px minmax(0,1fr); gap:16px; padding:12px 16px; border-top:1px solid var(--line); }
+  .agday:first-child { border-top:0; } .agday .d { color:var(--muted); font-size:13px; } .agday .d b { display:block; color:var(--txt); font-size:14px; }
+  .agday .evs { display:grid; gap:6px; align-content:start; } .agday .chip { white-space:normal; }
+  @media (max-width:820px) { .cday { min-height:74px; padding:4px; } .chip { font-size:10.5px; padding:2px 4px; } .agday { grid-template-columns:minmax(0,1fr); gap:6px; } }
   footer { margin:56px 0 40px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px; line-height:1.7; }
   footer p { margin:0 0 6px; max-width:760px; }
   .linkbtn { border:0; box-shadow:none; background:none; padding:0; color:var(--acc); font-size:12.5px; margin-top:4px; }
@@ -348,7 +369,7 @@
 <body>
 <div class="top"><div class="wrap">
   <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Quanto falta</b></a><span class="sem">PUCPR · 2026/2</span>
-  <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#materias">Matérias</a><a href="#proximas">Próximas</a></nav>
+  <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#materias">Matérias</a><a href="#proximas">Próximas</a><a href="/calendario" id="navcal">Calendário</a></nav>
   <div class="spacer"></div>
   <div class="meta" title="Média final para passar. Na PUCPR é 7,0; mude se a sua matéria pedir outra.">
     <span class="ml">Meta</span>
@@ -395,6 +416,17 @@
     <div class="list" id="avisolist"></div>
   </section>
 
+  <section class="block" id="calendario">
+    <a class="back" href="/app">← Minhas matérias</a>
+    <div class="bhead"><h2 id="calttl">Calendário</h2>
+      <div class="acts calnav"><button id="calprev" type="button" aria-label="Mês anterior">‹</button><button id="caltoday" type="button">Hoje</button><button id="calnext" type="button" aria-label="Próximo mês">›</button>
+        <button id="calics" class="btn primary sm" type="button">Exportar .ics</button></div></div>
+    <p class="hint below" id="calmsg">Provas e avaliações pelas datas do Plano de Ensino; entregas do Canvas pela última importação.</p>
+    <div class="calgrid" id="calgrid"></div>
+    <div class="bhead" style="margin-top:28px"><h2>Próximos 21 dias</h2></div>
+    <div class="list" id="calagenda"></div>
+  </section>
+
   <section class="block" id="materias">
     <div class="bhead"><h2>Matérias</h2><div class="seg" role="group" aria-label="Filtrar matérias" id="summary"></div><button id="allbtn" type="button">Abrir todas</button></div>
     <p class="start">Ainda sem notas. Abra uma matéria e lance a primeira, ou <a href="#canvas">importe do Canvas</a>: os números aparecem aqui.</p>
@@ -403,7 +435,7 @@
 
   <section class="block" id="proximas">
     <div class="bhead"><h2>Próximas avaliações</h2>
-      <button id="icsbtn" type="button" title="Baixa um arquivo .ics com as avaliações e entregas: abra no Google Agenda, Apple Calendário ou Outlook">Exportar para o calendário</button><div class="seg" role="group" aria-label="Filtrar avaliações" id="filter"><button type="button" data-f="all" aria-pressed="true">Todas</button><button type="button" data-f="exam" aria-pressed="false">Só provas</button><button type="button" data-f="week" aria-pressed="false">Próximos 7 dias</button></div></div>
+      <a class="btn sm" href="/calendario" id="calbtn">Ver no calendário</a><button id="icsbtn" type="button" title="Baixa um arquivo .ics com as avaliações e entregas: abra no Google Agenda, Apple Calendário ou Outlook">Exportar para o calendário</button><div class="seg" role="group" aria-label="Filtrar avaliações" id="filter"><button type="button" data-f="all" aria-pressed="true">Todas</button><button type="button" data-f="exam" aria-pressed="false">Só provas</button><button type="button" data-f="week" aria-pressed="false">Próximos 7 dias</button></div></div>
     <p class="hint below">≈ estimativa e * provisório: até você lançar as notas que já saíram.</p>
     <div class="list" id="next"></div>
   </section>
@@ -810,7 +842,10 @@ const NotasCore = (() => {
     return ok ? n : 7;
   }
 
-  let filter = "all", cardFilter = "all", showAll = false, showAllPend = false, showAllNews = false;
+  let filter = "all", cardFilter = "all", showAll = false, showAllPend = false, showAllNews = false, exportICS = () => {};
+  // /calendario is this same page (vercel.json rewrite) showing only the calendar; ?view=calendario works locally too.
+  const CAL = /\/calendario\/?$/.test(location.pathname) || new URLSearchParams(location.search).get("view") === "calendario";
+  if (CAL) { document.body.classList.add("cal"); document.title = "Calendário · Quanto falta"; }
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
     const main = $("cards");
@@ -878,7 +913,7 @@ const NotasCore = (() => {
       window.open("https://github.com/Bossmann007/quanto-falta-pucpr/issues/new?" + q, "_blank", "noopener,noreferrer");
       fb.close(); $("fbtext").value = "";
     });
-    $("icsbtn").addEventListener("click", () => {
+    exportICS = () => {
       const esc = t => String(t).replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, " ");
       const day = iso => iso.replace(/-/g, ""), next = iso => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + 1); return day(C.localISO(d)); };
       const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
@@ -891,10 +926,17 @@ const NotasCore = (() => {
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       const nTodo = ev.filter(x => x.startsWith("UID:todo-")).length, nAll = ev.filter(x => x.startsWith("UID:")).length;
+      if (CAL) { $("calmsg").textContent = "Arquivo .ics baixado: " + pl(nAll - nTodo, "avaliação", "avaliações") + " e " + pl(nTodo, "entrega", "entregas") + ". Abra no Google Agenda, Apple ou Outlook."; return; }
       con.run({ ask:"Exportar para o calendário", title:"Montando o calendário", doneTitle:"Calendário pronto", steps:[["Avaliações", pl(nAll - nTodo, "evento", "eventos")], ["Prazos do Canvas", pl(nTodo, "entrega", "entregas")], ["Arquivo .ics", "baixado"]],
         text:"Abra o arquivo no Google Agenda, no Calendário da Apple ou no Outlook.", scroll:true });
-    });
-    const links = [...$("nav").querySelectorAll("a")];
+    };
+    $("icsbtn").addEventListener("click", () => exportICS()); $("calics").addEventListener("click", () => exportICS());
+    const shiftMonth = k => { const [y, m] = (calMonth || today.slice(0, 7)).split("-").map(Number), d = new Date(y, m - 1 + k, 1); calMonth = C.localISO(d).slice(0, 7); calc(); };
+    $("calprev").addEventListener("click", () => shiftMonth(-1)); $("calnext").addEventListener("click", () => shiftMonth(1));
+    $("caltoday").addEventListener("click", () => { calMonth = today.slice(0, 7); calc(); });
+    if (CAL) { for (const a of $("nav").querySelectorAll('a[href^="#"]')) a.href = "/app" + a.getAttribute("href"); $("navcal").setAttribute("aria-current", "true"); }
+    if (location.protocol === "file:") { $("navcal").href = $("calbtn").href = "?view=calendario"; }
+    const links = [...$("nav").querySelectorAll('a[href^="#"]')];
     if ("IntersectionObserver" in window) {
       const io = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting)
         links.forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + e.target.id)); }, { rootMargin:"-45% 0px -50% 0px" });
@@ -995,7 +1037,7 @@ const NotasCore = (() => {
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T); renderTiles(states, T); renderTodo(); renderNews();
+    renderFocus(T); renderTiles(states, T); renderTodo(); renderNews(); renderCal(T);
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -1088,6 +1130,51 @@ const NotasCore = (() => {
       text:(fromLink ? "Estas notas chegaram por um link: aplique só se foi você que clicou na extensão agora. " : "") + (n ? "Com essas notas, o que importa agora:" : "Nenhuma nota nova para aplicar."), lines:n ? nextLines(merged, 3) : [],
       action:n && applyBtn ? { label:"Aplicar " + n + " notas", onClick:() => applyBtn.click(), live:() => applyBtn.isConnected } : null });
   }
+  // Calendar page: month grid and the next 21 days, from the Plano dates, the grades and the last Canvas import.
+  let calMonth = null;
+  const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  function calEvents(T) {
+    const ev = [], up = new Map(C.upcoming(C.COURSES, saved.grades, today, T).map(u => [C.key(u.course, u.item), u]));
+    for (const c of C.COURSES) for (const it of c.items) {
+      const k = C.key(c, it), p = C.itemPoints(it, saved.grades[k]), graded = p !== null && !Number.isNaN(p), u = up.get(k);
+      ev.push({ date:it.date, course:c.id, kind:graded ? "done" : "", label:(it.exam ? "Prova · " : "") + it.name,
+        info:graded ? "nota lançada" : u ? "precisa " + reqText(u.req, u.item, u.st) : "falta a nota" });
+    }
+    if (saved.todo) for (const t of saved.todo.list) if (t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due))
+      ev.push({ date:t.due, course:C.COURSES.some(c => c.id === t.course) ? t.course : null, kind:"todo", label:"Entregar: " + t.name, info:"prazo no Canvas" });
+    return ev;
+  }
+  function chip(e) {
+    const c = el("span", "chip " + e.kind); if (e.course) c.style.setProperty("--c", COLORS[e.course]);
+    c.append(el("b", null, e.course ? SHORT[e.course] + " " : ""), e.label); c.title = (e.course ? SHORT[e.course] + ": " : "") + e.label + " · " + e.info; return c;
+  }
+  function renderCal(T) {
+    if (!CAL) return;
+    if (!calMonth) calMonth = today.slice(0, 7);
+    const [y, m] = calMonth.split("-").map(Number), first = new Date(y, m - 1, 1), start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
+    $("calttl").textContent = MONTHS[m - 1][0].toUpperCase() + MONTHS[m - 1].slice(1) + " de " + y;
+    const ev = calEvents(T), byDay = {}; for (const e of ev) (byDay[e.date] = byDay[e.date] || []).push(e);
+    const g = $("calgrid"); g.textContent = "";
+    ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"].forEach(d => g.appendChild(el("div", "dow", d)));
+    const cells = Math.ceil(((first.getDay() + 6) % 7 + new Date(y, m, 0).getDate()) / 7) * 7;   // whole weeks only
+    for (let i = 0; i < cells; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i); const iso = C.localISO(d);
+      const cell = el("div", "cday" + (d.getMonth() !== m - 1 ? " out" : "") + (iso === today ? " today" : ""));
+      cell.appendChild(el("span", "n", String(d.getDate())));
+      for (const e of (byDay[iso] || [])) cell.appendChild(chip(e));
+      g.appendChild(cell);
+    }
+    const ag = $("calagenda"); ag.textContent = "";
+    const soon = Object.keys(byDay).filter(d => days(d) >= 0 && days(d) <= 21).sort();
+    for (const d of soon) {
+      const row = el("div", "agday"), dd = el("div", "d"), dt = new Date(d + "T12:00:00"), n = days(d);
+      dd.append(el("b", null, dmy(d)), ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][dt.getDay()] + " · " + (n === 0 ? "hoje" : n === 1 ? "amanhã" : "em " + n + " dias"));
+      const evs = el("div", "evs"); byDay[d].forEach(e => { const c = chip(e); c.textContent = ""; c.append(el("b", null, (e.course ? SHORT[e.course] + " · " : "")), e.label + " — " + e.info); evs.appendChild(c); });
+      row.append(dd, evs); ag.appendChild(row);
+    }
+    if (!soon.length) ag.appendChild(el("div", "empty", "Nada nos próximos 21 dias."));
+  }
+
   // Hero for returning students: the next assessment that still matters and what it needs, then the two after it.
   function renderFocus(T) {
     const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
