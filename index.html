@@ -681,7 +681,7 @@ const NotasCore = (() => {
         ta.value = new TextDecoder().decode(Uint8Array.from(b, ch => ch.charCodeAt(0)));
       } catch (e) { ta.value = ""; out.appendChild(el("div", "msg bad", "O link da extensão veio incompleto. Clique em Importar de novo.")); }
       history.replaceState(null, "", location.pathname + location.search + "#canvas");
-      if (ta.value) { read(); $("canvas").scrollIntoView(); }
+      if (ta.value) { read(); out.prepend(el("div", "muted", "Estas notas chegaram por um link. Se não foi você que clicou na extensão agora, não aplique.")); $("canvas").scrollIntoView(); }
     }
     function read() {
       out.textContent = "";
