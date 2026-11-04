@@ -2,7 +2,8 @@
 """Export your PUCPR Canvas grades with your own Canvas API token, for the Quanto falta paste box.
 
 Runs on your computer and only sends read-only GET requests to pucpr.instructure.com.
-The token is read from CANVAS_TOKEN or typed at a hidden prompt; it is never printed or saved.
+The token is read from CANVAS_TOKEN, then from a .env file next to this script or in the current folder
+(see .env.example), then from a hidden prompt. It is never printed or saved by the script.
 
   python3 canvas-export.py > notas.json        # then paste the file's text into "Copiei o texto"
   python3 canvas-export.py | pbcopy            # macOS: straight to the clipboard
@@ -45,8 +46,21 @@ def assignment(a):
     }
 
 
+def env_token():
+    """CANVAS_TOKEN from a .env next to the script or in the current folder (KEY=VALUE lines, # comments)."""
+    for folder in (os.path.dirname(os.path.abspath(__file__)), os.getcwd()):
+        path = os.path.join(folder, ".env")
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    key, sep, value = line.strip().partition("=")
+                    if sep and key.strip() == "CANVAS_TOKEN" and value.strip():
+                        return value.strip().strip('"').strip("'")
+    return None
+
+
 def main():
-    token = os.environ.get("CANVAS_TOKEN") or getpass.getpass("Token da API do Canvas (não aparece na tela): ")
+    token = os.environ.get("CANVAS_TOKEN") or env_token() or getpass.getpass("Token da API do Canvas (não aparece na tela): ")
     if not token.strip():
         sys.exit("sem token")
     try:
