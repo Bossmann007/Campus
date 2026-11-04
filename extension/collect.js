@@ -1,5 +1,5 @@
 // Runs inside the student's Canvas tab (injected with chrome.scripting on click): same-origin, read-only GETs.
-// Returns { v:1, courses:[{ name, assignments:[{ name, points, score, due, missing, submitted }] }] } for 2026/2 courses, or { error } (never rejects).
+// Returns { v:1, courses:[{ name, assignments:[{ name, points, score, due, missing, submitted, online }] }] } for 2026/2 courses, or { error } (never rejects).
 async function collectCanvasGrades() {
   const get = async url => {
     const out = [];
@@ -21,7 +21,8 @@ async function collectCanvasGrades() {
     courses.push({ name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible,
       score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
       due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
-      submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))) })) });
+      submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),
+      online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)) })) });
   }
   return { v: 1, courses };
   } catch (e) { return { error: String(e && e.message || e) }; }

@@ -500,7 +500,7 @@ const NotasCore = (() => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
         due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
-        submitted:a.submitted === true, hasSub:"submitted" in a })) };
+        submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false })) };
     });
     // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
     const pending = [];
@@ -514,7 +514,7 @@ const NotasCore = (() => {
     const todo = [];
     for (const cv of courses) {
       const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
-      for (const a of cv.assignments) if (a.hasSub && !a.submitted && !a.missing && a.due) todo.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
+      for (const a of cv.assignments) if (a.hasSub && !a.submitted && !a.missing && !a.offline && a.due) todo.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
     }
     todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
     const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {};
@@ -670,7 +670,7 @@ const NotasCore = (() => {
         const g = cell("Nota"), inp = el("input");
         inp.inputMode = "decimal"; inp.placeholder = "—"; inp.value = saved.grades[k] == null ? "" : String(saved.grades[k]); inp.id = "in-" + k;
         inp.setAttribute("aria-label", "Nota de " + it.name + ", " + c.name);
-        inp.addEventListener("input", () => { saved.grades[k] = inp.value; store(); calc(); });
+        inp.addEventListener("input", () => { saved.grades[k] = inp.value; saved.fresh = saved.fresh.filter(x => x !== k); store(); calc(); });
         g.append(inp, el("span", "scale", "/ " + fmt(it.inMax, dec(it.inMax))));
         const rq = cell("Precisa"); rq.id = "rq-" + k;
         const mn = cell("Mín", "muted num"); mn.id = "mn-" + k;
@@ -848,7 +848,7 @@ const NotasCore = (() => {
       const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
       const er = arc("er", 0, e), fu = arc("fu", e, f); er.style.stroke = "var(--" + cls + ")"; fu.style.stroke = "color-mix(in srgb, var(--" + cls + ") 22%, transparent)";
       svg.append(arc("tr", 0, L), fu); if (e > 0.5) svg.appendChild(er); svg.appendChild(arc("mk", Math.min(T, 9.9) / 10 * L, 2));
-      ring.append(svg, el("b", null, fmt(st.earned, st.earned >= 10 ? 0 : 1)));
+      ring.append(svg, el("b", null, st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1)));
       const txt = el("span"), nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
       txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
       t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
@@ -959,7 +959,7 @@ const NotasCore = (() => {
         const apply = el("button", "btn primary", "Aplicar " + keys.length + " notas"); apply.type = "button";
         apply.addEventListener("click", () => {
           const hadImport = !!(saved.pending || saved.todo);   // the first import would mark every grade as new
-          saved.fresh = hadImport ? keys.filter(k => saved.grades[k] !== res.grades[k]) : [];
+          saved.fresh = hadImport ? keys.filter(k => C.parseNum(saved.grades[k]) !== C.parseNum(res.grades[k])) : [];
           for (const k of keys) { saved.grades[k] = res.grades[k]; const inp = $("in-" + k); if (inp) inp.value = res.grades[k]; }
           if (res.meta != null) { saved.meta = res.meta; metaEl.value = res.meta; }
           savePending(); store(); calc(); afterApply(); out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));

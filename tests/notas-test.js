@@ -127,9 +127,9 @@ ok("pending submissions come only from Canvas missing flags, sorted by due date"
 const S = (name, due, submitted, missing) => ({ name, points: 10, score: null, due, missing: !!missing, submitted });
 const td = C.fromCanvas({ v: 1, courses: [
   cv("Ética", [S("TDE - TAREFA SOMATIVA - VÍDEO", "2026-11-11T02:59:59Z", false), S("Fórum 5", "2026-11-06T15:00:00Z", true), S("Fórum 2", "2026-10-01T15:00:00Z", false, true), S("Leitura", null, false)]),
-  cv("Programação Imperativa", [S("Prova do RA2", "2026-11-11T15:00:00Z", false)]) ] });
-assert.deepStrictEqual(td.todo.map(t => t.name + "@" + t.due), ["TDE - TAREFA SOMATIVA - VÍDEO@2026-11-10", "Prova do RA2@2026-11-11"], "unsubmitted, not missing, with a date, soonest first");
-assert.deepStrictEqual(td.dates, { "etica:ra2": "2026-11-10", "imp:p2": "2026-11-11" }, "single-assignment items carry the Canvas date");
+  cv("Programação Imperativa", [S("Prova do RA2", "2026-11-11T15:00:00Z", false), Object.assign(S("Prova do RA1", "2026-11-12T15:00:00Z", false), { online: false })]) ] });
+assert.deepStrictEqual(td.todo.map(t => t.name + "@" + t.due), ["TDE - TAREFA SOMATIVA - VÍDEO@2026-11-10", "Prova do RA2@2026-11-11"], "unsubmitted, not missing, online, with a date, soonest first");
+assert.deepStrictEqual(td.dates, { "etica:ra2": "2026-11-10", "imp:p1": "2026-11-12", "imp:p2": "2026-11-11" }, "single-assignment items carry the Canvas date");
 assert.strictEqual(got.todo, null, "old exports without the flag: unknown");
 ok("to-do comes from the submitted flag; single items get Canvas due dates");
 
