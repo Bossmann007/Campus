@@ -8,15 +8,18 @@ Calculadora de notas para a turma: mostra quanto você precisa tirar em cada ava
 
 ## Para quem desenvolve
 
-Calculadora "Quanto falta pra passar" for PUCPR 2026/2: one static page (`index.html`), no backend, grades stay in each visitor's `localStorage`.
+Calculadora "Quanto falta pra passar" for PUCPR 2026/2: two static pages (`index.html` landing, `app.html` calculator at `/app`), no backend, grades stay in each visitor's `localStorage`.
 
-- `index.html`: the public page. The `<script id="core">` block holds the course weights and pure math; `<script id="ui">` renders it.
+- `index.html`: the landing page (pitch, demo video, install, FAQ); it forwards old `#canvas=` links to `/app`.
+- `app.html`: the calculator. The `<script id="core">` block holds the course weights and pure math; `<script id="ui">` renders it.
 - `tests/notas-test.js`: tests for the core block.
 - `scripts/verify`: exit 0 = core tests pass and the UI script parses.
-- `scripts/snapshot`: copy `index.html` into `old/` before any redesign.
+- `scripts/snapshot`: copy `app.html` into `old/` before any redesign.
 - `extension/`: Chrome MV3 extension (popup + `collect.js`) that reads the student's own Canvas grades and opens the page with them. Load unpacked from `chrome://extensions` for testing.
 - `tools/canvas-export.py`: optional path for students who prefer their own Canvas API token; runs locally, read-only, prints the same JSON as the extension for the paste box. Stdlib only. Token from `CANVAS_TOKEN`, a `.env` (copy `tools/.env.example`; `.env` is git-ignored) or a hidden prompt.
-- `scripts/package-extension`: builds the release zip; `EXT_LATEST` in `index.html` must match `extension/manifest.json` (tested).
+- `scripts/package-extension`: builds the release zip; `EXT_LATEST` in `app.html` must match `extension/manifest.json` (tested).
+- `video/scene.html` + `scripts/render-video`: render `media/demo.mp4` frame by frame with headless virtual time (needs ffmpeg); the second half is the real `app.html` importing made-up grades.
+- Bookmarklet: `app.html` embeds a verbatim copy of `extension/collect.js` (tested) for students who cannot install the extension.
 - `referencias/`: design reference links (`README.md`, `links.html`); not deployed.
 
-Deploy: Vercel project `faltaquanto`, domain https://falta-quanto.vercel.app, serves only `index.html` and `privacidade.html` with the headers in `vercel.json` (`.vercelignore` whitelist). Production deploys need Enzo's approval each time.
+Deploy: Vercel project `faltaquanto`, domain https://falta-quanto.vercel.app, serves only `index.html`, `app.html`, `privacidade.html` and `media/` (`cleanUrls`) with the headers in `vercel.json` (`.vercelignore` whitelist). Production deploys need Enzo's approval each time.

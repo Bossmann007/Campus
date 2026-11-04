@@ -9,7 +9,7 @@ Obrigado por querer ajudar! Tudo é HTML, CSS e JavaScript puro: não há build 
 
 ## Onde fica cada coisa
 
-- `index.html`: a página inteira. O bloco `<script id="core">` tem os pesos das matérias e as contas; o `<script id="ui">` desenha a tela.
+- `index.html`: a página inicial (apresentação). `app.html`: a calculadora, em `/app`. O bloco `<script id="core">` tem os pesos das matérias e as contas; o `<script id="ui">` desenha a tela.
 - `extension/`: a extensão do Chrome. Para testar, abra `chrome://extensions`, ligue o modo do desenvolvedor e use "Carregar sem compactação" nessa pasta.
 - `tests/`: os testes que o `scripts/verify` roda.
 - `canvas/mapping.json`: qual avaliação do Canvas vira qual item da calculadora.
