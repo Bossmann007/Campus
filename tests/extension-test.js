@@ -14,8 +14,8 @@ global.location = { href: "https://pucpr.instructure.com/courses", origin: "http
 const page = (body, next) => ({ ok: true, text: async () => "while(1);" + JSON.stringify(body), headers: { get: h => h === "Link" && next ? "<" + next + '>; rel="next"' : null } });
 global.fetch = async url => {
   if (url.startsWith("/api/v1/courses?")) return page([{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }]);
-  if (url.startsWith("/api/v1/courses/7/assignments")) return page([{ name: "Avaliação somativa -  Prova", points_possible: 10, submission: { score: 7 } }], "https://pucpr.instructure.com/n2");
-  if (url === "https://pucpr.instructure.com/n2") return page([{ name: "TDE - TAREFA SOMATIVA - VÍDEO", points_possible: 10, due_at: "2026-11-11T02:59:59Z", submission: { score: null, missing: true } }]);
+  if (url.startsWith("/api/v1/courses/7/assignments")) return page([{ name: "Avaliação somativa -  Prova", points_possible: 10, submission: { score: 7, workflow_state: "graded" } }], "https://pucpr.instructure.com/n2");
+  if (url === "https://pucpr.instructure.com/n2") return page([{ name: "TDE - TAREFA SOMATIVA - VÍDEO", points_possible: 10, due_at: "2026-11-11T02:59:59Z", submission_types: ["on_paper"], submission: { score: null, missing: true } }]);
   throw new Error("unexpected " + url);
 };
 const collect = new Function(fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();
@@ -28,7 +28,7 @@ const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLine
 (async () => {
   const out = await collect();
   assert.deepStrictEqual(out, { v: 1, courses: [{ name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
-    { name: "Avaliação somativa -  Prova", points: 10, score: 7, due: null, missing: false }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, score: null, due: "2026-11-11T02:59:59Z", missing: true }] }] });
+    { name: "Avaliação somativa -  Prova", points: 10, score: 7, due: null, missing: false, submitted: true, online: true }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, score: null, due: "2026-11-11T02:59:59Z", missing: true, submitted: false, online: false }] }] });
   const big = JSON.stringify({ v: 1, courses: Array.from({ length: 8 }, (_, i) => ({ name: "Matéria " + i + " ção", assignments: Array.from({ length: 60 }, (_, j) => ({ name: "Avaliação " + j + " é", points: 10, score: j, due: "2026-11-11T02:59:59Z", missing: false })) })) });
   const enc = b64url(big);
   assert(/^[A-Za-z0-9_-]+$/.test(enc), "url-safe");

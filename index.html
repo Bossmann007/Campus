@@ -8,13 +8,13 @@
 <title>Quanto falta · PUCPR 2026/2</title>
 <style>
   /* Radix Colors 3.0 scales (slate, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
-  :root { --bg:#f9f9fb; --surface:#fff; --sunk:#f0f0f3; --line:#e8e8ec; --line2:#d9d9e0; --txt:#1c2024; --muted:#60646c; --faint:#8b8d98;
+  :root { --bg:#f9f9fb; --surface:#fff; --sunk:#f0f0f3; --line:#e8e8ec; --line2:#d9d9e0; --txt:#1c2024; --muted:#60646c; --faint:#80838d; --field:#b9bbc6; --warn-ink:#4f3422; --bad-ink:#5c271f; --acc-ink:#113264; --ok-ink:#203c25;
           --acc:#0d74ce; --acc-fill:#0090ff; --acc-soft:#e6f4fe; --ok:#2a7e3b; --ok-soft:#e9f6e9; --warn:#ab6400; --warn-soft:#fff7c2; --bad:#d13415; --bad-soft:#feebe7;
           --r:12px; --shadow:0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.02);
           --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
           --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace; color-scheme:light; }
   @media (prefers-color-scheme:dark) {
-    :root { --bg:#111113; --surface:#18191b; --sunk:#212225; --line:#2e3135; --line2:#43484e; --txt:#edeef0; --muted:#b0b4ba; --faint:#696e77;
+    :root { --bg:#111113; --surface:#18191b; --sunk:#212225; --line:#2e3135; --line2:#43484e; --txt:#edeef0; --muted:#b0b4ba; --faint:#777b84; --field:#5a6169; --warn-ink:#ffca16; --bad-ink:#ff977d; --acc-ink:#70b8ff; --ok-ink:#71d083;
             --acc:#70b8ff; --acc-fill:#0090ff; --acc-soft:#0d2847; --ok:#71d083; --ok-soft:#1b2a1e; --warn:#ffca16; --warn-soft:#302008;
             --bad:#ff977d; --bad-soft:#391714; --shadow:none; color-scheme:dark; }
   }
@@ -33,22 +33,34 @@
   .brand { display:flex; align-items:center; gap:8px; font-weight:650; letter-spacing:-.01em; }
   .logo { width:22px; height:22px; border-radius:6px; background:var(--txt); color:var(--bg); display:grid; place-items:center; font-size:12px; font-weight:800; }
   .top .spacer { flex:1; }
-  .meta { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
-  .meta input { width:58px; text-align:center; }
+  .nav { display:flex; gap:2px; margin-left:8px; }
+  .nav a { color:var(--muted); font-size:13.5px; padding:6px 10px; border-radius:999px; transition:color .15s, background-color .15s; }
+  .nav a[aria-current="true"] { color:var(--txt); background:var(--sunk); }
+  @media (hover:hover) and (pointer:fine) { .nav a:hover { color:var(--txt); } }
+  .meta { display:flex; align-items:center; gap:2px; height:34px; padding:0 3px 0 12px; border:1px solid var(--line); border-radius:999px; background:var(--sunk); color:var(--muted); font-size:13px; cursor:help; }
+  .meta .ml { margin-right:6px; }
+  .meta input { width:40px; height:26px; padding:0; text-align:center; border:0; background:transparent; font-weight:600; color:var(--txt); font-family:var(--sans); }
+  .meta input:focus { box-shadow:none; } .meta:focus-within { border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-soft); }
+  .meta input.bad { color:var(--bad); box-shadow:none; }
+  .step { width:26px; height:26px; padding:0; display:grid; place-items:center; border-radius:999px; border:0; box-shadow:none; background:transparent; color:var(--muted); font-size:15px; line-height:1; }
+  @media (hover:hover) and (pointer:fine) { .step:hover { background:var(--surface); color:var(--txt); } }
+  .btn.sm { padding:7px 14px; font-size:13px; }
   button, .btn { font:inherit; font-size:13px; font-weight:500; color:var(--txt); background:var(--surface); border:1px solid var(--line);
                  border-radius:999px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
   button:active, .btn:active { transform:scale(.97); }
   @media (hover:hover) and (pointer:fine) { button:hover { border-color:var(--line2); background:var(--sunk); } }
-  button[aria-pressed="true"] { border-color:var(--acc); color:var(--acc); }
+  .linkbtn[aria-pressed="true"] { color:var(--acc); }
 
   input { font-family:var(--mono); font-size:14px; font-variant-numeric:tabular-nums; color:var(--txt); background:var(--surface);
-          border:1px solid var(--line2); border-radius:8px; padding:6px 8px; width:76px; transition:border-color .15s, box-shadow .15s; }
+          border:1px solid var(--field); border-radius:8px; padding:6px 8px; width:76px; transition:border-color .15s, box-shadow .15s; }
   input::placeholder { color:var(--faint); }
   input:focus { outline:none; border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-soft); }
+  input:focus-visible { box-shadow:0 0 0 2px var(--acc); }
+  :focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
   input.bad { border-color:var(--bad); box-shadow:0 0 0 3px var(--bad-soft); }
 
   .hero { padding:72px 0 8px; text-align:center; position:relative; isolation:isolate; }
-  .hero::before { content:""; position:absolute; z-index:-1; inset:-24px -50vw 0; pointer-events:none;
+  .hero::before { content:""; position:absolute; z-index:-1; inset:-24px 0 0; pointer-events:none;
                   background-image:radial-gradient(var(--line2) 1px, transparent 1px); background-size:22px 22px;
                   -webkit-mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); }
   .hero .lead { margin:0 auto; }
@@ -58,6 +70,9 @@
           background:var(--surface); border-radius:999px; padding:4px 12px; margin-bottom:20px; }
   .dim { color:var(--faint); }
   .feats[hidden] { display:none; }
+  body.fresh #panorama, body.fresh #late-block, body.fresh .chead .badge, body.fresh .chead .figs, body.fresh .chead .bar { display:none; }
+  .start a { color:var(--acc); }
+  .start { display:none; } body.fresh .start { display:block; margin:0 0 12px; padding:14px 16px; border:1px dashed var(--line2); border-radius:var(--r); color:var(--muted); font-size:13.5px; }
   .feats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:48px; }
   .feat { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:18px 20px; }
   .feat .ico { width:36px; height:36px; display:grid; place-items:center; border-radius:8px; background:var(--sunk); border:1px solid var(--line); color:var(--txt); }
@@ -97,7 +112,7 @@
   .seg button { border:0; box-shadow:none; background:transparent; color:var(--muted); padding:5px 12px; border-radius:999px; font-size:12.5px; }
   .seg button:hover { background:transparent; color:var(--txt); }
   .seg button .c { color:var(--faint); margin-left:5px; font-variant-numeric:tabular-nums; }
-  .seg button[aria-selected="true"] { background:var(--surface); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .seg button[aria-pressed="true"] { background:var(--surface); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.08); }
   .hint.below { margin:-4px 0 12px; display:block; color:var(--muted); font-size:13px; }
   h1 { font-size:clamp(38px,6.4vw,64px); line-height:1.02; letter-spacing:-.04em; font-weight:700; margin:0 0 16px; }
   .lead { color:var(--muted); font-size:16px; max-width:60ch; margin:0; }
@@ -116,7 +131,7 @@
   .row { display:grid; grid-template-columns:92px minmax(0,1fr) 190px 90px; gap:16px; align-items:center; padding:12px 16px; border-top:1px solid var(--line); }
   .row:first-child { border-top:none; }
   .row.head { padding-top:9px; padding-bottom:9px; background:var(--sunk); color:var(--muted); font-size:12px; font-weight:500; }
-  .row .title { font-weight:500; }
+  .row .title { font-weight:500; overflow-wrap:anywhere; }
   .row .sub, .src { display:block; color:var(--muted); font-size:12.5px; }
   .row .sub a:hover { color:var(--acc); }
   .empty { padding:18px 16px; color:var(--muted); }
@@ -125,12 +140,15 @@
   .when .d { font-weight:600; }
   .when .rel { font-size:12px; color:var(--muted); }
   .when .rel.soon { color:var(--bad); font-weight:500; } .when .rel.week { color:var(--warn); font-weight:500; }
-  .flag { color:var(--warn); cursor:help; margin-left:4px; }
+  .flag { color:var(--warn); cursor:help; margin-left:4px; display:inline-flex; vertical-align:-1px; }
+  .cdate { font-size:12px; color:var(--acc); cursor:help; } .cdate:empty { display:none; }
+  .acc { color:var(--acc); background:var(--acc-soft); } .check + .badge { margin-left:8px; }
 
   .badge { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:550; padding:2px 9px; border-radius:6px;
            border:1px solid transparent; font-variant-numeric:tabular-nums; }
   .ok { color:var(--ok); background:var(--ok-soft); } .warn { color:var(--warn); background:var(--warn-soft); }
-  .bad { color:var(--bad); background:var(--bad-soft); } .done { color:var(--muted); background:var(--sunk); }
+  .bad { color:var(--bad); background:var(--bad-soft); }
+  .badge.ok { color:var(--ok-ink); } .badge.warn { color:var(--warn-ink); } .badge.bad { color:var(--bad-ink); } .badge.acc { color:var(--acc-ink); } .done { color:var(--muted); background:var(--sunk); }
   .muted { color:var(--muted); }
   .note { display:block; font-size:12px; margin-top:3px; color:var(--warn); }
 
@@ -144,10 +162,10 @@
   .card.open .chead { background:var(--sunk); }
   .chead { display:grid; grid-template-columns:auto minmax(0,1fr) auto 140px 136px; align-items:center; gap:18px; padding:14px 18px; cursor:pointer; user-select:none; }
   .chead:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
-  .chead h3 { margin:0; font-size:15px; font-weight:600; letter-spacing:-.01em; }
+  .chead .cname { display:block; font-size:15px; font-weight:600; letter-spacing:-.01em; }
   .csub { display:block; color:var(--muted); font-size:12.5px; margin-top:1px; }
   .chead .badge { justify-self:end; white-space:nowrap; }
-  .chev { color:var(--faint); transition:transform .2s cubic-bezier(.23,1,.32,1); font-size:11px; }
+  .chev { color:var(--faint); display:grid; transition:transform .2s cubic-bezier(.23,1,.32,1); }
   .card.open .chev { transform:rotate(90deg); }
   .figs { display:flex; gap:18px; }
   .figs div { display:flex; flex-direction:column; min-width:52px; }
@@ -196,10 +214,11 @@
 
   footer { margin:56px 0 40px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px; line-height:1.7; }
   footer p { margin:0 0 6px; max-width:760px; }
+  .linkbtn { border:0; box-shadow:none; background:none; padding:0; color:var(--acc); font-size:12.5px; margin-top:4px; }
 
   @media (max-width:820px) {
     .focus { grid-template-columns:minmax(0,1fr); } .focus .need { text-align:left; }
-    .sem { display:none; }
+    .sem { display:none; } .nav { display:none; }
     .feats { grid-template-columns:minmax(0,1fr); } .tiles { grid-template-columns:repeat(2,minmax(0,1fr)); }
     #summary { order:3; max-width:100%; overflow-x:auto; scrollbar-width:none; }
     #summary button { flex-shrink:0; }
@@ -219,7 +238,12 @@
     .tile { grid-template-columns:52px minmax(0,1fr); gap:10px; padding:12px; }
     .ring, .ring svg { width:52px; height:52px; } .ring b { font-size:13.5px; }
     .tile .badge { font-size:11.5px; white-space:nowrap; padding:2px 7px; }
-    .wrap { padding:0 16px; } .hero { padding-top:40px; } .meta span { display:none; } .brand b { display:none; }
+    .wrap { padding:0 16px; } .hero { padding-top:40px; } .brand b { display:none; } .hide-sm { display:none; }
+  }
+  @media (pointer:coarse) {
+    button, .btn, input, .seg button, .nav a { min-height:44px; }
+    .meta { height:44px; } .meta input { min-height:0; } .step { width:36px; height:36px; min-height:0; }
+    .row .sub a { display:inline-block; padding:6px 0; }
   }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } html { scroll-behavior:auto; } }
 </style>
@@ -227,9 +251,15 @@
 <body>
 <div class="top"><div class="wrap">
   <a class="brand" href="#"><span class="logo">Q</span><b>Quanto falta</b></a><span class="sem">PUCPR · 2026/2</span>
+  <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#materias">Matérias</a><a href="#proximas">Próximas</a><a href="#canvas">Importar</a></nav>
   <div class="spacer"></div>
-  <label class="meta"><span>Meta</span><input id="meta" inputmode="decimal" value="7" aria-label="Meta para passar"></label>
-  <button id="srcbtn" type="button" aria-pressed="false">Fontes</button>
+  <div class="meta" title="Média final para passar. Na PUCPR é 7,0; mude se a sua matéria pedir outra.">
+    <span class="ml">Meta</span>
+    <button class="step" id="metadown" type="button" aria-label="Diminuir a meta em 0,5">−</button>
+    <input id="meta" inputmode="decimal" value="7" aria-label="Meta para passar (média final)">
+    <button class="step" id="metaup" type="button" aria-label="Aumentar a meta em 0,5">+</button>
+  </div>
+  <a class="btn primary sm" href="#canvas">Importar<span class="hide-sm">&nbsp;do Canvas</span></a>
 </div></div>
 
 <div class="wrap">
@@ -259,14 +289,20 @@
     <div class="tiles" id="tiles"></div>
   </section>
 
+  <section class="block" id="todo" hidden>
+    <div class="bhead"><h2>Para entregar</h2><span class="hint" id="todoat"></span></div>
+    <div class="list" id="todolist"></div>
+  </section>
+
   <section class="block" id="materias">
-    <div class="bhead"><h2>Matérias</h2><div class="seg" role="tablist" id="summary"></div><button id="allbtn" type="button">Abrir todas</button></div>
+    <div class="bhead"><h2>Matérias</h2><div class="seg" role="group" aria-label="Filtrar matérias" id="summary"></div><button id="allbtn" type="button">Abrir todas</button></div>
+    <p class="start">Ainda sem notas. Abra uma matéria e lance a primeira, ou <a href="#canvas">importe do Canvas</a>: os números aparecem aqui.</p>
     <div class="courses" id="cards"></div>
   </section>
 
   <section class="block" id="proximas">
     <div class="bhead"><h2>Próximas avaliações</h2>
-      <div class="seg" role="tablist" id="filter"><button role="tab" data-f="all" aria-selected="true">Todas</button><button role="tab" data-f="exam" aria-selected="false">Só provas</button><button role="tab" data-f="week" aria-selected="false">Próximos 7 dias</button></div></div>
+      <div class="seg" role="group" aria-label="Filtrar avaliações" id="filter"><button type="button" data-f="all" aria-pressed="true">Todas</button><button type="button" data-f="exam" aria-pressed="false">Só provas</button><button type="button" data-f="week" aria-pressed="false">Próximos 7 dias</button></div></div>
     <p class="hint below">≈ estimativa e * provisório: até você lançar as notas que já saíram.</p>
     <div class="list" id="next"></div>
   </section>
@@ -276,8 +312,8 @@
     <div class="list" id="pend"></div>
   </section>
 
-  <section class="block">
-    <div class="bhead"><h2>Sem nota lançada</h2><span class="hint">já passaram; contam 0 até você lançar</span></div>
+  <section class="block" id="late-block">
+    <div class="bhead"><h2>Faltam notas</h2><span class="hint">avaliações que já passaram sem nota: contam 0 até você lançar</span></div>
     <div class="list" id="late"></div>
   </section>
 
@@ -463,7 +499,8 @@ const NotasCore = (() => {
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
-        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a })) };
+        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
+        submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false })) };
     });
     // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
     const pending = [];
@@ -473,6 +510,14 @@ const NotasCore = (() => {
     }
     pending.sort((x, y) => (x.due || "9") < (y.due || "9") ? -1 : (x.due || "9") > (y.due || "9") ? 1 : 0);
     const known = courses.some(cv => cv.assignments.some(a => a.flagged));   // older exports have no flag: unknown, not "none"
+    // Not handed in yet and not late: everything with a due date, soonest first; the page keeps the next two weeks.
+    const todo = [];
+    for (const cv of courses) {
+      const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
+      for (const a of cv.assignments) if (a.hasSub && !a.submitted && !a.missing && !a.offline && a.due) todo.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
+    }
+    todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
+    const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {};
     const grades = {}, missing = [], notes = [];
     for (const c of COURSES) {
       const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
@@ -483,6 +528,7 @@ const NotasCore = (() => {
         const parts = (rule.avg || rule.sum || [rule.one]).map(n => cv.assignments.filter(a => a.name.includes(n)));
         if (parts.some(p => p.length !== 1)) { missing.push({ key:k, reason:"avaliação não está no Canvas (ou aparece repetida)" }); continue; }
         const got = parts.map(p => p[0]);
+        if (rule.one && got[0].due) dates[k] = got[0].due;   // Canvas due date of a single-assignment item
         if (got.some(a => a.score === null)) { missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
         const pts = a => rule.pts && !(a.points > 0) ? rule.pts : a.points;
         if (got.some(a => !(pts(a) > 0))) { missing.push({ key:k, reason:"avaliação sem pontuação no Canvas" }); continue; }
@@ -492,7 +538,7 @@ const NotasCore = (() => {
         grades[k] = String(r9(Math.round(Math.max(0, f) * it.inMax * 1000) / 1000));
       }
     }
-    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null };
+    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates };
   }
 
   // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
@@ -525,6 +571,7 @@ const NotasCore = (() => {
 <script id="ui">
 (() => {
   const C = NotasCore, LS = "notas-pucpr-2026-2";
+  const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
   const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
   let saved;
   try { saved = JSON.parse(localStorage.getItem(LS)); } catch (e) { saved = null; }
@@ -533,6 +580,10 @@ const NotasCore = (() => {
   if (typeof saved.meta !== "string") saved.meta = "7";
   if (!saved.open || typeof saved.open !== "object") saved.open = {};
   if (!saved.pending || typeof saved.pending.at !== "string" || !Array.isArray(saved.pending.list)) delete saved.pending;
+  if (!saved.todo || typeof saved.todo.at !== "string" || !Array.isArray(saved.todo.list)) delete saved.todo;
+  if (!saved.cdates || typeof saved.cdates !== "object" || Array.isArray(saved.cdates)) saved.cdates = {};
+  if (!Array.isArray(saved.fresh)) saved.fresh = [];
+  const ISO = /^\d{4}-\d\d-\d\d$/;
   const store = () => { try { localStorage.setItem(LS, JSON.stringify(saved)); } catch (e) {} };
 
   const $ = id => document.getElementById(id);
@@ -563,17 +614,20 @@ const NotasCore = (() => {
   }
   const minText = (m, it) => m.impossible ? "não dá" : m.f <= 1e-9 ? "0" : up(m.raw, dec(it.inMax));
   function srcText(it) { return it.dateSrc + (it.alt ? " · outra fonte: " + it.alt : "") + (it.unv ? " · não verificada" : ""); }
-  function whenCell(it) {
+  // The Canvas due date for this item, when the last import had one and it differs from the Plano date.
+  const canvasDate = (k, it) => { const v = saved.cdates[k]; return typeof v === "string" && ISO.test(v) && v !== it.date ? "Canvas: " + dmy(v) : ""; };
+  function whenCell(it, k) {
     const d = days(it.date), w = cell("Data", "when");
     const top = el("span", "d num", dmy(it.date));
-    if (it.unv || it.alt) { const f = el("span", "flag", "⚠"); f.title = "Data a conferir: " + srcText(it); top.appendChild(f); }
+    if (it.unv || it.alt) { const f = el("span", "flag"); f.innerHTML = ALERT; f.title = "Data a conferir: " + srcText(it); f.setAttribute("aria-label", "data a conferir"); top.appendChild(f); }
     w.append(top, el("span", "rel" + (d >= 0 && d <= 3 ? " soon" : d >= 0 && d <= 7 ? " week" : ""),
       d === 0 ? "hoje" : d === 1 ? "amanhã" : d > 0 ? "em " + d + " dias" : d >= -7 ? "há " + -d + " dias" : "passou"));
-    w.appendChild(el("span", "src fonte", srcText(it)));
+    const cd = el("span", "cdate", k ? canvasDate(k, it) : ""); if (k) cd.id = "cd-" + k; cd.title = "Prazo no Canvas na última importação; a conta usa a data do Plano de Ensino";
+    w.append(cd, el("span", "src fonte", srcText(it)));
     return w;
   }
   function needBadge(st, it) {
-    if (st.status === "garantido") return badge("ok", "livre");
+    if (st.status === "garantido") return badge("ok", "garantido");
     const dep = st.status === "depende-atrasadas", req = C.requiredFor(st, it);
     return badge(dep ? "warn" : req.impossible ? "bad" : tone(req.f), reqText(req, it, st));
   }
@@ -583,18 +637,20 @@ const NotasCore = (() => {
     return ok ? n : 7;
   }
 
-  let filter = "all", cardFilter = "all", showAll = false;
+  let filter = "all", cardFilter = "all", showAll = false, showAllPend = false;
+  const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
     const main = $("cards");
     for (const c of C.COURSES) {
       const card = el("article", "card"); card.id = "card-" + c.id;
       const head = el("div", "chead"); head.tabIndex = 0; head.setAttribute("role", "button");
       const pill = badge("done", "…"); pill.id = "pill-" + c.id;
-      const ttl = el("div"), sub = el("span", "csub"); sub.id = "sub-" + c.id; ttl.append(el("h3", null, c.name), sub);
+      const ttl = el("div"), sub = el("span", "csub"); sub.id = "sub-" + c.id; ttl.append(el("span", "cname", c.name), sub); head.setAttribute("aria-label", c.name);
       const figs = el("div", "figs"); figs.id = "figs-" + c.id;
       const bar = el("div", "bar"); bar.append(el("span", "g"), el("span", "f"), el("span", "m")); bar.id = "bar-" + c.id;
-      head.append(el("span", "chev", "▶"), ttl, figs, bar, pill);
-      const setOpen = on => { card.classList.toggle("open", on); head.setAttribute("aria-expanded", on); saved.open[c.id] = on; store(); };
+      const chev = el("span", "chev"); chev.innerHTML = CHEV;   // static markup, no data
+      head.append(chev, ttl, figs, bar, pill);
+      const setOpen = on => { card.classList.toggle("open", on); head.setAttribute("aria-expanded", on); saved.open[c.id] = on; store(); syncAll(); };
       card.setOpen = setOpen;
       head.addEventListener("click", () => setOpen(!card.classList.contains("open")));
       head.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!card.classList.contains("open")); } });
@@ -614,11 +670,11 @@ const NotasCore = (() => {
         const g = cell("Nota"), inp = el("input");
         inp.inputMode = "decimal"; inp.placeholder = "—"; inp.value = saved.grades[k] == null ? "" : String(saved.grades[k]); inp.id = "in-" + k;
         inp.setAttribute("aria-label", "Nota de " + it.name + ", " + c.name);
-        inp.addEventListener("input", () => { saved.grades[k] = inp.value; store(); calc(); });
+        inp.addEventListener("input", () => { saved.grades[k] = inp.value; saved.fresh = saved.fresh.filter(x => x !== k); store(); calc(); });
         g.append(inp, el("span", "scale", "/ " + fmt(it.inMax, dec(it.inMax))));
         const rq = cell("Precisa"); rq.id = "rq-" + k;
         const mn = cell("Mín", "muted num"); mn.id = "mn-" + k;
-        row.append(name, whenCell(it), g, rq, mn); items.appendChild(row);
+        row.append(name, whenCell(it, k), g, rq, mn); items.appendChild(row);
       }
       detail.appendChild(items);
       card.append(head, detail); main.appendChild(card);
@@ -630,14 +686,26 @@ const NotasCore = (() => {
       el("p", null, "Recuperação (só informação, não simulada): os Planos permitem recuperar um único RA com média abaixo de 7,0. Conectividade: recuperação estendida para final entre 4,0 e 7,0, com teto 7,0."));
 
     metaEl.addEventListener("input", () => { saved.meta = metaEl.value; store(); calc(); });
+    const stepMeta = d => { const n = Math.min(10, Math.max(0, Math.round((target() + d) * 2) / 2));
+      metaEl.value = fmt(n, 1); saved.meta = metaEl.value; store(); calc(); };
+    $("metadown").addEventListener("click", () => stepMeta(-0.5)); $("metaup").addEventListener("click", () => stepMeta(0.5));
+    metaEl.addEventListener("keydown", e => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); stepMeta(e.key === "ArrowUp" ? 0.5 : -0.5); } });
+    const links = [...$("nav").querySelectorAll("a")];
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting)
+        links.forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + e.target.id)); }, { rootMargin:"-45% 0px -50% 0px" });
+      links.forEach(a => { const t = document.getElementById(a.getAttribute("href").slice(1)); if (t) io.observe(t); });
+    }
     for (const b of $("filter").children) b.addEventListener("click", () => {
-      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-selected", x === b); calc(); });
+      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); });
     $("startbtn").addEventListener("click", () => { const first = document.querySelector(".card"); if (first && !document.querySelector(".card.open")) first.setOpen(true); });
-    const sb = $("srcbtn");
-    sb.addEventListener("click", () => { const on = document.body.classList.toggle("src-on"); sb.setAttribute("aria-pressed", on); });
-    const all = $("allbtn");
+    const sb = el("button", "linkbtn", "Mostrar de onde vêm os pesos e as datas"); sb.type = "button"; sb.setAttribute("aria-pressed", "false");
+    sb.addEventListener("click", () => { const on = document.body.classList.toggle("src-on"); sb.setAttribute("aria-pressed", on);
+      sb.textContent = on ? "Esconder as fontes" : "Mostrar de onde vêm os pesos e as datas"; });
+    foot.appendChild(sb);
+    const all = $("allbtn"); syncAll();
     all.addEventListener("click", () => { const cards = [...document.querySelectorAll(".card")], on = cards.some(x => !x.classList.contains("open"));
-      cards.forEach(x => x.setOpen(on)); all.textContent = on ? "Fechar todas" : "Abrir todas"; });
+      cards.forEach(x => x.setOpen(on)); });
     const openHash = () => { const card = document.getElementById(location.hash.slice(1)); if (card && card.setOpen) card.setOpen(true); };
     window.addEventListener("hashchange", openHash); openHash();
     document.addEventListener("click", e => { const a = e.target.closest('a[href^="#card-"]'); if (!a) return;
@@ -658,9 +726,11 @@ const NotasCore = (() => {
         const d = el("div"); d.append(el("span", "k", k), el("span", "v num", v)); figs.appendChild(d); });
       const nGraded = c.items.filter(it => { const p = C.itemPoints(it, saved.grades[C.key(c, it)]); return p !== null && !Number.isNaN(p); }).length;
       const nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
-      $("sub-" + c.id).textContent = nGraded + " de " + c.items.length + " lançadas" + (nx ? " · próxima: " + nx.name + ", " + (days(nx.date) === 0 ? "hoje" : days(nx.date) === 1 ? "amanhã" : "em " + days(nx.date) + " dias") : "");
+      const nFresh = c.items.filter(it => saved.fresh.includes(C.key(c, it))).length;
+      $("sub-" + c.id).textContent = nGraded + " de " + c.items.length + " lançadas" + (nFresh ? " · " + nFresh + (nFresh === 1 ? " nova" : " novas") : "") + (nx ? " · próxima: " + nx.name + ", " + (days(nx.date) === 0 ? "hoje" : days(nx.date) === 1 ? "amanhã" : "em " + days(nx.date) + " dias") : "");
       const [g, f, m] = $("bar-" + c.id).children;
       g.style.width = Math.min(100, st.earned * 10) + "%";
+      g.style.background = "var(--" + (st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction)) + ")";
       f.style.left = Math.min(100, st.earned * 10) + "%"; f.style.width = st.futureMax * 10 + "%";
       m.style.left = Math.min(99.5, T * 10) + "%";
 
@@ -670,8 +740,9 @@ const NotasCore = (() => {
         inp.classList.toggle("bad", Number.isNaN(p)); inp.title = Number.isNaN(p) ? "Fora de 0 a " + fmt(it.inMax, 2) + " ou não é número: ignorada" : "";
         rq.textContent = ""; mn.textContent = "";
         const graded = p !== null && !Number.isNaN(p); $("row-" + k).classList.toggle("graded", graded);
-        if (graded) { rq.appendChild(el("span", "check", "✓ lançada")); continue; }
-        if (st.late.includes(it)) { rq.appendChild(badge("warn", "lançar nota")); continue; }
+        $("cd-" + k).textContent = canvasDate(k, it);
+        if (graded) { rq.appendChild(el("span", "check", "✓ lançada")); if (saved.fresh.includes(k)) rq.appendChild(badge("acc", "nova")); continue; }
+        if (st.late.includes(it)) { rq.appendChild(badge("warn", "falta a nota")); continue; }
         rq.appendChild(needBadge(st, it));
         mn.textContent = st.status === "garantido" || st.status === "depende-atrasadas" ? "—" : minText(C.minimumFor(st, it, T), it);
       }
@@ -682,19 +753,19 @@ const NotasCore = (() => {
       else if (st.status === "depende-atrasadas") { cls = "warn"; text = "Só com o que falta não chega (teto " + fmt(st.ceiling, 2) + "). Lance as notas que já saíram."; }
       else { cls = tone(st.fraction);
              text = "Faltam " + up(st.need, 2) + " pontos: " + up(st.fraction * 10, 1) + " em 10 em cada item que falta."; }
-      if (st.late.length && st.status !== "garantido") text = st.late.length + " nota(s) antiga(s) sem lançar contam 0" +
+      if (st.late.length && st.status !== "garantido") text = (st.late.length === 1 ? "1 nota antiga sem lançar conta 0" : st.late.length + " notas antigas sem lançar contam 0") +
         (st.fractionIfLate != null ? (st.fractionIfLate > 1 + 1e-9 ? " (não dá nem com nota cheia)" : " (se forem iguais ao resto: " + up(st.fractionIfLate * 10, 1) + " em 10)") : "") + ". " + text;
-      if (st.invalid.length) text = st.invalid.length + " nota(s) inválida(s) ignorada(s). " + text;
+      if (st.invalid.length) text = (st.invalid.length === 1 ? "1 nota inválida ignorada: " : st.invalid.length + " notas inválidas ignoradas: ") + st.invalid.map(i => i.name).join(", ") + ". " + text;
       const box = $("msg-" + c.id); box.className = "msg " + cls; box.textContent = text;
-      const label = { garantido:"passou", "nao-da":"recuperação", "depende-atrasadas":"lançar notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10";
+      const label = { garantido:"garantido", "nao-da":"recuperação", "depende-atrasadas":"faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10";
       const pill = $("pill-" + c.id); pill.className = "badge " + cls; pill.textContent = label;
     }
 
     const sum = $("summary"); sum.textContent = "";
     if (!groups[cardFilter] || !groups[cardFilter].length) cardFilter = "all";
-    [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Já passou"]].forEach(([k, l, n]) => {
+    [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
       const count = n != null ? n : groups[k].length; if (!count) return;
-      const b = el("button", null, l); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", k === cardFilter);
+      const b = el("button", null, l); b.type = "button"; b.setAttribute("aria-pressed", k === cardFilter);
       b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); }); sum.appendChild(b); });
     for (const c of C.COURSES) $("card-" + c.id).hidden = cardFilter !== "all" && states[c.id].status !== cardFilter;
 
@@ -709,14 +780,14 @@ const NotasCore = (() => {
       name.append(el("span", "title", u.item.name + (u.item.exam ? " · prova" : "")), sub);
       const rq = cell("Precisa"); rq.appendChild(needBadge(u.st, u.item));
       if (u.st.provisional && u.st.status === "precisa") { const fl = el("span", "flag", "*"); fl.title = "Provisório: notas antigas sem lançar contam 0"; rq.appendChild(fl); }
-      row.append(whenCell(u.item), name, rq,
+      row.append(whenCell(u.item, C.key(u.course, u.item)), name, rq,
         cell("Mín", "muted num", u.st.status === "garantido" || u.st.status === "depende-atrasadas" ? "—" : minText(u.min, u.item)));
       next.appendChild(row);
     }
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T); renderTiles(states, T);
+    renderFocus(T); renderTiles(states, T); renderTodo();
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -741,6 +812,7 @@ const NotasCore = (() => {
     const all = C.upcoming(C.COURSES, saved.grades, today, T), list = all.filter(u => u.st.status !== "garantido");
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     $("feats").hidden = any;
+    document.body.classList.toggle("fresh", !any);
     const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
     $("h1a").textContent = !any ? "Quanto falta" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
     $("h1b").textContent = !any ? "pra passar?" : open ? "pra fechar o semestre." : "bom descanso.";
@@ -776,11 +848,28 @@ const NotasCore = (() => {
       const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
       const er = arc("er", 0, e), fu = arc("fu", e, f); er.style.stroke = "var(--" + cls + ")"; fu.style.stroke = "color-mix(in srgb, var(--" + cls + ") 22%, transparent)";
       svg.append(arc("tr", 0, L), fu); if (e > 0.5) svg.appendChild(er); svg.appendChild(arc("mk", Math.min(T, 9.9) / 10 * L, 2));
-      ring.append(svg, el("b", null, fmt(st.earned, st.earned >= 10 ? 0 : 1)));
+      ring.append(svg, el("b", null, st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1)));
       const txt = el("span"), nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
       txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
       t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
     }
+  }
+
+  // Canvas assignments not handed in yet, due in the next 14 days (a snapshot from the last import).
+  function renderTodo() {
+    const td = saved.todo, box = $("todolist"); $("todo").hidden = !td; box.textContent = ""; if (!td) return;
+    const list = td.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0 && days(t.due) <= 14);
+    $("todoat").textContent = list.length + (list.length === 1 ? " entrega" : " entregas") + " nos próximos 14 dias · lido do Canvas em " + dmy(td.at);
+    const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
+    for (const t of list) {
+      const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub"), d = days(t.due);
+      const ours = C.COURSES.find(c => c.id === t.course);
+      if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); } else sub.textContent = String(t.courseName || "");
+      name.append(el("span", "title", t.name), sub);
+      const w = cell("Prazo", "when"); w.append(el("span", "d num", dmy(t.due)), el("span", "rel" + (d <= 3 ? " soon" : d <= 7 ? " week" : ""), d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias"));
+      row.append(w, name); box.appendChild(row);
+    }
+    if (!list.length) box.appendChild(el("div", "empty", "Nada para entregar nos próximos 14 dias."));
   }
 
   // What Canvas marked as missing at the last import (a snapshot: it does not refresh by itself).
@@ -789,7 +878,8 @@ const NotasCore = (() => {
     $("pendat").textContent = pd ? "lido do Canvas em " + dmy(pd.at) + "; importe de novo para atualizar" : "";
     $("pendentes").hidden = !pd; if (!pd) return;
     const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
-    for (const p of pd.list) {
+    const okList = pd.list.filter(p => p && typeof p.name === "string");
+    for (const p of showAllPend ? okList : okList.slice(0, 6)) {
       if (!p || typeof p.name !== "string") continue;
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
       const ours = C.COURSES.find(c => c.id === p.course);   // link built from our own ids only, never from imported text
@@ -799,6 +889,8 @@ const NotasCore = (() => {
       row.append(cell("Prazo", "muted num", typeof p.due === "string" && /^\d{4}-\d\d-\d\d$/.test(p.due) ? dmy(p.due) : "sem data"), name);
       box.appendChild(row);
     }
+    if (!showAllPend && okList.length > 6) { const b = el("button", "more", "Ver todas (" + okList.length + ")"); b.type = "button";
+      b.addEventListener("click", () => { showAllPend = true; renderPending(); }); box.appendChild(b); }
     if (!pd.list.length) box.appendChild(el("div", "empty", "Nenhuma. O Canvas não marcou nada como atrasado."));
   }
 
@@ -845,12 +937,14 @@ const NotasCore = (() => {
     }
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;
-      const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); } };
+      const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); }
+        if (res.todo) saved.todo = { at:today, list:res.todo };
+        if (res.dates) saved.cdates = res.dates; };
       const pendNote = pend ? " " + (pend.length ? pend.length + " entrega(s) que o Canvas marca como não entregue(s) vão para Entregas atrasadas." : "O Canvas não marca nenhuma entrega como atrasada.") : "";
       if (!keys.length) {
         out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão." + pendNote));
         if (pend) { const b = el("button", "btn primary", "Atualizar entregas atrasadas"); b.type = "button";
-          b.addEventListener("click", () => { savePending(); store(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas atrasadas atualizadas.")); });
+          b.addEventListener("click", () => { savePending(); store(); calc(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas atrasadas atualizadas.")); });
           out.appendChild(b); }
       }
       else {
@@ -864,6 +958,8 @@ const NotasCore = (() => {
         out.appendChild(ul);
         const apply = el("button", "btn primary", "Aplicar " + keys.length + " notas"); apply.type = "button";
         apply.addEventListener("click", () => {
+          const hadImport = !!(saved.pending || saved.todo);   // the first import would mark every grade as new
+          saved.fresh = hadImport ? keys.filter(k => C.parseNum(saved.grades[k]) !== C.parseNum(res.grades[k])) : [];
           for (const k of keys) { saved.grades[k] = res.grades[k]; const inp = $("in-" + k); if (inp) inp.value = res.grades[k]; }
           if (res.meta != null) { saved.meta = res.meta; metaEl.value = res.meta; }
           savePending(); store(); calc(); afterApply(); out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));
