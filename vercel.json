@@ -22,5 +22,11 @@
       ]
     }
   ],
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/calendario",
+      "destination": "/app"
+    }
+  ]
 }
