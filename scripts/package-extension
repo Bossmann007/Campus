@@ -1,0 +1,10 @@
+#!/bin/sh
+# Build the Chrome Web Store upload: dist/quanto-falta-extension-<version>.zip with only the extension files.
+set -eu
+cd "$(dirname "$0")/.."
+./scripts/verify >/dev/null
+v=$(python3 -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
+mkdir -p dist && out="dist/quanto-falta-extension-$v.zip" && rm -f "$out"
+(cd extension && zip -q -X -r "../$out" manifest.json popup.html popup.css popup.js collect.js icons)
+unzip -l "$out" | tail -n +4 | sed '$d' | sed '$d'
+echo "built $out"
