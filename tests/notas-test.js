@@ -184,6 +184,6 @@ assert(fs.existsSync(require("path").join(__dirname, "..", "media", "demo.mp4"))
 ok("landing page is clean, forwards extension links and has the video");
 const vj = JSON.parse(fs.readFileSync(require("path").join(__dirname, "..", "vercel.json"), "utf8"));
 assert(vj.rewrites.some(r => r.source === "/calendario" && r.destination === "/app"), "/calendario serves the app");
-assert(/const CAL = \/\\\/calendario/.test(html), "the app switches to the calendar view on /calendario");
+assert(/const urlCal = \(\) => \/\\\/calendario/.test(html) && html.includes('id="viewsw"'), "the app switches to the calendar view on /calendario and has the switch");
 ok("/calendario is the app in calendar view");
 console.log("all " + n + " checks passed");
