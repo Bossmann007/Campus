@@ -1240,12 +1240,12 @@ const NotasCore = (() => {
       const graded = res.courses.reduce((n, c) => n + c.assignments.filter(a => a.score !== null).length, 0);
       msg.textContent = res.courses.length + " matérias lidas, " + graded + " avaliações com nota.";
       const open = btn("Abrir no Quanto falta", true); open.href = app + "#canvas=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); open.target = "_blank"; open.rel = "noopener";
-      const copy = btn("Copiar texto"); copy.onclick = () => navigator.clipboard.writeText(txt).then(() => { copy.textContent = "Copiado"; });
+      const copy = btn("Copiar texto"); copy.onclick = () => navigator.clipboard.writeText(txt).then(() => { copy.textContent = "Copiado"; }, () => { copy.textContent = "O Canvas bloqueou a cópia: use Abrir no Quanto falta"; });
       const close = btn("Fechar"); close.onclick = () => box.remove();
       box.append(open, copy, close);
     });
   }
-  const bookmarkletHref = () => "javascript:" + encodeURIComponent("(" + bookmarkletPanel.toString() + ")((function () {\n" + COLLECT_SRC + "\nreturn collectCanvasGrades;\n})(), " + JSON.stringify(location.origin.startsWith("http") ? location.origin + "/app" : "https://falta-quanto.vercel.app/app") + ")");
+  const bookmarkletHref = () => "javascript:" + encodeURIComponent("(" + bookmarkletPanel.toString() + ")((function () {\n" + COLLECT_SRC + "\nreturn collectCanvasGrades;\n})(), " + JSON.stringify("https://falta-quanto.vercel.app/app") + ")");   // always production: a preview or local origin would go stale
 
   function buildImport() {
     $("bm").href = bookmarkletHref();
