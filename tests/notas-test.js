@@ -118,7 +118,8 @@ assert.deepStrictEqual(pend, [
   { course: null, courseName: "PUC Acolhe", name: "Quiz", due: "2026-10-01" },
   { course: "etica", courseName: "Ética", name: "Fórum 3", due: "2026-10-20" },
   { course: "etica", courseName: "Ética", name: "Leitura", due: null } ]);
-assert.deepStrictEqual(got.pending, [], "old exports without the flag give no pending");
+assert.strictEqual(got.pending, null, "old exports without the flag: unknown, so the saved list is left alone");
+assert.deepStrictEqual(C.fromCanvas({ v: 1, courses: [cv("Ética", [M("Fórum 4", null, false)])] }).pending, [], "flag present, none missing");
 ok("pending submissions come only from Canvas missing flags, sorted by due date");
 
 // the name table matches the real Canvas listing: every rule hits exactly one assignment (Somativa III not created yet)

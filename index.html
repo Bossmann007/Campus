@@ -402,7 +402,7 @@ const NotasCore = (() => {
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
-        due:str(a.due) !== null && !Number.isNaN(Date.parse(a.due)) ? localISO(new Date(a.due)) : null, missing:a.missing === true })) };
+        due:str(a.due) !== null && !Number.isNaN(Date.parse(a.due)) ? localISO(new Date(a.due)) : null, missing:a.missing === true, flagged:"missing" in a })) };
     });
     // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
     const pending = [];
@@ -411,6 +411,7 @@ const NotasCore = (() => {
       for (const a of cv.assignments) if (a.missing) pending.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
     }
     pending.sort((x, y) => (x.due || "9") < (y.due || "9") ? -1 : (x.due || "9") > (y.due || "9") ? 1 : 0);
+    const known = courses.some(cv => cv.assignments.some(a => a.flagged));   // older exports have no flag: unknown, not "none"
     const grades = {}, missing = [], notes = [];
     for (const c of COURSES) {
       const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
@@ -430,7 +431,7 @@ const NotasCore = (() => {
         grades[k] = String(r9(Math.round(Math.max(0, f) * it.inMax * 1000) / 1000));
       }
     }
-    return { grades, missing, notes, pending };
+    return { grades, missing, notes, pending: known ? pending : null };
   }
 
   // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
