@@ -13,13 +13,13 @@ const page = (body, next) => ({ ok:true, text: async () => "while(1);" + JSON.st
 global.fetch = async url => { calls.push(url);
   if (url.startsWith("/api/v1/courses?")) return page([{ id:1, name:"Programação WEB (Turma) - 2026 / 2º Sem" }, { id:2, name:"PUC Acolhe" }]);
   if (url === "/api/v1/courses/1/assignments?include[]=submission&per_page=100") return page([{ name:"Entrega TDE", points_possible:1.5, submission:{ score:1.2 } }], "https://pucpr.instructure.com/p2");
-  if (url === "https://pucpr.instructure.com/p2") return page([{ name:"Prova", points_possible:10, submission:{ score:null } }]);
+  if (url === "https://pucpr.instructure.com/p2") return page([{ name:"Prova", points_possible:10, due_at:"2026-10-20T15:00:00Z", submission:{ score:null, missing:true } }]);
   throw new Error("unexpected " + url); };
 eval(src);
 setTimeout(() => {
   const ta = nodes.find(n => n.tag === "textarea"); assert(ta, "export box shown");
   const out = JSON.parse(ta.value);
-  assert.deepStrictEqual(out, { v:1, courses:[{ name:"Programação WEB (Turma) - 2026 / 2º Sem", assignments:[{ name:"Entrega TDE", points:1.5, score:1.2 }, { name:"Prova", points:10, score:null }] }] });
+  assert.deepStrictEqual(out, { v:1, courses:[{ name:"Programação WEB (Turma) - 2026 / 2º Sem", assignments:[{ name:"Entrega TDE", points:1.5, score:1.2, due:null, missing:false }, { name:"Prova", points:10, score:null, due:"2026-10-20T15:00:00Z", missing:true }] }] });
   assert(calls.every(u => new URL(u, location.href).origin === location.origin), "only same-origin calls (absolute Link followed)");
   console.log("bookmarklet ok:", calls.length, "GETs, other semesters skipped, pagination and while(1) handled");
 }, 50);

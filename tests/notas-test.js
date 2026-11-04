@@ -107,6 +107,22 @@ assert.throws(() => C.fromCanvas(JSON.parse('{"v":1,"courses":[{"name":{"toStrin
 assert.deepStrictEqual(C.fromCanvas(JSON.stringify(exp)).grades, got.grades);
 ok("bad input is rejected; JSON text and objects give the same result");
 
+// missing submissions: only Canvas "missing" flags, any 2026/2 course, oldest first; bad dates kept as null, not crashes
+const M = (name, due, missing) => ({ name, points: 1, score: null, due, missing });
+const pend = C.fromCanvas({ v: 1, courses: [
+  cv("Ética", [M("Fórum 3", "2026-10-20T15:00:00Z", true), M("Fórum 4", "2026-11-30T15:00:00Z", false), M("Leitura", "ontem", true), M("Resumo", "2026-10-25", true)]),
+  cv("Programação WEB", [M("Lista 2", "2026-09-10T15:00:00Z", true), M("Lista 3", null, "true")]),
+  { name: "PUC Acolhe - Apoio ao estudante (Turma A) - 2026 / 2º Sem", assignments: [M("Quiz", "2026-10-01T15:00:00Z", true)] } ] }).pending;
+assert.deepStrictEqual(pend, [
+  { course: "web", courseName: "Programação WEB", name: "Lista 2", due: "2026-09-10" },
+  { course: null, courseName: "PUC Acolhe", name: "Quiz", due: "2026-10-01" },
+  { course: "etica", courseName: "Ética", name: "Fórum 3", due: "2026-10-20" },
+  { course: "etica", courseName: "Ética", name: "Resumo", due: "2026-10-25" },
+  { course: "etica", courseName: "Ética", name: "Leitura", due: null } ]);
+assert.strictEqual(got.pending, null, "old exports without the flag: unknown, so the saved list is left alone");
+assert.deepStrictEqual(C.fromCanvas({ v: 1, courses: [cv("Ética", [M("Fórum 4", null, false)])] }).pending, [], "flag present, none missing");
+ok("pending submissions come only from Canvas missing flags, sorted by due date");
+
 // the name table matches the real Canvas listing: every rule hits exactly one assignment (Somativa III not created yet)
 const real = JSON.parse(fs.readFileSync(require("path").join(__dirname, "canvas-names.json"), "utf8"));
 const withScores = { v: 1, courses: real.courses.map(c => ({ name: c.name, assignments: c.assignments.map(a => ({ name: a.name, points: a.points, score: a.points })) })) };
