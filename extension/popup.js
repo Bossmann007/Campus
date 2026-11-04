@@ -22,6 +22,7 @@ $("go").addEventListener("click", async () => {
   try {
     const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: collectCanvasGrades });
     if (!res || !res.result) throw new Error("não veio resposta da aba do Canvas");
+    if (res.result.error) throw new Error(res.result.error);
     exported = JSON.stringify(res.result);
     const graded = res.result.courses.reduce((n, c) => n + c.assignments.filter(a => a.score !== null).length, 0);
     say(res.result.courses.length + " matérias lidas, " + graded + " avaliações com nota.", "ok");

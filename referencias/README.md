@@ -1,6 +1,6 @@
 # Referências de design web
 
-Lista que o Enzo juntou (04/11/2026). Usada para redesenhar `~/PUCPR/notas-v4.html`.
+Lista de referências de design juntada em 04/11/2026, usada no visual do site.
 
 ## 1. Componentes UI e microinterações
 

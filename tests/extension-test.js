@@ -9,7 +9,7 @@ for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(di
 const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
 assert(/activeTab/.test(priv) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists permissions and storage, no scripts");
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
-assert(!/<script>(?!<)/.test(html) && !/on\w+="/.test(html), "no inline script (MV3 CSP)");
+assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
 global.location = { href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };
 const page = (body, next) => ({ ok: true, text: async () => "while(1);" + JSON.stringify(body), headers: { get: h => h === "Link" && next ? "<" + next + '>; rel="next"' : null } });
 global.fetch = async url => {
@@ -20,7 +20,11 @@ global.fetch = async url => {
 };
 const collect = new Function(fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();
 const popupSrc = fs.readFileSync(path.join(dir, "popup.js"), "utf8");
-const b64url = new Function("btoa", "TextEncoder", popupSrc.match(/function b64url[\s\S]*?\n\}/)[0] + "\nreturn b64url;")(s => Buffer.from(s, "binary").toString("base64"), TextEncoder);
+const b64url = new Function(popupSrc.match(/function b64url[\s\S]*?\n\}/)[0] + "\nreturn b64url;")();   // Node's own btoa, like the browser
+const page2 = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+const decodeLines = page2.match(/const b = atob\(location\.hash[^\n]*\n[^\n]*TextDecoder[^\n]*/);
+assert(decodeLines, "index.html hash decode found");
+const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLines[0]); return ta.value; };   // runs index.html's own lines
 (async () => {
   const out = await collect();
   assert.deepStrictEqual(out, { v: 1, courses: [{ name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
@@ -28,9 +32,11 @@ const b64url = new Function("btoa", "TextEncoder", popupSrc.match(/function b64u
   const big = JSON.stringify({ v: 1, courses: Array.from({ length: 8 }, (_, i) => ({ name: "Matéria " + i + " ção", assignments: Array.from({ length: 60 }, (_, j) => ({ name: "Avaliação " + j + " é", points: 10, score: j })) })) });
   const enc = b64url(big);
   assert(/^[A-Za-z0-9_-]+$/.test(enc), "url-safe");
-  const dec = Buffer.from(enc.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+  const dec = decodeHash("#canvas=" + enc);
   assert.strictEqual(dec, big, "hand-off round trip (" + big.length + " chars)");
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");
-  await assert.rejects(collect(), /fora do Canvas/);
-  console.log("extension ok: MV3, activeTab+scripting only, collect + pagination, url-safe hand-off of " + big.length + " chars, off-origin refused");
+  assert.match((await collect()).error, /fora do Canvas/);
+  global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
+  assert.deepStrictEqual(await collect(), { error: "o Canvas respondeu 401" });
+  console.log("extension ok: MV3, activeTab+scripting only, collect + pagination, url-safe hand-off decoded by index.html's own code, " + big.length + " chars, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });
