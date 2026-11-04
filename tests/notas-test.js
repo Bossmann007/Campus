@@ -114,5 +114,21 @@ const realRun = C.fromCanvas(withScores);
 const absent = realRun.missing.filter(m => /não está no Canvas/.test(m.reason)).map(m => m.key);
 assert.deepStrictEqual(absent, ["abd:s3"], "unexpected unmatched: " + absent);
 ok("Canvas name table matches the real listing (only abd:s3 absent)");
+
+// ---- backup (#7): toBackup/fromBackup round trip, only known items, hostile files rejected ----
+const mine = { "abd:pj1": "0.9", "rpnd:as5": "5,5", "etica:ra1": "", "imp:p1": "7.5" };
+const file = C.toBackup(mine, "6,5");
+const back = C.fromBackup(file);
+assert.deepStrictEqual(back.grades, { "abd:pj1": "0.9", "rpnd:as5": "5,5", "imp:p1": "7.5" }, "empty entries are not exported");
+assert.strictEqual(back.meta, "6,5"); assert.deepStrictEqual(back.missing, []);
+assert.strictEqual(JSON.parse(file).app, "quanto-falta"); assert.strictEqual(JSON.parse(file).semester, C.SEMESTER);
+ok("backup round trip keeps the same grades and goal");
+assert.throws(() => C.fromBackup("{oops"), /arquivo/); assert.throws(() => C.fromBackup(JSON.stringify({ app: "outro", grades: {} })), /arquivo/);
+assert.throws(() => C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, grades: [] })), /arquivo/);
+const odd = C.fromBackup('{"app":"quanto-falta","v":1,"semester":"' + C.SEMESTER + '","grades":{"abd:pj1":"0.5","__proto__":"1","abd:xx":"1","web:p1":9,"imp:p1":"abc"}}');   // text, so __proto__ is a real key
+assert.deepStrictEqual(odd.grades, { "abd:pj1": "0.5" }, "only known items with text grades that parse");
+assert(odd.missing.length === 4, "the other entries are reported: " + JSON.stringify(odd.missing));
+assert(C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, semester: "2027-1", grades: {} })).notes.some(n => /semestre/.test(n.reason)), "other semester flagged");
+ok("invalid backups are rejected; unknown, non-text and unparsable entries are skipped and listed");
 assert.deepStrictEqual(C.SEED, {}); assert(!/Enzo|~\//.test(html), "no personal data in the page"); ok("public page has no seed grades or personal notes");
 console.log("all " + n + " checks passed");
