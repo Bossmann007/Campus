@@ -38,5 +38,8 @@ const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLine
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
   assert.deepStrictEqual(await collect(), { error: "o Canvas respondeu 401" });
+  assert(!/javascript:|canvasExport/.test(page2), "no bookmarklet left on the site");
+  assert(page2.includes('href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
+  assert(/cp "\$out" dist\/quanto-falta-extension\.zip/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "package script writes the stable name");
   console.log("extension ok: MV3, activeTab+scripting only, collect + pagination, url-safe hand-off decoded by index.html's own code, " + big.length + " chars, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });

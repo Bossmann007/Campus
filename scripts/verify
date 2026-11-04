@@ -3,7 +3,6 @@
 set -e
 cd "$(dirname "$0")/.."
 TZ=America/Sao_Paulo node tests/notas-test.js index.html   # due dates are shown in local (Brasília) days
-node tests/bookmarklet-test.js index.html
 node tests/extension-test.js
 python3 -c "import re;s=open('index.html').read();open('/tmp/notas-ui-check.js','w').write(re.search(r'<script id=\"ui\">([\s\S]*?)</script>',s).group(1))"
 node --check /tmp/notas-ui-check.js && echo "ui script parses"
