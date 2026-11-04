@@ -173,5 +173,6 @@ assert.deepStrictEqual(odd.grades, { "abd:pj1": "0.5" }, "only known items with 
 assert(odd.missing.length === 4, "the other entries are reported: " + JSON.stringify(odd.missing));
 assert(C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, semester: "2027-1", grades: {} })).notes.some(n => /semestre/.test(n.reason)), "other semester flagged");
 ok("invalid backups are rejected; unknown, non-text and unparsable entries are skipped and listed");
-assert.deepStrictEqual(C.SEED, {}); assert(!/Enzo|~\//.test(html), "no personal data in the page"); ok("public page has no seed grades or personal notes");
+assert.deepStrictEqual(C.SEED, {}); const publicText = html.replace(/<dialog id="fb"[\s\S]*?<\/dialog>/, "").replace(/title="Mandar um feedback para o Enzo"/, "");   // the feedback button names its recipient on purpose
+assert(!/Enzo|~\//.test(publicText), "no personal data in the page outside the feedback dialog"); ok("public page has no seed grades or personal notes");
 console.log("all " + n + " checks passed");

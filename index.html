@@ -45,6 +45,21 @@
   .step { width:26px; height:26px; padding:0; display:grid; place-items:center; border-radius:999px; border:0; box-shadow:none; background:transparent; color:var(--muted); font-size:15px; line-height:1; }
   @media (hover:hover) and (pointer:fine) { .step:hover { background:var(--surface); color:var(--txt); } }
   .btn.sm { padding:7px 14px; font-size:13px; }
+  .top .wrap > * { white-space:nowrap; flex-shrink:0; } .top .spacer { flex-shrink:1; }
+  @media (max-width:1100px) { .sem { display:none; } }
+  @media (max-width:1000px) { .nav { display:none; } }
+  .iconbtn { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px; border-radius:999px; border:1px solid transparent; box-shadow:none;
+             background:transparent; color:var(--muted); font-size:13px; }
+  @media (hover:hover) and (pointer:fine) { .iconbtn:hover { color:var(--txt); background:var(--sunk); } }
+  dialog#fb { width:min(520px, calc(100vw - 32px)); border:1px solid var(--line); border-radius:var(--r); padding:0; background:var(--surface); color:var(--txt);
+              box-shadow:0 20px 50px rgba(0,0,0,.25); }
+  dialog#fb[open] { animation:pop .18s cubic-bezier(.23,1,.32,1); }
+  @keyframes pop { from { opacity:0; transform:scale(.96); } }
+  dialog#fb::backdrop { background:rgba(0,0,0,.45); }
+  .fbform { padding:20px 22px; display:grid; gap:10px; }
+  .fbform h2 { margin:0; font-size:17px; letter-spacing:-.01em; }
+  .fbform p { margin:0; font-size:13.5px; } .fbform .fine { font-size:12.5px; }
+  .fbform textarea { font-family:var(--sans); font-size:14px; }
   button, .btn { font:inherit; font-size:13px; font-weight:500; color:var(--txt); background:var(--surface); border:1px solid var(--line);
                  border-radius:999px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
   button:active, .btn:active { transform:scale(.97); }
@@ -263,7 +278,7 @@
 <body>
 <div class="top"><div class="wrap">
   <a class="brand" href="#"><span class="logo">Q</span><b>Quanto falta</b></a><span class="sem">PUCPR · 2026/2</span>
-  <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#materias">Matérias</a><a href="#proximas">Próximas</a><a href="#canvas">Importar</a></nav>
+  <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#materias">Matérias</a><a href="#proximas">Próximas</a></nav>
   <div class="spacer"></div>
   <div class="meta" title="Média final para passar. Na PUCPR é 7,0; mude se a sua matéria pedir outra.">
     <span class="ml">Meta</span>
@@ -271,7 +286,9 @@
     <input id="meta" inputmode="decimal" value="7" aria-label="Meta para passar (média final)">
     <button class="step" id="metaup" type="button" aria-label="Aumentar a meta em 0,5">+</button>
   </div>
-  <a class="btn primary sm" href="#canvas">Importar<span class="hide-sm">&nbsp;do Canvas</span></a>
+  <button class="iconbtn" id="fbbtn" type="button" title="Mandar um feedback para o Enzo"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg><span class="hide-sm">Feedback</span></button>
+  <a class="iconbtn" href="https://github.com/Bossmann007/quanto-falta-pucpr" target="_blank" rel="noopener noreferrer" title="Código no GitHub" aria-label="Código no GitHub"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+  <a class="btn primary sm" href="#canvas">Importar</a>
 </div></div>
 
 <div class="wrap">
@@ -376,6 +393,16 @@
   </section>
 
   <footer id="foot"></footer>
+
+<dialog id="fb" aria-labelledby="fbtitle">
+  <form method="dialog" class="fbform">
+    <h2 id="fbtitle">Feedback para o Enzo</h2>
+    <p class="muted">O que você mudaria, uma ideia ou algo que deu errado. A mensagem abre pronta no GitHub do projeto; lá é só clicar em <b>Create</b>.</p>
+    <textarea id="fbtext" rows="5" maxlength="2000" placeholder="Ex.: queria ver a média geral do semestre" aria-label="Sua mensagem"></textarea>
+    <p class="muted fine">Precisa de uma conta no GitHub (é grátis). A mensagem fica pública: não escreva notas, tokens nem dados pessoais.</p>
+    <div class="acts"><button id="fbsend" class="btn primary" type="button">Abrir no GitHub</button><button class="btn" value="cancel">Cancelar</button></div>
+  </form>
+</dialog>
 </div>
 
 <script id="core">
@@ -757,6 +784,16 @@ const NotasCore = (() => {
       metaEl.value = fmt(n, 1); saved.meta = metaEl.value; store(); calc(); };
     $("metadown").addEventListener("click", () => stepMeta(-0.5)); $("metaup").addEventListener("click", () => stepMeta(0.5));
     metaEl.addEventListener("keydown", e => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); stepMeta(e.key === "ArrowUp" ? 0.5 : -0.5); } });
+    // Feedback: opens a prefilled issue form on GitHub (the site has no server; the student sends it from their own account).
+    const fb = $("fb");
+    $("fbbtn").addEventListener("click", () => { fb.showModal(); $("fbtext").focus(); });
+    fb.addEventListener("click", e => { if (e.target === fb) fb.close(); });   // click on the backdrop closes
+    $("fbsend").addEventListener("click", () => {
+      const t = $("fbtext").value.trim(); if (!t) { $("fbtext").focus(); return; }
+      const q = new URLSearchParams({ template:"feedback.yml", title:"Feedback: " + t.split(/\s+/).slice(0, 8).join(" ").slice(0, 70), mensagem:t.slice(0, 2000), origem:"site, " + today });
+      window.open("https://github.com/Bossmann007/quanto-falta-pucpr/issues/new?" + q, "_blank", "noopener,noreferrer");
+      fb.close(); $("fbtext").value = "";
+    });
     $("icsbtn").addEventListener("click", () => {
       const esc = t => String(t).replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, " ");
       const day = iso => iso.replace(/-/g, ""), next = iso => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + 1); return day(C.localISO(d)); };
