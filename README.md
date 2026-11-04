@@ -1,4 +1,12 @@
-# notas-pucpr
+# Quanto falta pra passar · PUCPR 2026/2
+
+Calculadora de notas para a turma: mostra quanto você precisa tirar em cada avaliação que falta, com os pesos dos Planos de Ensino. As notas podem vir do Canvas pela extensão do Chrome, sem senha, sem token e sem servidor: tudo fica no seu navegador.
+
+- Site: https://falta-quanto.vercel.app
+- Quer ajudar? Veja [CONTRIBUTING.md](CONTRIBUTING.md). Falha de segurança: [SECURITY.md](SECURITY.md).
+- Não é um sistema oficial da PUCPR. Confira pesos e datas no Canvas.
+
+## Para quem desenvolve
 
 Calculadora "Quanto falta pra passar" for PUCPR 2026/2: one static page (`index.html`), no backend, grades stay in each visitor's `localStorage`.
 

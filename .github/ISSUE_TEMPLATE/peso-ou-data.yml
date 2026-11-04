@@ -1,0 +1,16 @@
+name: Peso ou data errados
+description: Uma avaliação com peso, data ou nome diferente do Plano de Ensino ou do Canvas
+labels: [dados]
+body:
+  - type: input
+    id: materia
+    attributes: { label: Matéria, placeholder: "Ex.: Programação WEB" }
+    validations: { required: true }
+  - type: input
+    id: avaliacao
+    attributes: { label: Avaliação, placeholder: "Ex.: Prova do RA2" }
+    validations: { required: true }
+  - type: textarea
+    id: certo
+    attributes: { label: O que está certo, description: "Peso, data ou nome, com a fonte (Plano de Ensino, Canvas ou aviso do professor). Não cole as suas notas." }
+    validations: { required: true }

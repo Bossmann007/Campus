@@ -1,0 +1,11 @@
+name: Algo não funciona
+description: Erro na página, na extensão ou no favorito
+labels: [bug]
+body:
+  - type: textarea
+    id: oque
+    attributes: { label: O que aconteceu, description: "O que você fez, o que esperava e o que apareceu. Não cole notas, tokens nem o texto copiado do Canvas." }
+    validations: { required: true }
+  - type: input
+    id: navegador
+    attributes: { label: Navegador e sistema, placeholder: "Ex.: Chrome 140 no Windows 11" }
