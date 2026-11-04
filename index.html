@@ -126,6 +126,8 @@
   .when .rel { font-size:12px; color:var(--muted); }
   .when .rel.soon { color:var(--bad); font-weight:500; } .when .rel.week { color:var(--warn); font-weight:500; }
   .flag { color:var(--warn); cursor:help; margin-left:4px; }
+  .cdate { font-size:12px; color:var(--acc); cursor:help; } .cdate:empty { display:none; }
+  .acc { color:var(--acc); background:var(--acc-soft); } .check + .badge { margin-left:8px; }
 
   .badge { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:550; padding:2px 9px; border-radius:6px;
            border:1px solid transparent; font-variant-numeric:tabular-nums; }
@@ -257,6 +259,11 @@
   <section class="block" id="panorama">
     <div class="bhead"><h2>Panorama</h2><span class="hint">anel = pontos garantidos de 10; a marca é a sua meta</span></div>
     <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="block" id="todo" hidden>
+    <div class="bhead"><h2>Para entregar</h2><span class="hint" id="todoat"></span></div>
+    <div class="list" id="todolist"></div>
   </section>
 
   <section class="block" id="materias">
@@ -463,7 +470,8 @@ const NotasCore = (() => {
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
-        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a })) };
+        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
+        submitted:a.submitted === true, hasSub:"submitted" in a })) };
     });
     // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
     const pending = [];
@@ -473,6 +481,14 @@ const NotasCore = (() => {
     }
     pending.sort((x, y) => (x.due || "9") < (y.due || "9") ? -1 : (x.due || "9") > (y.due || "9") ? 1 : 0);
     const known = courses.some(cv => cv.assignments.some(a => a.flagged));   // older exports have no flag: unknown, not "none"
+    // Not handed in yet and not late: everything with a due date, soonest first; the page keeps the next two weeks.
+    const todo = [];
+    for (const cv of courses) {
+      const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
+      for (const a of cv.assignments) if (a.hasSub && !a.submitted && !a.missing && a.due) todo.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
+    }
+    todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
+    const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {};
     const grades = {}, missing = [], notes = [];
     for (const c of COURSES) {
       const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
@@ -483,6 +499,7 @@ const NotasCore = (() => {
         const parts = (rule.avg || rule.sum || [rule.one]).map(n => cv.assignments.filter(a => a.name.includes(n)));
         if (parts.some(p => p.length !== 1)) { missing.push({ key:k, reason:"avaliação não está no Canvas (ou aparece repetida)" }); continue; }
         const got = parts.map(p => p[0]);
+        if (rule.one && got[0].due) dates[k] = got[0].due;   // Canvas due date of a single-assignment item
         if (got.some(a => a.score === null)) { missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
         const pts = a => rule.pts && !(a.points > 0) ? rule.pts : a.points;
         if (got.some(a => !(pts(a) > 0))) { missing.push({ key:k, reason:"avaliação sem pontuação no Canvas" }); continue; }
@@ -492,7 +509,7 @@ const NotasCore = (() => {
         grades[k] = String(r9(Math.round(Math.max(0, f) * it.inMax * 1000) / 1000));
       }
     }
-    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null };
+    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates };
   }
 
   // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
@@ -533,6 +550,10 @@ const NotasCore = (() => {
   if (typeof saved.meta !== "string") saved.meta = "7";
   if (!saved.open || typeof saved.open !== "object") saved.open = {};
   if (!saved.pending || typeof saved.pending.at !== "string" || !Array.isArray(saved.pending.list)) delete saved.pending;
+  if (!saved.todo || typeof saved.todo.at !== "string" || !Array.isArray(saved.todo.list)) delete saved.todo;
+  if (!saved.cdates || typeof saved.cdates !== "object" || Array.isArray(saved.cdates)) saved.cdates = {};
+  if (!Array.isArray(saved.fresh)) saved.fresh = [];
+  const ISO = /^\d{4}-\d\d-\d\d$/;
   const store = () => { try { localStorage.setItem(LS, JSON.stringify(saved)); } catch (e) {} };
 
   const $ = id => document.getElementById(id);
@@ -563,13 +584,16 @@ const NotasCore = (() => {
   }
   const minText = (m, it) => m.impossible ? "não dá" : m.f <= 1e-9 ? "0" : up(m.raw, dec(it.inMax));
   function srcText(it) { return it.dateSrc + (it.alt ? " · outra fonte: " + it.alt : "") + (it.unv ? " · não verificada" : ""); }
-  function whenCell(it) {
+  // The Canvas due date for this item, when the last import had one and it differs from the Plano date.
+  const canvasDate = (k, it) => { const v = saved.cdates[k]; return typeof v === "string" && ISO.test(v) && v !== it.date ? "Canvas: " + dmy(v) : ""; };
+  function whenCell(it, k) {
     const d = days(it.date), w = cell("Data", "when");
     const top = el("span", "d num", dmy(it.date));
     if (it.unv || it.alt) { const f = el("span", "flag", "⚠"); f.title = "Data a conferir: " + srcText(it); top.appendChild(f); }
     w.append(top, el("span", "rel" + (d >= 0 && d <= 3 ? " soon" : d >= 0 && d <= 7 ? " week" : ""),
       d === 0 ? "hoje" : d === 1 ? "amanhã" : d > 0 ? "em " + d + " dias" : d >= -7 ? "há " + -d + " dias" : "passou"));
-    w.appendChild(el("span", "src fonte", srcText(it)));
+    const cd = el("span", "cdate", k ? canvasDate(k, it) : ""); if (k) cd.id = "cd-" + k; cd.title = "Prazo no Canvas na última importação; a conta usa a data do Plano de Ensino";
+    w.append(cd, el("span", "src fonte", srcText(it)));
     return w;
   }
   function needBadge(st, it) {
@@ -618,7 +642,7 @@ const NotasCore = (() => {
         g.append(inp, el("span", "scale", "/ " + fmt(it.inMax, dec(it.inMax))));
         const rq = cell("Precisa"); rq.id = "rq-" + k;
         const mn = cell("Mín", "muted num"); mn.id = "mn-" + k;
-        row.append(name, whenCell(it), g, rq, mn); items.appendChild(row);
+        row.append(name, whenCell(it, k), g, rq, mn); items.appendChild(row);
       }
       detail.appendChild(items);
       card.append(head, detail); main.appendChild(card);
@@ -658,7 +682,8 @@ const NotasCore = (() => {
         const d = el("div"); d.append(el("span", "k", k), el("span", "v num", v)); figs.appendChild(d); });
       const nGraded = c.items.filter(it => { const p = C.itemPoints(it, saved.grades[C.key(c, it)]); return p !== null && !Number.isNaN(p); }).length;
       const nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
-      $("sub-" + c.id).textContent = nGraded + " de " + c.items.length + " lançadas" + (nx ? " · próxima: " + nx.name + ", " + (days(nx.date) === 0 ? "hoje" : days(nx.date) === 1 ? "amanhã" : "em " + days(nx.date) + " dias") : "");
+      const nFresh = c.items.filter(it => saved.fresh.includes(C.key(c, it))).length;
+      $("sub-" + c.id).textContent = nGraded + " de " + c.items.length + " lançadas" + (nFresh ? " · " + nFresh + (nFresh === 1 ? " nova" : " novas") : "") + (nx ? " · próxima: " + nx.name + ", " + (days(nx.date) === 0 ? "hoje" : days(nx.date) === 1 ? "amanhã" : "em " + days(nx.date) + " dias") : "");
       const [g, f, m] = $("bar-" + c.id).children;
       g.style.width = Math.min(100, st.earned * 10) + "%";
       f.style.left = Math.min(100, st.earned * 10) + "%"; f.style.width = st.futureMax * 10 + "%";
@@ -670,7 +695,8 @@ const NotasCore = (() => {
         inp.classList.toggle("bad", Number.isNaN(p)); inp.title = Number.isNaN(p) ? "Fora de 0 a " + fmt(it.inMax, 2) + " ou não é número: ignorada" : "";
         rq.textContent = ""; mn.textContent = "";
         const graded = p !== null && !Number.isNaN(p); $("row-" + k).classList.toggle("graded", graded);
-        if (graded) { rq.appendChild(el("span", "check", "✓ lançada")); continue; }
+        $("cd-" + k).textContent = canvasDate(k, it);
+        if (graded) { rq.appendChild(el("span", "check", "✓ lançada")); if (saved.fresh.includes(k)) rq.appendChild(badge("acc", "nova")); continue; }
         if (st.late.includes(it)) { rq.appendChild(badge("warn", "lançar nota")); continue; }
         rq.appendChild(needBadge(st, it));
         mn.textContent = st.status === "garantido" || st.status === "depende-atrasadas" ? "—" : minText(C.minimumFor(st, it, T), it);
@@ -709,14 +735,14 @@ const NotasCore = (() => {
       name.append(el("span", "title", u.item.name + (u.item.exam ? " · prova" : "")), sub);
       const rq = cell("Precisa"); rq.appendChild(needBadge(u.st, u.item));
       if (u.st.provisional && u.st.status === "precisa") { const fl = el("span", "flag", "*"); fl.title = "Provisório: notas antigas sem lançar contam 0"; rq.appendChild(fl); }
-      row.append(whenCell(u.item), name, rq,
+      row.append(whenCell(u.item, C.key(u.course, u.item)), name, rq,
         cell("Mín", "muted num", u.st.status === "garantido" || u.st.status === "depende-atrasadas" ? "—" : minText(u.min, u.item)));
       next.appendChild(row);
     }
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T); renderTiles(states, T);
+    renderFocus(T); renderTiles(states, T); renderTodo();
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -783,6 +809,23 @@ const NotasCore = (() => {
     }
   }
 
+  // Canvas assignments not handed in yet, due in the next 14 days (a snapshot from the last import).
+  function renderTodo() {
+    const td = saved.todo, box = $("todolist"); $("todo").hidden = !td; box.textContent = ""; if (!td) return;
+    const list = td.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0 && days(t.due) <= 14);
+    $("todoat").textContent = list.length + (list.length === 1 ? " entrega" : " entregas") + " nos próximos 14 dias · lido do Canvas em " + dmy(td.at);
+    const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
+    for (const t of list) {
+      const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub"), d = days(t.due);
+      const ours = C.COURSES.find(c => c.id === t.course);
+      if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); } else sub.textContent = String(t.courseName || "");
+      name.append(el("span", "title", t.name), sub);
+      const w = cell("Prazo", "when"); w.append(el("span", "d num", dmy(t.due)), el("span", "rel" + (d <= 3 ? " soon" : d <= 7 ? " week" : ""), d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias"));
+      row.append(w, name); box.appendChild(row);
+    }
+    if (!list.length) box.appendChild(el("div", "empty", "Nada para entregar nos próximos 14 dias."));
+  }
+
   // What Canvas marked as missing at the last import (a snapshot: it does not refresh by itself).
   function renderPending() {
     const box = $("pend"), pd = saved.pending; box.textContent = "";
@@ -845,12 +888,14 @@ const NotasCore = (() => {
     }
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;
-      const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); } };
+      const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); }
+        if (res.todo) saved.todo = { at:today, list:res.todo };
+        if (res.dates) saved.cdates = res.dates; };
       const pendNote = pend ? " " + (pend.length ? pend.length + " entrega(s) que o Canvas marca como não entregue(s) vão para Entregas atrasadas." : "O Canvas não marca nenhuma entrega como atrasada.") : "";
       if (!keys.length) {
         out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão." + pendNote));
         if (pend) { const b = el("button", "btn primary", "Atualizar entregas atrasadas"); b.type = "button";
-          b.addEventListener("click", () => { savePending(); store(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas atrasadas atualizadas.")); });
+          b.addEventListener("click", () => { savePending(); store(); calc(); out.textContent = ""; out.appendChild(el("div", "msg ok", "Entregas atrasadas atualizadas.")); });
           out.appendChild(b); }
       }
       else {
@@ -864,6 +909,8 @@ const NotasCore = (() => {
         out.appendChild(ul);
         const apply = el("button", "btn primary", "Aplicar " + keys.length + " notas"); apply.type = "button";
         apply.addEventListener("click", () => {
+          const hadImport = !!(saved.pending || saved.todo);   // the first import would mark every grade as new
+          saved.fresh = hadImport ? keys.filter(k => saved.grades[k] !== res.grades[k]) : [];
           for (const k of keys) { saved.grades[k] = res.grades[k]; const inp = $("in-" + k); if (inp) inp.value = res.grades[k]; }
           if (res.meta != null) { saved.meta = res.meta; metaEl.value = res.meta; }
           savePending(); store(); calc(); afterApply(); out.textContent = ""; out.appendChild(el("div", "msg ok", keys.length + " notas aplicadas. Os números da página já foram atualizados."));

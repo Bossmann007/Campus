@@ -123,6 +123,16 @@ assert.strictEqual(got.pending, null, "old exports without the flag: unknown, so
 assert.deepStrictEqual(C.fromCanvas({ v: 1, courses: [cv("Ética", [M("Fórum 4", null, false)])] }).pending, [], "flag present, none missing");
 ok("pending submissions come only from Canvas missing flags, sorted by due date");
 
+// to-do (not handed in, not late) and Canvas due dates for single-assignment items
+const S = (name, due, submitted, missing) => ({ name, points: 10, score: null, due, missing: !!missing, submitted });
+const td = C.fromCanvas({ v: 1, courses: [
+  cv("Ética", [S("TDE - TAREFA SOMATIVA - VÍDEO", "2026-11-11T02:59:59Z", false), S("Fórum 5", "2026-11-06T15:00:00Z", true), S("Fórum 2", "2026-10-01T15:00:00Z", false, true), S("Leitura", null, false)]),
+  cv("Programação Imperativa", [S("Prova do RA2", "2026-11-11T15:00:00Z", false)]) ] });
+assert.deepStrictEqual(td.todo.map(t => t.name + "@" + t.due), ["TDE - TAREFA SOMATIVA - VÍDEO@2026-11-10", "Prova do RA2@2026-11-11"], "unsubmitted, not missing, with a date, soonest first");
+assert.deepStrictEqual(td.dates, { "etica:ra2": "2026-11-10", "imp:p2": "2026-11-11" }, "single-assignment items carry the Canvas date");
+assert.strictEqual(got.todo, null, "old exports without the flag: unknown");
+ok("to-do comes from the submitted flag; single items get Canvas due dates");
+
 // the name table matches the real Canvas listing: every rule hits exactly one assignment (Somativa III not created yet)
 const real = JSON.parse(fs.readFileSync(require("path").join(__dirname, "canvas-names.json"), "utf8"));
 const withScores = { v: 1, courses: real.courses.map(c => ({ name: c.name, assignments: c.assignments.map(a => ({ name: a.name, points: a.points, score: a.points })) })) };
