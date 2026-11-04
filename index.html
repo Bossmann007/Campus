@@ -46,7 +46,33 @@
   input:focus { outline:none; border-color:var(--acc); box-shadow:0 0 0 3px var(--acc-soft); }
   input.bad { border-color:var(--bad); box-shadow:0 0 0 3px var(--bad-soft); }
 
-  .hero { padding:56px 0 8px; }
+  .hero { padding:72px 0 8px; text-align:center; position:relative; isolation:isolate; }
+  .hero::before { content:""; position:absolute; z-index:-1; inset:-24px -50vw 0; pointer-events:none;
+                  background-image:radial-gradient(var(--line2) 1px, transparent 1px); background-size:22px 22px;
+                  -webkit-mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); }
+  .hero .lead { margin:0 auto; }
+  .hero details.how { margin-left:auto; margin-right:auto; }
+  .hero details.how ul { text-align:left; display:inline-block; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:500; color:var(--muted); border:1px solid var(--line);
+          background:var(--surface); border-radius:999px; padding:4px 12px; margin-bottom:20px; }
+  .dim { color:var(--faint); }
+  .feats[hidden] { display:none; }
+  .feats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:48px; }
+  .feat { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:18px 20px; }
+  .feat .ico { width:36px; height:36px; display:grid; place-items:center; border-radius:8px; background:var(--sunk); border:1px solid var(--line); color:var(--txt); }
+  .feat h3 { margin:14px 0 4px; font-size:14.5px; font-weight:600; letter-spacing:-.01em; }
+  .feat p { margin:0; color:var(--muted); font-size:13.5px; }
+  .tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+  .tile { display:grid; grid-template-columns:64px minmax(0,1fr); gap:14px; align-items:center; text-align:left; width:100%;
+          background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:16px; font-size:14px; }
+  .tile .nm { font-weight:600; letter-spacing:-.01em; display:block; }
+  .tile .nx { color:var(--muted); font-size:12.5px; display:block; margin:2px 0 8px; }
+  .ring { width:64px; height:64px; position:relative; }
+  .ring svg { width:64px; height:64px; transform:rotate(-90deg); }
+  .ring circle { fill:none; stroke-width:6; }
+  .ring .tr { stroke:var(--sunk); } .ring .er { stroke-linecap:round; transition:stroke-dasharray .28s cubic-bezier(.23,1,.32,1); }
+  .ring .mk { stroke:var(--txt); stroke-width:10; }
+  .ring b { position:absolute; inset:0; display:grid; place-items:center; font-size:15px; font-weight:650; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
   .focus { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 24px; align-items:center; margin:0;
            background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:20px 22px; }
   .focus[hidden] { display:none; }
@@ -58,10 +84,10 @@
   .focus .need .u { color:var(--muted); font-size:12px; }
   .focus .then { grid-column:1 / -1; border-top:1px solid var(--line); margin-top:12px; padding-top:10px; color:var(--muted); font-size:13px; }
   .focus .then a:hover { color:var(--acc); }
-  .hero.mine h1, .hero.mine .lead { display:none; }
-  .hero.mine .cta, .hero.mine details.how { display:none; }
+  .hero.mine .lead, .hero.mine details.how { display:none; }
+  .hero.mine .focus { max-width:680px; margin:28px auto 0; text-align:left; }
   .more { display:block; width:100%; border:0; border-top:1px solid var(--line); border-radius:0; box-shadow:none; padding:10px; color:var(--muted); }
-  .cta { display:flex; gap:10px; margin-top:22px; flex-wrap:wrap; }
+  .cta { display:flex; gap:10px; margin-top:26px; flex-wrap:wrap; justify-content:center; }
   .btn { display:inline-flex; align-items:center; padding:10px 20px; font-size:14px; border-radius:999px; }
   .btn:hover { border-color:var(--line2); background:var(--sunk); }
   .btn.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); }
@@ -72,7 +98,7 @@
   .seg button .c { color:var(--faint); margin-left:5px; font-variant-numeric:tabular-nums; }
   .seg button[aria-selected="true"] { background:var(--surface); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.08); }
   .hint.below { margin:-4px 0 12px; display:block; color:var(--muted); font-size:13px; }
-  h1 { font-size:clamp(28px,4vw,40px); line-height:1.1; letter-spacing:-.03em; font-weight:650; margin:0 0 10px; }
+  h1 { font-size:clamp(38px,6.4vw,64px); line-height:1.02; letter-spacing:-.04em; font-weight:700; margin:0 0 16px; }
   .lead { color:var(--muted); font-size:16px; max-width:60ch; margin:0; }
   details.how { margin-top:14px; max-width:680px; }
   details.how summary, .exthow summary, .pastebox summary { cursor:pointer; color:var(--muted); font-size:13px; font-weight:500; }
@@ -173,6 +199,7 @@
   @media (max-width:820px) {
     .focus { grid-template-columns:minmax(0,1fr); } .focus .need { text-align:left; }
     .sem { display:none; }
+    .feats { grid-template-columns:minmax(0,1fr); } .tiles { grid-template-columns:repeat(2,minmax(0,1fr)); }
     #summary { order:3; max-width:100%; overflow-x:auto; scrollbar-width:none; }
     #summary button { flex-shrink:0; }
     .chead { grid-template-columns:auto minmax(0,1fr) auto; gap:6px 12px; }
@@ -188,7 +215,10 @@
       content:attr(data-label); font-size:12px; color:var(--faint); font-family:var(--sans); }
   }
   @media (max-width:520px) {
-    .wrap { padding:0 16px; } .hero { padding-top:36px; } .meta span { display:none; } .brand b { display:none; }
+    .tile { grid-template-columns:52px minmax(0,1fr); gap:10px; padding:12px; }
+    .ring, .ring svg { width:52px; height:52px; } .ring b { font-size:13.5px; }
+    .tile .badge { font-size:11.5px; white-space:nowrap; padding:2px 7px; }
+    .wrap { padding:0 16px; } .hero { padding-top:40px; } .meta span { display:none; } .brand b { display:none; }
   }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } html { scroll-behavior:auto; } }
 </style>
@@ -203,7 +233,8 @@
 
 <div class="wrap">
   <header class="hero">
-    <h1>Quanto falta pra passar?</h1>
+    <a class="pill" href="#materias">PUCPR · 2026/2 · 6 matérias</a>
+    <h1 id="h1"><span id="h1a">Quanto falta</span><br><span class="dim" id="h1b">pra passar?</span></h1>
     <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
     <div class="focus" id="focus" hidden></div>
     <div class="cta"><a class="btn primary" href="#materias" id="startbtn">Lançar minhas notas</a><a class="btn" href="#canvas">Importar do Canvas</a></div>
@@ -215,6 +246,17 @@
       <li>Pesos dos Planos de Ensino; confira sempre no Canvas. Não é um sistema oficial da PUCPR.</li>
     </ul></details>
   </header>
+
+  <section class="feats" id="feats">
+    <div class="feat"><span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6" fill="currentColor"/></svg></span><h3>O mínimo em cada prova</h3><p>Com os pesos dos Planos de Ensino, já com o que você tirou.</p></div>
+    <div class="feat"><span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg></span><h3>Notas direto do Canvas</h3><p>Uma extensão lê suas notas em um clique, sem senha nem token.</p></div>
+    <div class="feat"><span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><h3>Fica só com você</h3><p>Sem conta e sem servidor: tudo fica salvo no seu navegador.</p></div>
+  </section>
+
+  <section class="block" id="panorama">
+    <div class="bhead"><h2>Panorama</h2><span class="hint">anel = pontos garantidos de 10; a marca é a sua meta</span></div>
+    <div class="tiles" id="tiles"></div>
+  </section>
 
   <section class="block" id="materias">
     <div class="bhead"><h2>Matérias</h2><div class="seg" role="tablist" id="summary"></div><button id="allbtn" type="button">Abrir todas</button></div>
@@ -673,7 +715,7 @@ const NotasCore = (() => {
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T);
+    renderFocus(T); renderTiles(states, T);
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -697,6 +739,10 @@ const NotasCore = (() => {
     const any = Object.keys(saved.grades).some(k => String(saved.grades[k]).trim() !== "");
     const all = C.upcoming(C.COURSES, saved.grades, today, T), list = all.filter(u => u.st.status !== "garantido");
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
+    $("feats").hidden = any;
+    const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
+    $("h1a").textContent = !any ? "Quanto falta" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
+    $("h1b").textContent = !any ? "pra passar?" : open ? "pra fechar o semestre." : "bom descanso.";
     const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
     sb.textContent = any ? "Ver minhas matérias" : "Lançar minhas notas";
     box.textContent = ""; if (box.hidden) return;
@@ -713,6 +759,27 @@ const NotasCore = (() => {
     if (rest.length) { const t = el("div", "then", "Depois: ");
       rest.forEach((r, i) => { const a = el("a", null, r.item.name + " (" + (SHORT[r.course.id] || r.course.name) + ", " + dmy(r.item.date) + ")"); a.href = "#card-" + r.course.id; if (i) t.append(" · "); t.appendChild(a); });
       box.appendChild(t); }
+  }
+
+  // One tile per course: ring = points earned of 10 (lighter: still possible), tick = the goal.
+  function renderTiles(states, T) {
+    const box = $("tiles"), R = 26, L = 2 * Math.PI * R; box.textContent = "";
+    const NS = "http://www.w3.org/2000/svg";
+    const arc = (cls, from, len) => { const c = document.createElementNS(NS, "circle");
+      c.setAttribute("class", cls); c.setAttribute("cx", 32); c.setAttribute("cy", 32); c.setAttribute("r", R);
+      c.setAttribute("stroke-dasharray", Math.max(0, len) + " " + L); c.setAttribute("stroke-dashoffset", -from); return c; };
+    for (const c of C.COURSES) {
+      const st = states[c.id], e = Math.min(10, st.earned) / 10 * L, f = Math.min(10 - Math.min(10, st.earned), st.futureMax) / 10 * L;
+      const cls = st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction);
+      const t = el("a", "tile"); t.href = "#card-" + c.id;
+      const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
+      const er = arc("er", 0, e), fu = arc("fu", e, f); er.style.stroke = "var(--" + cls + ")"; fu.style.stroke = "color-mix(in srgb, var(--" + cls + ") 22%, transparent)";
+      svg.append(arc("tr", 0, L), fu); if (e > 0.5) svg.appendChild(er); svg.appendChild(arc("mk", Math.min(T, 9.9) / 10 * L, 2));
+      ring.append(svg, el("b", null, fmt(st.earned, st.earned >= 10 ? 0 : 1)));
+      const txt = el("span"), nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
+      txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
+      t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
+    }
   }
 
   // What Canvas marked as missing at the last import (a snapshot: it does not refresh by itself).
