@@ -5,6 +5,9 @@ const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "ut
 assert.strictEqual(manifest.manifest_version, 3);
 assert.deepStrictEqual(manifest.permissions, ["activeTab", "scripting"], "no broad permissions");
 assert(!manifest.host_permissions, "no host permissions");
+for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(dir, f)), "icon " + f);
+const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
+assert(/activeTab/.test(priv) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists permissions and storage, no scripts");
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 assert(!/<script>(?!<)/.test(html) && !/on\w+="/.test(html), "no inline script (MV3 CSP)");
 global.location = { href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };
