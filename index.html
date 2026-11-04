@@ -120,6 +120,9 @@
   details.how summary, .exthow summary, .pastebox summary { cursor:pointer; color:var(--muted); font-size:13px; font-weight:500; }
   details.how summary:hover, .exthow summary:hover { color:var(--txt); }
   .exthow[open] summary { margin-bottom:12px; }
+  .exthow + .exthow, .exthow + .pastebox { margin-top:8px; }
+  .exthow code { font:12px var(--mono); background:var(--sunk); border:1px solid var(--line); border-radius:6px; padding:1px 5px; }
+  .exthow a { color:var(--acc); }
   details.how ul { color:var(--muted); font-size:13px; padding-left:18px; margin:8px 0 0; }
 
   section.block { margin-top:44px; }
@@ -333,7 +336,23 @@
         <li><b>Abra o Canvas da PUCPR</b>, já logado, clique no ícone Q e em <b>Importar notas do Canvas</b>.</li>
         <li><b>Esta página abre sozinha</b> com as notas: confira e clique em Aplicar.</li>
       </ol></details>
-      <details class="pastebox"><summary>Copiei o texto pela extensão</summary>
+      <details class="exthow" id="exthow-up"><summary>Como atualizar a extensão</summary>
+        <ol class="steps ext">
+          <li><b>Baixe a versão nova</b> pelo mesmo botão (sempre a mais recente).</li>
+          <li><b>Descompacte por cima da pasta antiga</b>, substituindo os arquivos.</li>
+          <li>Em <b>chrome://extensions</b>, clique em <b>↻ Recarregar</b> no Quanto falta. Se você apagou a pasta antiga, remova a extensão e carregue a pasta nova.</li>
+        </ol>
+        <p class="muted">Suas notas não se perdem: elas ficam salvas neste site, não na extensão. A versão instalada aparece embaixo do botão da extensão.</p>
+      </details>
+      <details class="exthow" id="apitoken"><summary>Prefere usar o seu token da API do Canvas?</summary>
+        <ol class="steps ext">
+          <li>No Canvas: <b>Conta → Configurações → + Novo token de acesso</b>. Copie o token.</li>
+          <li>Baixe o script <a href="https://github.com/Bossmann007/quanto-falta-pucpr/blob/main/tools/canvas-export.py">canvas-export.py</a> e rode no seu computador: <code>python3 canvas-export.py | pbcopy</code> (Mac) ou <code>python canvas-export.py &gt; notas.json</code>. Ele pede o token sem mostrar na tela.</li>
+          <li>Cole o texto em <b>Copiei o texto</b> logo abaixo e clique em Ler notas.</li>
+        </ol>
+        <p class="muted">O token dá acesso à sua conta inteira: ele fica só no seu computador, o script só lê, e nada passa por este site. Apague o token no Canvas quando terminar. Pelo navegador não dá: o Canvas da PUCPR bloqueia chamadas de outros sites.</p>
+      </details>
+      <details class="pastebox"><summary>Copiei o texto pela extensão ou pelo script</summary>
         <textarea id="paste" rows="3" placeholder="Cole aqui o texto copiado pela extensão" aria-label="Texto copiado pela extensão" spellcheck="false"></textarea>
         <div class="acts"><button id="readbtn" class="btn primary" type="button">Ler notas</button><button id="pastebtn" class="btn" type="button">Colar da área de transferência</button></div>
       </details>
@@ -538,8 +557,15 @@ const NotasCore = (() => {
         grades[k] = String(r9(Math.round(Math.max(0, f) * it.inMax * 1000) / 1000));
       }
     }
-    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates };
+    const ext = data.ext === "script" || (str(data.ext) !== null && /^\d+(\.\d+){0,3}$/.test(data.ext)) ? data.ext : null;   // "script": tools/canvas-export.py
+    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates, ext,
+             extOld: ext !== "script" && (!ext || verLess(ext, EXT_LATEST)) };
   }
+
+  // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
+  const EXT_LATEST = "0.4.0";
+  const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
   // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
   const SEMESTER = "2026-2";
@@ -565,7 +591,7 @@ const NotasCore = (() => {
     }
     return { grades, missing, notes, meta: typeof d.meta === "string" ? d.meta : null };
   }
-  return { COURSES, SEED, CANVAS, fromCanvas, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks };
+  return { COURSES, SEED, CANVAS, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks };
 })();
 </script>
 <script id="ui">
@@ -706,7 +732,7 @@ const NotasCore = (() => {
     const all = $("allbtn"); syncAll();
     all.addEventListener("click", () => { const cards = [...document.querySelectorAll(".card")], on = cards.some(x => !x.classList.contains("open"));
       cards.forEach(x => x.setOpen(on)); });
-    const openHash = () => { const card = document.getElementById(location.hash.slice(1)); if (card && card.setOpen) card.setOpen(true); };
+    const openHash = () => { const t = document.getElementById(location.hash.slice(1)); if (t && t.setOpen) t.setOpen(true); if (t && t.tagName === "DETAILS") t.open = true; };
     window.addEventListener("hashchange", openHash); openHash();
     document.addEventListener("click", e => { const a = e.target.closest('a[href^="#card-"]'); if (!a) return;
       const card = document.getElementById(a.getAttribute("href").slice(1)); if (card) card.setOpen(true); });   // same hash twice fires no hashchange
@@ -937,6 +963,9 @@ const NotasCore = (() => {
     }
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;
+      if (res.extOld) { const n = el("div", "msg warn");
+        n.append("Sua extensão está desatualizada" + (res.ext ? " (v" + res.ext + ")" : "") + ". A v" + C.EXT_LATEST + " traz a lista Para entregar. ");
+        const a = el("a", null, "Como atualizar"); a.href = "#exthow-up"; n.appendChild(a); out.appendChild(n); }
       const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); }
         if (res.todo) saved.todo = { at:today, list:res.todo };
         if (res.dates) saved.cdates = res.dates; };

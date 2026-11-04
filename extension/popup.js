@@ -8,6 +8,7 @@ function b64url(s) {   // chunked: a spread of a long export would overflow the 
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 let exported = "";
+$("ver").textContent = "v" + chrome.runtime.getManifest().version + " ·";
 
 $("go").addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -23,7 +24,7 @@ $("go").addEventListener("click", async () => {
     const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: collectCanvasGrades });
     if (!res || !res.result) throw new Error("não veio resposta da aba do Canvas");
     if (res.result.error) throw new Error(res.result.error);
-    exported = JSON.stringify(res.result);
+    exported = JSON.stringify(Object.assign({ ext: chrome.runtime.getManifest().version }, res.result));   // lets the page say when this copy is outdated
     const graded = res.result.courses.reduce((n, c) => n + c.assignments.filter(a => a.score !== null).length, 0);
     say(res.result.courses.length + " matérias lidas, " + graded + " avaliações com nota.", "ok");
     $("open").hidden = false; $("copy").hidden = false;
