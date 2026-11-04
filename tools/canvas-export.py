@@ -9,7 +9,7 @@ The token is read from CANVAS_TOKEN or typed at a hidden prompt; it is never pri
 
 Create a token in Canvas: Conta > Configurações > "+ Novo token de acesso". Delete it when you are done.
 """
-import getpass, json, os, re, sys, urllib.request
+import datetime, getpass, json, os, re, sys, urllib.error, urllib.request
 from urllib.parse import urlsplit
 
 BASE = "https://pucpr.instructure.com"
@@ -41,6 +41,7 @@ def assignment(a):
         "missing": bool(s.get("missing")),
         "submitted": bool(s.get("submitted_at") or re.match(r"^(submitted|graded|pending_review)$", s.get("workflow_state") or "")),
         "online": not isinstance(types, list) or any(not OFFLINE.match(t) for t in types),
+        "stats": {k: st.get(k) for k in ("mean", "min", "max")} if isinstance(st := a.get("score_statistics"), dict) and isinstance(st.get("mean"), (int, float)) else None,
     }
 
 
@@ -52,8 +53,17 @@ def main():
         courses = [c for c in get(token, BASE + "/api/v1/courses?enrollment_state=active&per_page=100")
                    if isinstance(c.get("name"), str) and SEMESTER.search(c["name"])]
         data = {"v": 1, "ext": "script", "courses": [
-            {"name": c["name"], "assignments": [assignment(a) for a in get(token, f"{BASE}/api/v1/courses/{c['id']}/assignments?include[]=submission&per_page=100")]}
+            {"name": c["name"], "assignments": [assignment(a) for a in get(token, f"{BASE}/api/v1/courses/{c['id']}/assignments?include[]=submission&include[]=score_statistics&per_page=100")]}
             for c in courses]}
+        since = (datetime.date.today() - datetime.timedelta(days=60)).isoformat()
+        until = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()   # Canvas caps the window when end_date is left out
+        names = {f"course_{c['id']}": c["name"] for c in courses}
+        try:
+            an = get(token, BASE + "/api/v1/announcements?" + "&".join(f"context_codes[]=course_{c['id']}" for c in courses) + f"&start_date={since}&end_date={until}&per_page=50") if courses else []
+            data["announcements"] = [{"course": names.get(a.get("context_code"), ""), "title": a.get("title"), "at": a.get("posted_at"),
+                                      "unread": a.get("read_state") == "unread", "url": a.get("html_url")} for a in an[:50]]
+        except urllib.error.HTTPError:
+            data["announcements"] = None
     except urllib.error.HTTPError as e:
         sys.exit(f"o Canvas respondeu {e.code}" + (": confira o token" if e.code == 401 else ""))
     print(json.dumps(data, ensure_ascii=False))

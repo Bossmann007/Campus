@@ -136,7 +136,8 @@
   .row.head { padding-top:9px; padding-bottom:9px; background:var(--sunk); color:var(--muted); font-size:12px; font-weight:500; }
   .row .title { font-weight:500; overflow-wrap:anywhere; }
   .row .sub, .src { display:block; color:var(--muted); font-size:12.5px; }
-  .row .sub a:hover { color:var(--acc); }
+  .row .sub a:hover, a.title:hover { color:var(--acc); }
+  .row .wide > .badge { margin-top:4px; }
   .empty { padding:18px 16px; color:var(--muted); }
 
   .when { display:flex; flex-direction:column; gap:2px; }
@@ -144,6 +145,14 @@
   .when .rel { font-size:12px; color:var(--muted); }
   .when .rel.soon { color:var(--bad); font-weight:500; } .when .rel.week { color:var(--warn); font-weight:500; }
   .flag { color:var(--warn); cursor:help; margin-left:4px; display:inline-flex; vertical-align:-1px; }
+  .vs { display:flex; align-items:center; gap:8px; margin-top:5px; cursor:help; }
+  .vsbar { position:relative; width:84px; height:6px; border-radius:999px; background:var(--sunk); flex-shrink:0; }
+  .vsbar i { position:absolute; top:0; bottom:0; }
+  .vsbar .rng { background:var(--line2); border-radius:999px; }
+  .vsbar .mean { width:2px; background:var(--muted); }
+  .vsbar .you { width:8px; height:8px; top:-1px; margin-left:-4px; border-radius:50%; background:var(--acc-fill); box-shadow:0 0 0 2px var(--surface); }
+  .vst { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .items [data-label="Precisa"] { flex-wrap:wrap; }
   .cdate { font-size:12px; color:var(--acc); cursor:help; } .cdate:empty { display:none; }
   .acc { color:var(--acc); background:var(--acc-soft); } .check + .badge { margin-left:8px; }
 
@@ -297,6 +306,11 @@
     <div class="list" id="todolist"></div>
   </section>
 
+  <section class="block" id="avisos" hidden>
+    <div class="bhead"><h2>Avisos dos professores</h2><span class="hint" id="avisosat"></span></div>
+    <div class="list" id="avisolist"></div>
+  </section>
+
   <section class="block" id="materias">
     <div class="bhead"><h2>Matérias</h2><div class="seg" role="group" aria-label="Filtrar matérias" id="summary"></div><button id="allbtn" type="button">Abrir todas</button></div>
     <p class="start">Ainda sem notas. Abra uma matéria e lance a primeira, ou <a href="#canvas">importe do Canvas</a>: os números aparecem aqui.</p>
@@ -305,7 +319,7 @@
 
   <section class="block" id="proximas">
     <div class="bhead"><h2>Próximas avaliações</h2>
-      <div class="seg" role="group" aria-label="Filtrar avaliações" id="filter"><button type="button" data-f="all" aria-pressed="true">Todas</button><button type="button" data-f="exam" aria-pressed="false">Só provas</button><button type="button" data-f="week" aria-pressed="false">Próximos 7 dias</button></div></div>
+      <button id="icsbtn" type="button" title="Baixa um arquivo .ics com as avaliações e entregas: abra no Google Agenda, Apple Calendário ou Outlook">Exportar para o calendário</button><div class="seg" role="group" aria-label="Filtrar avaliações" id="filter"><button type="button" data-f="all" aria-pressed="true">Todas</button><button type="button" data-f="exam" aria-pressed="false">Só provas</button><button type="button" data-f="week" aria-pressed="false">Próximos 7 dias</button></div></div>
     <p class="hint below">≈ estimativa e * provisório: até você lançar as notas que já saíram.</p>
     <div class="list" id="next"></div>
   </section>
@@ -519,7 +533,8 @@ const NotasCore = (() => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
         due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
-        submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false })) };
+        submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false,
+        stats:a.stats && typeof a.stats === "object" && [a.stats.mean, a.stats.min, a.stats.max].every(x => num(x) !== null) ? { mean:a.stats.mean, min:a.stats.min, max:a.stats.max } : null })) };
     });
     // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
     const pending = [];
@@ -536,7 +551,7 @@ const NotasCore = (() => {
       for (const a of cv.assignments) if (a.hasSub && !a.submitted && !a.missing && !a.offline && a.due) todo.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
     }
     todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
-    const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {};
+    const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {}, stats = {};
     const grades = {}, missing = [], notes = [];
     for (const c of COURSES) {
       const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
@@ -551,6 +566,10 @@ const NotasCore = (() => {
         if (got.some(a => a.score === null)) { missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
         const pts = a => rule.pts && !(a.points > 0) ? rule.pts : a.points;
         if (got.some(a => !(pts(a) > 0))) { missing.push({ key:k, reason:"avaliação sem pontuação no Canvas" }); continue; }
+        if (rule.one && got[0].stats && pts(got[0]) > 0) {   // class mean/min/max on the item's own scale
+          const sc = x => r9(Math.round(Math.min(1, Math.max(0, x / pts(got[0]))) * it.inMax * 1000) / 1000), s = got[0].stats;
+          stats[k] = { mean:sc(s.mean), min:sc(s.min), max:sc(s.max) };
+        }
         let f = rule.sum ? got.reduce((s, a) => s + a.score / pts(a) * 10, 0) * rule.factor / it.inMax
                          : got.reduce((s, a) => s + a.score / pts(a), 0) / got.length;
         if (f > 1 + EPS) { notes.push({ key:k, reason:"nota acima do máximo no Canvas: usei a nota cheia" }); f = 1; }
@@ -558,12 +577,19 @@ const NotasCore = (() => {
       }
     }
     const ext = data.ext === "script" || (str(data.ext) !== null && /^\d+(\.\d+){0,3}$/.test(data.ext)) ? data.ext : null;   // "script": tools/canvas-export.py
-    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates, ext,
+    // Announcements: plain text only; links kept only when they point into the PUCPR Canvas.
+    const news = !Array.isArray(data.announcements) ? null : data.announcements.filter(a => a && str(a.title) !== null).slice(0, 50).map(a => {
+      const cn = str(a.course) || "", ours = COURSES.find(c => CANVAS[c.id] && cn.startsWith(CANVAS[c.id].match));
+      const url = str(a.url) !== null && /^https:\/\/pucpr\.instructure\.com\//.test(a.url) ? a.url : null;
+      return { course:ours ? ours.id : null, courseName:cn.split(" (")[0].split(" - ")[0], title:a.title.slice(0, 200),
+               at:str(a.at) !== null && !Number.isNaN(Date.parse(a.at)) ? localISO(new Date(a.at)) : null, unread:a.unread === true, url };
+    }).sort((x, y) => (y.unread - x.unread) || ((y.at || "") > (x.at || "") ? 1 : -1));
+    return { grades, missing, notes, pending: known ? pending.slice(0, 200) : null, todo: knownSub ? todo.slice(0, 200) : null, dates, stats, news, ext,
              extOld: ext !== "script" && (!ext || verLess(ext, EXT_LATEST)) };
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "0.4.0";
+  const EXT_LATEST = "0.5.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -609,6 +635,8 @@ const NotasCore = (() => {
   if (!saved.todo || typeof saved.todo.at !== "string" || !Array.isArray(saved.todo.list)) delete saved.todo;
   if (!saved.cdates || typeof saved.cdates !== "object" || Array.isArray(saved.cdates)) saved.cdates = {};
   if (!Array.isArray(saved.fresh)) saved.fresh = [];
+  if (!saved.stats || typeof saved.stats !== "object" || Array.isArray(saved.stats)) saved.stats = {};
+  if (!saved.news || typeof saved.news.at !== "string" || !Array.isArray(saved.news.list)) delete saved.news;
   const ISO = /^\d{4}-\d\d-\d\d$/;
   const store = () => { try { localStorage.setItem(LS, JSON.stringify(saved)); } catch (e) {} };
 
@@ -640,6 +668,19 @@ const NotasCore = (() => {
   }
   const minText = (m, it) => m.impossible ? "não dá" : m.f <= 1e-9 ? "0" : up(m.raw, dec(it.inMax));
   function srcText(it) { return it.dateSrc + (it.alt ? " · outra fonte: " + it.alt : "") + (it.unv ? " · não verificada" : ""); }
+  // Class mean/min/max from Canvas for one item, already on the item's scale.
+  const classStat = (k, it) => { const v = saved.stats[k];
+    return v && [v.mean, v.min, v.max].every(x => typeof x === "number" && x >= 0 && x <= it.inMax + 1e-9) ? v : null; };
+  function classBar(cs, raw, it) {
+    const pct = x => Math.max(0, Math.min(100, x / it.inMax * 100)) + "%", w = el("div", "vs");
+    const bar = el("span", "vsbar"), rng = el("i", "rng"), mean = el("i", "mean"), you = el("i", "you");
+    rng.style.left = pct(cs.min); rng.style.width = "calc(" + pct(cs.max) + " - " + pct(cs.min) + ")"; mean.style.left = pct(cs.mean); you.style.left = pct(raw);
+    bar.append(rng, mean, you);
+    const d = raw - cs.mean, dec2 = dec(it.inMax);
+    w.append(bar, el("span", "vst", "turma " + fmt(cs.mean, dec2) + " · você " + (d >= 0 ? "+" : "−") + fmt(Math.abs(d), dec2)));
+    w.title = "Turma no Canvas: média " + fmt(cs.mean, dec2) + ", mínima " + fmt(cs.min, dec2) + ", máxima " + fmt(cs.max, dec2);
+    return w;
+  }
   // The Canvas due date for this item, when the last import had one and it differs from the Plano date.
   const canvasDate = (k, it) => { const v = saved.cdates[k]; return typeof v === "string" && ISO.test(v) && v !== it.date ? "Canvas: " + dmy(v) : ""; };
   function whenCell(it, k) {
@@ -663,7 +704,7 @@ const NotasCore = (() => {
     return ok ? n : 7;
   }
 
-  let filter = "all", cardFilter = "all", showAll = false, showAllPend = false;
+  let filter = "all", cardFilter = "all", showAll = false, showAllPend = false, showAllNews = false;
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
     const main = $("cards");
@@ -716,6 +757,19 @@ const NotasCore = (() => {
       metaEl.value = fmt(n, 1); saved.meta = metaEl.value; store(); calc(); };
     $("metadown").addEventListener("click", () => stepMeta(-0.5)); $("metaup").addEventListener("click", () => stepMeta(0.5));
     metaEl.addEventListener("keydown", e => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); stepMeta(e.key === "ArrowUp" ? 0.5 : -0.5); } });
+    $("icsbtn").addEventListener("click", () => {
+      const esc = t => String(t).replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, " ");
+      const day = iso => iso.replace(/-/g, ""), next = iso => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + 1); return day(C.localISO(d)); };
+      const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+      const add = (id, date, title, desc) => ev.push("BEGIN:VEVENT", "UID:" + id + "@quanto-falta", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + day(date), "DTEND;VALUE=DATE:" + next(date),
+        "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
+      for (const u of C.upcoming(C.COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Quanto falta: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
+      if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
+        .forEach((t, i) => add("todo-" + i + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
+      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Quanto falta//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Quanto falta"].concat(ev, "END:VCALENDAR").join("\r\n");
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
     const links = [...$("nav").querySelectorAll("a")];
     if ("IntersectionObserver" in window) {
       const io = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting)
@@ -753,13 +807,13 @@ const NotasCore = (() => {
       const nGraded = c.items.filter(it => { const p = C.itemPoints(it, saved.grades[C.key(c, it)]); return p !== null && !Number.isNaN(p); }).length;
       const nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
       const nFresh = c.items.filter(it => saved.fresh.includes(C.key(c, it))).length;
-      $("sub-" + c.id).textContent = nGraded + " de " + c.items.length + " lançadas" + (nFresh ? " · " + nFresh + (nFresh === 1 ? " nova" : " novas") : "") + (nx ? " · próxima: " + nx.name + ", " + (days(nx.date) === 0 ? "hoje" : days(nx.date) === 1 ? "amanhã" : "em " + days(nx.date) + " dias") : "");
       const [g, f, m] = $("bar-" + c.id).children;
       g.style.width = Math.min(100, st.earned * 10) + "%";
       g.style.background = "var(--" + (st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction)) + ")";
       f.style.left = Math.min(100, st.earned * 10) + "%"; f.style.width = st.futureMax * 10 + "%";
       m.style.left = Math.min(99.5, T * 10) + "%";
 
+      let above = 0, compared = 0;
       for (const it of c.items) {
         const k = C.key(c, it), inp = $("in-" + k), rq = $("rq-" + k), mn = $("mn-" + k);
         const p = C.itemPoints(it, saved.grades[k]);
@@ -767,12 +821,16 @@ const NotasCore = (() => {
         rq.textContent = ""; mn.textContent = "";
         const graded = p !== null && !Number.isNaN(p); $("row-" + k).classList.toggle("graded", graded);
         $("cd-" + k).textContent = canvasDate(k, it);
-        if (graded) { rq.appendChild(el("span", "check", "✓ lançada")); if (saved.fresh.includes(k)) rq.appendChild(badge("acc", "nova")); continue; }
+        if (graded) { rq.appendChild(el("span", "check", "✓ lançada")); if (saved.fresh.includes(k)) rq.appendChild(badge("acc", "nova"));
+          const cs = classStat(k, it); if (cs) { const raw = C.parseNum(saved.grades[k]); rq.appendChild(classBar(cs, raw, it)); if (raw >= cs.mean) above++; compared++; }
+          continue; }
         if (st.late.includes(it)) { rq.appendChild(badge("warn", "falta a nota")); continue; }
         rq.appendChild(needBadge(st, it));
         mn.textContent = st.status === "garantido" || st.status === "depende-atrasadas" ? "—" : minText(C.minimumFor(st, it, T), it);
       }
 
+      const vsTurma = compared ? " · na média da turma ou acima em " + above + " de " + compared : "";
+      $("sub-" + c.id).textContent = nGraded + " de " + c.items.length + " lançadas" + (nFresh ? " · " + nFresh + (nFresh === 1 ? " nova" : " novas") : "") + vsTurma + (nx ? " · próxima: " + nx.name + ", " + (days(nx.date) === 0 ? "hoje" : days(nx.date) === 1 ? "amanhã" : "em " + days(nx.date) + " dias") : "");
       let cls, text;
       if (st.status === "garantido") { cls = "ok"; text = "Passou: " + fmt(st.earned, 2) + " já garantidos, mesmo com zero no resto."; }
       else if (st.status === "nao-da") { cls = "bad"; text = "Mesmo com nota cheia em tudo chega a " + fmt(st.ceilingIfLate, 2) + ". Caminho: recuperação de um RA."; }
@@ -813,7 +871,7 @@ const NotasCore = (() => {
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T); renderTiles(states, T); renderTodo();
+    renderFocus(T); renderTiles(states, T); renderTodo(); renderNews();
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -879,6 +937,24 @@ const NotasCore = (() => {
       txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
       t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
     }
+  }
+
+  // Announcements from the last 60 days (snapshot): unread first; titles link to Canvas only.
+  function renderNews() {
+    const nw = saved.news, box = $("avisolist"); $("avisos").hidden = !nw; box.textContent = ""; if (!nw) return;
+    const list = nw.list.filter(a => a && typeof a.title === "string"), unread = list.filter(a => a.unread).length;
+    $("avisosat").textContent = (unread ? unread + (unread === 1 ? " não lido" : " não lidos") + " · " : "") + "lido do Canvas em " + dmy(nw.at);
+    for (const a of showAllNews ? list : list.slice(0, 5)) {
+      const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
+      const ours = C.COURSES.find(c => c.id === a.course); sub.textContent = ours ? SHORT[ours.id] : String(a.courseName || "");
+      const t = typeof a.url === "string" && /^https:\/\/pucpr\.instructure\.com\//.test(a.url) ? el("a", "title", a.title) : el("span", "title", a.title);
+      if (t.tagName === "A") { t.href = a.url; t.target = "_blank"; t.rel = "noopener noreferrer"; }
+      name.append(t, sub); if (a.unread) name.appendChild(badge("acc", "não lido"));
+      row.append(cell("Data", "muted num", typeof a.at === "string" && ISO.test(a.at) ? dmy(a.at) : "—"), name); box.appendChild(row);
+    }
+    if (!showAllNews && list.length > 5) { const b = el("button", "more", "Ver todos (" + list.length + ")"); b.type = "button";
+      b.addEventListener("click", () => { showAllNews = true; renderNews(); }); box.appendChild(b); }
+    if (!list.length) box.appendChild(el("div", "empty", "Nenhum aviso nos últimos 60 dias."));
   }
 
   // Canvas assignments not handed in yet, due in the next 14 days (a snapshot from the last import).
@@ -964,11 +1040,13 @@ const NotasCore = (() => {
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;
       if (res.extOld) { const n = el("div", "msg warn");
-        n.append("Sua extensão está desatualizada" + (res.ext ? " (v" + res.ext + ")" : "") + ". A v" + C.EXT_LATEST + " traz a lista Para entregar. ");
+        n.append("Sua extensão está desatualizada" + (res.ext ? " (v" + res.ext + ")" : "") + ". A v" + C.EXT_LATEST + " traz a média da turma, os avisos e a lista Para entregar. ");
         const a = el("a", null, "Como atualizar"); a.href = "#exthow-up"; n.appendChild(a); out.appendChild(n); }
       const savePending = () => { if (pend) { saved.pending = { at:today, list:pend }; renderPending(); }
         if (res.todo) saved.todo = { at:today, list:res.todo };
-        if (res.dates) saved.cdates = res.dates; };
+        if (res.dates) saved.cdates = res.dates;
+        if (res.stats) saved.stats = res.stats;
+        if (res.news) saved.news = { at:today, list:res.news }; };
       const pendNote = pend ? " " + (pend.length ? pend.length + " entrega(s) que o Canvas marca como não entregue(s) vão para Entregas atrasadas." : "O Canvas não marca nenhuma entrega como atrasada.") : "";
       if (!keys.length) {
         out.appendChild(el("div", "msg warn", "Nenhuma nota para importar ainda. As avaliações abaixo ficam para lançar à mão." + pendNote));
