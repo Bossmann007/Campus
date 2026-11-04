@@ -49,7 +49,8 @@ const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLine
   // The javascript: URL itself, built the way the page builds it, must be valid code.
   const hrefSrc = page2.match(/const bookmarkletHref = [^\n]*/)[0];
   const href = new Function("COLLECT_SRC", "bookmarkletPanel", "location", hrefSrc + "\nreturn bookmarkletHref();")(eval(lit[1]), sandbox({}, {}, TextEncoder, btoa, () => {}, {}), { origin: "https://falta-quanto.vercel.app" });
-  assert(href.startsWith("javascript:")); new Function(decodeURIComponent(href.slice(11)));   // throws on a syntax error
+  const scheme = href.slice(0, href.indexOf(":"));   // a bookmarklet is a javascript: URL by design; this asserts it, it does not filter input
+  assert.strictEqual(scheme, "javascript"); new Function(decodeURIComponent(href.slice(scheme.length + 1)));   // throws on a syntax error
   assert(decodeURIComponent(href).includes('"https://falta-quanto.vercel.app/app"'), "bookmarklet opens the app");
   const big = JSON.stringify({ v: 1, courses: Array.from({ length: 8 }, (_, i) => ({ name: "Matéria " + i + " ção", assignments: Array.from({ length: 60 }, (_, j) => ({ name: "Avaliação " + j + " é", points: 10, score: j, due: "2026-11-11T02:59:59Z", missing: false })) })) });
   const enc = b64url(big);
