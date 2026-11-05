@@ -62,7 +62,6 @@
     .top .wrap { gap:8px; padding:0 6px 0 10px; }
     .top a[aria-label="Código no GitHub"], .top .btn.primary.sm, #fbbtn { display:none; }   /* feedback stays in the footer */
     .viewsw button { padding:5px 10px; font-size:12.5px; }
-    .meta { padding-left:3px; }
   }
   .iconbtn { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px; border-radius:999px; border:1px solid transparent; box-shadow:none;
              background:transparent; color:var(--muted); font-size:13px; }
@@ -864,8 +863,8 @@ const NotasCore = (() => {
     const d = days(it.date), w = cell("Data", "when");
     const top = el("span", "d num", dmy(it.date));
     let note = null;
-    if (it.unv || it.alt) { const f = el("button", "flag"); f.type = "button"; f.innerHTML = ALERT; f.title = "Data a conferir: " + srcText(it); f.setAttribute("aria-label", "data a conferir: mostrar a fonte");
-      note = el("span", "flagnote", "Data a conferir: " + srcText(it)); note.hidden = true;
+    if (it.unv || it.alt) { const f = el("button", "flag"); f.type = "button"; f.innerHTML = ALERT; f.title = "Data a conferir: " + srcText(it); f.setAttribute("aria-label", "data a conferir: mostrar a fonte"); f.setAttribute("aria-expanded", "false");
+      note = el("span", "flagnote", "Data a conferir: " + srcText(it)); note.hidden = true; note.id = "fn-" + Math.random().toString(36).slice(2); f.setAttribute("aria-controls", note.id);
       f.addEventListener("click", e => { e.stopPropagation(); note.hidden = !note.hidden; f.setAttribute("aria-expanded", !note.hidden); }); top.appendChild(f); }
     w.append(top, el("span", "rel" + (d >= 0 && d <= 3 ? " soon" : d >= 0 && d <= 7 ? " week" : ""),
       d === 0 ? "hoje" : d === 1 ? "amanhã" : d > 0 ? "em " + d + " dias" : d >= -7 ? "há " + -d + " dias" : "passou"));
@@ -1216,9 +1215,9 @@ const NotasCore = (() => {
       const cell = el("div", "cday" + (d.getMonth() !== m - 1 ? " out" : "") + (iso === today ? " today" : ""));
       cell.appendChild(el("span", "n", String(d.getDate())));
       for (const e of (byDay[iso] || [])) cell.appendChild(chip(e));
-      if (byDay[iso]) { cell.classList.add("has"); cell.classList.toggle("sel", iso === calDay); cell.tabIndex = 0; cell.setAttribute("role", "button");
+      if (byDay[iso]) { cell.classList.add("has"); cell.classList.toggle("sel", iso === calDay); cell.tabIndex = 0; cell.setAttribute("role", "button"); cell.dataset.iso = iso; cell.setAttribute("aria-pressed", iso === calDay);
         cell.setAttribute("aria-label", dmy(iso) + ": " + byDay[iso].length + (byDay[iso].length === 1 ? " evento" : " eventos"));
-        const pick = () => { calDay = iso === calDay ? null : iso; renderCal(T); if (calDay) $("calaghead").scrollIntoView({ behavior:"smooth", block:"start" }); };
+        const pick = () => { calDay = iso === calDay ? null : iso; renderCal(T); const again = $("calgrid").querySelector('[data-iso="' + iso + '"]'); if (again) again.focus({ preventScroll:true }); if (calDay) $("calaghead").scrollIntoView({ behavior:"smooth", block:"start" }); };
         cell.addEventListener("click", pick); cell.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } }); }
       g.appendChild(cell);
     }
