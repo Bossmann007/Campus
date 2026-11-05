@@ -16,7 +16,7 @@ for (const c of C.COURSES) { near(C.weightSum(c), 10, c.id + " weights"); ok(c.i
 for (const c of C.COURSES) for (const it of c.items) assert(it.wSrc && it.dateSrc, c.id + ":" + it.id + " has sources");
 ok("every item has a weight source and a date source");
 
-near(C.courseState(byId("abd"), FIX, TODAY, T).earned, 6.5, "BD"); ok("BD garantido 6,5");
+near(C.courseState(byId("abd"), FIX, TODAY, T).earned, 6.0, "BD"); ok("BD garantido 6,0 (PjBL II 2/2 vale 1,5)");
 near(C.courseState(byId("etica"), FIX, TODAY, T).earned, 6.3, "Ética"); ok("Ética garantido 6,3");
 near(C.courseState(byId("cscf"), FIX, TODAY, T).earned, 4, "Cone"); ok("Conectividade garantido 4,0 (=8,0/2)");
 
@@ -57,7 +57,7 @@ assert.strictEqual(C.localISO(new Date(2026, 10, 4, 23, 30)), "2026-11-04"); ok(
 assert.strictEqual(C.parseNum("1,1"), 1.1); assert.strictEqual(C.parseNum(""), null); assert(Number.isNaN(C.parseNum("abc")));
 assert(Number.isNaN(C.itemPoints(s3, "1.3"))); assert(Number.isNaN(C.parseNum("-1")));
 const bad = C.courseState(byId("abd"), Object.assign({}, FIX, { "abd:s3": "9" }), TODAY, T);
-near(bad.earned, 6.5, "invalid ignored"); assert.strictEqual(bad.invalid.length, 1); ok("comma decimals parse; out-of-range grades are ignored and flagged");
+near(bad.earned, 6.0, "invalid ignored"); assert.strictEqual(bad.invalid.length, 1); ok("comma decimals parse; out-of-range grades are ignored and flagged");
 
 // garantido and impossible
 assert.strictEqual(C.courseState(byId("abd"), full, TODAY, T).status, "garantido");
