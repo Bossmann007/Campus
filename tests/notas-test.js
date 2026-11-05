@@ -170,6 +170,7 @@ assert.throws(() => C.fromBackup("{oops"), /arquivo/); assert.throws(() => C.fro
 assert.throws(() => C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, grades: [] })), /arquivo/);
 const odd = C.fromBackup('{"app":"quanto-falta","v":1,"semester":"' + C.SEMESTER + '","grades":{"abd:pj1":"0.5","__proto__":"1","abd:xx":"1","web:p1":9,"imp:p1":"abc"}}');   // text, so __proto__ is a real key
 assert.deepStrictEqual(odd.grades, { "abd:pj1": "0.5" }, "only known items with text grades that parse");
+assert.deepStrictEqual(C.fromBackup('{"app":"quanto-falta","v":1,"semester":"' + C.SEMESTER + '","grades":{"abd:pj1:junk":"0.5"}}').grades, {}, "keys with extra segments are not items");
 assert(odd.missing.length === 4, "the other entries are reported: " + JSON.stringify(odd.missing));
 assert(C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, semester: "2027-1", grades: {} })).notes.some(n => /semestre/.test(n.reason)), "other semester flagged");
 ok("invalid backups are rejected; unknown, non-text and unparsable entries are skipped and listed");
