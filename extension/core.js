@@ -210,7 +210,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "0.7.0";
+  const EXT_LATEST = "1.0.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -224,8 +224,8 @@ const NotasCore = (() => {
   }
   function fromBackup(text) {
     let d;
-    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Quanto falta"); }
-    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Quanto falta");
+    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Campus+"); }
+    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Campus+");
     const grades = {}, missing = [], notes = [];
     if (d.semester !== SEMESTER) notes.push({ key:"", reason:"backup de outro semestre (" + String(d.semester) + "): confira antes de aplicar" });
     for (const k of Object.keys(d.grades)) {

@@ -4,8 +4,8 @@ Upload: `./scripts/package-extension` gera `dist/quanto-falta-extension-<versão
 
 ## Item
 
-- **Nome:** Quanto falta · PUCPR
-- **Resumo (até 132 caracteres):** Importa suas notas do Canvas da PUCPR e mostra quanto falta para passar em cada matéria. Sem senha, sem servidor.
+- **Nome:** Campus+ · PUCPR
+- **Resumo (até 132 caracteres):** O Canvas da PUCPR melhorado: semana, avisos, lembretes, tema escuro, quanto falta e arquivos. Feito por um aluno, para alunos.
 - **Categoria:** Educação
 - **Idioma:** Português (Brasil)
 - **Ícone:** `extension/icons/icon128.png`
@@ -16,9 +16,21 @@ Upload: `./scripts/package-extension` gera `dist/quanto-falta-extension-<versão
 
 ## Descrição
 
-Calculadora de notas para alunos da PUCPR (2026/2).
+O Canvas da PUCPR do jeito que o aluno usa. Feito por um aluno, para alunos (2026/2).
 
-Com o Canvas aberto, clique no ícone da extensão e em "Importar notas do Canvas". A extensão lê as suas notas na aba do Canvas e abre o Quanto falta, que mostra:
+Dentro do Canvas, sem configurar nada:
+
+- **Esta semana:** no painel, as entregas e provas de todas as matérias por dia, com o que já foi entregue e o que está atrasado;
+- **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos contados;
+- **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova;
+- **Tema escuro** (ou igual ao sistema);
+- **Quanto falta:** em cada card e em cada matéria, quanto você precisa tirar nas próximas avaliações;
+- **Arquivos:** baixa os arquivos da matéria organizados em Downloads/PUCPR/<matéria>/<tipo>;
+- o número de dias até a próxima prova no ícone.
+
+Cada parte pode ser desligada no botão da extensão.
+
+No botão da extensão, "Importar notas do Canvas" leva as notas para o site do Campus+, que mostra:
 
 - quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino;
 - o mínimo em cada prova se você tirar nota cheia no resto;
@@ -35,13 +47,14 @@ Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure.
 
 ## Práticas de privacidade (aba Privacy)
 
-- **Finalidade única:** importar as notas do próprio aluno no Canvas da PUCPR para calcular quanto falta para passar.
-- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR quanto falta em cada matéria e oferecer o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
+- **Finalidade única:** melhorar o Canvas da PUCPR para o próprio aluno: organizar prazos, avisos, notas e arquivos das matérias dele.
+- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR a semana, os avisos, quanto falta em cada matéria, o tema escuro e o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
 - **activeTab:** ler a aba do Canvas quando o usuário clica no botão da extensão.
 - **scripting:** executar, nessa aba e nesse momento, a leitura das notas pela API do Canvas com a sessão do próprio usuário.
-- **storage:** guardar no dispositivo a última leitura, a data da próxima prova (número no ícone) e quais arquivos já foram baixados.
-- **alarms:** atualizar de hora em hora o número de dias até a próxima prova no ícone (não lê nada).
+- **storage:** guardar no dispositivo as escolhas do usuário, os lembretes marcados, a última leitura, a data da próxima prova (número no ícone) e quais arquivos já foram baixados.
+- **alarms:** atualizar de hora em hora o número de dias até a próxima prova no ícone e disparar os lembretes na hora marcada (não lê nada).
+- **notifications:** mostrar os lembretes de entregas e provas que o usuário ligou; o texto é gerado no dispositivo.
 - **downloads:** salvar, a pedido do usuário, os arquivos das matérias em Downloads/PUCPR/<matéria>/<tipo>; só endereços do Canvas da PUCPR.
 - **Código remoto:** não. Todo o código está no pacote.
-- **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma e títulos de avisos são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
+- **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma, títulos de avisos e a agenda do Canvas são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.

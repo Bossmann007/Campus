@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Quanto falta · PUCPR",
-  "version": "0.7.0",
-  "description": "Mostra no Canvas da PUCPR quanto falta para passar em cada matéria, baixa os arquivos das matérias e leva as notas para a calculadora.",
+  "name": "Campus+ · PUCPR",
+  "version": "1.0.0",
+  "description": "O Canvas da PUCPR melhorado: semana com entregas e provas, avisos juntos, lembretes, tema escuro, quanto falta em cada matéria e download dos arquivos.",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Quanto falta",
+    "default_title": "Campus+",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
@@ -16,7 +16,8 @@
     "scripting",
     "storage",
     "downloads",
-    "alarms"
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "https://pucpr.instructure.com/*"
@@ -25,6 +26,16 @@
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://pucpr.instructure.com/*"
+      ],
+      "js": [
+        "prefs.js",
+        "theme.js"
+      ],
+      "run_at": "document_start"
+    },
     {
       "matches": [
         "https://pucpr.instructure.com/*"

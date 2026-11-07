@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; form-action 'none'; base-uri 'none'">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2230%22%20height%3D%2230%22%20rx%3D%229%22%20fill%3D%22%23202020%22/%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%227.2%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223.2%22/%3E%3Cpath%20d%3D%22m17.2%2018.6%203.3%203.4%206-7.2%22%20fill%3D%22none%22%20stroke%3D%22%233fd07f%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E">
 <meta name="description" content="Calculadora de notas da PUCPR 2026/2: quanto falta em cada prova para passar.">
-<title>Minhas matérias · Quanto falta</title>
+<title>Minhas matérias · Campus+</title>
 <style>
   /* Radix Colors 3.0 scales (gray, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
   :root { --bg:#f9f9f9; --surface:#fff; --sunk:#f0f0f0; --line:#e8e8e8; --line2:#d9d9d9; --txt:#202020; --muted:#646464; --faint:#838383; --field:#bbbbbb; --brand:#9be8be; --logo-check:#3fd07f; --warn-ink:#4f3422; --bad-ink:#5c271f; --acc-ink:#113264; --ok-ink:#203c25;
@@ -309,7 +309,7 @@
   @keyframes glow { 50% { box-shadow:0 0 0 6px color-mix(in srgb, var(--brand) 30%, transparent); } }
   .win-main .fade { transition:opacity .25s ease-out; }
 
-  /* Canvas -> Quanto falta diagram */
+  /* Canvas -> Campus+ diagram */
   .flow { text-align:center; margin-top:80px; }
   .flow h2 { font-size:clamp(28px,4.6vw,46px); line-height:1.08; letter-spacing:-.035em; margin:0 0 12px; font-weight:700; }
   .flow p { color:var(--muted); margin:0 auto; max-width:56ch; font-size:15.5px; }
@@ -399,7 +399,7 @@
 </head>
 <body>
 <div class="top"><div class="wrap">
-  <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Quanto falta</b></a><span class="sem">PUCPR · 2026/2</span>
+  <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Campus+</b></a><span class="sem">PUCPR · 2026/2</span>
   <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#proximas">Próximas</a></nav>
   <div class="viewsw" id="viewsw" role="group" aria-label="Ver matérias ou calendário"><span class="thumb" aria-hidden="true"></span><button type="button" data-v="app" aria-pressed="true">Matérias</button><button type="button" data-v="cal" aria-pressed="false">Calendário</button></div>
   <div class="spacer"></div>
@@ -417,7 +417,7 @@
 <div class="wrap">
   <header class="hero">
     <div class="avail"><span class="new">NOVO</span><span>Funciona no</span><b>Chrome</b><b>Brave</b><b>Edge</b><i></i><b>Canvas PUCPR 2026/2</b></div>
-    <h1 id="h1"><span id="h1a">Quanto falta</span> <svg class="hlogo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><br><span class="dim" id="h1b">pra passar?</span></h1>
+    <h1 id="h1"><span id="h1a">Campus+</span> <svg class="hlogo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><br><span class="dim" id="h1b">pra passar?</span></h1>
     <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
     <div class="focus" id="focus" hidden></div>
     <div class="cta"><a class="btn primary" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Baixar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
@@ -488,7 +488,7 @@
       <div class="acts canvasgo"><a class="btn" href="https://pucpr.instructure.com/" target="_blank" rel="noopener noreferrer">Abrir o Canvas da PUCPR ↗</a><span class="muted">entre, clique na extensão (ou no favorito) e volte aqui</span></div>
       <details class="exthow" id="exthow"><summary>Como importar pela extensão</summary>
       <ol class="steps ext">
-        <li><b>Instale a extensão Quanto falta</b> no Chrome, Brave ou Edge (no computador).
+        <li><b>Instale a extensão Campus+</b> no Chrome, Brave ou Edge (no computador).
           <div class="acts"><a class="btn primary" id="extdl" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip">Baixar extensão</a></div>
           <details class="exthelp"><summary>Como instalar (1 minuto)</summary><ol>
             <li>Descompacte o arquivo baixado: fica uma pasta <b>quanto-falta-extension</b>.</li>
@@ -503,16 +503,16 @@
         <ol class="steps ext">
           <li><b>Baixe a versão nova</b> pelo mesmo botão (sempre a mais recente).</li>
           <li><b>Descompacte por cima da pasta antiga</b>, substituindo os arquivos.</li>
-          <li>Em <b>chrome://extensions</b>, clique em <b>↻ Recarregar</b> no Quanto falta. Se você apagou a pasta antiga, remova a extensão e carregue a pasta nova.</li>
+          <li>Em <b>chrome://extensions</b>, clique em <b>↻ Recarregar</b> no Campus+. Se você apagou a pasta antiga, remova a extensão e carregue a pasta nova.</li>
         </ol>
         <p class="muted">Suas notas não se perdem: elas ficam salvas neste site, não na extensão. A versão instalada aparece embaixo do botão da extensão.</p>
       </details>
       <details class="exthow" id="bmhow"><summary>Sem extensão? Use um favorito</summary>
         <ol class="steps ext">
-          <li>Arraste este botão para a barra de favoritos: <a id="bm" class="btn bm" title="Arraste para a barra de favoritos">Quanto falta</a>
+          <li>Arraste este botão para a barra de favoritos: <a id="bm" class="btn bm" title="Arraste para a barra de favoritos">Campus+</a>
             <span class="muted">(não aparece a barra? <b>Cmd+Shift+B</b> no Mac ou <b>Ctrl+Shift+B</b> no Windows)</span></li>
           <li>Ou crie à mão: <button id="bmcopy" class="btn sm" type="button">Copiar código do favorito</button>, adicione qualquer página aos favoritos, edite e troque o endereço pelo código.</li>
-          <li><b>Abra o Canvas</b> e clique no favorito: ele lê as notas e mostra <b>Abrir no Quanto falta</b>.</li>
+          <li><b>Abra o Canvas</b> e clique no favorito: ele lê as notas e mostra <b>Abrir no Campus+</b>.</li>
         </ol>
         <p class="muted">Lê o mesmo que a extensão, com o seu login do Canvas, e não envia nada para servidor nenhum. Funciona em qualquer navegador de computador, inclusive Safari e Firefox.</p>
       </details>
@@ -761,7 +761,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "0.7.0";
+  const EXT_LATEST = "1.0.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -775,8 +775,8 @@ const NotasCore = (() => {
   }
   function fromBackup(text) {
     let d;
-    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Quanto falta"); }
-    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Quanto falta");
+    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Campus+"); }
+    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Campus+");
     const grades = {}, missing = [], notes = [];
     if (d.semester !== SEMESTER) notes.push({ key:"", reason:"backup de outro semestre (" + String(d.semester) + "): confira antes de aplicar" });
     for (const k of Object.keys(d.grades)) {
@@ -887,7 +887,7 @@ const NotasCore = (() => {
   // /calendario is this same page (vercel.json rewrite) showing only the calendar; ?view=calendario works locally too.
   const urlCal = () => /\/calendario\/?$/.test(location.pathname) || new URLSearchParams(location.search).get("view") === "calendario";
   let CAL = urlCal();
-  const applyView = () => { document.body.classList.toggle("cal", CAL); document.title = CAL ? "Calendário · Quanto falta" : "Minhas matérias · Quanto falta";
+  const applyView = () => { document.body.classList.toggle("cal", CAL); document.title = CAL ? "Calendário · Campus+" : "Minhas matérias · Campus+";
     for (const b of document.querySelectorAll("#viewsw button")) b.setAttribute("aria-pressed", (b.dataset.v === "cal") === CAL); };
   applyView();
   // The switch changes the view in place and keeps the address in step (/app or /calendario; ?view= on file://).
@@ -969,10 +969,10 @@ const NotasCore = (() => {
       const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
       const add = (id, date, title, desc) => ev.push("BEGIN:VEVENT", "UID:" + id + "@quanto-falta", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + day(date), "DTEND;VALUE=DATE:" + next(date),
         "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
-      for (const u of C.upcoming(C.COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Quanto falta: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
+      for (const u of C.upcoming(C.COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Campus+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
       if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
         .forEach(t => add("todo-" + [...(t.courseName + "|" + t.name)].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 7).toString(36) + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
-      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Quanto falta//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Quanto falta"].concat(ev, "END:VCALENDAR").join("\r\n");
+      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Campus+//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Campus+"].concat(ev, "END:VCALENDAR").join("\r\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       const nTodo = ev.filter(x => x.startsWith("UID:todo-")).length, nAll = ev.filter(x => x.startsWith("UID:")).length;
@@ -1130,7 +1130,7 @@ const NotasCore = (() => {
   const con = (() => {
     const w = el("div", "win"), bar = el("div", "win-bar"), dots = el("span", "dots"), tab = el("span", "tab"), tag = el("span", "demo-tag");
     dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    tab.append(" Quanto falta"); bar.append(dots, tab, el("span", "sp"), tag);
+    tab.append(" Campus+"); bar.append(dots, tab, el("span", "sp"), tag);
     const body = el("div", "win-body"), side = el("div", "win-side"), main = el("div", "win-main fade");
     main.setAttribute("aria-live", "polite");
     side.appendChild(el("h4", null, "Matérias · 2026/2"));
@@ -1249,7 +1249,7 @@ const NotasCore = (() => {
       con.side(side, true);
       if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
     const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
-    $("h1a").textContent = !any ? "Quanto falta" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
+    $("h1a").textContent = !any ? "Campus+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
     $("h1b").textContent = !any ? "pra passar?" : open ? "pra fechar o semestre." : "bom descanso.";
     const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
     sb.textContent = any ? "Ver minhas matérias" : "Lançar minhas notas";
@@ -1350,13 +1350,13 @@ const NotasCore = (() => {
   }
 
   // Bookmarklet: runs collectCanvasGrades (a verbatim copy of extension/collect.js, checked by tests) on the Canvas tab,
-  // then offers "Abrir no Quanto falta" with the same #canvas= hand-off as the extension. Read-only, same origin, no third party.
+  // then offers "Abrir no Campus+" with the same #canvas= hand-off as the extension. Read-only, same origin, no third party.
   const COLLECT_SRC = '// Runs inside the student\'s Canvas tab (injected with chrome.scripting on click): same-origin, read-only GETs.\n// Returns { v:1, courses:[{ name, assignments:[{ name, points, score, due, missing, submitted, online, stats }] }], announcements } for 2026/2 courses, or { error } (never rejects).\nasync function collectCanvasGrades() {\n  const get = async url => {\n    const out = [];\n    while (url) {\n      const r = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });\n      if (!r.ok) throw new Error("o Canvas respondeu " + r.status);\n      out.push(...JSON.parse((await r.text()).replace(/^while\\(1\\);/, "")));\n      const m = /<([^>]+)>;\\s*rel="next"/.exec(r.headers.get("Link") || "");\n      url = m ? m[1] : null;\n      if (url && new URL(url, location.href).origin !== location.origin) throw new Error("o Canvas indicou uma página fora do Canvas");\n    }\n    return out;\n  };\n  try {\n  const cs = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string" && /2026 \\/ 2/.test(c.name));\n  const courses = [];\n  for (const c of cs) {\n    const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100");\n    courses.push({ name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible,\n      score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,\n      due: a.due_at || null, missing: !!(a.submission && a.submission.missing),\n      submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),\n      online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),\n      stats: a.score_statistics && typeof a.score_statistics.mean === "number"\n        ? { mean: a.score_statistics.mean, min: a.score_statistics.min, max: a.score_statistics.max } : null })) });\n  }\n  // Professors\' announcements from the last 60 days; optional, a failure here never blocks the grades.\n  let announcements = null;\n  try {\n    const since = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10), until = new Date(Date.now() + 864e5).toISOString().slice(0, 10);   // Canvas caps the window when end_date is left out\n    const an = cs.length ? await get("/api/v1/announcements?" + cs.map(c => "context_codes[]=course_" + c.id).join("&") + "&start_date=" + since + "&end_date=" + until + "&per_page=50") : [];\n    const names = Object.fromEntries(cs.map(c => ["course_" + c.id, c.name]));\n    announcements = an.slice(0, 50).map(a => ({ course: names[a.context_code] || "", title: a.title, at: a.posted_at || null, unread: a.read_state === "unread", url: a.html_url || null }));\n  } catch (e) { announcements = null; }\n  return { v: 1, courses, announcements };\n  } catch (e) { return { error: String(e && e.message || e) }; }\n}\n';
   function bookmarkletPanel(collect, app) {
     if (!/(^|\.)instructure\.com$/.test(location.hostname)) { alert("Abra o Canvas da PUCPR (pucpr.instructure.com) e clique de novo neste favorito."); return; }
     const box = document.createElement("div");
     box.setAttribute("style", "position:fixed;z-index:2147483647;top:16px;right:16px;width:340px;max-width:calc(100vw - 32px);background:#1f1f1f;color:#eee;border:1px solid #3a3a3a;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.4);padding:16px;font:14px/1.45 system-ui,sans-serif");
-    const msg = document.createElement("p"); msg.style.margin = "0 0 10px"; msg.textContent = "Quanto falta: lendo suas notas no Canvas…"; box.appendChild(msg); document.body.appendChild(box);
+    const msg = document.createElement("p"); msg.style.margin = "0 0 10px"; msg.textContent = "Campus+: lendo suas notas no Canvas…"; box.appendChild(msg); document.body.appendChild(box);
     const btn = (t, primary) => { const b = document.createElement("a"); b.textContent = t; b.setAttribute("style", "display:block;text-align:center;margin-top:8px;padding:8px 12px;border-radius:999px;cursor:pointer;text-decoration:none;border:1px solid #3a3a3a;" + (primary ? "background:#eee;color:#191919" : "background:#262626;color:#eee")); return b; };
     collect().then(res => {
       if (res.error) { msg.textContent = "Não consegui ler as notas: " + res.error + ". Confira se você está logado no Canvas."; return; }
@@ -1364,8 +1364,8 @@ const NotasCore = (() => {
       for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
       const graded = res.courses.reduce((n, c) => n + c.assignments.filter(a => a.score !== null).length, 0);
       msg.textContent = res.courses.length + " matérias lidas, " + graded + " avaliações com nota.";
-      const open = btn("Abrir no Quanto falta", true); open.href = app + "#canvas=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); open.target = "_blank"; open.rel = "noopener";
-      const copy = btn("Copiar texto"); copy.onclick = () => navigator.clipboard.writeText(txt).then(() => { copy.textContent = "Copiado"; }, () => { copy.textContent = "O Canvas bloqueou a cópia: use Abrir no Quanto falta"; });
+      const open = btn("Abrir no Campus+", true); open.href = app + "#canvas=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); open.target = "_blank"; open.rel = "noopener";
+      const copy = btn("Copiar texto"); copy.onclick = () => navigator.clipboard.writeText(txt).then(() => { copy.textContent = "Copiado"; }, () => { copy.textContent = "O Canvas bloqueou a cópia: use Abrir no Campus+"; });
       const close = btn("Fechar"); close.onclick = () => box.remove();
       box.append(open, copy, close);
     });
@@ -1398,7 +1398,7 @@ const NotasCore = (() => {
     $("importfile").addEventListener("change", e => {
       const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
       out.textContent = "";
-      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Quanto falta.")); return; }
+      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Campus+.")); return; }
       f.text().then(t => {
         let res;
         try { res = C.fromBackup(t); } catch (err) { out.appendChild(el("div", "msg bad", "Não reconheci esse arquivo (" + err.message + ").")); return; }

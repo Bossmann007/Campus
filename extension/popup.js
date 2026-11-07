@@ -1,4 +1,5 @@
-// Popup: inject collectCanvasGrades into the active Canvas tab, then hand the result to the calculator page.
+// Popup: the Campus+ settings (chrome.storage.local "prefs"), and the grades import: inject collectCanvasGrades into
+// the active Canvas tab, then hand the result to the calculator page.
 const SITE = "https://falta-quanto.vercel.app/app";   // preview/production URL; the page reads #canvas=<data> locally (hash never reaches a server)
 const $ = id => document.getElementById(id);
 const say = (text, cls) => { $("status").textContent = text; $("status").className = cls || ""; };
@@ -9,6 +10,17 @@ function b64url(s) {   // chunked: a spread of a long export would overflow the 
 }
 let exported = "";
 $("ver").textContent = "v" + chrome.runtime.getManifest().version + " ·";
+
+chrome.storage.local.get("prefs").then(({ prefs }) => {
+  let p = cpPrefs(prefs);
+  const save = () => chrome.storage.local.set({ prefs: p });
+  $("theme").value = p.theme;
+  $("theme").addEventListener("change", () => { p = Object.assign({}, p, { theme: $("theme").value }); save(); });
+  for (const box of document.querySelectorAll("[data-pref]")) {
+    box.checked = p[box.dataset.pref];
+    box.addEventListener("change", () => { p = Object.assign({}, p, { [box.dataset.pref]: box.checked }); save(); });
+  }
+});
 
 $("go").addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

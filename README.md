@@ -1,4 +1,6 @@
-# Quanto falta pra passar · PUCPR 2026/2
+# Campus+ · PUCPR 2026/2
+
+O Canvas da PUCPR melhorado. Feito por um aluno, para alunos. (Antes chamado Quanto falta.)
 
 Calculadora de notas para a turma: mostra quanto você precisa tirar em cada avaliação que falta, com os pesos dos Planos de Ensino. As notas podem vir do Canvas pela extensão do Chrome, sem senha, sem token e sem servidor: tudo fica no seu navegador.
 
@@ -17,6 +19,7 @@ Calculadora "Quanto falta pra passar" for PUCPR 2026/2: two static pages (`index
 - `scripts/snapshot`: copy `app.html` into `old/` before any redesign.
 - `extension/`: Chrome MV3 extension (popup + `collect.js`) that reads the student's own Canvas grades and opens the page with them. Load unpacked from `chrome://extensions` for testing.
   - Since 0.7 it also runs on `pucpr.instructure.com` pages (`content.js`): a status pill on each dashboard card, a panel on course pages with the next assessments and what each needs, a files download into `Downloads/PUCPR/<course>/<kind>/` (`files.js`, rules from the PUCPR bot's `canvas_files.py`), and the days to the next exam on the icon (`background.js`).
+  - 1.0 renames it **Campus+**, a Canvas improvement where the grade calculator is one module: the week (Canvas planner deadlines plus our exams) and all announcements on the dashboard, reminders (`notifications`, alarms 1 day and 1 hour before), a dark theme (`theme.js`, document_start), and a settings popup to turn each part off (`prefs.js`, `chrome.storage.local` "prefs").
   - `extension/core.js` is generated from `app.html`'s core block by `scripts/sync-ext-core`; `tests/inside-canvas-test.js` fails when it is stale.
 - `tools/canvas-export.py`: optional path for students who prefer their own Canvas API token; runs locally, read-only, prints the same JSON as the extension for the paste box. Stdlib only. Token from `CANVAS_TOKEN`, a `.env` (copy `tools/.env.example`; `.env` is git-ignored) or a hidden prompt.
 - `scripts/package-extension`: builds the release zip; `EXT_LATEST` in `app.html` must match `extension/manifest.json` (tested).

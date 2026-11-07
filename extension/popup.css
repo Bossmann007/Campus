@@ -9,3 +9,8 @@ button { font:inherit; font-weight:500; padding:9px 14px; border-radius:999px; b
 button.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); }
 button:disabled { opacity:.5; cursor:default; }
 .fine { color:var(--muted); font-size:12px; margin:12px 0 0; }
+.mods { display:grid; gap:2px; padding:0 0 12px; margin:0 0 12px; border-bottom:1px solid var(--line); }
+.row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:5px 0; cursor:pointer; }
+.row input { width:16px; height:16px; margin:0; accent-color:var(--txt); }
+select { font:inherit; padding:3px 6px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--txt); }
+.mods .fine { margin:4px 0 0; }

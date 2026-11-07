@@ -3,15 +3,17 @@ const assert = require("assert"), fs = require("fs"), path = require("path");
 const dir = path.join(__dirname, "..", "extension");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.strictEqual(manifest.manifest_version, 3);
-assert.deepStrictEqual(manifest.permissions, ["activeTab", "scripting", "storage", "downloads", "alarms"], "no broad permissions");
+assert.deepStrictEqual(manifest.permissions, ["activeTab", "scripting", "storage", "downloads", "alarms", "notifications"], "no broad permissions");
 assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*"], "host access only to the PUCPR Canvas");
-assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"]], "page script only on the PUCPR Canvas");
+assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"], ["https://pucpr.instructure.com/*"]], "page scripts only on the PUCPR Canvas");
+assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_idle"], "theme before the page paints, the rest after it loads");
+assert.strictEqual([].concat(...manifest.content_scripts.map(c => c.js)).filter(f => f === "prefs.js").length, 1, "prefs.js once: the scripts share one scope, a second copy would redeclare its consts");
 const pack = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
-for (const f of [...manifest.content_scripts[0].js, manifest.background.service_worker, "popup.js", "popup.html", "popup.css"]) {
+for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.background.service_worker, "popup.js", "popup.html", "popup.css"]) {
   assert(fs.existsSync(path.join(dir, f)), "file " + f); assert(new RegExp("\\b" + f.replace(".", "\\.") + "\\b").test(pack), "packaged: " + f); }
 for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(dir, f)), "icon " + f);
 const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
-assert(["activeTab", "scripting", "storage", "downloads", "alarms", "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
+assert(["activeTab", "scripting", "storage", "downloads", "alarms", "notifications", "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
 global.location = { href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };

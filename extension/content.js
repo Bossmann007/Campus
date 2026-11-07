@@ -1,6 +1,7 @@
-// Runs on pucpr.instructure.com pages (after collect.js, core.js and files.js): "Quanto falta" inside Canvas.
-// Dashboard cards get the course status; course pages get the next assessments, what each needs, and a files download.
-// Same-origin read-only GETs with the student's session; grades stay in chrome.storage.local on this computer.
+// Campus+ on pucpr.instructure.com pages (after prefs.js, collect.js, core.js and files.js). Each part can be turned off in the popup:
+// dashboard: the week (deadlines and exams of every course) and the announcements; cards: the course status (quanto falta);
+// course pages: the next assessments, what each needs, and a files download; reminders handed to the service worker.
+// Same-origin read-only GETs with the student's session; everything stays in chrome.storage.local on this computer.
 (() => {
   if (window.top !== window) return;
   const C = NotasCore, F = QFFiles, T = 7, TTL = 10 * 60 * 1000;
@@ -9,6 +10,10 @@
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
   const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
   const today = () => C.localISO(new Date());
+  const WD = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  const dayLabel = iso => { const d = days(iso); return d === 0 ? "hoje" : d === 1 ? "amanhã" : d === -1 ? "ontem" : WD[new Date(iso + "T12:00:00").getDay()] + " " + dmy(iso); };
+  const hhmm = iso => { const d = new Date(iso); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const addDays = n => C.localISO(new Date(Date.now() + n * 864e5));
   const days = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(today() + "T00:00:00Z")) / 864e5);
 
   async function getAll(url) {
@@ -34,7 +39,8 @@
     const data = await collectCanvasGrades();
     if (data.error) throw new Error(data.error);
     const ids = (await getAll("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string").map(c => ({ id: c.id, name: c.name }));
-    const fresh = { v: VERSION, user, at: Date.now(), data, ids };
+    const planner = await getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders
+    const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null };
     await chrome.storage.local.set({ cache: fresh });
     return fresh;
   }
@@ -57,10 +63,38 @@
     chrome.runtime.sendMessage({ type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" }).catch(() => {});
   }
 
+  // Deadlines from the Canvas planner (every course) plus our exams that are not in Canvas, from today on.
+  function agenda(a, cache) {
+    const short = (name, id) => { const c = a.byCanvasId[id]; return c ? c.name : String(name || "").split(" (")[0].split(" - ")[0]; };
+    const out = [];
+    for (const p of cache.planner || []) {
+      if (!p || !p.plannable || typeof p.plannable_date !== "string" || /^(announcement|planner_note)$/.test(p.plannable_type)) continue;
+      const s = p.submissions || {};
+      const url = p.html_url ? new URL(p.html_url, location.href).href : "";
+      out.push({ key: p.plannable_type + ":" + p.plannable_id, title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
+        task: !!p.submissions, date: C.localISO(new Date(p.plannable_date)), due: p.plannable_date, url: url.startsWith(location.origin + "/") ? url : null,   // task: has a submission (events and pages do not)
+        done: !!(s.submitted || s.graded || s.excused || (p.planner_override && p.planner_override.marked_complete)), late: !!s.missing });
+    }
+    for (const u of a.upcoming) if (u.item.exam && !out.some(x => x.ours === u.course && x.date === u.item.date))
+      out.push({ key: "qf:" + C.key(u.course, u.item), title: u.item.name, course: u.course.name, ours: u.course, date: u.item.date, due: null, url: null, done: false, late: false, exam: u });
+    return out.sort((x, y) => (x.due || x.date + "T12:00:00").localeCompare(y.due || y.date + "T12:00:00"));
+  }
+  const need = u => u.req.impossible ? "não dá" : u.req.f <= 1e-9 ? "já garantido" : "precisa " + up(u.req.raw, u.item.inMax >= 5 ? 1 : 2) + (u.item.inMax === 10 ? "" : " de " + fmt(u.item.inMax, u.item.inMax >= 5 ? 1 : 2));
+
+  // What the service worker should remind: work not yet handed in and exams, in the next 14 days. Without a planner reading
+  // (Canvas failed) nothing is sent, so a passing error does not wipe the reminders already set.
+  function sendReminders(list, prefs, cache) {
+    if (prefs.remind && !cache.planner) return;
+    const t = today(), end = addDays(14);
+    const items = prefs.remind ? list.filter(x => (x.task || x.exam) && !x.done && x.date >= t && x.date <= end).slice(0, 60)
+      .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
+    chrome.runtime.sendMessage({ type: "remind", items }).catch(() => {});
+  }
+
   const COLORS = { ok: ["#e9f6e9", "#2a7e3b"], warn: ["#fff7c2", "#ab6400"], bad: ["#feebe7", "#d13415"] };
   function pill(text, tone) {
     const s = document.createElement("span"), [bg, fg] = COLORS[tone] || COLORS.warn;
-    s.textContent = text;
+    s.textContent = text; s.className = "cp-host";   // cp-host: the dark theme leaves it as is
     s.style.cssText = "display:inline-block;margin-top:6px;padding:2px 9px;border-radius:999px;font:600 12px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:" + bg + ";color:" + fg;
     return s;
   }
@@ -73,7 +107,7 @@
       card.dataset.qf = "1";
       if (!c) continue;
       const st = a.state(c), p = pill(a.label(st), a.tone(st));
-      p.title = "Quanto falta (notas do Canvas, meta 7)";
+      p.title = "Campus+ · quanto falta (notas do Canvas, meta 7)";
       (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
     }
   }
@@ -98,40 +132,97 @@
     button { font:inherit; font-size:13px; font-weight:500; color:#202020; background:#fff; border:1px solid #d9d9d9; border-radius:999px; padding:6px 14px; cursor:pointer; }
     button.primary { background:#202020; color:#fff; border-color:#202020; }
     button:disabled { opacity:.55; cursor:default; }
-    @media (prefers-color-scheme:dark) { :host { color:#eee; } .box { background:#222; border-color:#313131; } .muted, li .d { color:#b4b4b4; }
-      button { background:#2a2a2a; color:#eee; border-color:#484848; } button.primary { background:#eee; color:#191919; border-color:#eee; } }`;
+    a { color:inherit; text-decoration:none; } a:hover { text-decoration:underline; }
+    .grid { display:grid; gap:18px; } @media (min-width:900px) { .grid.two { grid-template-columns:minmax(0,3fr) minmax(0,2fr); } }
+    h3 { margin:0; font-size:14px; display:flex; gap:8px; align-items:center; }
+    ul.wk li { grid-template-columns:118px minmax(0,1fr) auto; } ul.wk li .d { white-space:nowrap; } li .c { color:#646464; font-size:12.5px; } li.unread .n { font-weight:600; }
+    :host-context(html.cp-dark) { color:#eee; } :host-context(html.cp-dark) .box { background:#1d1d1f; border-color:#313131; }
+    :host-context(html.cp-dark) :is(.muted, li .d, li .c) { color:#b4b4b4; }
+    :host-context(html.cp-dark) button { background:#2a2a2a; color:#eee; border-color:#484848; } :host-context(html.cp-dark) button.primary { background:#eee; color:#191919; border-color:#eee; }
+    :host-context(html.cp-dark) .ok { background:#16351d; color:#7ad38c; } :host-context(html.cp-dark) .warn { background:#3a3000; color:#f5c84b; } :host-context(html.cp-dark) .bad { background:#43170f; color:#ff9a85; }`;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-  // Course pages: the next assessments of this course and the files download.
-  function coursePanel(courseId, a, cache) {
-    if (document.getElementById("qf-panel")) return;
+  // A panel in a shadow root at the top of the page content; null when it is already there or the page has no content area.
+  function panelHost(id) {
     const anchor = document.getElementById("content");
-    if (!anchor) return;
-    const host = el("div"); host.id = "qf-panel";
-    const root = host.attachShadow({ mode: "open" }), box = el("div", "box");
-    const style = el("style"); style.textContent = CSS; root.append(style, box);
-    const c = a.byCanvasId[courseId], cv = cache.ids.find(x => String(x.id) === courseId);
-    const top = el("div", "top"); top.appendChild(el("b", null, "Quanto falta"));
-    if (c) { const st = a.state(c); top.appendChild(el("span", "pill " + a.tone(st), a.label(st))); top.appendChild(el("span", "muted", "pelas notas do Canvas, meta 7")); }
+    if (document.getElementById(id) || !anchor) return null;
+    const host = el("div", "cp-host"); host.id = id;
+    const root = host.attachShadow({ mode: "open" }), box = el("div", "box"), style = el("style");
+    style.textContent = CSS; root.append(style, box); anchor.prepend(host);
+    return box;
+  }
+  const link = (text, url) => { const x = el(url ? "a" : "span", "n", text); if (url) x.href = url; x.title = text; return x; };
+
+  // Dashboard: this week's deadlines and exams of every course, and the latest announcements.
+  function dashPanel(a, cache, prefs) {
+    const week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
+    if (!week && !news) return;
+    const box = panelHost("cp-dash");
+    if (!box) return;
+    const grid = el("div", "grid" + (week && news ? " two" : "")); box.appendChild(grid);
+    if (week) {
+      const t = today(), end = addDays(7), list = agenda(a, cache);
+      const late = list.filter(x => x.late && !x.done && x.date < t), next = list.filter(x => x.date >= t && x.date <= end);
+      const sec = el("div"), h = el("h3", null, "Esta semana"), open = next.filter(x => (x.task || x.exam) && !x.done).length;
+      h.appendChild(el("span", "pill " + (late.length ? "bad" : open ? "warn" : "ok"), late.length ? late.length + (late.length === 1 ? " atrasada" : " atrasadas") : open ? open + " pela frente" : "tudo entregue"));
+      sec.appendChild(h);
+      const ul = el("ul", "wk");
+      for (const x of [...late, ...next].slice(0, 12)) {
+        const li = el("li"), right = x.done ? el("span", "pill ok", "entregue") : x.late ? el("span", "pill bad", "atrasada")
+          : x.exam ? el("span", "pill warn", prefs.grades ? need(x.exam) : "prova") : el("span");
+        const mid = el("span"); mid.style.minWidth = "0"; mid.style.overflow = "hidden";
+        mid.append(link((x.exam ? "Prova: " : "") + x.title, x.url), el("div", "c", x.course));
+        li.append(el("span", "d", dayLabel(x.date) + (x.due ? " " + hhmm(x.due) : "")), mid, right);
+        ul.appendChild(li);
+      }
+      sec.appendChild(late.length + next.length ? ul : el("div", "muted", "Nada para os próximos 7 dias."));
+      grid.appendChild(sec);
+    }
+    if (news) {
+      const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
+      const sec = el("div"), h = el("h3", null, "Avisos");
+      if (unread) h.appendChild(el("span", "pill warn", unread + (unread === 1 ? " não lido" : " não lidos")));
+      sec.appendChild(h);
+      const ul = el("ul", "wk");
+      for (const x of all.slice(0, 6)) {
+        const li = el("li", x.unread ? "unread" : null), mid = el("span"); mid.style.minWidth = "0"; mid.style.overflow = "hidden";
+        mid.append(link(x.title, x.url && x.url.startsWith(location.origin + "/") ? x.url : null), el("div", "c", String(x.course || "").split(" (")[0]));
+        li.append(el("span", "d", x.at ? dayLabel(C.localISO(new Date(x.at))) : ""), mid, el("span"));
+        ul.appendChild(li);
+      }
+      sec.appendChild(all.length ? ul : el("div", "muted", "Nenhum aviso nos últimos 60 dias."));
+      grid.appendChild(sec);
+    }
+  }
+
+  // Course pages: the next assessments of this course and the files download.
+  function coursePanel(courseId, a, cache, prefs) {
+    const c = prefs.grades ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
+    if (!c && !prefs.files) return;
+    const box = panelHost("qf-panel");
+    if (!box) return;
+    const top = el("div", "top"); top.appendChild(el("b", null, "Campus+"));
+    if (c) { const st = a.state(c); top.appendChild(el("span", "pill " + a.tone(st), a.label(st))); top.appendChild(el("span", "muted", "quanto falta pelas notas do Canvas, meta 7")); }
     box.appendChild(top);
     if (c) {
       const list = el("ul"), next = a.upcoming.filter(u => u.course.id === c.id).slice(0, 4);
       for (const u of next) {
-        const li = el("li"), d = days(u.item.date), inMax = u.item.inMax;
+        const li = el("li"), d = days(u.item.date);
         li.title = d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias";
         li.append(el("span", "d", dmy(u.item.date)), el("span", "n", u.item.name),
-          el("span", "q", u.req.impossible ? "não dá" : u.req.f <= 1e-9 ? "já garantido" : "precisa " + up(u.req.raw, inMax >= 5 ? 1 : 2) + (inMax === 10 ? "" : " de " + fmt(inMax, inMax >= 5 ? 1 : 2))));
+          el("span", "q", need(u)));
         list.appendChild(li);
       }
       if (next.length) box.appendChild(list); else box.appendChild(el("div", "muted", "Nada pela frente nesta matéria."));
     }
-    const acts = el("div", "acts");
-    const files = el("button", "primary", "Baixar arquivos da matéria"), status = el("span", "muted");
-    acts.appendChild(files);
-    if (c) { const open = el("button", null, "Abrir no Quanto falta"); open.addEventListener("click", () => window.open(SITE + "#canvas=" + b64url(JSON.stringify(Object.assign({ ext: VERSION }, cache.data))), "_blank", "noopener")); acts.appendChild(open); }
+    const acts = el("div", "acts"), status = el("span", "muted");
+    if (prefs.files) {
+      const files = el("button", "primary", "Baixar arquivos da matéria");
+      files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
+      acts.appendChild(files);
+    }
+    if (c) { const open = el("button", null, "Abrir no Campus+"); open.addEventListener("click", () => window.open(SITE + "#canvas=" + b64url(JSON.stringify(Object.assign({ ext: VERSION }, cache.data))), "_blank", "noopener")); acts.appendChild(open); }
     acts.appendChild(status); box.appendChild(acts);
-    files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
-    anchor.prepend(host);
   }
 
   async function courseFiles(id) {
@@ -172,13 +263,17 @@
   }
 
   async function run() {
+    const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
     let cache;
     try { cache = await load(false); } catch (e) { return; }   // logged out or Canvas down: stay quiet
     const a = analyse(cache);
     sendNext(a);
+    sendReminders(agenda(a, cache), prefs, cache);
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
-    if (m) coursePanel(m[1], a, cache);
+    if (m) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
+      dashPanel(a, cache, prefs);
+      if (!prefs.grades) return;
       decorateCards(a);
       let t = 0;
       new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); }).observe(document.body, { childList: true, subtree: true });
