@@ -1,4 +1,4 @@
-// Runs inside the student's Canvas tab (injected with chrome.scripting on click): same-origin, read-only GETs.
+// Reads the student's own Canvas data on the Canvas page (content script, or the bookmarklet): same-origin, read-only GETs.
 // Returns { v:1, courses:[{ name, assignments:[{ name, points, score, due, missing, submitted, online, stats }] }], announcements } for 2026/2 courses, or { error } (never rejects).
 async function collectCanvasGrades() {
   const get = async url => {

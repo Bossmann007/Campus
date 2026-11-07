@@ -5,7 +5,8 @@
 (() => {
   if (window.top !== window) return;
   const C = NotasCore, F = QFFiles, T = 7, TTL = 10 * 60 * 1000;
-  const SITE = "https://falta-quanto.vercel.app/app", VERSION = chrome.runtime.getManifest().version;
+  const VERSION = chrome.runtime.getManifest().version;
+  const APP = chrome.runtime.getURL ? chrome.runtime.getURL("app.html") : null;   // the full calculator; null in the bookmarklet
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
   const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -112,10 +113,32 @@
     }
   }
 
-  function b64url(s) {
-    const bytes = new TextEncoder().encode(s); let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  // The Campus+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons).
+  function campusPage() {
+    const cur = document.getElementById("cp-app");
+    if (location.hash !== "#campus" || !APP) { if (cur) cur.remove(); return; }
+    if (cur) return;
+    const nav = document.querySelector(".ic-app-header"), left = nav && nav.getBoundingClientRect ? Math.round(nav.getBoundingClientRect().width) : 0;
+    const box = el("div"); box.id = "cp-app";
+    box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:" + left + "px;z-index:9999;background:#fff";
+    const frame = el("iframe"); frame.src = APP; frame.title = "Campus+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
+    const close = el("button", null, "Fechar"); close.type = "button";
+    close.style.cssText = "position:absolute;bottom:16px;right:16px;font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:9px 14px;border-radius:999px;border:1px solid #d4d4d8;background:#fff;color:#18181b;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.12)";
+    close.addEventListener("click", closeCampus);
+    box.append(frame, close); document.body.appendChild(box);
+  }
+  function closeCampus() { history.replaceState(null, "", location.pathname + location.search); campusPage(); }
+  // "Campus+" in the Canvas left menu, after Painel.
+  function navItem() {
+    const menu = document.getElementById("menu");
+    if (!menu || !APP || document.getElementById("cp-nav")) return;
+    const li = el("li", "menu-item ic-app-header__menu-list-item"); li.id = "cp-nav";
+    const a = el("a", "ic-app-header__menu-list-link"); a.href = "#campus";
+    const icon = el("div", "menu-item-icon-container", "C+"); icon.setAttribute("aria-hidden", "true");
+    icon.style.cssText = "font:800 17px/26px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:-.5px";
+    a.append(icon, el("div", "menu-item__text", "Campus+")); li.appendChild(a);
+    const dash = document.getElementById("global_nav_dashboard_link"), after = dash && dash.closest ? dash.closest("li") : null;
+    menu.insertBefore(li, after ? after.nextSibling : null);
   }
 
   const CSS = `
@@ -173,7 +196,8 @@
     const box = panelHost("cp-dash");
     if (!box) return;
     const grid = el("div", "grid" + (week && news ? " two" : ""));
-    box.append(el("span", "brand", "Campus+"), grid);
+    const brand = el(APP ? "a" : "span", "brand", APP ? "Abrir Campus+ →" : "Campus+"); if (APP) brand.href = "#campus";
+    box.append(brand, grid);
     if (week) {
       const t = today(), end = addDays(7), list = agenda(a, cache);
       const late = list.filter(x => x.late && !x.done && x.date < t), next = list.filter(x => x.date >= t && x.date <= end);
@@ -237,7 +261,7 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
-    if (c) { const open = el("button", null, "Abrir no Campus+"); open.addEventListener("click", () => window.open(SITE + "#canvas=" + b64url(JSON.stringify(Object.assign({ ext: VERSION }, cache.data))), "_blank", "noopener")); acts.appendChild(open); }
+    if (c && APP) { const open = el("button", null, "Abrir no Campus+"); open.addEventListener("click", () => { location.hash = "campus"; }); acts.appendChild(open); }
     acts.appendChild(status); box.appendChild(acts);
   }
 
@@ -279,6 +303,7 @@
   }
 
   async function run() {
+    navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
     let cache;
     try { cache = await load(false); } catch (e) { return; }   // logged out or Canvas down: stay quiet

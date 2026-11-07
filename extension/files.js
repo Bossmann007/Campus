@@ -1,4 +1,4 @@
-// Where a Canvas file goes inside Downloads: PUCPR/<course>/<kind>/<name>. Kind rules follow Enzo's canvas_files.py
+// Where a Canvas file goes inside Downloads: PUCPR/<course>/<kind>/<name>. Kind rules follow the author's canvas_files.py
 // (first match wins); the extension cannot see the disk, so it always uses the canonical folder names.
 const QFFiles = (() => {
   const BLOCKED = new Set([".app", ".command", ".sh", ".bash", ".zsh", ".csh", ".exe", ".msi", ".dmg", ".pkg", ".bat", ".cmd", ".com",

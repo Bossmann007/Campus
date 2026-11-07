@@ -8,6 +8,9 @@ let n = 0; const ok = s => { n++; };
 // core.js is a copy of app.html's core block
 const core = fs.readFileSync(path.join(root, "app.html"), "utf8").match(/<script id="core">([\s\S]*?)<\/script>/)[1].replace(/^\n+|\n+$/g, "");
 assert.strictEqual(read("core.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), core, "extension/core.js is stale: run scripts/sync-ext-core"); ok();
+const ui = fs.readFileSync(path.join(root, "app.html"), "utf8").match(/<script id="ui">([\s\S]*?)<\/script>/)[1].replace(/^\n+|\n+$/g, "");
+assert.strictEqual(read("app-ui.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), ui, "extension/app-ui.js is stale: run scripts/sync-ext-core");
+assert(read("app.html").includes('<script src="core.js"></script>\n<script src="app-boot.js"></script>'), "extension/app.html loads the core, then the boot");
 const C = new Function(read("core.js") + "\nreturn NotasCore;")();
 assert.strictEqual(C.EXT_LATEST, JSON.parse(read("manifest.json")).version, "EXT_LATEST matches the manifest"); ok();
 
@@ -58,7 +61,7 @@ function fakeEl(tag) {
     append(...c) { c.forEach(x => { x.parent = this; }); this.kids.push(...c); }, appendChild(c) { this.append(c); return c; },
     prepend(c) { c.parent = this; this.kids.unshift(c); }, insertBefore(c, ref) { c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); },
     remove() { if (this.parent) this.parent.kids.splice(this.parent.kids.indexOf(this), 1); },
-    addEventListener(t, f) { this.listeners[t] = f; }, attachShadow() { this.shadow = fakeEl("#shadow"); return this.shadow; } };
+    addEventListener(t, f) { this.listeners[t] = f; }, setAttribute(k, v) { this[k] = v; }, attachShadow() { this.shadow = fakeEl("#shadow"); return this.shadow; } };
   return e;
 }
 const all = e => [e, ...(e.shadow ? all(e.shadow) : []), ...e.kids.flatMap(all)];
@@ -73,14 +76,17 @@ const PLANNER = [
   { plannable_type: "assignment", plannable_id: 3, plannable: { title: "Quiz feito" }, plannable_date: isoIn(2) + "T13:00:00Z", context_name: "Inglês - 2026 / 2º Sem", course_id: 77, html_url: "/courses/77/assignments/3", submissions: { submitted: true } },
   { plannable_type: "calendar_event", plannable_id: 5, plannable: { title: "Aula" }, plannable_date: isoIn(1) + "T11:00:00Z", context_name: BD, course_id: 42, html_url: "https://evil.example/e", submissions: false },
   { plannable_type: "announcement", plannable_id: 4, plannable: { title: "Aviso" }, plannable_date: isoIn(0) + "T13:00:00Z", context_name: BD, course_id: 42, submissions: false }];
-async function runContent(pathname, files, preStore) {
+async function runContent(pathname, files, preStore, opts = {}) {
   const header = fakeEl("div"), card = fakeEl("div"), anchor = fakeEl("div"), sent = [], store = Object.assign({}, preStore);
   anchor.prepend = function (c) { c.parent = this; this.kids.unshift(c); byId[c.id] = c; };
-  const byId = { content: anchor };
+  const menu = fakeEl("ul"), body = fakeEl("body"), winListeners = {}, alerts = [];
+  const byId = { content: anchor, menu };
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/42" } : header;
-  const doc = { createElement: fakeEl, body: {}, getElementById: id => byId[id] || null,
+  body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
+  menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
+  const doc = { createElement: fakeEl, body, getElementById: id => byId[id] || null, querySelector: () => null,
     querySelectorAll: sel => sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
-  const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
+  const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => ({ [k]: store[k] }), set: async o => Object.assign(store, o) } } };
   const fetch = async url => {
     if (url === "/api/v1/users/self") return page({ id: 5 });
@@ -96,13 +102,15 @@ async function runContent(pathname, files, preStore) {
     if (url === "/api/v1/courses/42/files/9") return page({ id: 9, display_name: "Aula 9.pdf", url: "https://pucpr.instructure.com/files/9/download?verifier=v", size: 5 });
     throw new Error("unexpected " + url);
   };
-  const env = { window: {}, location: { pathname, href: "https://pucpr.instructure.com" + pathname, origin: "https://pucpr.instructure.com" } };
+  const env = { window: { addEventListener: (t, f) => { winListeners[t] = f; } },
+    location: { pathname, search: "", hash: opts.hash || "", href: "https://pucpr.instructure.com" + pathname, origin: "https://pucpr.instructure.com", hostname: "pucpr.instructure.com" } };
   env.window.top = env.window;
-  const src = read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
-  new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", src)(env.window, env.location, doc, chrome, fetch,
-    class { observe() {} }, TextEncoder, btoa);
+  const history = { replaceState: (a, b, url) => { env.location.hash = ""; } };
+  const src = opts.src || read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
+  new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
+    class { observe() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener);
   await new Promise(r => setTimeout(r, 30));
-  return { header, anchor, sent, store };
+  return { header, anchor, sent, store, menu, body, env, winListeners, alerts };
 }
 (async () => {
   assert.strictEqual(await ask({ type: "download", items }, { id: "me", origin: "https://evil.example" }), "no reply", "messages from other origins are ignored");
@@ -213,7 +221,36 @@ async function runContent(pathname, files, preStore) {
   const auto = theme("auto", true), light = theme(undefined, true); await new Promise(r => setTimeout(r, 5));
   assert(auto.cls.has("cp-dark") && !light.cls.has("cp-dark"), "auto follows the system; default is the Canvas light theme"); ok();
 
+  // the Campus+ page: a left-menu item, and the calculator over Canvas on #campus
+  const camp = await runContent("/", null);
+  const item = camp.menu.kids.find(k => k.id === "cp-nav");
+  assert(item && all(item).some(e => e.href === "#campus") && /Campus\+/.test(text(item)), "Campus+ item in the Canvas left menu");
+  assert(all(camp.anchor).some(e => e.href === "#campus"), "the dashboard panel opens the Campus+ page");
+  assert(!camp.body.kids.some(k => k.id === "cp-app"), "closed until asked");
+  camp.env.location.hash = "#campus"; camp.winListeners.hashchange();
+  const page1 = camp.body.kids.find(k => k.id === "cp-app"), frame = page1 && all(page1).find(e => e.tag === "iframe");
+  assert(frame && frame.src === "chrome-extension://me/app.html", "#campus shows the extension's calculator page");
+  await all(page1).find(e => e.textContent === "Fechar").listeners.click();
+  assert(!camp.body.kids.some(k => k.id === "cp-app") && camp.env.location.hash === "", "Fechar closes it and clears the address");
+  const direct = await runContent("/courses/42", [], {}, { hash: "#campus" });
+  assert(direct.body.kids.some(k => k.id === "cp-app"), "a link straight to #campus opens it");
+  assert(all(direct.anchor).some(e => e.textContent === "Abrir no Campus+"), "course panel opens the Campus+ page"); ok();
+
+  // the bookmarklet on the site: the extension's page scripts, bundled with an in-memory chrome stand-in
+  const lit = fs.readFileSync(path.join(root, "index.html"), "utf8").match(/\/\*CP-BM\*\/("(?:[^"\\]|\\.)*")\/\*CP-BM\*\//);
+  assert(lit, "bookmarklet source on index.html"); const bm = JSON.parse(lit[1]);
+  let at = 0; for (const f of ["prefs.js", "collect.js", "core.js", "files.js", "content.js"]) { const i = bm.indexOf(read(f), at); assert(i > at, f + " bundled as is, in order: run scripts/sync-bookmarklet"); at = i; }
+  new Function(bm);   // valid code
+  const bmDash = await runContent("/", null, {}, { src: bm });
+  assert.match(text(bmDash.anchor), /Esta semana/); assert.match(text(bmDash.anchor), /Prova adiada/);
+  assert(!all(bmDash.anchor).some(e => e.href === "#campus") && !bmDash.menu.kids.length, "no Campus+ page without the extension");
+  const bmCourse = await runContent("/courses/42", [], {}, { src: bm });
+  assert.match(text(bmCourse.anchor), /quanto falta/);
+  assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no/.test(e.textContent)), "no downloads and no calculator page in the bookmarklet");
+  const bmOther = await runContent("/profile", null, {}, { src: bm });
+  assert.strictEqual(bmOther.alerts.length, 1, "elsewhere it asks for the dashboard or a course"); ok();
+
   const none = await runContent("/courses/42/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week and announcements, modules off, theme)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week and announcements, modules off, theme, Campus+ page, bookmarklet)");
 })().catch(e => { console.error(e); process.exit(1); });

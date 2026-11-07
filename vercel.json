@@ -23,10 +23,16 @@
     }
   ],
   "cleanUrls": true,
-  "rewrites": [
+  "redirects": [
+    {
+      "source": "/app",
+      "destination": "/",
+      "permanent": false
+    },
     {
       "source": "/calendario",
-      "destination": "/app"
+      "destination": "/",
+      "permanent": false
     }
   ]
 }
