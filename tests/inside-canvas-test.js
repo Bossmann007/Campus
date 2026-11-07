@@ -173,7 +173,7 @@ async function runContent(pathname, files, preStore) {
   const dash2 = await runContent("/", null), wk = dash2.anchor.kids.find(k => k.id === "cp-dash");
   assert(wk && wk.className === "cp-host", "dashboard panel, kept as is by the dark theme");
   const wt = text(wk);
-  assert.match(wt, /Esta semana/); assert.match(wt, /Lista 3/); assert.match(wt, /amanhã/);
+  assert.match(wt, /Esta semana/); assert.match(wt, /Lista 3/); assert.match(wt, /Amanhã/, "the week grouped by day");
   assert.match(wt, /Relatório \| [^|]*\| atrasada/, "missing deadline of the last days shown as late"); assert.match(wt, /1 atrasada/);
   assert.match(wt, /Quiz feito \| Inglês \| entregue/, "handed-in work marked, other courses by their short name");
   assert(!/\| Aviso \|/.test(wt), "planner announcements stay out of the week");

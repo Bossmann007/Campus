@@ -9,7 +9,7 @@ function b64url(s) {   // chunked: a spread of a long export would overflow the 
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 let exported = "";
-$("ver").textContent = "v" + chrome.runtime.getManifest().version + " ·";
+$("ver").textContent = "v" + chrome.runtime.getManifest().version;
 
 chrome.storage.local.get("prefs").then(({ prefs }) => {
   let p = cpPrefs(prefs);
