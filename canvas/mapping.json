@@ -186,8 +186,8 @@
             "Aula 7 - TAREFA SOMATIVA",
             "Avaliação somativa -  Prova"
           ],
-          "factor": 0.23,
-          "note": "RA1 = soma das três notas (0-10) x 2,3 em pontos de 70; aqui x 0,23 em pontos de 7 (informado por um aluno, 2026-11-04)"
+          "factor": 0.2333333333333333,
+          "note": "RA1 = soma das três notas (0-10) x 2,3 em pontos de 70; aqui x 7/30 em pontos de 7, para 10 nas três dar 7 (confirmado pelo aluno, 2026-11-05)"
         },
         "ra2": {
           "kind": "single",
