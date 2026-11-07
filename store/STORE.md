@@ -36,8 +36,12 @@ Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure.
 ## Práticas de privacidade (aba Privacy)
 
 - **Finalidade única:** importar as notas do próprio aluno no Canvas da PUCPR para calcular quanto falta para passar.
-- **activeTab:** ler a aba do Canvas só quando o usuário clica no botão da extensão.
+- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR quanto falta em cada matéria e oferecer o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
+- **activeTab:** ler a aba do Canvas quando o usuário clica no botão da extensão.
 - **scripting:** executar, nessa aba e nesse momento, a leitura das notas pela API do Canvas com a sessão do próprio usuário.
+- **storage:** guardar no dispositivo a última leitura, a data da próxima prova (número no ícone) e quais arquivos já foram baixados.
+- **alarms:** atualizar de hora em hora o número de dias até a próxima prova no ícone (não lê nada).
+- **downloads:** salvar, a pedido do usuário, os arquivos das matérias em Downloads/PUCPR/<matéria>/<tipo>; só endereços do Canvas da PUCPR.
 - **Código remoto:** não. Todo o código está no pacote.
 - **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma e títulos de avisos são conteúdo lido do site do Canvas; marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.

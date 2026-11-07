@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 ./scripts/verify >/dev/null
 v=$(python3 -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
 mkdir -p dist && out="dist/quanto-falta-extension-$v.zip" && rm -f "$out"
-(cd extension && zip -q -X -r "../$out" manifest.json popup.html popup.css popup.js collect.js icons)
+(cd extension && zip -q -X -r "../$out" manifest.json popup.html popup.css popup.js collect.js core.js files.js content.js background.js icons)
 unzip -l "$out" | tail -n +4 | sed '$d' | sed '$d'
 cp "$out" dist/quanto-falta-extension.zip   # stable name for the site download link (releases/latest/download/...)
 echo "built $out and dist/quanto-falta-extension.zip"

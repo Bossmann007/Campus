@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Quanto falta · PUCPR",
-  "version": "0.6.0",
-  "description": "Lê as suas notas no Canvas da PUCPR e mostra quanto falta para passar em cada matéria.",
+  "version": "0.7.0",
+  "description": "Mostra no Canvas da PUCPR quanto falta para passar em cada matéria, baixa os arquivos das matérias e leva as notas para a calculadora.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Quanto falta",
@@ -13,7 +13,30 @@
   },
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage",
+    "downloads",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://pucpr.instructure.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pucpr.instructure.com/*"
+      ],
+      "js": [
+        "collect.js",
+        "core.js",
+        "files.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"

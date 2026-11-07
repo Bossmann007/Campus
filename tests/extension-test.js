@@ -3,11 +3,15 @@ const assert = require("assert"), fs = require("fs"), path = require("path");
 const dir = path.join(__dirname, "..", "extension");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.strictEqual(manifest.manifest_version, 3);
-assert.deepStrictEqual(manifest.permissions, ["activeTab", "scripting"], "no broad permissions");
-assert(!manifest.host_permissions, "no host permissions");
+assert.deepStrictEqual(manifest.permissions, ["activeTab", "scripting", "storage", "downloads", "alarms"], "no broad permissions");
+assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*"], "host access only to the PUCPR Canvas");
+assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"]], "page script only on the PUCPR Canvas");
+const pack = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
+for (const f of [...manifest.content_scripts[0].js, manifest.background.service_worker, "popup.js", "popup.html", "popup.css"]) {
+  assert(fs.existsSync(path.join(dir, f)), "file " + f); assert(new RegExp("\\b" + f.replace(".", "\\.") + "\\b").test(pack), "packaged: " + f); }
 for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(dir, f)), "icon " + f);
 const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
-assert(/activeTab/.test(priv) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists permissions and storage, no scripts");
+assert(["activeTab", "scripting", "storage", "downloads", "alarms", "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
 global.location = { href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };
@@ -63,5 +67,5 @@ const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLine
   assert.deepStrictEqual(await collect(), { error: "o Canvas respondeu 401" });
   assert(page2.includes('href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
   assert(/cp "\$out" dist\/quanto-falta-extension\.zip/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "package script writes the stable name");
-  console.log("extension ok: MV3, activeTab+scripting only, collect + pagination, url-safe hand-off decoded by index.html's own code, " + big.length + " chars, off-origin and 401 returned as errors; bookmarklet uses the same collector and hand-off");
+  console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, url-safe hand-off decoded by index.html's own code, " + big.length + " chars, off-origin and 401 returned as errors; bookmarklet uses the same collector and hand-off");
 })().catch(e => { console.error(e); process.exit(1); });

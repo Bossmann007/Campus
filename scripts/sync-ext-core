@@ -1,0 +1,10 @@
+#!/bin/sh
+# Copy app.html's <script id="core"> into extension/core.js (the extension computes "quanto falta" with the same code).
+set -eu
+cd "$(dirname "$0")/.."
+python3 - <<'PY'
+import re
+core = re.search(r'<script id="core">([\s\S]*?)</script>', open("app.html", encoding="utf-8").read()).group(1)
+open("extension/core.js", "w", encoding="utf-8").write("// Generated from app.html <script id=\"core\"> by scripts/sync-ext-core; do not edit by hand.\n" + core.strip("\n") + "\n")
+PY
+echo "extension/core.js updated"

@@ -16,6 +16,8 @@ Calculadora "Quanto falta pra passar" for PUCPR 2026/2: two static pages (`index
 - `scripts/verify`: exit 0 = core tests pass and the UI script parses.
 - `scripts/snapshot`: copy `app.html` into `old/` before any redesign.
 - `extension/`: Chrome MV3 extension (popup + `collect.js`) that reads the student's own Canvas grades and opens the page with them. Load unpacked from `chrome://extensions` for testing.
+  - Since 0.7 it also runs on `pucpr.instructure.com` pages (`content.js`): a status pill on each dashboard card, a panel on course pages with the next assessments and what each needs, a files download into `Downloads/PUCPR/<course>/<kind>/` (`files.js`, rules from the PUCPR bot's `canvas_files.py`), and the days to the next exam on the icon (`background.js`).
+  - `extension/core.js` is generated from `app.html`'s core block by `scripts/sync-ext-core`; `tests/inside-canvas-test.js` fails when it is stale.
 - `tools/canvas-export.py`: optional path for students who prefer their own Canvas API token; runs locally, read-only, prints the same JSON as the extension for the paste box. Stdlib only. Token from `CANVAS_TOKEN`, a `.env` (copy `tools/.env.example`; `.env` is git-ignored) or a hidden prompt.
 - `scripts/package-extension`: builds the release zip; `EXT_LATEST` in `app.html` must match `extension/manifest.json` (tested).
 - `video/scene.html` + `scripts/render-video`: render `media/demo.mp4` frame by frame with headless virtual time (needs ffmpeg); the second half is the real `app.html` importing made-up grades.
