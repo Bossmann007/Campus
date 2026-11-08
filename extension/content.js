@@ -113,19 +113,21 @@
     }
   }
 
-  // The Campus+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons).
+  // The Campus+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
+  // #campus=<subject id> (course page button) opens it on that subject.
   function campusPage() {
-    const cur = document.getElementById("cp-app");
-    if (location.hash !== "#campus" || !APP) { if (cur) cur.remove(); return; }
-    if (cur) return;
+    const cur = document.getElementById("cp-app"), m = /^#campus(?:=([a-z0-9]{1,20}))?$/.exec(location.hash);
+    if (!m || !APP) { if (cur) cur.remove(); return; }
+    const src = APP + (m[1] ? "?m=" + m[1] : "");
+    if (cur) { if (cur.cpFrame && cur.cpFrame.src !== src) cur.cpFrame.src = src; return; }
     const nav = document.querySelector(".ic-app-header"), left = nav && nav.getBoundingClientRect ? Math.round(nav.getBoundingClientRect().width) : 0;
     const box = el("div"); box.id = "cp-app";
     box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:" + left + "px;z-index:9999;background:#FBF7EF";
-    const frame = el("iframe"); frame.src = APP; frame.title = "Campus+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
+    const frame = el("iframe"); frame.src = src; frame.title = "Campus+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
     const close = el("button", null, "Fechar"); close.type = "button";
     close.style.cssText = "position:absolute;bottom:16px;right:16px;font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:10px 16px;border-radius:10px;border:1px solid #1D2433;background:#1D2433;color:#FBF7EF;cursor:pointer;box-shadow:0 2px 0 #E2482B,0 8px 20px -8px rgba(29,36,51,.5)";
     close.addEventListener("click", closeCampus);
-    box.append(frame, close); document.body.appendChild(box);
+    box.cpFrame = frame; box.append(frame, close); document.body.appendChild(box);
   }
   function closeCampus() { history.replaceState(null, "", location.pathname + location.search); campusPage(); }
   // "Campus+" in the Canvas left menu, after Painel.
@@ -370,7 +372,7 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
-    if (c && APP) { const open = el("button", null, "Abrir no Campus+"); open.addEventListener("click", () => { location.hash = "campus"; }); acts.appendChild(open); }
+    if (c && APP) { const open = el("button", null, "Abrir no Campus+"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
     acts.appendChild(status); box.appendChild(acts);
   }
 

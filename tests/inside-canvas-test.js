@@ -60,7 +60,7 @@ function fakeEl(tag) {
   const e = { tag, kids: [], style: {}, dataset: {}, className: "", textContent: "", listeners: {}, parent: null,
     append(...c) { c.forEach(x => { x.parent = this; }); this.kids.push(...c); }, appendChild(c) { this.append(c); return c; },
     prepend(c) { c.parent = this; this.kids.unshift(c); }, insertBefore(c, ref) { c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); },
-    remove() { if (this.parent) this.parent.kids.splice(this.parent.kids.indexOf(this), 1); },
+    remove() { if (this.parent) this.parent.kids.splice(this.parent.kids.indexOf(this), 1); this.parent = null; this.removed = true; },
     addEventListener(t, f) { this.listeners[t] = f; }, setAttribute(k, v) { this[k] = v; }, attachShadow() { this.shadow = fakeEl("#shadow"); return this.shadow; } };
   return e;
 }
@@ -84,7 +84,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/42" } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
-  const doc = { createElement: fakeEl, body, getElementById: id => byId[id] || null, querySelector: () => null,
+  const doc = { createElement: fakeEl, body, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null, querySelector: () => null,
     querySelectorAll: sel => sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => ({ [k]: store[k] }), set: async o => Object.assign(store, o) } } };
@@ -267,7 +267,16 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!camp.body.kids.some(k => k.id === "cp-app") && camp.env.location.hash === "", "Fechar closes it and clears the address");
   const direct = await runContent("/courses/42", [], {}, { hash: "#campus" });
   assert(direct.body.kids.some(k => k.id === "cp-app"), "a link straight to #campus opens it");
-  assert(all(direct.anchor).some(e => e.textContent === "Abrir no Campus+"), "course panel opens the Campus+ page"); ok();
+  const openBtn = all(direct.anchor).find(e => e.textContent === "Abrir no Campus+");
+  assert(openBtn, "course panel opens the Campus+ page");
+  direct.env.location.hash = ""; direct.winListeners.hashchange();
+  await openBtn.listeners.click();
+  assert(/^campus=[a-z0-9]+$/.test(direct.env.location.hash), "the course button asks for that subject: " + direct.env.location.hash);
+  direct.env.location.hash = "#" + direct.env.location.hash; direct.winListeners.hashchange();
+  const subj = all(direct.body.kids.find(k => k.id === "cp-app")).find(e => e.tag === "iframe");
+  assert(subj && /app\.html\?m=[a-z0-9]+$/.test(subj.src), "#campus=<id> opens the calculator on that subject: " + (subj && subj.src));
+  direct.env.location.hash = "#campus=../x"; direct.winListeners.hashchange();
+  assert(!direct.body.kids.some(k => k.id === "cp-app"), "an odd subject id does not open anything"); ok();
 
   // the bookmarklet on the site: the extension's page scripts, bundled with an in-memory chrome stand-in
   const lit = fs.readFileSync(path.join(root, "index.html"), "utf8").match(/\/\*CP-BM\*\/("(?:[^"\\]|\\.)*")\/\*CP-BM\*\//);

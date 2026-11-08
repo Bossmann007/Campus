@@ -102,6 +102,14 @@
     if (cal === CAL) return; CAL = cal; applyView(); calc(); swap($(CAL ? "calendario" : "materias")); scrollTo({ top:0, behavior:"auto" });
     if (push) history.pushState(null, "", cal ? "?view=calendario" : location.pathname);
   }
+  // ?m=<subject id> (the course page button in Canvas) opens that subject's card and scrolls to it.
+  function focusSubject() {
+    const id = new URLSearchParams(location.search).get("m"), card = id && /^[a-z0-9]+$/.test(id) && $("card-" + id);
+    if (!card) return;
+    if (CAL) setView(false, false);
+    if (!card.classList.contains("open")) card.setOpen(true);
+    card.scrollIntoView({ block:"start", behavior:"auto" }); card.classList.add("focus"); setTimeout(() => card.classList.remove("focus"), 1600);
+  }
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
     const main = $("cards");
@@ -352,7 +360,7 @@
     // One tool run: the student's request, the steps with real counts, the result and an optional action.
     api.run = async ({ ask, title, doneTitle, steps, text, lines, action, scroll }) => {
       const me = ++run, alive = () => me === run; busy = true; used = true; document.body.classList.add("ran"); tag.textContent = "ao vivo";
-      main.textContent = ""; if (scroll) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
+      main.textContent = ""; if (scroll && w.offsetParent) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
       bubble("me", ask); await wait(300); if (!alive()) return;
       const card = stepsCard(title); card.set(0, steps.length, true); main.appendChild(card);
       const t0 = performance.now();
@@ -680,5 +688,5 @@
       }
     }
   }
-  build(); buildImport(); calc();
+  build(); buildImport(); calc(); focusSubject();
 })();
