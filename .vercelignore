@@ -1,8 +1,11 @@
 *
 !index.html
-!app.html
 !media/
 !media/demo.mp4
 !media/demo-poster.png
 !privacidade.html
 !vercel.json
+!fonts/
+!fonts/fraunces-latin-500-normal.woff2
+!fonts/fraunces-latin-400-italic.woff2
+!fonts/OFL.txt

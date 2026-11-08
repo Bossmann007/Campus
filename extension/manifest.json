@@ -12,8 +12,6 @@
     }
   },
   "permissions": [
-    "activeTab",
-    "scripting",
     "storage",
     "downloads",
     "alarms",
@@ -58,5 +56,15 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "homepage_url": "https://falta-quanto.vercel.app/"
+  "homepage_url": "https://falta-quanto.vercel.app/",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "app.html"
+      ],
+      "matches": [
+        "https://pucpr.instructure.com/*"
+      ]
+    }
+  ]
 }

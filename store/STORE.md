@@ -30,7 +30,7 @@ Dentro do Canvas, sem configurar nada:
 
 Cada parte pode ser desligada no botão da extensão.
 
-No botão da extensão, "Importar notas do Canvas" leva as notas para o site do Campus+, que mostra:
+No item Campus+ do menu lateral do Canvas, a calculadora completa mostra:
 
 - quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino;
 - o mínimo em cada prova se você tirar nota cheia no resto;
@@ -48,9 +48,7 @@ Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure.
 ## Práticas de privacidade (aba Privacy)
 
 - **Finalidade única:** melhorar o Canvas da PUCPR para o próprio aluno: organizar prazos, avisos, notas e arquivos das matérias dele.
-- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR a semana, os avisos, quanto falta em cada matéria, o tema escuro e o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
-- **activeTab:** ler a aba do Canvas quando o usuário clica no botão da extensão.
-- **scripting:** executar, nessa aba e nesse momento, a leitura das notas pela API do Canvas com a sessão do próprio usuário.
+- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR a semana, os avisos, quanto falta em cada matéria, a calculadora completa (página da própria extensão, a única exposta ao Canvas), o tema escuro e o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
 - **storage:** guardar no dispositivo as escolhas do usuário, os lembretes marcados, a última leitura, a data da próxima prova (número no ícone) e quais arquivos já foram baixados.
 - **alarms:** atualizar de hora em hora o número de dias até a próxima prova no ícone e disparar os lembretes na hora marcada (não lê nada).
 - **notifications:** mostrar os lembretes de entregas e provas que o usuário ligou; o texto é gerado no dispositivo.

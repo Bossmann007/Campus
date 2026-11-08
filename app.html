@@ -3,35 +3,44 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; form-action 'none'; base-uri 'none'">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2230%22%20height%3D%2230%22%20rx%3D%229%22%20fill%3D%22%23202020%22/%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%227.2%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223.2%22/%3E%3Cpath%20d%3D%22m17.2%2018.6%203.3%203.4%206-7.2%22%20fill%3D%22none%22%20stroke%3D%22%233fd07f%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; form-action 'none'; base-uri 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%3E%3Crect%20x=%221%22%20y=%221%22%20width=%2230%22%20height=%2230%22%20rx=%227%22%20fill=%22%231D2433%22/%3E%3Cpath%20fill=%22%23FBF7EF%22%20d=%22M18.71%2019.77Q18.7%2020.58%2018.26%2021.39Q17.82%2022.21%2017%2022.89Q16.17%2023.58%2014.99%2023.99Q13.81%2024.4%2012.3%2024.4Q9.84%2024.4%208.04%2023.34Q6.25%2022.28%205.28%2020.4Q4.3%2018.52%204.3%2016.09Q4.3%2014.24%204.88%2012.7Q5.45%2011.16%206.5%2010.01Q7.54%208.87%208.95%208.23Q10.35%207.6%2012%207.6Q13.15%207.6%2013.86%207.82Q14.58%208.05%2014.99%208.27Q15.4%208.5%2015.64%208.5Q15.93%208.5%2016.08%208.3Q16.23%208.1%2016.39%207.91Q16.55%207.71%2016.83%207.71Q17.04%207.71%2017.17%207.85Q17.31%207.98%2017.4%208.28L18.6%2012.22Q18.68%2012.48%2018.55%2012.69Q18.42%2012.9%2018.16%2012.95Q17.88%2013.01%2017.66%2012.9Q17.45%2012.79%2017.32%2012.52Q16.71%2011.15%2015.96%2010.34Q15.21%209.54%2014.34%209.19Q13.48%208.83%2012.47%208.83Q11.46%208.83%2010.61%209.29Q9.77%209.76%209.15%2010.61Q8.53%2011.47%208.2%2012.67Q7.86%2013.87%207.86%2015.36Q7.86%2017.65%208.57%2019.25Q9.29%2020.84%2010.52%2021.66Q11.75%2022.48%2013.34%2022.48Q14.86%2022.48%2015.98%2021.76Q17.11%2021.03%2017.73%2019.71Q17.86%2019.45%2018.02%2019.36Q18.18%2019.28%2018.37%2019.31Q18.54%2019.33%2018.63%2019.45Q18.71%2019.57%2018.71%2019.77Z%22/%3E%3Cpath%20d=%22M24.5%209v6.6M21.2%2012.3h6.6%22%20fill=%22none%22%20stroke=%22%23E2482B%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20transform=%22rotate%28-6%2024.5%2012.3%29%22/%3E%3C/svg%3E">
 <meta name="description" content="Calculadora de notas da PUCPR 2026/2: quanto falta em cada prova para passar.">
 <title>Minhas matérias · Campus+</title>
 <style>
-  /* Radix Colors 3.0 scales (gray, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
-  :root { --bg:#f9f9f9; --surface:#fff; --sunk:#f0f0f0; --line:#e8e8e8; --line2:#d9d9d9; --txt:#202020; --muted:#646464; --faint:#838383; --field:#bbbbbb; --brand:#9be8be; --logo-check:#3fd07f; --warn-ink:#4f3422; --bad-ink:#5c271f; --acc-ink:#113264; --ok-ink:#203c25;
-          --acc:#0d74ce; --acc-fill:#0090ff; --acc-soft:#e6f4fe; --ok:#2a7e3b; --ok-soft:#e9f6e9; --warn:#ab6400; --warn-soft:#fff7c2; --bad:#d13415; --bad-soft:#feebe7;
-          --r:12px; --shadow:0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.02);
-          --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* Campus+ identity "Caderno": paper and ink, coral accent; Fraunces (OFL, fonts/OFL.txt) for headings and big numbers. Names kept from the old scale. */
+  @font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family:"Fraunces"; font-style:italic; font-weight:400; font-display:swap; src:url(fonts/fraunces-latin-400-italic.woff2) format("woff2"); }
+  :root { --bg:#FBF7EF; --surface:#fff; --sunk:#F4EEE3; --line:#ECE4D3; --line2:#DCD1BC; --txt:#1D2433; --muted:#5F6675; --faint:#8C909A; --field:#CFC3AC; --brand:#E2482B; --logo-check:#E2482B; --warn-ink:#744405; --bad-ink:#912713; --acc-ink:#912713; --ok-ink:#1F5C42;
+          --acc:#C03A1F; --acc-fill:#E2482B; --acc-soft:#FFE6DF; --ok:#2F7D5B; --ok-soft:#E2F1E9; --warn:#A8650F; --warn-soft:#FBEFD6; --bad:#C2361F; --bad-soft:#FCE4DD;
+          --coral:#E2482B; --logo-tile:#1D2433; --logo-c:#FBF7EF;
+          --r:12px; --shadow:0 1px 0 rgba(29,36,51,.03), 0 1px 2px rgba(29,36,51,.05);
+          --serif:"Fraunces","Iowan Old Style","New York",Georgia,serif;
+          --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
           --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace; color-scheme:light; }
   @media (prefers-color-scheme:dark) {
-    :root { --bg:#191919; --surface:#222222; --sunk:#2a2a2a; --line:#313131; --line2:#484848; --txt:#eeeeee; --muted:#b4b4b4; --faint:#7b7b7b; --field:#606060; --brand:#9be8be; --logo-check:#2fb36b; --warn-ink:#ffca16; --bad-ink:#ff977d; --acc-ink:#70b8ff; --ok-ink:#71d083;
-            --acc:#70b8ff; --acc-fill:#0090ff; --acc-soft:#0d2847; --ok:#71d083; --ok-soft:#1b2a1e; --warn:#ffca16; --warn-soft:#302008;
-            --bad:#ff977d; --bad-soft:#391714; --shadow:none; color-scheme:dark; }
+    :root { --bg:#141925; --surface:#1B2130; --sunk:#222938; --line:#2A3242; --line2:#394256; --txt:#F3EDE1; --muted:#A9AFBC; --faint:#7A8292; --field:#4A5468; --brand:#F0603F; --logo-check:#F0603F; --warn-ink:#F0C67E; --bad-ink:#FFA28C; --acc-ink:#FFA28C; --ok-ink:#8FD8B3;
+            --acc:#FF8D72; --acc-fill:#F0603F; --acc-soft:#3B2220; --ok:#6CC59A; --ok-soft:#173229; --warn:#E6B15C; --warn-soft:#33291A;
+            --bad:#FF876C; --bad-soft:#3A1F1D; --coral:#F0603F; --logo-tile:#F3EDE1; --logo-c:#1D2433; --shadow:none; color-scheme:dark; }
   }
+  .logo .lt { fill:var(--logo-tile); } .logo .lc { fill:var(--logo-c); } .logo .lp { fill:none; stroke:var(--coral); stroke-width:2.4; stroke-linecap:round; }
+  h1, .bhead h2, .focus .t, .focus .need .v, .ring b, .figs .v, .fbform h2, .flow h2, .brand b { font-family:var(--serif); font-weight:500; }
+  #h1b { font-style:italic; font-weight:400; color:var(--muted); }
+  .bhead h2 { font-size:21px !important; letter-spacing:-.02em !important; }
+  ::selection { background:#FFD5C7; color:#1D2433; }
   * { box-sizing:border-box; }
   html { scroll-behavior:smooth; scroll-padding-top:72px; }
-  body { margin:0; font-family:var(--sans); background:var(--bg); color:var(--txt); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  body { margin:0; font-variant-numeric:tabular-nums; font-family:var(--sans); background:var(--bg); color:var(--txt); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
   a { color:inherit; text-decoration:none; }
   .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
   .num { font-variant-numeric:tabular-nums; }
 
   .top { position:sticky; top:12px; z-index:5; margin:12px auto 0; max-width:1032px; padding:0 12px; }
-  .top .wrap { display:flex; align-items:center; gap:16px; height:52px; padding:0 8px 0 16px; border-radius:999px;
-               background:color-mix(in srgb, var(--surface) 82%, transparent); border:1px solid var(--line); box-shadow:0 4px 16px rgba(0,0,0,.06);
+  .top .wrap { display:flex; align-items:center; gap:16px; height:52px; padding:0 8px 0 14px; border-radius:14px;
+               background:color-mix(in srgb, var(--surface) 82%, transparent); border:1px solid var(--line); box-shadow:0 6px 20px -10px rgba(29,36,51,.18);
                -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
   .sem { color:var(--muted); font-size:13px; padding-left:12px; margin-left:4px; border-left:1px solid var(--line); }
-  .brand { display:flex; align-items:center; gap:8px; font-weight:650; letter-spacing:-.01em; }
+  .brand { display:flex; align-items:center; gap:8px; font-size:17px; letter-spacing:-.02em; }
   .logo { flex-shrink:0; }
   .top .spacer { flex:1; }
   .nav { display:flex; gap:2px; margin-left:8px; }
@@ -76,7 +85,7 @@
   .fbform p { margin:0; font-size:13.5px; } .fbform .fine { font-size:12.5px; }
   .fbform textarea { font-family:var(--sans); font-size:14px; }
   button, .btn { font:inherit; font-size:13px; font-weight:500; color:var(--txt); background:var(--surface); border:1px solid var(--line);
-                 border-radius:999px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
+                 border-radius:10px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
   button:active, .btn:active { transform:scale(.97); }
   @media (hover:hover) and (pointer:fine) { button:hover { border-color:var(--line2); background:var(--sunk); } }
   .linkbtn[aria-pressed="true"] { color:var(--acc); }
@@ -90,9 +99,6 @@
   input.bad { border-color:var(--bad); box-shadow:0 0 0 3px var(--bad-soft); }
 
   .hero { padding:72px 0 8px; text-align:center; position:relative; isolation:isolate; }
-  .hero::before { content:""; position:absolute; z-index:-1; inset:-24px 0 0; pointer-events:none;
-                  background-image:radial-gradient(var(--line2) 1px, transparent 1px); background-size:22px 22px;
-                  -webkit-mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); }
   .hero .lead { margin:0 auto; }
   .hero details.how { margin-left:auto; margin-right:auto; }
   .hero details.how ul { text-align:left; display:inline-block; }
@@ -108,6 +114,20 @@
   .feat .ico { width:36px; height:36px; display:grid; place-items:center; border-radius:8px; background:var(--sunk); border:1px solid var(--line); color:var(--txt); }
   .feat h3 { margin:14px 0 4px; font-size:14.5px; font-weight:600; letter-spacing:-.01em; }
   .feat p { margin:0; color:var(--muted); font-size:13.5px; }
+  .kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+  .kpi { position:relative; display:flex; flex-direction:column; gap:2px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:14px 16px 16px; min-width:0; }
+  .kpi .k { color:var(--muted); font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+  .kpi .v { font-family:var(--serif); font-weight:500; font-size:34px; line-height:1.1; letter-spacing:-.03em; }
+  .kpi .v.need { color:var(--coral); } .kpi .v.need.ok { color:var(--ok); }
+  .kpi .s { color:var(--muted); font-size:12.5px; margin-top:auto; padding-top:4px; }
+  .meter { position:relative; height:8px; margin-top:14px; border-radius:99px; background:var(--sunk); }
+  .meter i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--txt); transition:width .28s cubic-bezier(.23,1,.32,1); }
+  .meter b { position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); }
+  .trk { display:flex; gap:2px; height:20px; margin-top:8px; }
+  .trk i { flex:1; min-width:3px; border-radius:3px; background:var(--line); position:relative; }
+  .trk i.ok { background:var(--ok); } .trk i.late { background:var(--coral); }
+  @media (hover:hover) and (pointer:fine) { .trk i:hover { outline:2px solid var(--txt); outline-offset:1px; } }
+  @media (max-width:820px) { .kpis { grid-template-columns:minmax(0,1fr); } .kpi .v { font-size:30px; } }
   .tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
   .tile { display:grid; grid-template-columns:64px minmax(0,1fr); gap:14px; align-items:center; text-align:left; width:100%;
           background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:16px; font-size:14px; }
@@ -135,17 +155,17 @@
   .hero.mine .focus { max-width:680px; margin:28px auto 0; text-align:left; }
   .more { display:block; width:100%; border:0; border-top:1px solid var(--line); border-radius:0; box-shadow:none; padding:10px; color:var(--muted); }
   .cta { display:flex; gap:10px; margin-top:26px; flex-wrap:wrap; justify-content:center; }
-  .btn { display:inline-flex; align-items:center; padding:10px 20px; font-size:14px; border-radius:999px; }
+  .btn { display:inline-flex; align-items:center; padding:10px 18px; font-size:14px; border-radius:11px; }
   .btn:hover { border-color:var(--line2); background:var(--sunk); }
   .btn.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); }
-  .btn.primary:hover { opacity:.88; background:var(--txt); }
+  .btn.primary:hover { background:var(--txt); border-color:var(--txt); box-shadow:0 2px 0 var(--coral); }
   .seg { display:inline-flex; background:var(--sunk); border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; }
   .seg button { border:0; box-shadow:none; background:transparent; color:var(--muted); padding:5px 12px; border-radius:999px; font-size:12.5px; }
   .seg button:hover { background:transparent; color:var(--txt); }
   .seg button .c { color:var(--faint); margin-left:5px; font-variant-numeric:tabular-nums; }
   .seg button[aria-pressed="true"] { background:var(--surface); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.08); }
   .hint.below { margin:-4px 0 12px; display:block; color:var(--muted); font-size:13px; }
-  h1 { font-size:clamp(38px,6.4vw,64px); line-height:1.02; letter-spacing:-.04em; font-weight:700; margin:0 0 16px; }
+  h1 { font-size:clamp(40px,6.4vw,68px); line-height:1; letter-spacing:-.04em; margin:0 0 16px; }
   .lead { color:var(--muted); font-size:16px; max-width:60ch; margin:0; }
   details.how { margin-top:14px; max-width:680px; }
   details.how summary, .exthow summary, .pastebox summary { cursor:pointer; color:var(--muted); font-size:13px; font-weight:500; }
@@ -207,6 +227,8 @@
   .card:first-child { border-top:0; }
   @media (hover:hover) and (pointer:fine) { .chead:hover { background:var(--sunk); } }
   .card.open .chead { background:var(--sunk); }
+  .card.focus { box-shadow:0 0 0 2px var(--acc, #E2482B); transition:box-shadow .3s; }
+  @media (prefers-reduced-motion:reduce) { .card.focus { transition:none; } }
   .chead { display:grid; grid-template-columns:auto minmax(0,1fr) auto 140px 136px; align-items:center; gap:18px; padding:14px 18px; cursor:pointer; user-select:none; }
   .chead:focus-visible { outline:2px solid var(--acc); outline-offset:-2px; }
   .chead .cname { display:block; font-size:15px; font-weight:600; letter-spacing:-.01em; }
@@ -263,9 +285,9 @@
   /* hero, openbot.run style: availability row, logo inside the headline */
   .avail { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; font-size:12px; color:var(--muted);
            border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:3px 12px 3px 3px; margin-bottom:26px; }
-  .avail .new { background:var(--txt); color:var(--bg); font-weight:700; font-size:10.5px; letter-spacing:.04em; border-radius:999px; padding:2px 8px; }
+  .avail .new { background:var(--acc-soft); color:var(--acc); font-weight:700; font-size:10.5px; letter-spacing:.04em; border-radius:999px; padding:2px 8px; }
   .avail b { color:var(--txt); font-weight:500; } .avail i { width:1px; height:12px; background:var(--line2); }
-  .hlogo { width:.92em; height:.92em; vertical-align:-.12em; margin:0 .04em; filter:drop-shadow(0 8px 24px rgba(0,0,0,.25)); }
+  .hlogo { width:.82em; height:.82em; vertical-align:-.08em; margin:0 .04em; }
   .btn svg { margin-right:7px; }
 
   /* demo window: a scripted import, like the product videos on openbot.run */
@@ -273,14 +295,14 @@
   .demo-slot { margin-top:44px; }
   .win { text-align:left; border:1px solid var(--line); border-radius:14px; background:var(--bg); box-shadow:0 30px 80px rgba(0,0,0,.35); overflow:hidden; }
   .win-bar { display:flex; align-items:center; gap:14px; height:40px; padding:0 14px; border-bottom:1px solid var(--line); background:var(--surface); font-size:12.5px; }
-  .dots { display:flex; gap:7px; } .dots i { width:11px; height:11px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
+  .dots { display:flex; gap:7px; } .dots i { width:9px; height:9px; border-radius:50%; background:var(--line2); }
   .win-bar .tab { display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:8px; background:var(--sunk); color:var(--txt); }
   .win-bar .sp { flex:1; } .win-bar .demo-tag { color:var(--faint); }
   .win-body { display:grid; grid-template-columns:230px minmax(0,1fr); height:460px; }
   .win-side { border-right:1px solid var(--line); background:var(--surface); padding:12px 10px; overflow:hidden; }
   .win-side h4 { margin:6px 8px 8px; font-size:11.5px; color:var(--faint); font-weight:600; }
   .srow { display:grid; grid-template-columns:30px minmax(0,1fr); gap:10px; align-items:center; padding:7px 8px; border-radius:10px; }
-  .srow .av { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:10px; font-weight:800; color:#141414; }
+  .srow .av { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; font:500 13px/1 var(--serif); color:#1D2433; }
   .srow b { display:block; font-size:13px; font-weight:600; } .srow small { display:block; font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .srow small.on { color:var(--txt); }
   .win-main { position:relative; padding:18px 22px; overflow:hidden; display:flex; flex-direction:column; gap:12px; justify-content:flex-end; min-height:0; }
@@ -327,6 +349,7 @@
   @media (max-width:820px) { .win-body { grid-template-columns:minmax(0,1fr); height:400px; } .win-side { display:none; } .bub { max-width:92%; } }
   @media (prefers-reduced-motion:reduce) { .spin, .wire::after, .apply-demo .btn, .typing i { animation:none !important; } .enter { animation:none; } }
   /* calendar page */
+  html.in-ext :is(.avail, .cta, .demo-slot, #exthow, #exthow-up, #apitoken, .canvasgo, .top a[href="#canvas"], .brand) { display:none !important; }
   #calendario { display:none; }
   body.cal #calendario { display:block; }
   body.cal .hero, body.cal main > section:not(#calendario), body.cal .wrap > section:not(#calendario) { display:none !important; }
@@ -345,7 +368,7 @@
   .cday:nth-child(7n) { border-right:0; }
   .cday .n { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding:2px 4px; align-self:flex-start; border-radius:999px; }
   .cday.out { background:color-mix(in srgb, var(--sunk) 55%, transparent); } .cday.out .n { color:var(--faint); }
-  .cday.today .n { background:var(--txt); color:var(--bg); font-weight:700; }
+  .cday.today .n { background:var(--coral); color:#fff; font-weight:700; }
   .cday.has { cursor:pointer; } .cday.sel { box-shadow:inset 0 0 0 2px var(--acc); }
   .chip { display:block; font-size:11.5px; line-height:1.35; padding:3px 6px; border-radius:6px; background:var(--sunk); border-left:3px solid var(--c, var(--line2));
           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--txt); }
@@ -394,12 +417,29 @@
     .meta { height:44px; } .meta input { min-height:0; } .step { width:36px; height:36px; min-height:0; }
     .row .sub a { display:inline-block; padding:6px 0; }
   }
-  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } html { scroll-behavior:auto; } }
+  /* microinteractions: instant tooltips, lift on hover, press on click, a short fade when a filter or view switches */
+  [data-tip] { position:relative; }
+  [data-tip]::after { content:attr(data-tip); position:absolute; z-index:30; left:50%; bottom:calc(100% + 8px); width:max-content; max-width:260px; padding:6px 9px; border-radius:7px;
+    background:var(--txt); color:var(--bg); font:500 12px/1.35 var(--sans); letter-spacing:0; text-transform:none; text-align:left; white-space:normal; box-shadow:0 10px 24px -10px rgba(29,36,51,.5);
+    opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,3px); transition:opacity .12s, transform .12s, visibility 0s .12s; }
+  [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity:1; visibility:visible; transform:translate(-50%,0); transition-delay:0s; }
+  .trk i:nth-child(-n+6)::after { left:0; transform:translateY(3px); } .trk i:nth-last-child(-n+6)::after { left:auto; right:0; transform:translateY(3px); }
+  .trk i:nth-child(-n+6):hover::after, .trk i:nth-last-child(-n+6):hover::after { transform:none; }
+  .tile, .kpi { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; }
+  .seg button { transition:background-color .2s, color .2s, box-shadow .2s, transform .16s cubic-bezier(.23,1,.32,1); }
+  @media (hover:hover) and (pointer:fine) {
+    .tile:hover { transform:translateY(-2px); border-color:var(--line2); box-shadow:0 10px 24px -14px rgba(29,36,51,.35); }
+    .btn:hover { transform:translateY(-1px); } .btn:active, button:active { transform:scale(.97); }
+  }
+  .swap { animation:swapin .22s cubic-bezier(.23,1,.32,1); }
+  @keyframes swapin { from { opacity:0; transform:translateY(4px); } }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } html { scroll-behavior:auto; }
+    .swap { animation:none; } .tile:hover, .btn:hover, .btn:active, button:active { transform:none !important; } }
 </style>
 </head>
 <body>
 <div class="top"><div class="wrap">
-  <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Campus+</b></a><span class="sem">PUCPR · 2026/2</span>
+  <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><b>Campus+</b></a><span class="sem">PUCPR · 2026/2</span>
   <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#proximas">Próximas</a></nav>
   <div class="viewsw" id="viewsw" role="group" aria-label="Ver matérias ou calendário"><span class="thumb" aria-hidden="true"></span><button type="button" data-v="app" aria-pressed="true">Matérias</button><button type="button" data-v="cal" aria-pressed="false">Calendário</button></div>
   <div class="spacer"></div>
@@ -417,7 +457,7 @@
 <div class="wrap">
   <header class="hero">
     <div class="avail"><span class="new">NOVO</span><span>Funciona no</span><b>Chrome</b><b>Brave</b><b>Edge</b><i></i><b>Canvas PUCPR 2026/2</b></div>
-    <h1 id="h1"><span id="h1a">Campus+</span> <svg class="hlogo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><br><span class="dim" id="h1b">pra passar?</span></h1>
+    <h1 id="h1"><span id="h1a">Campus+</span> <svg class="hlogo logo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><br><span class="dim" id="h1b">quanto falta?</span></h1>
     <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
     <div class="focus" id="focus" hidden></div>
     <div class="cta"><a class="btn primary" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Baixar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
@@ -435,6 +475,7 @@
 
   <section class="block" id="panorama">
     <div class="bhead"><h2>Panorama</h2><span class="hint">anel = pontos garantidos de 10; a marca é a sua meta</span></div>
+    <div class="kpis" id="kpis"></div>
     <div class="tiles" id="tiles"></div>
   </section>
 
@@ -507,15 +548,6 @@
         </ol>
         <p class="muted">Suas notas não se perdem: elas ficam salvas neste site, não na extensão. A versão instalada aparece embaixo do botão da extensão.</p>
       </details>
-      <details class="exthow" id="bmhow"><summary>Sem extensão? Use um favorito</summary>
-        <ol class="steps ext">
-          <li>Arraste este botão para a barra de favoritos: <a id="bm" class="btn bm" title="Arraste para a barra de favoritos">Campus+</a>
-            <span class="muted">(não aparece a barra? <b>Cmd+Shift+B</b> no Mac ou <b>Ctrl+Shift+B</b> no Windows)</span></li>
-          <li>Ou crie à mão: <button id="bmcopy" class="btn sm" type="button">Copiar código do favorito</button>, adicione qualquer página aos favoritos, edite e troque o endereço pelo código.</li>
-          <li><b>Abra o Canvas</b> e clique no favorito: ele lê as notas e mostra <b>Abrir no Campus+</b>.</li>
-        </ol>
-        <p class="muted">Lê o mesmo que a extensão, com o seu login do Canvas, e não envia nada para servidor nenhum. Funciona em qualquer navegador de computador, inclusive Safari e Firefox.</p>
-      </details>
       <details class="exthow" id="apitoken"><summary>Prefere usar o seu token da API do Canvas?</summary>
         <ol class="steps ext">
           <li>No Canvas: <b>Conta → Configurações → + Novo token de acesso</b>. Copie o token.</li>
@@ -525,7 +557,7 @@
         </ol>
         <p class="muted">O token dá acesso à sua conta inteira: ele fica só no seu computador, o script só lê, e nada passa por este site. Nunca compartilhe o arquivo <code>.env</code>; apague o token no Canvas quando terminar. Pelo navegador não dá: o Canvas da PUCPR bloqueia chamadas de outros sites.</p>
       </details>
-      <details class="pastebox"><summary>Copiei o texto pela extensão ou pelo script</summary>
+      <details class="pastebox"><summary>Colar o texto do script com o token</summary>
         <textarea id="paste" rows="3" placeholder="Cole aqui o texto copiado pela extensão" aria-label="Texto copiado pela extensão" spellcheck="false"></textarea>
         <div class="acts"><button id="readbtn" class="btn primary" type="button">Ler notas</button><button id="pastebtn" class="btn" type="button">Colar da área de transferência</button></div>
       </details>
@@ -789,14 +821,48 @@ const NotasCore = (() => {
     }
     return { grades, missing, notes, meta: typeof d.meta === "string" ? d.meta : null };
   }
-  return { COURSES, SEED, CANVAS, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks };
+  const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
+  // Shared by the calculator page and the panels inside Canvas (extension/content.js), so both show the same numbers.
+  const fractionTone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
+  const statusTone = st => st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : fractionTone(st.fraction);
+  const nextItem = st => st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0] || null;
+  // Ring: share of 10 already earned, and the share still possible (capped so both fit in one turn).
+  const ringParts = st => { const e = Math.min(10, st.earned); return { earned: e / 10, future: Math.min(10 - e, st.futureMax) / 10 }; };
+  // What a course still needs on 0-10 in each remaining item: of10 null when it cannot reach the goal; approx when
+  // old items have no grade yet (counted as if they were like the rest).
+  function courseNeed(st) {
+    if (st.status === "garantido") return { of10: 0, approx: false, impossible: false, tone: "ok" };
+    if (st.status === "nao-da" || st.fraction == null || st.fraction > 1 + EPS) return { of10: null, approx: false, impossible: true, tone: "bad" };
+    if (st.status === "depende-atrasadas") { const f = st.fractionIfLate;
+      return f == null || f > 1 + EPS ? { of10: null, approx: true, impossible: true, tone: "bad" } : { of10: f * 10, approx: true, impossible: false, tone: "warn" }; }
+    return { of10: st.fraction * 10, approx: false, impossible: false, tone: fractionTone(st.fraction) };
+  }
+  // The upcoming assessments that still count (course not yet guaranteed), soonest first.
+  const stillCounts = (courses, grades, today, target) => upcoming(courses, grades, today, target).filter(u => u.st.status !== "garantido");
+  // The semester overview: mean of the points earned, the tightest course still reachable, and every item as a tracker
+  // block (ok graded, late past without a grade, next still to come), in date order.
+  function semester(courses, grades, today, target) {
+    const states = {}; for (const c of courses) states[c.id] = courseState(c, grades, today, target);
+    const mean = courses.reduce((s, c) => s + Math.min(10, states[c.id].earned), 0) / courses.length;
+    const tight = courses.filter(c => states[c.id].status === "precisa").sort((a, b) => states[b.id].fraction - states[a.id].fraction)[0] || null;
+    const counts = {}; for (const c of courses) counts[states[c.id].status] = (counts[states[c.id].status] || 0) + 1;
+    const items = [];
+    for (const c of courses) for (const it of c.items) {
+      const p = itemPoints(it, grades[key(c, it)]), graded = p !== null && !Number.isNaN(p);
+      items.push({ course: c, item: it, s: graded ? "ok" : it.date < today ? "late" : "next" });
+    }
+    items.sort((a, b) => a.item.date.localeCompare(b.item.date));
+    return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok").length, late: items.filter(x => x.s === "late").length };
+  }
+  return { COURSES, SEED, CANVAS, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+           SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();
 </script>
 <script id="ui">
 (() => {
   const C = NotasCore, LS = "notas-pucpr-2026-2";
   const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
-  const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
+  const SHORT = C.SHORT;
   let saved;
   try { saved = JSON.parse(localStorage.getItem(LS)); } catch (e) { saved = null; }
   if (!saved || typeof saved !== "object" || !saved.grades || typeof saved.grades !== "object" || Array.isArray(saved.grades))
@@ -829,7 +895,7 @@ const NotasCore = (() => {
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function cell(label, cls, text) { const d = el("div", cls, text); if (label) d.dataset.label = label; return d; }
   const badge = (cls, text) => el("span", "badge " + cls, text);
-  const tone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
+  const tone = C.fractionTone;
 
   function reqText(req, it, st) {
     if (!req) return "—";
@@ -884,17 +950,25 @@ const NotasCore = (() => {
   }
 
   let filter = "all", cardFilter = "all", showAll = false, showAllPend = false, showAllNews = false, exportICS = () => {};
-  // /calendario is this same page (vercel.json rewrite) showing only the calendar; ?view=calendario works locally too.
-  const urlCal = () => /\/calendario\/?$/.test(location.pathname) || new URLSearchParams(location.search).get("view") === "calendario";
+  // ?view=calendario shows only the calendar.
+  const urlCal = () => new URLSearchParams(location.search).get("view") === "calendario";
   let CAL = urlCal();
   const applyView = () => { document.body.classList.toggle("cal", CAL); document.title = CAL ? "Calendário · Campus+" : "Minhas matérias · Campus+";
     for (const b of document.querySelectorAll("#viewsw button")) b.setAttribute("aria-pressed", (b.dataset.v === "cal") === CAL); };
   applyView();
-  // The switch changes the view in place and keeps the address in step (/app or /calendario; ?view= on file://).
+  // The switch changes the view in place and keeps the address in step (?view=calendario).
+  const swap = e => { if (!e) return; e.classList.remove("swap"); void e.offsetWidth; e.classList.add("swap"); };   // replay the short fade-in
   function setView(cal, push) {
-    if (cal === CAL) return; CAL = cal; applyView(); calc(); scrollTo({ top:0, behavior:"auto" });
-    if (push) { const local = location.protocol === "file:";
-      history.pushState(null, "", local ? (cal ? "?view=calendario" : location.pathname) : (cal ? "/calendario" : "/app")); }
+    if (cal === CAL) return; CAL = cal; applyView(); calc(); swap($(CAL ? "calendario" : "materias")); scrollTo({ top:0, behavior:"auto" });
+    if (push) history.pushState(null, "", cal ? "?view=calendario" : location.pathname);
+  }
+  // ?m=<subject id> (the course page button in Canvas) opens that subject's card and scrolls to it.
+  function focusSubject() {
+    const id = new URLSearchParams(location.search).get("m"), card = id && /^[a-z0-9]+$/.test(id) && $("card-" + id);
+    if (!card) return;
+    if (CAL) setView(false, false);
+    if (!card.classList.contains("open")) card.setOpen(true);
+    card.scrollIntoView({ block:"start", behavior:"auto" }); card.classList.add("focus"); setTimeout(() => card.classList.remove("focus"), 1600);
   }
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
@@ -994,7 +1068,7 @@ const NotasCore = (() => {
       links.forEach(a => { const t = document.getElementById(a.getAttribute("href").slice(1)); if (t) io.observe(t); });
     }
     for (const b of $("filter").children) b.addEventListener("click", () => {
-      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); });
+      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); swap($("next")); });
     $("startbtn").addEventListener("click", () => { const first = document.querySelector(".card"); if (first && !document.querySelector(".card.open")) first.setOpen(true); });
     const sb = el("button", "linkbtn", "Mostrar de onde vêm os pesos e as datas"); sb.type = "button"; sb.setAttribute("aria-pressed", "false");
     sb.addEventListener("click", () => { const on = document.body.classList.toggle("src-on"); sb.setAttribute("aria-pressed", on);
@@ -1028,7 +1102,7 @@ const NotasCore = (() => {
       const nFresh = c.items.filter(it => saved.fresh.includes(C.key(c, it))).length;
       const [g, f, m] = $("bar-" + c.id).children;
       g.style.width = Math.min(100, st.earned * 10) + "%";
-      g.style.background = "var(--" + (st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction)) + ")";
+      g.style.background = "var(--" + C.statusTone(st) + ")";
       f.style.left = Math.min(100, st.earned * 10) + "%"; f.style.width = st.futureMax * 10 + "%";
       m.style.left = Math.min(99.5, T * 10) + "%";
 
@@ -1069,7 +1143,7 @@ const NotasCore = (() => {
     [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
       const count = n != null ? n : groups[k].length; if (!count) return;
       const b = el("button", null, l); b.type = "button"; b.setAttribute("aria-pressed", k === cardFilter);
-      b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); }); sum.appendChild(b); });
+      b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); swap($("cards")); }); sum.appendChild(b); });
     for (const c of C.COURSES) { const cd = $("card-" + c.id); cd.hidden = cardFilter !== "all" && states[c.id].status !== cardFilter && !cd.contains(document.activeElement); }
 
     const next = $("next"); next.textContent = "";
@@ -1090,7 +1164,7 @@ const NotasCore = (() => {
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T); renderTiles(states, T); renderTodo(); renderNews(); renderCal(T);
+    renderFocus(T); renderKpis(states, T); renderTiles(states, T); renderTodo(); renderNews(); renderCal(T);
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -1113,7 +1187,7 @@ const NotasCore = (() => {
   const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wait = ms => new Promise(r => setTimeout(r, RM ? 0 : ms));
   const CHECK = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const COLORS = { imp:"#f5a25b", abd:"#7cc4fa", rpnd:"#c8a6f7", web:"#f7c948", etica:"#f28fb1", cscf:"#7ee0d0" };
+  const COLORS = { imp:"#E9A77F", abd:"#8FB4D9", rpnd:"#B9A6DA", web:"#E8C766", etica:"#E6A0B0", cscf:"#8CCBB4" };
   function stepRow(title, sub) {
     const r = el("div", "stp enter"), ic = el("span", "ico-s"), tx = el("div"), t = el("span", "t");
     ic.appendChild(el("span", "spin")); tx.append(el("span", null, title), el("span", "sub", sub)); r.append(ic, tx, t);
@@ -1129,7 +1203,7 @@ const NotasCore = (() => {
   }
   const con = (() => {
     const w = el("div", "win"), bar = el("div", "win-bar"), dots = el("span", "dots"), tab = el("span", "tab"), tag = el("span", "demo-tag");
-    dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg class="logo" viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg>';
     tab.append(" Campus+"); bar.append(dots, tab, el("span", "sp"), tag);
     const body = el("div", "win-body"), side = el("div", "win-side"), main = el("div", "win-main fade");
     main.setAttribute("aria-live", "polite");
@@ -1146,7 +1220,7 @@ const NotasCore = (() => {
     // One tool run: the student's request, the steps with real counts, the result and an optional action.
     api.run = async ({ ask, title, doneTitle, steps, text, lines, action, scroll }) => {
       const me = ++run, alive = () => me === run; busy = true; used = true; document.body.classList.add("ran"); tag.textContent = "ao vivo";
-      main.textContent = ""; if (scroll) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
+      main.textContent = ""; if (scroll && w.offsetParent) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
       bubble("me", ask); await wait(300); if (!alive()) return;
       const card = stepsCard(title); card.set(0, steps.length, true); main.appendChild(card);
       const t0 = performance.now();
@@ -1172,7 +1246,7 @@ const NotasCore = (() => {
       .map(u => SHORT[u.course.id] + ": " + reqText(u.req, u.item, u.st) + " em " + u.item.name + " (" + dmy(u.item.date) + ")");
   }
   const pl = (n, one, many) => n + " " + (n === 1 ? one : many);
-  function importRun(res, ask, applyBtn, fromLink) {
+  function importRun(res, ask, applyBtn) {
     const steps = [["Notas", pl(Object.keys(res.grades).length, "nota encontrada", "notas encontradas")]];
     if (res.stats) steps.push(["Média da turma", pl(Object.keys(res.stats).length, "avaliação com média da turma", "avaliações com média da turma")]);
     if (res.todo) steps.push(["Prazos", pl(res.todo.filter(t => t.due >= today && days(t.due) <= 14).length, "entrega", "entregas") + " nos próximos 14 dias"]);
@@ -1180,7 +1254,7 @@ const NotasCore = (() => {
     if (res.news) steps.push(["Avisos", pl(res.news.length, "aviso", "avisos") + ", " + pl(res.news.filter(n => n.unread).length, "não lido", "não lidos")]);
     const merged = Object.assign({}, saved.grades, res.grades), n = Object.keys(res.grades).length;
     con.run({ ask, title:"Lendo", doneTitle:"Pronto: confira antes de aplicar", steps, scroll:true,
-      text:(fromLink ? "Estas notas chegaram por um link: aplique só se foi você que clicou na extensão agora. " : "") + (n ? "Com essas notas, o que importa agora:" : "Nenhuma nota nova para aplicar."), lines:n ? nextLines(merged, 3) : [],
+      text:(n ? "Com essas notas, o que importa agora:" : "Nenhuma nota nova para aplicar."), lines:n ? nextLines(merged, 3) : [],
       action:n && applyBtn ? { label:"Aplicar " + n + " notas", onClick:() => applyBtn.click(), live:() => applyBtn.isConnected } : null });
   }
   // Calendar page: month grid and the next 21 days, from the Plano dates, the grades and the last Canvas import.
@@ -1240,7 +1314,7 @@ const NotasCore = (() => {
   function renderFocus(T) {
     const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
     const any = Object.keys(saved.grades).some(k => String(saved.grades[k]).trim() !== "");
-    const all = C.upcoming(C.COURSES, saved.grades, today, T), list = all.filter(u => u.st.status !== "garantido");
+    const list = C.stillCounts(C.COURSES, saved.grades, today, T);
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     document.body.classList.toggle("fresh", !any);
     if (!any) { con.side({}, false); if (!con.busy) con.idle("Ainda sem notas. Importe do Canvas ou lance uma nota: cada passo aparece aqui.", []); }
@@ -1250,23 +1324,41 @@ const NotasCore = (() => {
       if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
     const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
     $("h1a").textContent = !any ? "Campus+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
-    $("h1b").textContent = !any ? "pra passar?" : open ? "pra fechar o semestre." : "bom descanso.";
+    $("h1b").textContent = !any ? "quanto falta?" : open ? "pra fechar o semestre." : "bom descanso.";
     const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
     sb.textContent = any ? "Ver minhas matérias" : "Lançar minhas notas";
     box.textContent = ""; if (box.hidden) return;
     const u = list[0], d = days(u.item.date), when = d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias";
     const left = el("div"), need = el("div", "need");
     left.append(el("div", "t", u.item.name), el("div", "s", (SHORT[u.course.id] || u.course.name) + " · " + dmy(u.item.date) + ", " + when));
-    const st = u.st, dep = st.status === "depende-atrasadas";
-    const v = st.status === "nao-da" || u.req.impossible ? "não dá" : dep ? (st.fractionIfLate == null || st.fractionIfLate > 1 + 1e-9 ? "não dá" : "≈ " + up(st.fractionIfLate * 10, 1)) : up(u.req.of10, 1);
-    const tn = v === "não dá" ? "bad" : dep ? "warn" : tone(u.req.f);
-    const vv = el("div", "v num", v); vv.style.color = "var(--" + tn + ")";
-    need.append(vv, el("div", "u", v === "não dá" ? "nem com nota cheia" : "precisa, em 10" + (dep ? " (faltam notas antigas)" : "")));
+    const nd = C.courseNeed(u.st), v = nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
+    const vv = el("div", "v num", v); vv.style.color = "var(--" + nd.tone + ")";
+    need.append(vv, el("div", "u", nd.impossible ? "nem com nota cheia" : "precisa, em 10" + (nd.approx ? " (faltam notas antigas)" : "")));
     box.append(el("div", "k", "Próxima avaliação que conta"), left, need);
     const rest = list.slice(1, 3);
     if (rest.length) { const t = el("div", "then", "Depois: ");
       rest.forEach((r, i) => { const a = el("a", null, r.item.name + " (" + (SHORT[r.course.id] || r.course.name) + ", " + dmy(r.item.date) + ")"); a.href = "#card-" + r.course.id; if (i) t.append(" · "); t.appendChild(a); });
       box.appendChild(t); }
+  }
+
+  // KPI row over the tiles, from the same states: the mean of the points earned, the tightest grade still needed, and every item
+  // of the semester as a tracker block (graded, past without a grade, still to come).
+  function renderKpis(states, T) {
+    const box = $("kpis"); box.textContent = "";
+    const card = (k, v, sub, cls) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v num" + (cls ? " " + cls : ""), v), el("div", "s", sub)); box.appendChild(d); return d; };
+    const sem = C.semester(C.COURSES, saved.grades, today, T), mean = sem.mean, tight = sem.tight, count = s => sem.counts[s] || 0;
+    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + C.COURSES.length + " matérias · meta " + fmt(T, 1));
+    const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
+    fill.style.width = Math.min(100, mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); avg.insertBefore(meter, avg.lastChild);
+    if (tight) card("Quanto falta", up(states[tight.id].fraction * 10, 1), "em 10 em cada item que falta, em " + SHORT[tight.id] + " (a mais apertada)", "need");
+    else if (count("depende-atrasadas")) card("Quanto falta", "?", "lance as notas que já saíram para calcular", "need");
+    else if (count("nao-da")) card("Quanto falta", "—", count("nao-da") + (count("nao-da") === 1 ? " matéria vai" : " matérias vão") + " para a recuperação", "need");
+    else card("Quanto falta", "0", "tudo garantido, pela meta " + fmt(T, 1), "need ok");
+    const items = sem.items, done = sem.done, late = sem.late;
+    const kp = card("Entregues", done + " de " + items.length, late ? late + (late === 1 ? " passou da data sem nota" : " passaram da data sem nota") : "notas lançadas no semestre");
+    const trk = el("div", "trk"); trk.setAttribute("role", "img"); trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
+    for (const x of items) { const b = el("i", x.s); b.dataset.tip = SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
+    kp.insertBefore(trk, kp.lastChild);
   }
 
   // One tile per course: ring = points earned of 10 (lighter: still possible), tick = the goal.
@@ -1277,14 +1369,13 @@ const NotasCore = (() => {
       c.setAttribute("class", cls); c.setAttribute("cx", 32); c.setAttribute("cy", 32); c.setAttribute("r", R);
       c.setAttribute("stroke-dasharray", Math.max(0, len) + " " + L); c.setAttribute("stroke-dashoffset", -from); return c; };
     for (const c of C.COURSES) {
-      const st = states[c.id], e = Math.min(10, st.earned) / 10 * L, f = Math.min(10 - Math.min(10, st.earned), st.futureMax) / 10 * L;
-      const cls = st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction);
+      const st = states[c.id], rp = C.ringParts(st), e = rp.earned * L, f = rp.future * L, cls = C.statusTone(st);
       const t = el("a", "tile"); t.href = "#card-" + c.id;
       const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
       const er = arc("er", 0, e), fu = arc("fu", e, f); er.style.stroke = "var(--" + cls + ")"; fu.style.stroke = "color-mix(in srgb, var(--" + cls + ") 22%, transparent)";
       svg.append(arc("tr", 0, L), fu); if (e > 0.5) svg.appendChild(er); svg.appendChild(arc("mk", Math.min(T, 9.9) / 10 * L, 2));
       ring.append(svg, el("b", null, st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1)));
-      const txt = el("span"), nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
+      const txt = el("span"), nx = C.nextItem(st);
       txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
       t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
     }
@@ -1349,34 +1440,7 @@ const NotasCore = (() => {
     if (!pd.list.length) box.appendChild(el("div", "empty", "Nenhuma. O Canvas não marcou nada como atrasado."));
   }
 
-  // Bookmarklet: runs collectCanvasGrades (a verbatim copy of extension/collect.js, checked by tests) on the Canvas tab,
-  // then offers "Abrir no Campus+" with the same #canvas= hand-off as the extension. Read-only, same origin, no third party.
-  const COLLECT_SRC = '// Runs inside the student\'s Canvas tab (injected with chrome.scripting on click): same-origin, read-only GETs.\n// Returns { v:1, courses:[{ name, assignments:[{ name, points, score, due, missing, submitted, online, stats }] }], announcements } for 2026/2 courses, or { error } (never rejects).\nasync function collectCanvasGrades() {\n  const get = async url => {\n    const out = [];\n    while (url) {\n      const r = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });\n      if (!r.ok) throw new Error("o Canvas respondeu " + r.status);\n      out.push(...JSON.parse((await r.text()).replace(/^while\\(1\\);/, "")));\n      const m = /<([^>]+)>;\\s*rel="next"/.exec(r.headers.get("Link") || "");\n      url = m ? m[1] : null;\n      if (url && new URL(url, location.href).origin !== location.origin) throw new Error("o Canvas indicou uma página fora do Canvas");\n    }\n    return out;\n  };\n  try {\n  const cs = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string" && /2026 \\/ 2/.test(c.name));\n  const courses = [];\n  for (const c of cs) {\n    const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100");\n    courses.push({ name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible,\n      score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,\n      due: a.due_at || null, missing: !!(a.submission && a.submission.missing),\n      submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),\n      online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),\n      stats: a.score_statistics && typeof a.score_statistics.mean === "number"\n        ? { mean: a.score_statistics.mean, min: a.score_statistics.min, max: a.score_statistics.max } : null })) });\n  }\n  // Professors\' announcements from the last 60 days; optional, a failure here never blocks the grades.\n  let announcements = null;\n  try {\n    const since = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10), until = new Date(Date.now() + 864e5).toISOString().slice(0, 10);   // Canvas caps the window when end_date is left out\n    const an = cs.length ? await get("/api/v1/announcements?" + cs.map(c => "context_codes[]=course_" + c.id).join("&") + "&start_date=" + since + "&end_date=" + until + "&per_page=50") : [];\n    const names = Object.fromEntries(cs.map(c => ["course_" + c.id, c.name]));\n    announcements = an.slice(0, 50).map(a => ({ course: names[a.context_code] || "", title: a.title, at: a.posted_at || null, unread: a.read_state === "unread", url: a.html_url || null }));\n  } catch (e) { announcements = null; }\n  return { v: 1, courses, announcements };\n  } catch (e) { return { error: String(e && e.message || e) }; }\n}\n';
-  function bookmarkletPanel(collect, app) {
-    if (!/(^|\.)instructure\.com$/.test(location.hostname)) { alert("Abra o Canvas da PUCPR (pucpr.instructure.com) e clique de novo neste favorito."); return; }
-    const box = document.createElement("div");
-    box.setAttribute("style", "position:fixed;z-index:2147483647;top:16px;right:16px;width:340px;max-width:calc(100vw - 32px);background:#1f1f1f;color:#eee;border:1px solid #3a3a3a;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.4);padding:16px;font:14px/1.45 system-ui,sans-serif");
-    const msg = document.createElement("p"); msg.style.margin = "0 0 10px"; msg.textContent = "Campus+: lendo suas notas no Canvas…"; box.appendChild(msg); document.body.appendChild(box);
-    const btn = (t, primary) => { const b = document.createElement("a"); b.textContent = t; b.setAttribute("style", "display:block;text-align:center;margin-top:8px;padding:8px 12px;border-radius:999px;cursor:pointer;text-decoration:none;border:1px solid #3a3a3a;" + (primary ? "background:#eee;color:#191919" : "background:#262626;color:#eee")); return b; };
-    collect().then(res => {
-      if (res.error) { msg.textContent = "Não consegui ler as notas: " + res.error + ". Confira se você está logado no Canvas."; return; }
-      const txt = JSON.stringify(Object.assign({ ext: "bookmarklet" }, res)), bytes = new TextEncoder().encode(txt); let bin = "";
-      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-      const graded = res.courses.reduce((n, c) => n + c.assignments.filter(a => a.score !== null).length, 0);
-      msg.textContent = res.courses.length + " matérias lidas, " + graded + " avaliações com nota.";
-      const open = btn("Abrir no Campus+", true); open.href = app + "#canvas=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); open.target = "_blank"; open.rel = "noopener";
-      const copy = btn("Copiar texto"); copy.onclick = () => navigator.clipboard.writeText(txt).then(() => { copy.textContent = "Copiado"; }, () => { copy.textContent = "O Canvas bloqueou a cópia: use Abrir no Campus+"; });
-      const close = btn("Fechar"); close.onclick = () => box.remove();
-      box.append(open, copy, close);
-    });
-  }
-  const bookmarkletHref = () => "javascript:" + encodeURIComponent("(" + bookmarkletPanel.toString() + ")((function () {\n" + COLLECT_SRC + "\nreturn collectCanvasGrades;\n})(), " + JSON.stringify("https://falta-quanto.vercel.app/app") + ")");   // always production: a preview or local origin would go stale
-
   function buildImport() {
-    $("bm").href = bookmarkletHref();
-    $("bm").addEventListener("click", e => { e.preventDefault(); alert("Arraste este botão para a barra de favoritos. Depois clique nele com o Canvas aberto."); });
-    $("bmcopy").addEventListener("click", e => { const b = e.currentTarget;
-      navigator.clipboard.writeText($("bm").href).then(() => { b.textContent = "Código copiado"; }, () => { b.textContent = "Não deu para copiar: arraste o botão"; }); });
     const out = $("importout"), ta = $("paste");
     const itemOf = k => { const [cid, iid] = k.split(":"), c = C.COURSES.find(x => x.id === cid); return { c, it:c.items.find(i => i.id === iid) }; };
     const label = k => { if (!k) return "Arquivo"; if (!C.itemByKey(k)) return k; const { c, it } = itemOf(k); return (SHORT[c.id] || c.name) + ": " + it.name; };
@@ -1384,7 +1448,7 @@ const NotasCore = (() => {
       if (!navigator.clipboard || !navigator.clipboard.readText) { out.textContent = "Seu navegador não deixa ler a área de transferência. Cole no campo com Ctrl+V ou Cmd+V."; return; }
       navigator.clipboard.readText().then(t => { ta.value = t; read(); }, () => { out.textContent = "Sem permissão para ler a área de transferência. Cole no campo com Ctrl+V ou Cmd+V."; });
     });
-    $("readbtn").addEventListener("click", read);
+    $("readbtn").addEventListener("click", () => read(false));
     $("exportbtn").addEventListener("click", () => {
       const blob = new Blob([C.toBackup(saved.grades, saved.meta)], { type:"application/json" }), a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = "quanto-falta-notas-" + C.SEMESTER + ".json";
@@ -1406,21 +1470,26 @@ const NotasCore = (() => {
         importRun(res, "Importar o backup " + f.name, [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
       });
     });
-    // Extension hand-off: #canvas=<base64url JSON>. The hash never reaches a server; it is read here and removed from the address.
-    if (location.hash.startsWith("#canvas=")) {
-      try {
-        const b = atob(location.hash.slice(8).replace(/-/g, "+").replace(/_/g, "/"));
-        ta.value = new TextDecoder().decode(Uint8Array.from(b, ch => ch.charCodeAt(0)));
-      } catch (e) { ta.value = ""; out.appendChild(el("div", "msg bad", "O link da extensão veio incompleto. Clique em Importar de novo.")); }
-      history.replaceState(null, "", location.pathname + location.search + "#canvas");
-      if (ta.value) { read(true); out.prepend(el("div", "muted", "Estas notas chegaram por um link. Se não foi você que clicou na extensão agora, não aplique.")); }
-    }
-    function read(fromLink) {
+    // Inside the extension (the Campus+ page in Canvas): the last Canvas reading is applied as the page opens.
+    if (window.CP_EXT && window.CP_EXT.data) { ta.value = JSON.stringify(window.CP_EXT.data); read(true); }
+    function read(auto) {
       out.textContent = "";
       let res;
       try { res = C.fromCanvas(ta.value.trim()); } catch (e) { out.appendChild(el("div", "msg bad", "Não reconheci esse texto (" + e.message + "). Copie de novo pela extensão no Canvas.")); return; }
+      // Inside the extension: only grades that changed in Canvas since the last reading are applied, so one corrected by hand stays.
+      const canvasAll = res.grades;
+      if (auto) { const last = saved.canvas || {}; res.grades = Object.fromEntries(Object.entries(canvasAll).filter(([k, v]) => last[k] !== v)); }
       preview(res, "Sem nota do Canvas", () => { ta.value = ""; });
-      importRun(res, res.ext === "script" ? "Ler o texto do script com o meu token" : res.ext === "bookmarklet" ? "Importar pelo favorito do Canvas" : "Importar minhas notas do Canvas", [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)), fromLink);
+      if (auto) {
+        const b = [...out.querySelectorAll("button")].find(x => /^(Aplicar|Atualizar)/.test(x.textContent));
+        if (b) b.click();
+        saved.canvas = canvasAll; store();
+        out.textContent = ""; ta.value = "";
+        const at = window.CP_EXT.at ? new Date(window.CP_EXT.at) : null;
+        out.appendChild(el("div", "muted", "Notas lidas do Canvas" + (at ? " às " + String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0") : "") + ". Abra o Canvas para atualizar."));
+        return;
+      }
+      importRun(res, res.ext === "script" ? "Ler o texto do script com o meu token" : "Importar minhas notas do Canvas", [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
     }
     function preview(res, extraTitle, afterApply) {
       const keys = Object.keys(res.grades), pend = res.pending;
@@ -1468,7 +1537,7 @@ const NotasCore = (() => {
       }
     }
   }
-  build(); buildImport(); calc();
+  build(); buildImport(); calc(); focusSubject();
 })();
 </script>
 </body>
