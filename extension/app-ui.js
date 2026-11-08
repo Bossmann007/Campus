@@ -1,6 +1,8 @@
 // Generated from app.html <script id="ui"> by scripts/sync-ext-core; do not edit by hand.
 (() => {
-  const C = NotasCore, LS = "notas-pucpr-2026-2";
+  const C = NotasCore;
+  let LS = window.CP_EXT ? "notas-pucpr-2026-2:nouser" : "notas-pucpr-2026-2";
+  try { LS = C.storageKey(localStorage, window.CP_EXT && window.CP_EXT.user, !!window.CP_EXT); } catch (e) { /* storage off: the save warning covers it */ }
   const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
   const SHORT = C.SHORT;
   let saved;
@@ -79,7 +81,7 @@
     return w;
   }
   function needBadge(st, it) {
-    if (st.status === "garantido") return badge("ok", "garantido");
+    if (st.status === "garantido") { const b = badge("ok", "garantido"); b.title = C.GARANTIDO_TIP; return b; }
     const dep = st.status === "depende-atrasadas", req = C.requiredFor(st, it);
     return badge(dep ? "warn" : req.impossible ? "bad" : tone(req.f), reqText(req, it, st));
   }
@@ -275,7 +277,7 @@
       if (st.invalid.length) text = (st.invalid.length === 1 ? "1 nota inválida ignorada: " : st.invalid.length + " notas inválidas ignoradas: ") + st.invalid.map(i => i.name).join(", ") + ". " + text;
       const box = $("msg-" + c.id); box.className = "msg " + cls; box.textContent = text;
       const label = { garantido:"garantido", "nao-da":"recuperação", "depende-atrasadas":"faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10";
-      const pill = $("pill-" + c.id); pill.className = "badge " + cls; pill.textContent = label;
+      const pill = $("pill-" + c.id); pill.className = "badge " + cls; pill.textContent = label; pill.title = st.status === "garantido" ? C.GARANTIDO_TIP : "";
     }
 
     const sum = $("summary"); sum.textContent = "";
@@ -611,7 +613,10 @@
       });
     });
     // Inside the extension (the Campus+ page in Canvas): the last Canvas reading is applied as the page opens.
-    if (window.CP_EXT && window.CP_EXT.data) { ta.value = JSON.stringify(window.CP_EXT.data); read(true); }
+    // After the term (TERM_END) it shows the notice at the top instead.
+    const boot = C.extBoot(window.CP_EXT, C.localISO(new Date()));
+    if (boot.notice) { const n = el("div", "msg warn termover", boot.notice); n.setAttribute("role", "status"); const hero = document.querySelector("header.hero"); hero.parentNode.insertBefore(n, hero); }
+    if (boot.autoImport) { ta.value = JSON.stringify(window.CP_EXT.data); read(true); }
     function read(auto) {
       out.textContent = "";
       let res;

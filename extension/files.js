@@ -2,7 +2,8 @@
 // (first match wins); the extension cannot see the disk, so it always uses the canonical folder names.
 const QFFiles = (() => {
   const BLOCKED = new Set([".app", ".command", ".sh", ".bash", ".zsh", ".csh", ".exe", ".msi", ".dmg", ".pkg", ".bat", ".cmd", ".com",
-    ".scr", ".ps1", ".vbs", ".jar", ".apk", ".lnk", ".reg"]);
+    ".scr", ".ps1", ".vbs", ".vbe", ".jar", ".apk", ".lnk", ".reg", ".hta", ".wsf", ".wsh", ".cpl", ".msc", ".pif", ".iso", ".img", ".vhd",
+    ".docm", ".xlsm", ".pptm"]);
   const IMAGES = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".svg"]);
   const MEDIA = new Set([".mp4", ".mov", ".mkv", ".avi", ".webm", ".mp3", ".m4a", ".wav", ".aac", ".ogg"]);
   const CODE = new Set([".c", ".h", ".cpp", ".java", ".py", ".js", ".ts", ".php", ".sql", ".css", ".json", ".ipynb", ".html", ".xml", ".csv"]);
@@ -39,17 +40,18 @@ const QFFiles = (() => {
     if (stem.length > 150) stem = stem.slice(0, 150).trim();
     return stem + ext;
   }
-  // Our course name when the Canvas course is one of the six, else the Canvas name without turma and semester.
-  function courseFolder(canvasName, courses, canvas) {
-    const ours = courses.find(c => canvas[c.id] && canvasName.startsWith(canvas[c.id].match));
+  // Our course name when the Canvas course (by id when known, else by name) is one of the six, else the Canvas name without
+  // turma and semester.
+  function courseFolder(canvasName, courses, canvas, cid) {
+    const ours = courses.find(c => canvas[c.id] && (cid != null ? String(canvas[c.id].cid) === String(cid) : canvasName.startsWith(canvas[c.id].match)));
     return safeName(ours ? ours.name : canvasName.split(" (")[0].split(" - ")[0]) || "Curso";
   }
   // Downloads-relative path, or null when the file must not be saved (blocked type or too big).
-  function target(canvasName, file, courses, canvas) {
+  function target(canvasName, file, courses, canvas, cid) {
     const name = safeName(file.display_name || file.filename);
     if (!name || file.size > MAX_BYTES) return null;
     const k = kind(name);
-    return "PUCPR/" + courseFolder(canvasName, courses, canvas) + "/" + (k ? k + "/" : "") + name;
+    return "PUCPR/" + courseFolder(canvasName, courses, canvas, cid) + "/" + (k ? k + "/" : "") + name;
   }
   return { kind, safeName, courseFolder, target, MAX_BYTES };
 })();
