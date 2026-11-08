@@ -84,6 +84,7 @@
   .fbform { padding:20px 22px; display:grid; gap:10px; }
   .fbform h2 { margin:0; font-size:17px; letter-spacing:-.01em; }
   .fbform p { margin:0; font-size:13.5px; } .fbform .fine { font-size:12.5px; }
+  .fbform .fbwarn { padding:8px 10px; border-radius:8px; background:var(--warn-soft); color:var(--warn-ink); font-size:13px; }
   .fbform textarea { font-family:var(--sans); font-size:14px; }
   button, .btn { font:inherit; font-size:13px; font-weight:500; color:var(--txt); background:var(--surface); border:1px solid var(--line);
                  border-radius:10px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
@@ -248,6 +249,7 @@
   .bar .m { width:2px; background:var(--txt); }
   .msg { font-size:13px; padding:9px 12px; border-radius:8px; }
   .detail > .msg { margin:14px 18px 0; }
+  .msg.termover { margin:16px 0 0; }
   .detail { display:none; border-top:1px solid var(--line); }
   .card.open .detail { display:block; }
   .formula { padding:12px 18px 0; color:var(--muted); font-size:12.5px; }
@@ -576,7 +578,8 @@
     <h2 id="fbtitle">Feedback para o Enzo</h2>
     <p class="muted">O que você mudaria, uma ideia ou algo que deu errado. A mensagem abre pronta no GitHub do projeto; lá é só clicar em <b>Create</b>.</p>
     <textarea id="fbtext" rows="5" maxlength="1200" placeholder="Ex.: queria ver a média geral do semestre" aria-label="Sua mensagem"></textarea>
-    <p class="muted fine">Precisa de uma conta no GitHub (é grátis). A mensagem fica pública: não escreva notas, tokens nem dados pessoais.</p>
+    <p class="fbwarn" role="note"><b>Vira uma issue pública no GitHub: não escreva nome, RA nem notas.</b></p>
+    <p class="muted fine">Precisa de uma conta no GitHub (é grátis). Também não cole tokens nem outros dados pessoais.</p>
     <div class="acts"><button id="fbsend" class="btn primary" type="button">Abrir no GitHub</button><button class="btn" value="cancel">Cancelar</button></div>
   </form>
 </dialog>

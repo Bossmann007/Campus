@@ -14,8 +14,17 @@ import datetime, getpass, json, os, re, sys, urllib.error, urllib.request
 from urllib.parse import urlsplit
 
 BASE = "https://pucpr.instructure.com"
-SEMESTER = re.compile(r"2026 / 2")
+SEMESTER = "2026 / 2"   # NotasCore.TERM in app.html
 OFFLINE = re.compile(r"^(on_paper|none|not_graded)$")
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect: the Authorization header must not go to another host."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "o Canvas redirecionou para " + urlsplit(newurl).netloc + "; parei", headers, fp)
+
+
+OPENER = urllib.request.build_opener(NoRedirect)
 
 
 def get(token, url):
@@ -24,7 +33,7 @@ def get(token, url):
         if urlsplit(url).netloc != urlsplit(BASE).netloc:
             sys.exit("o Canvas indicou uma página fora do Canvas; parei")
         req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with OPENER.open(req, timeout=30) as r:
             out += json.loads(r.read().decode().removeprefix("while(1);"))
             m = re.search(r'<([^>]+)>;\s*rel="next"', r.headers.get("Link") or "")
         url = m.group(1) if m else None
@@ -65,21 +74,21 @@ def main():
         sys.exit("sem token")
     try:
         courses = [c for c in get(token, BASE + "/api/v1/courses?enrollment_state=active&per_page=100")
-                   if isinstance(c.get("name"), str) and SEMESTER.search(c["name"])]
+                   if isinstance(c.get("name"), str) and SEMESTER in c["name"]]
         data = {"v": 1, "ext": "script", "courses": [
-            {"name": c["name"], "assignments": [assignment(a) for a in get(token, f"{BASE}/api/v1/courses/{c['id']}/assignments?include[]=submission&include[]=score_statistics&per_page=100")]}
+            {"id": c["id"], "name": c["name"], "assignments": [assignment(a) for a in get(token, f"{BASE}/api/v1/courses/{c['id']}/assignments?include[]=submission&include[]=score_statistics&per_page=100")]}
             for c in courses]}
         since = (datetime.date.today() - datetime.timedelta(days=60)).isoformat()
         until = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()   # Canvas caps the window when end_date is left out
-        names = {f"course_{c['id']}": c["name"] for c in courses}
+        by_code = {f"course_{c['id']}": c for c in courses}
         try:
             an = get(token, BASE + "/api/v1/announcements?" + "&".join(f"context_codes[]=course_{c['id']}" for c in courses) + f"&start_date={since}&end_date={until}&per_page=50") if courses else []
-            data["announcements"] = [{"course": names.get(a.get("context_code"), ""), "title": a.get("title"), "at": a.get("posted_at"),
+            data["announcements"] = [{"course": by_code.get(a.get("context_code"), {}).get("name", ""), "courseId": by_code.get(a.get("context_code"), {}).get("id"), "title": a.get("title"), "at": a.get("posted_at"),
                                       "unread": a.get("read_state") == "unread", "url": a.get("html_url")} for a in an[:50]]
         except (urllib.error.URLError, ValueError):   # announcements are optional: keep the grades
             data["announcements"] = None
     except urllib.error.HTTPError as e:
-        sys.exit(f"o Canvas respondeu {e.code}" + (": confira o token" if e.code == 401 else ""))
+        sys.exit(f"o Canvas respondeu {e.code}" + (": confira o token" if e.code == 401 else f" ({e.msg})" if 300 <= e.code < 400 else ""))
     except (urllib.error.URLError, ValueError) as e:
         sys.exit(f"não consegui ler o Canvas: {e}")
     print(json.dumps(data, ensure_ascii=False))
