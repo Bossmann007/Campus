@@ -1,18 +1,27 @@
-// Popup: the Caderno+ settings (chrome.storage.local "prefs") and the way into the full calculator (the extension's app.html,
-// which reads the last Canvas reading that content.js saved).
+// Popup: the Caderno+ settings (chrome.storage.local "prefs"), the Foco timer and the student's data (backup, import).
+// Opened in a tab (popup.html#tab) for the import: a file dialog closes the popup on some systems.
 const $ = id => document.getElementById(id);
 $("ver").textContent = "v" + chrome.runtime.getManifest().version;
 
-chrome.storage.local.get("prefs").then(({ prefs }) => {
-  let p = cpPrefs(prefs);
-  const save = () => chrome.storage.local.set({ prefs: p });
+// Each change writes only its own key over the latest prefs (the Canvas panel changes mode, meta and the native dashboard
+// too), and the popup follows changes made elsewhere: neither side undoes the other.
+const setPref = async (k, v) => { const { prefs } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, prefs, { [k]: v }) }); };
+const looks = [...document.querySelectorAll("[data-look]")], modes = [...document.querySelectorAll("[data-mode]")];
+function showPrefs(prefs) {
+  const p = cpPrefs(prefs);
   $("theme").value = p.theme;
-  $("theme").addEventListener("change", () => { p = Object.assign({}, p, { theme: $("theme").value }); save(); });
-  for (const box of document.querySelectorAll("[data-pref]")) {
-    box.checked = p[box.dataset.pref];
-    box.addEventListener("change", () => { p = Object.assign({}, p, { [box.dataset.pref]: box.checked }); save(); });
-  }
-});
+  for (const sel of document.querySelectorAll("[data-sel]")) sel.value = p[sel.dataset.sel];
+  looks.forEach(b => b.setAttribute("aria-checked", String(b.dataset.look === p.look)));
+  modes.forEach(b => b.setAttribute("aria-checked", String(b.dataset.mode === p.mode)));
+  for (const box of document.querySelectorAll("[data-pref]")) box.checked = p[box.dataset.pref];
+}
+$("theme").addEventListener("change", () => setPref("theme", $("theme").value));
+for (const sel of document.querySelectorAll("[data-sel]")) sel.addEventListener("change", () => setPref(sel.dataset.sel, sel.value));
+for (const b of looks) b.addEventListener("click", () => setPref("look", b.dataset.look));
+for (const b of modes) b.addEventListener("click", () => setPref("mode", b.dataset.mode));
+for (const box of document.querySelectorAll("[data-pref]")) box.addEventListener("change", () => setPref(box.dataset.pref, box.checked));
+chrome.storage.local.get("prefs").then(({ prefs }) => showPrefs(prefs));
+if (chrome.storage.onChanged) chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs) showPrefs(ch.prefs.newValue); });
 
 chrome.storage.local.get("cache").then(({ cache }) => {
   if (!cache || !cache.data || !cache.at) return;
@@ -26,7 +35,50 @@ $("refresh").addEventListener("click", async () => {
   await chrome.storage.local.remove("refreshing");
   $("status").textContent = "Atualiza ao abrir ou recarregar uma página do Canvas.";
 });
-$("open").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
+// Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
+const KEEP = ["hand", "marks", "tasks", "notes", "hidden", "prefs", "fold"];
+$("export").addEventListener("click", async () => {
+  const got = await chrome.storage.local.get(KEEP), body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = "caderno-plus-backup.json"; a.click();
+  $("status").textContent = "Backup salvo nos Downloads.";
+});
+$("import").addEventListener("click", () => { if (location.hash === "#tab") $("importFile").click(); else chrome.tabs.create({ url: chrome.runtime.getURL("popup.html#tab") }); });
+if (location.hash === "#tab") document.body.classList.add("tab");
+$("importFile").addEventListener("change", async () => {
+  const f = $("importFile").files && $("importFile").files[0]; if (!f) return;
+  let d; try { d = JSON.parse(await f.text()); } catch (e) { d = null; }
+  if (!d || d.app !== "caderno-plus") { $("status").textContent = "Esse arquivo não é um backup do Caderno+."; return; }
+  // merged per Canvas user (other students on this computer keep theirs); only well-formed values
+  const str = (v, n) => typeof v === "string" && v.length <= n, iso = v => typeof v === "string" && /^\d{4}-\d\d-\d\d$/.test(v), obj = v => v && typeof v === "object" && !Array.isArray(v);
+  const keepIf = (m, ok) => obj(m) ? Object.fromEntries(Object.entries(m).filter(([k, v]) => str(k, 60) && ok(v))) : {};
+  const per = { hand: u => keepIf(u, v => str(v, 12)), marks: u => keepIf(u, iso), notes: u => keepIf(u, v => str(v, 5000)),
+    tasks: u => Array.isArray(u) ? u.filter(t => t && str(t.id, 40) && str(t.title, 140) && (t.date === null || iso(t.date))).slice(0, 100).map(t => ({ id: t.id, title: t.title, date: t.date })) : [] };
+  const cur = await chrome.storage.local.get(KEEP), out = {};
+  for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, per[k](v)])));
+  if (Array.isArray(d.hidden)) out.hidden = d.hidden.map(String).filter(x => /^\d{1,20}$/.test(x)).slice(0, 200);
+  if (obj(d.prefs)) out.prefs = cpPrefs(Object.assign({}, cur.prefs, d.prefs));
+  if (obj(d.fold)) out.fold = keepIf(d.fold, v => typeof v === "boolean");
+  await chrome.storage.local.set(out); $("status").textContent = "Backup aplicado (" + Object.keys(out).length + " partes). Recarregue o Canvas.";
+});
+// Once: the grades and the meta typed in the old Caderno+ page (this extension's localStorage, per Canvas user) become
+// "hand" grades, which the Canvas panels now use. Grades already typed in Canvas win.
+(async () => {
+  const { migrated } = await chrome.storage.local.get("migrated"); if (migrated) return;
+  let ls; try { ls = window.localStorage; } catch (e) { return; }
+  if (!ls) return;
+  const { hand = {}, prefs } = await chrome.storage.local.get(["hand", "prefs"]), next = Object.assign({}, hand); let meta = null;
+  for (let i = 0; i < ls.length; i++) {
+    const k = ls.key(i), m = /^notas-pucpr-[\d-]+:u(\d{1,20})$/.exec(k || ""); if (!m) continue;
+    let saved; try { saved = JSON.parse(ls.getItem(k)); } catch (e) { continue; }
+    if (!saved || !saved.grades || typeof saved.grades !== "object") continue;
+    const mine = Object.assign({}, next[m[1]]);
+    for (const [g, v] of Object.entries(saved.grades)) if (typeof v === "string" && v.trim() && /^[a-z0-9]+:[a-z0-9]+$/.test(g) && mine[g] == null) mine[g] = v.trim();
+    next[m[1]] = mine; if (typeof saved.meta === "string") meta = saved.meta;
+  }
+  const set = { hand: next, migrated: 1 };
+  if (meta && !(prefs && prefs.meta)) set.prefs = Object.assign({}, prefs, { meta });
+  await chrome.storage.local.set(set);
+})();
 $("canvas").addEventListener("click", () => chrome.tabs.create({ url: "https://pucpr.instructure.com/" }));
 
 // Foco: 25 minutes of study or 5 of break; the service worker shows a notification when the alarm fires.
@@ -47,3 +99,21 @@ $("f25").addEventListener("click", () => startFocus("foco", 25));
 $("f5").addEventListener("click", () => startFocus("pausa", 5));
 $("fstop").addEventListener("click", async () => { for (const k of ["foco", "pausa"]) await chrome.alarms.clear("focus|" + k); await chrome.storage.local.remove("focus"); showFocus(); });
 showFocus(); setInterval(showFocus, 1000);
+
+// Matérias no painel: every course of the last reading; unticked ones leave the dashboard (chrome.storage.local "hidden").
+(async () => {
+  const { cache, hidden } = await chrome.storage.local.get(["cache", "hidden"]), box = $("courses"), off = new Set(Array.isArray(hidden) ? hidden.map(String) : []);
+  const ids = cache && Array.isArray(cache.ids) ? cache.ids : [];
+  if (!ids.length) { $("coursesHint").textContent = "Abra o Canvas uma vez para escolher as matérias do painel."; return; }
+  for (const x of ids) {
+    const row = document.createElement("label"), name = document.createElement("span"), box2 = document.createElement("input");
+    row.className = "row"; name.textContent = String(x.name).split(" (")[0].split(" - ")[0]; name.title = x.name;
+    box2.type = "checkbox"; box2.setAttribute("role", "switch"); box2.checked = !off.has(String(x.id));
+    box2.addEventListener("change", async () => {
+      const { hidden: h } = await chrome.storage.local.get("hidden"), set = new Set(Array.isArray(h) ? h.map(String) : []);
+      if (box2.checked) set.delete(String(x.id)); else set.add(String(x.id));
+      await chrome.storage.local.set({ hidden: [...set] });
+    });
+    row.append(name, box2); box.appendChild(row);
+  }
+})();

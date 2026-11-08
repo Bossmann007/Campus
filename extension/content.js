@@ -4,10 +4,11 @@
 // Same-origin read-only GETs with the student's session; everything stays in chrome.storage.local on this computer.
 (() => {
   if (window.top !== window) return;
-  const C = NotasCore, F = QFFiles, T = 7, TTL = 10 * 60 * 1000, LOCK = 60 * 1000;
+  const C = NotasCore, F = QFFiles, TTL = 10 * 60 * 1000, LOCK = 60 * 1000;
   const TERM = C.TERM.replace(/ /g, "");   // "2026/2"
   const VERSION = chrome.runtime.getManifest().version;
-  const APP = chrome.runtime.getURL ? chrome.runtime.getURL("app.html") : null;   // the full calculator; null in the bookmarklet
+  const EXT = !!chrome.runtime.getURL;   // the extension (the bookmarklet keeps nothing after a reload)
+  let T = 7;   // the meta (goal), from the popup or the dashboard; 7 by default
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
   const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -113,18 +114,93 @@
     if (cpPrefs(prefs).newgrades) chrome.runtime.sendMessage({ type: "grades", items: got.slice(0, 10) }).catch(() => {});
   }
   const pts = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
+  // Grades typed by the student where Canvas has none (exams on paper, a grade not posted yet): chrome.storage.local "hand",
+  // per Canvas user, { "<subject>:<item>": "8,5" }. Moved once from the old Caderno+ page by the popup.
+  async function myHand(user) { const { hand } = await chrome.storage.local.get("hand"); const h = hand && typeof hand === "object" ? hand[user] : null; return h && typeof h === "object" ? h : {}; }
+  async function setHand(user, changes) {
+    const { hand } = await chrome.storage.local.get("hand"), all = hand && typeof hand === "object" ? hand : {}, mine = Object.assign({}, all[user]);
+    for (const [k, v] of Object.entries(changes)) if (v == null || v === "") delete mine[k]; else mine[k] = String(v);
+    await chrome.storage.local.set({ hand: Object.assign({}, all, { [user]: mine }) }); return mine;
+  }
+  // Own tasks (not from Canvas), per Canvas user in chrome.storage.local "tasks": [{ id, title, date|null }]; done = a tick.
+  let myTasks = [];
+  async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
+  async function saveTasks(user, list) {
+    const { tasks } = await chrome.storage.local.get("tasks"), all = tasks && typeof tasks === "object" ? tasks : {};
+    myTasks = list.slice(0, 100); await chrome.storage.local.set({ tasks: Object.assign({}, all, { [user]: myTasks }) });
+  }
+  const addTask = (user, title, date) => saveTasks(user, myTasks.concat([{ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(title).trim().slice(0, 140), date: date || null }]));
+  // "estudar cap 5 sex" -> title + the next friday; also hoje, amanhã, segunda..domingo, dd/mm
+  function parseWhen(text) {
+    const words = String(text).trim().split(/\s+/), last = (words[words.length - 1] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const WDN = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"], wd = WDN.findIndex(w => last.startsWith(w) && last.length <= 7);
+    let date = null;
+    if (last === "hoje") date = addDays(0); else if (last === "amanha") date = addDays(1);
+    else if (wd >= 0) { const d = (wd - new Date().getDay() + 7) % 7 || 7; date = addDays(d); }
+    else { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(last); if (m) { const y = new Date().getFullYear(), iso = y + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0"), d = new Date(iso + "T12:00:00");
+      if (!isNaN(d) && C.localISO(d) === iso) date = iso < addDays(-1) ? (y + 1) + iso.slice(4) : iso; } }   // 31/02 is not a day: the words stay in the title
+    return { title: (date ? words.slice(0, -1) : words).join(" "), date };
+  }
+  // "Desde a sua última visita": new assignments and announcements (from the reading) and new files and modules (one GET
+  // each per course, at most once an hour), compared with a snapshot per Canvas user. The first look only takes the
+  // snapshot. Changes pile up (7 days, 40 at most) until the student marks them as seen.
+  let myChanges = { seenAt: 0, items: [] };
+  async function loadChanges(user) { const { changes } = await chrome.storage.local.get("changes"); const c = changes && changes[user]; myChanges = c && Array.isArray(c.items) ? c : { seenAt: Date.now(), items: [] }; return myChanges; }
+  async function saveChanges(user, c) { const { changes } = await chrome.storage.local.get("changes"); myChanges = c; await chrome.storage.local.set({ changes: Object.assign({}, changes, { [user]: c }) }); }
+  async function whatChanged(cache) {
+    const user = cache.user, { snap } = await chrome.storage.local.get("snap"), old = snap && snap[user], hourOld = !old || Date.now() - (old.netAt || 0) > 60 * 60 * 1000;
+    const now = { at: Date.now(), netAt: hourOld ? Date.now() : old.netAt, asg: {}, ann: [], files: {}, mods: {} };
+    for (const c of cache.data.courses) now.asg[c.id] = c.assignments.map(x => x.name);
+    now.ann = (cache.data.announcements || []).map(x => x.url || x.title);
+    for (const c of cache.data.courses) {
+      if (!hourOld) { now.files[c.id] = old.files[c.id]; now.mods[c.id] = old.mods[c.id]; continue; }
+      try { now.files[c.id] = (await getAll("/api/v1/courses/" + c.id + "/files?sort=created_at&order=desc&per_page=15", 1)).map(f => [f.id, String(f.display_name || "arquivo").slice(0, 120)]); } catch (e) { now.files[c.id] = old && old.files[c.id]; }
+      try { now.mods[c.id] = (await getAll("/api/v1/courses/" + c.id + "/modules?per_page=50", 1)).map(m => [m.id, String(m.name || "módulo").slice(0, 120)]); } catch (e) { now.mods[c.id] = old && old.mods[c.id]; }
+    }
+    await chrome.storage.local.set({ snap: Object.assign({}, snap, { [user]: now }) });
+    if (!old) return false;
+    const items = [], t = Date.now(), byName = {};
+    for (const c of cache.data.courses) {
+      const nm = shortName(c.name), was = old.asg[c.id];
+      byName[c.id] = nm;
+      if (Array.isArray(was)) for (const x of c.assignments) if (!was.includes(x.name)) items.push({ k: "t:" + c.id + ":" + x.name, kind: "tarefa", text: x.name, course: nm, url: x.url && inCanvas(x.url), at: t });
+      const of = old.files[c.id], nf = now.files[c.id];
+      if (Array.isArray(of) && Array.isArray(nf)) for (const [id, name] of nf) if (!of.some(f => f[0] === id)) items.push({ k: "f:" + id, kind: "arquivo", text: name, course: nm, url: location.origin + "/courses/" + c.id + "/files/" + id, at: t });
+      const om = old.mods[c.id], nmods = now.mods[c.id];
+      if (Array.isArray(om) && Array.isArray(nmods)) for (const [id, name] of nmods) if (!om.some(m => m[0] === id)) items.push({ k: "m:" + id, kind: "módulo", text: name, course: nm, url: location.origin + "/courses/" + c.id + "/modules#module_" + id, at: t });
+    }
+    for (const a of cache.data.announcements || []) if (!old.ann.includes(a.url || a.title)) items.push({ k: "a:" + (a.url || a.title), kind: "aviso", text: String(a.title || ""), course: shortName(a.course), url: a.url && inCanvas(a.url), at: t });
+    if (!items.length) return false;
+    const cur = await loadChanges(user), keep = cur.items.filter(x => t - x.at < 7 * 864e5 && !items.some(n => n.k === x.k));
+    await saveChanges(user, { seenAt: cur.seenAt, items: items.concat(keep).slice(0, 40) });
+    return true;
+  }
+  function changesCard(cache, rec, redraw) {
+    const since = myChanges.seenAt || 0, grades = (Array.isArray(rec) ? rec : []).filter(r => r && r.at > since).length, items = myChanges.items;
+    if (!items.length && !grades) return null;
+    const sec = el("section", "card news changes"), h = el("h3", null, "Desde a sua última visita"), seen = el("button", "mini", "Visto ✓");
+    seen.type = "button"; seen.title = "Limpar esta lista";
+    seen.addEventListener("click", async () => { await saveChanges(cache.user, { seenAt: Date.now(), items: [] }); redraw(); });
+    const n = items.length + grades; h.appendChild(el("span", "pill ok", n + (n === 1 ? " novidade" : " novidades"))); h.appendChild(seen); sec.appendChild(h);
+    const ul = el("ul");
+    if (grades) { const li = el("li", "row"); li.append(el("span", "pill nt", "nota"), mid(grades + (grades === 1 ? " nota nova" : " notas novas"), location.origin + "/grades", "veja em Notas novas"), el("span")); ul.appendChild(li); }
+    for (const x of items.slice(0, 8)) { const li = el("li", "row"); li.append(el("span", "pill nt", x.kind), mid(x.text, x.url || null, x.course), el("span", "d", ago(C.localISO(new Date(x.at))))); ul.appendChild(li); }
+    if (items.length > 8) ul.appendChild(el("li", "muted", "+" + (items.length - 8) + " outras"));
+    sec.appendChild(ul); return sec;
+  }
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
-  function analyse(cache) {
-    const grades = C.fromCanvas(cache.data).grades, t = today(), byCanvasId = {};
+  // grades: Canvas first; where Canvas has none, the grade the student typed (hand, kept per Canvas user)
+  function analyse(cache, hand) {
+    const canvas = C.fromCanvas(cache.data).grades, grades = Object.assign({}, hand || {}, canvas), t = today(), byCanvasId = {};
     for (const x of cache.ids) { const c = C.subjectOf(x, true); if (c) { byCanvasId[x.id] = c; courseOf[c.id] = String(x.id); } }
     const mine = C.COURSES.filter(c => courseOf[c.id]), expired = C.expired(t), rules = mine.length > 0 && !expired;
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
     const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
     const has = rules && Object.keys(grades).length > 0;   // no matched course, term over or no grade read: no grade parts
-    return { grades, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
+    return { grades, canvas, hand: hand || {}, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
   }
 
   // The icon number: days to the next exam that still matters.
@@ -144,9 +220,13 @@
       const s = p.submissions || {};
       const url = p.html_url ? new URL(p.html_url, location.href).href : "";
       const key = p.plannable_type + ":" + p.plannable_id;
-      out.push({ key, mine: !!(marks && marks[key]), title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
+      out.push({ key, cid: p.course_id, mine: !!(marks && marks[key]), title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
         task: !!p.submissions, date: C.localISO(new Date(p.plannable_date)), due: p.plannable_date, url: url.startsWith(location.origin + "/") ? url : null,   // task: has a submission (events and pages do not)
         done: !!(s.submitted || s.graded || s.excused || (p.planner_override && p.planner_override.marked_complete)), late: !!s.missing });
+    }
+    for (const t of myTasks) if (t.date) {
+      const key = "own:" + t.id, done = !!(marks && marks[key]);
+      out.push({ key, own: true, mine: done, title: t.title, course: "Minha tarefa", ours: null, task: true, date: t.date, due: null, url: null, done: false, late: t.date < today() });
     }
     for (const u of a.upcoming) if (u.item.exam && !out.some(x => x.ours === u.course && x.date === u.item.date))
       out.push({ key: "qf:" + C.key(u.course, u.item), title: u.item.name, course: u.course.name, ours: u.course, date: u.item.date, due: null, url: null, done: false, late: false, exam: u });
@@ -191,61 +271,32 @@
   }
 
   // Dashboard: one status pill per card of the six courses. Cards render late (React), so watch the page.
-  function decorateCards(a, again) {
-    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { if (card.cpPill) card.cpPill.remove(); delete card.dataset.qf; }
+  // Course cards: the status pill on our subjects (inside Canvas's card content, under its title) and courses the student took
+  // off the dashboard (popup). Canvas's own card menu (⋮, color, nickname) stays untouched. ctx: { prefs, hidden }.
+  const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
+  function decorateCards(a, again, ctx) {
+    const prefs = ctx.prefs;
+    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); delete card.dataset.qf; }
     for (const card of document.querySelectorAll(".ic-DashboardCard:not([data-qf])")) {
       const link = card.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href"));
-      const c = m && a.byCanvasId[m[1]];
-      card.dataset.qf = "1";
-      if (!c) continue;
-      const st = a.state(c), p = pill(a.label(st), a.tone(st));
-      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
-      card.cpPill = p; (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
+      card.dataset.qf = "1"; card.cpAdded = [];
+      if (!m) continue;
+      const id = m[1], c = a.byCanvasId[id];
+      card.style.display = ctx.hidden.includes(id) ? "none" : "";
+      if (ctx.hidden.includes(id) || !c || !prefs.grades || !a.rules) continue;
+      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0);
+      card.cpAdded.push(p); head.appendChild(p);
     }
+    const shown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length, root = document.documentElement;
+    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(colsFor(shown)));
   }
 
-  // The Caderno+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
-  // #campus=<subject id> (course page button) opens it on that subject.
-  function campusPage() {
-    const cur = document.getElementById("cp-app"), m = /^#campus(?:=([a-z0-9]{1,20})(?:@\d{1,12})?)?$/.exec(location.hash);
-    if (!m || !APP) { if (cur) cur.remove(); return; }
-    const src = APP + (m[1] ? "?m=" + m[1] : "");
-    if (cur) { if (cur.cpFrame && cur.cpFrame.src !== src) cur.cpFrame.src = src; return; }
-    const nav = document.querySelector(".ic-app-header"), left = nav && nav.getBoundingClientRect ? Math.round(nav.getBoundingClientRect().width) : 0;
-    const box = el("div"); box.id = "cp-app";
-    box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:" + left + "px;z-index:9999;background:#FBF7EF";
-    const frame = el("iframe"); frame.src = src; frame.title = "Caderno+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
-    const close = el("button", null, "Fechar"); close.type = "button";
-    close.style.cssText = "position:absolute;bottom:16px;right:16px;font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:10px 16px;border-radius:10px;border:1px solid #1D2433;background:#1D2433;color:#FBF7EF;cursor:pointer;box-shadow:0 2px 0 #E2482B,0 8px 20px -8px rgba(29,36,51,.5)";
-    close.addEventListener("click", closeCampus);
-    box.cpFrame = frame; box.append(frame, close); document.body.appendChild(box);
-  }
-  // Fechar on a subject opened from the dashboard goes to that subject's Canvas course; otherwise it stays on the page.
-  function closeCampus() {
-    const m = /^#campus=([a-z0-9]{1,20})(?:@(\d{1,12}))?$/.exec(location.hash), cv = m && (courseOf[m[1]] || m[2]), home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
-    if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
-    history.replaceState(null, "", location.pathname + location.search); campusPage();
-  }
-  // "Caderno+" in the Canvas left menu, after Painel.
-  function navItem() {
-    const menu = document.getElementById("menu");
-    if (!menu || !APP || document.getElementById("cp-nav")) return;
-    const li = el("li", "menu-item ic-app-header__menu-list-item"); li.id = "cp-nav";
-    const a = el("a", "ic-app-header__menu-list-link"); a.href = "#campus";
-    a.style.cssText = "text-decoration:none;color:var(--ic-brand-global-nav-menu-item__text-color,#fff)";   // Canvas's own classes style it; this only guards the link look
-    const icon = el("div", "menu-item-icon-container", "C"), plus = el("span", null, "+"); icon.setAttribute("aria-hidden", "true");
-    icon.style.cssText = "font:600 22px/26px 'Iowan Old Style','New York',Georgia,serif";
-    plus.style.cssText = "font:700 14px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#FF7A5C;vertical-align:8px;margin-left:1px";
-    icon.appendChild(plus);
-    icon.style.color = "var(--ic-brand-global-nav-ic-icon-svg-fill,#fff)";
-    a.append(icon, el("div", "menu-item__text", "Caderno+")); li.appendChild(a);
-    const dash = document.getElementById("global_nav_dashboard_link"), after = dash && dash.closest ? dash.closest("li") : null;
-    menu.insertBefore(li, after ? after.nextSibling : null);
-  }
 
   const CSS = `
-    :host { all: initial; display:block; margin:0 0 18px; --fg:#1D2433; --muted:#5F6675; --line:#ECE4D3; --bg:#fff; --soft:#FBF7EF; --ring:#E2482B; --coral:#E2482B; --tile:#1D2433; --tile-c:#FBF7EF; --band1:#FFE6DF; --band2:#FFF5F1;
-      --paper:#FBF7EF; --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
+    :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
+      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, #fff); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, #fff);
+      --paper:var(--cp-paper,#FBF7EF); --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
     :host-context(html.cp-dark) { --fg:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --bg:#1B2130; --soft:#222938; --ring:#F0603F; --coral:#F0603F; --tile:#F3EDE1; --tile-c:#1D2433; --band1:#3B2220; --band2:#2A2129;
@@ -356,14 +407,19 @@
     .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
     .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
-    .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini { margin-left:10px; }
-    .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
+    .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini, .mini + .mini { margin-left:8px; } a.mini { border:1px solid var(--line); border-radius:9px; text-decoration:none; }
+    .seg { display:inline-flex; margin-left:12px; padding:2px; border-radius:999px; background:var(--track); }
+    .seg button { padding:3px 10px; border:0; border-radius:999px; background:none; font-size:12px; color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
+    .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
+    .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:96px minmax(0,1fr) auto; }
+    .natv + .find, .find + .natv { margin-left:8px; } .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
     .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
     .pal-q { all:unset; box-sizing:border-box; display:block; width:100%; padding:14px 16px; font:500 16px/1.3 var(--sans); color:var(--fg); border-bottom:1px solid var(--line); }
     .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
     .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
     h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
@@ -371,6 +427,19 @@
     .simi { all:unset; box-sizing:border-box; width:100%; max-width:130px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
     .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
+    .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }
+    .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
+    .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
+    @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
+    .meta { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
+    .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
+    .calnav { display:inline-flex; align-items:center; gap:6px; margin-left:14px; } .calnav button { padding:3px 10px; } .calt { min-width:150px; text-align:center; font:600 16px/1 var(--serif); text-transform:capitalize; }
+    .cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; padding:0; overflow:hidden; background:var(--line); }
+    .cwd { padding:8px 10px; background:var(--soft); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .cday { min-height:118px; padding:6px; background:var(--bg); display:flex; flex-direction:column; gap:4px; min-width:0; } .cday.off { background:var(--soft); } .cday.we { background:color-mix(in srgb, var(--soft) 55%, var(--bg)); }
+    .cday .cn { font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
+    .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -390,6 +459,63 @@
     const root = host.attachShadow({ mode: "open" }), box = el("div", "box"), style = el("style");
     style.textContent = CSS; root.append(style, box); anchor.prepend(host);
     return box;
+  }
+  // Placement: on the classic dashboard, right above its course cards (#DashboardCard_Container, outside its React root);
+  // on the widget dashboard, at the top of #content (never inside its React grid). The watcher re-applies the Notas do curso
+  // badges when React redraws that widget.
+  let dashWatch = null, widgets = null;
+  // the widget dashboard is on screen: its ENV flag, and not the classic dashboard (whose cards container is in the page
+  // HTML; the flag stays true after the student switches back to the old view)
+  const widgetDash = () => widgets != null ? widgets : (widgets = !document.getElementById("DashboardCard_Container") && [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));
+  function placeDash() {
+    const host = document.getElementById("cp-dash"), q = sel => document.querySelector ? document.querySelector(sel) : null;
+    const cols = q("#DashboardCard_Container");   // the classic dashboard: right above its cards (outside its React root); the widget dashboard keeps ours at the top of #content
+    if (!host || !cols || !cols.parentNode || host.nextSibling === cols) return;
+    cols.parentNode.insertBefore(host, cols);
+  }
+  // Its "Notas do curso" widget shows Canvas's current score (only what is graded, without the Plano de Ensino weights, so
+  // 92% halfway through the term). On our subjects the card keeps its picture and gets our numbers instead: points
+  // guaranteed of 10, the share of the term secured and what is still needed. Canvas's figure is hidden by a stylesheet
+  // of ours (not React's), and the badge comes back if React redraws the card.
+  let gradeA = null, hiddenIds = [];
+  function hideGradeCards(ids) {
+    hiddenIds = ids || hiddenIds;
+    let st = document.getElementById("cp-hidden");
+    if (!st) { st = el("style"); st.id = "cp-hidden"; (document.head || document.body).appendChild(st); }
+    st.textContent = hiddenIds.length ? hiddenIds.map(id => '[data-testid="course-grade-card-' + id + '"]').join(",") + " { display:none !important; }" : "";
+  }
+  function enhanceGradeCards() {
+    const a = gradeA;
+    if (!a || !document.querySelectorAll) return;
+    const hide = [];
+    for (const card of document.querySelectorAll('[data-testid^="course-grade-card-"]')) {
+      const id = (card.getAttribute("data-testid") || "").slice("course-grade-card-".length), c = a.byCanvasId[id];
+      if (!c || !a.has) continue;
+      hide.push('[data-testid="course-' + id + '-grade"]');
+      if (card.querySelector('[data-cp-grade]')) continue;
+      const st = a.state(c), name = card.querySelector('[data-testid="course-' + id + '-name"]'), b = el("div");
+      b.setAttribute("data-cp-grade", "1"); b.title = "Caderno+: pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0) + ". O Canvas mostra só a média do que já foi lançado.";
+      const tn = C.statusTone(st), col = { ok: "#2F7D5B", warn: "#A8650F", bad: "#C2361F" }[tn] || "#A8650F", pct = Math.round(Math.min(10, st.earned) * 10);
+      b.style.cssText = "display:flex;align-items:center;gap:10px;margin:8px 0 2px;font:500 12.5px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#5F6675";
+      const big = el("b", null, earnedText(st)); big.style.cssText = "font:600 22px/1 'Iowan Old Style','New York',Georgia,serif;color:" + col;
+      const of = el("span", null, "de 10"), txt = el("span", null, pct + "% garantido"), lab = el("b", null, a.label(st));
+      lab.style.cssText = "display:block;font-weight:600;color:" + col;
+      const bar = el("i"); bar.style.cssText = "display:block;height:5px;margin-top:4px;border-radius:9px;background:linear-gradient(90deg," + col + " " + pct + "%,#EEE9DE " + pct + "%)";
+      const right = el("span"); right.style.cssText = "flex:1;min-width:0"; right.append(lab, txt, bar);
+      b.append(big, of, right);
+      if (name && name.parentNode) name.parentNode.insertBefore(b, name.nextSibling); else card.appendChild(b);
+    }
+    let st = document.getElementById("cp-grades");
+    if (!st) { st = el("style"); st.id = "cp-grades"; (document.head || document.body).appendChild(st); }
+    st.textContent = hide.length ? hide.join(",") + " { display:none !important; }" : "";
+  }
+  function watchDash() {
+    const root = document.getElementById("content");
+    if (!root || dashWatch || typeof MutationObserver === "undefined") return;
+    let t = 0;
+    dashWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); }, 120); });
+    dashWatch.observe(root, { childList: true, subtree: true });
+    placeDash(); enhanceGradeCards();
   }
   const link = (text, url) => { const x = el(url ? "a" : "span", "n", text); if (url) x.href = url; x.title = text; return x; };
   const mid = (title, url, sub) => { const m = el("span", "mid"); m.append(link(title, url), el("div", "c", sub)); return m; };
@@ -447,6 +573,7 @@
       pr.setAttribute("aria-label", got + " de " + work.length + " feitas nesta semana"); h.appendChild(pr);
     }
     foldable(sec, h, "week");
+    const sem = el("a", "mini", "Semestre →"); sem.href = "/calendar"; sem.title = "O calendário do semestre inteiro"; h.appendChild(sem);
     const ics = el("button", "mini", "↓ .ics"); ics.type = "button"; ics.title = "Exportar entregas e provas para a sua agenda (Google, Outlook, celular)";
     ics.addEventListener("click", () => saveIcs(list)); h.appendChild(ics);
     sec.appendChild(h);
@@ -512,9 +639,9 @@
     return sec;
   }
 
-  // The calculator's own components, drawn from the shared core (same numbers as the Caderno+ page): ring, next card,
-  // KPI row and subject tiles. Links open Caderno+ on a subject (#campus=<id>); in the bookmarklet they are plain text.
-  const toCampus = (tag, cls, id) => { const x = el(APP ? "a" : tag, cls); if (APP) x.href = "#campus" + (id ? "=" + id + (courseOf[id] ? "@" + courseOf[id] : "") : ""); return x; };   // @<Canvas course id>: Fechar goes there
+  // The calculator's components, drawn from the shared core: ring, next card, KPI row and subject tiles. A subject opens its
+  // Canvas course page, where the course panel has the grades, the simulator and the notes.
+  const toCampus = (tag, cls, id) => { const x = el(courseOf[id] ? "a" : tag, cls); if (courseOf[id]) x.href = "/courses/" + courseOf[id]; return x; };   // a subject opens its Canvas course (the panel there has everything)
   const earnedText = st => st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1);
   function ring(st, big) {
     const r = el("span", "ring" + (big ? " big" : "")), rp = C.ringParts(st), tn = C.statusTone(st), e = rp.earned * 100, f = (rp.earned + rp.future) * 100;
@@ -572,17 +699,77 @@
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
-  function dashPanel(a, cache, prefs, marks, rec) {
+  // Modes: completo (everything), limpo (only what matters: next assessment, subjects, the week, what is new) and foco
+  // (one list: what to do now, nothing else). The page side (Canvas clutter hidden) is theme.js.
+  const MODES = [["completo", "Completo"], ["limpo", "Limpo"], ["foco", "Foco"]];
+  function focusView(list) {
+    const t = today(), end = addDays(6), now = list.filter(x => (x.task || x.exam) && !fin(x) && (x.late ? x.date >= addDays(-7) : x.date >= t) && x.date <= end).slice(0, 7);
+    const sec = el("section", "card week focus"), h = el("h3", null, "Agora");
+    h.appendChild(el("span", "pill " + (now.some(x => x.late) ? "bad" : now.length ? "warn" : "ok"), now.length ? now.length + (now.length === 1 ? " coisa" : " coisas") : "nada pendente"));
+    sec.appendChild(h);
+    if (!now.length) { sec.appendChild(el("div", "empty", "Tudo em dia. Aproveita.")); return sec; }
+    const ul = el("ul");
+    for (const x of now) {
+      const li = el("li", "row");
+      li.append(el("span", "d", x.late ? "atrasada" : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.course),
+        x.exam ? el("span", "pill " + needTone(x.exam), need(x.exam)) : el("span", "pill " + (x.late ? "bad" : "warn"), x.late ? "atrasada" : "a entregar"));
+      ul.appendChild(li);
+    }
+    sec.appendChild(ul); return sec;
+  }
+  function tasksCard(cache, marks, redraw) {
+    const sec = el("section", "card news tasks"), h = el("h3", null, "Minhas tarefas"), open = myTasks.filter(t => !marks["own:" + t.id]);
+    if (open.length) h.appendChild(el("span", "pill nt", open.length + (open.length === 1 ? " a fazer" : " a fazer")));
+    sec.appendChild(h);
+    const form = el("form", "add"), ti = el("input"), di = el("input"), ok = el("button", "primary", "Adicionar");
+    ti.type = "text"; ti.placeholder = "Nova tarefa (ex.: revisar slides 5 sex)"; ti.setAttribute("aria-label", "Nova tarefa"); ti.maxLength = 140;
+    di.type = "date"; di.setAttribute("aria-label", "Dia (opcional)"); ok.type = "submit";
+    form.addEventListener("submit", async e => {
+      e.preventDefault(); const pw = parseWhen(ti.value || ""), date = di.value || pw.date;
+      if (!pw.title) return; await addTask(cache.user, pw.title, date); redraw();
+    });
+    form.append(ti, di, ok); sec.appendChild(form);
+    const list = myTasks.slice().sort((x, y) => (!!marks["own:" + x.id] - !!marks["own:" + y.id]) || String(x.date || "9").localeCompare(String(y.date || "9")));
+    const ul = el("ul");
+    for (const t of list) {
+      const done = !!marks["own:" + t.id], li = el("li", "row" + (done ? " dn" : "")), end = el("span", "end");
+      const ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(done)); ck.setAttribute("aria-label", (done ? "Desmarcar: " : "Marcar como feito: ") + t.title);
+      ck.addEventListener("click", async () => { await setMark(cache.user, { key: "own:" + t.id, date: t.date || addDays(0) }, !done); redraw(); });
+      const del = el("button", "ck del", "×"); del.type = "button"; del.setAttribute("aria-label", "Apagar: " + t.title);
+      del.addEventListener("click", async () => { await saveTasks(cache.user, myTasks.filter(x => x.id !== t.id)); redraw(); });
+      end.append(ck, del);
+      li.append(el("span", "d", t.date ? cap(dayLabel(t.date)) : "sem dia"), mid(t.title, null, done ? "feita" : t.date && t.date < today() ? "atrasada" : "minha tarefa"), end);
+      ul.appendChild(li);
+    }
+    if (list.length) sec.appendChild(ul); else sec.appendChild(el("div", "muted", "Coisas que não estão no Canvas: estudar, imprimir, levar material. Com dia, entram na semana e nos lembretes."));
+    foldable(sec, h, "tasks"); return sec;
+  }
+  function dashPanel(a, cache, prefs, marks, rec, onMode) {
+    const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
-    if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length)) return;
+    if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
-    if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
-    if (APP) { const brand = el("a", "brand", "Abrir Caderno+ →"); brand.href = "#campus"; hd.appendChild(brand); }
+    const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
+    for (const [k, label] of MODES) {
+      const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(mode === k));
+      b.title = { completo: "Tudo do Caderno+", limpo: "Só o que importa, sem a bagunça do Canvas", foco: "Só o que fazer agora" }[k];
+      if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
+    }
+    hd.appendChild(seg);
+    // the meta (goal) every number is computed against
+    const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
+    dn.type = upb.type = "button"; dn.setAttribute("aria-label", "Meta menor"); upb.setAttribute("aria-label", "Meta maior"); meta.title = "A nota que você quer em cada matéria";
+    const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };   // onMode sets T before any wait, so quick clicks add up
+    dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
+    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.appendChild(meta);
     box.append(hd);
-    if (grades) box.append(...gradesView(a));
+    if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
+    // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
+    if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
     else if (why) box.append(el("div", "muted why", why));
     box.appendChild(grid);
     if (week) {
@@ -591,7 +778,14 @@
       const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
     }
-    const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < 30 * 864e5).slice(0, 5) : [];
+    if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
+    if (prefs.tasks) grid.appendChild(tasksCard(cache, marks, () => onMode && onMode(mode)));
+    if (!prefs.native && widgetDash() && !clean) {   // with Canvas's widgets hidden, every course stays one click away (extension courses too)
+      const sec = el("section", "card news courses"), h = el("h3", null, "Todas as matérias"), ul = el("ul");
+      for (const x of cache.ids) { const li = el("li", "row"); li.append(el("span"), mid(shortName(x.name), location.origin + "/courses/" + x.id, String(x.name).slice(0, 120)), el("span")); ul.appendChild(li); }
+      sec.append(h, ul); foldable(sec, h, "courses"); grid.appendChild(sec);
+    }
+    const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < (clean ? 3 : 30) * 864e5).slice(0, 5) : [];
     if (recent.length) {   // the latest grades, newest first; "nova" for the last 3 days
       const sec = el("section", "card news grades-new"), h = el("h3", null, "Notas novas"), fresh = recent.filter(r => Date.now() - r.at < 3 * 864e5).length;
       if (fresh) h.appendChild(el("span", "pill ok", fresh + (fresh === 1 ? " nova" : " novas")));
@@ -610,8 +804,8 @@
       for (const m of cache.inbox) { const li = el("li", "row unread"); li.append(el("span", "dot", "não lida"), mid(m.subject, location.origin + "/conversations", m.from), el("span", "d", m.at ? ago(C.localISO(new Date(m.at))) : "")); ul.appendChild(li); }
       sec.appendChild(ul); foldable(sec, h, "inbox"); grid.appendChild(sec);
     }
-    if (news) {
-      const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
+    if (news && !(prefs.native && widgetDash()) && !(clean && !cache.data.announcements.some(x => x.unread))) {   // inside Canvas's dashboard its own Avisos widget shows them
+      const all = cache.data.announcements.slice().filter(x => !clean || x.unread).sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
       const sec = el("section", "card news"), h = el("h3", null, "Avisos");
       if (unread) h.appendChild(el("span", "pill nt", unread + (unread === 1 ? " não lido" : " não lidos")));
       sec.appendChild(h);
@@ -652,27 +846,33 @@
       tbl.appendChild(th);
       const total = C.weightSum(c), d2 = it => it.inMax >= 5 ? 1 : 2, open = [];
       for (const it of c.items) {
-        const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.grades[k]), name = el("span", "n", it.name);
+        const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.canvas[k]), name = el("span", "n", it.name);
         if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st0.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
         let g;
         if (Number.isNaN(p)) g = el("span", "g e", "nota inválida");
-        else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.grades[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
+        else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.canvas[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
         else { g = el("span", "g e"); open.push({ it, k, g }); }
         row.append(name, el("span", "w", Math.round(it.max / total * 100) + "%"), g); tbl.appendChild(row);
       }
       const hint = it => st => st.late.includes(it) && !(C.key(c, it) in sim) ? "falta a nota" : st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it });
       paint = () => {
-        const st = C.courseState(c, Object.assign({}, a.grades, sim), today(), T);
+        const g = Object.assign({}, a.canvas, simOn ? {} : a.hand, sim), st = C.courseState(c, g, today(), T);
         headBox.replaceChildren(headCard(st));
         for (const o of open) {
-          const txt = (o.k in sim) ? "" : hint(o.it)(st);
-          if (!simOn) { o.g.replaceChildren(); o.g.textContent = txt; o.mounted = false; continue; }
+          const txt = (o.k in sim) ? "" : hint(o.it)(st), mineV = a.hand[o.k];
+          if (!simOn) {
+            o.g.replaceChildren(); o.mounted = false;
+            if (mineV != null && !Number.isNaN(C.itemPoints(o.it, mineV)) && C.itemPoints(o.it, mineV) !== null) { o.g.className = "g"; o.g.textContent = fmt(C.parseNum(mineV), d2(o.it)); o.g.appendChild(el("small", null, " sua nota")); }
+            else { o.g.className = "g e"; o.g.textContent = txt; }
+            continue;
+          }
+          o.g.className = "g e";
           if (!o.input) {
             o.input = el("input", "simi"); o.input.type = "text"; o.input.inputMode = "decimal"; o.input.setAttribute("aria-label", "Simular a nota de " + o.it.name + " (de " + fmt(o.it.inMax, d2(o.it)) + ")");
             o.input.addEventListener("input", () => { const v = String(o.input.value || "").trim(), pp = v && C.itemPoints(o.it, v);
               if (typeof pp === "number" && !Number.isNaN(pp)) sim[o.k] = v; else delete sim[o.k]; paint(); });
           }
-          if (!o.mounted) { o.g.textContent = ""; o.g.replaceChildren(o.input); o.mounted = true; }
+          if (!o.mounted) { o.g.textContent = ""; o.g.replaceChildren(o.input); o.mounted = true; o.input.value = sim[o.k] || ""; }
           o.input.placeholder = txt || "e se?";
         }
       };
@@ -686,16 +886,26 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
-    if (c && c.items.some(it => C.itemPoints(it, a.grades[C.key(c, it)]) === null)) {
-      const sb = el("button", null, "Simular notas"), note = el("span", "muted", "");
+    // Simular (nothing saved) or, with "Guardar como minhas notas", the grades typed where Canvas has none (kept per user)
+    if (c && c.items.some(it => C.itemPoints(it, a.canvas[C.key(c, it)]) === null)) {
+      const sb = el("button", null, "Simular ou lançar notas"), note = el("label", "muted keep"), keep = el("input"), save = el("button", "primary", "Guardar");
+      keep.type = "checkbox"; note.append(keep, el("span", null, " guardar como minhas notas")); note.hidden = true; save.hidden = true;
+      const ownOpen = () => c.items.filter(it => C.itemPoints(it, a.canvas[C.key(c, it)]) === null).map(it => C.key(c, it));
       sb.addEventListener("click", () => {
-        simOn = !simOn; if (!simOn) for (const k of Object.keys(sim)) delete sim[k];
-        sb.textContent = simOn ? "Sair da simulação" : "Simular notas"; note.textContent = simOn ? "Digite notas nas avaliações sem nota · nada é salvo" : "";
+        simOn = !simOn; for (const k of Object.keys(sim)) delete sim[k];
+        if (simOn) for (const k of ownOpen()) if (a.hand[k] != null) sim[k] = a.hand[k];   // start from the grades already typed
+        sb.textContent = simOn ? "Sair sem guardar" : "Simular ou lançar notas"; note.hidden = save.hidden = !simOn; keep.checked = false;
         paint();
       });
-      acts.append(sb, note);
+      save.addEventListener("click", async () => {
+        if (!keep.checked) { note.textContent = ""; note.append(keep, el("span", null, " marque para guardar (senão é só simulação)")); return; }
+        const ch = {}; for (const k of ownOpen()) ch[k] = k in sim ? sim[k] : null;
+        a.hand = await setHand(cache.user, ch); a.grades = Object.assign({}, a.hand, a.canvas);
+        simOn = false; for (const k of Object.keys(sim)) delete sim[k]; sb.textContent = "Simular ou lançar notas"; note.hidden = save.hidden = true; status.textContent = "Notas guardadas neste computador";
+        paint();
+      });
+      acts.append(sb, note, save);
     }
-    if (c && APP) { const open = el("button", null, "Abrir no Caderno+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
     // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
     const nb = el("button", null, "Anotações"), pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
     ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
@@ -714,8 +924,8 @@
       if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
     });
     nb.addEventListener("click", () => { pad.hidden = !pad.hidden; if (!pad.hidden && ta.focus) ta.focus(); });
-    if (APP) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
-    acts.appendChild(status); box.append(acts); if (APP) box.appendChild(pad);
+    if (EXT) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
+    acts.appendChild(status); box.append(acts); if (EXT) box.appendChild(pad);
   }
 
   async function courseFiles(id) {
@@ -769,7 +979,7 @@
       out.push({ t: nm, c: "Matéria", u: "/courses/" + c.id, k: "matéria" });
       for (const x of c.assignments) if (x.url) out.push({ t: x.name, c: nm, u: x.url, k: "tarefa" });
     }
-    if (APP) for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Caderno+", u: "#campus=" + c.id + "@" + courseOf[c.id], k: "campus" });
+    for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Caderno+", u: "/courses/" + courseOf[c.id], k: "campus" });
     return out;
   }
   async function moduleIndex(cache) {
@@ -809,14 +1019,20 @@
     ul.setAttribute("role", "listbox"); ul.id = "pal-r"; q.setAttribute("aria-controls", "pal-r");
     let items = inCanvasOnly(baseIndex(a, cache)), hits = [], sel = 0;
     const close = () => host.remove();
-    const go = x => { close(); if (x.u.startsWith("#")) location.hash = x.u.slice(1); else location.assign(inCanvas(x.u)); };
+    const go = async x => {
+      close();
+      if (x.pw) { await loadTasks(cache.user); await addTask(cache.user, x.pw.title, x.pw.date); if (window.cpRedraw) window.cpRedraw(); return; }
+      location.assign(inCanvas(x.u));
+    };
     const draw = () => {
-      hits = find(items, q.value); sel = Math.min(sel, Math.max(0, hits.length - 1)); ul.replaceChildren();
+      const plus = /^\+\s*(.+)/.exec(String(q.value || ""));
+      if (plus) { const pw = parseWhen(plus[1]); hits = pw.title ? [{ t: "Criar tarefa: " + pw.title, c: pw.date ? cap(dayLabel(pw.date)) : "sem dia", u: "#task", k: "nova", pw }] : []; }
+      else hits = find(items, q.value); sel = Math.min(sel, Math.max(0, hits.length - 1)); ul.replaceChildren();
       hits.forEach((x, i) => {
         const li = el("li", "pal-i" + (i === sel ? " on" : "")); li.setAttribute("role", "option"); li.setAttribute("aria-selected", String(i === sel));
         li.append(el("span", "pal-k", x.k), mid(x.t, null, x.c)); li.addEventListener("click", () => go(x)); ul.appendChild(li);
       });
-      if (!hits.length) ul.appendChild(el("li", "pal-e", q.value ? "Nada encontrado." : "Digite para buscar."));
+      if (!hits.length) ul.appendChild(el("li", "pal-e", q.value ? "Nada encontrado." : "Digite para buscar, ou + para criar uma tarefa (ex.: + revisar slides sex)."));
     };
     q.addEventListener("input", () => { sel = 0; draw(); });
     q.addEventListener("keydown", e => {
@@ -831,7 +1047,112 @@
     moduleIndex(cache).then(mods => { items = items.concat(inCanvasOnly(mods)); note.textContent = KEYS + " abre e fecha · ↑↓ escolhe · Enter abre"; draw(); },
       () => { note.textContent = "Não consegui ler os módulos agora; busca só nas tarefas e matérias."; });
   }
-  const inCanvasOnly = list => list.filter(x => x.u.startsWith("#campus=") || inCanvas(x.u));
+  const inCanvasOnly = list => list.filter(x => inCanvas(x.u));
+
+  // The left-menu trays (Cursos, Grupos, Histórico, Ajuda: canvas-lms navigation_header/react/trays, all in #nav-tray-portal):
+  // the look is page CSS; here the Cursos tray gets our pill on our subjects and leaves out the courses taken off the dashboard.
+  let trayWatch = null;
+  function enhanceTray(a, hidden) {
+    const portal = document.getElementById("nav-tray-portal");
+    if (!portal || !portal.querySelectorAll) return;
+    for (const link of portal.querySelectorAll('a[href^="/courses/"]')) {
+      const m = /^\/courses\/(\d+)$/.exec(link.getAttribute("href") || ""); if (!m) continue;
+      const item = link.closest ? link.closest("li") : null;
+      if (item) item.style.display = hidden().includes(m[1]) ? "none" : "";
+      const c = a.byCanvasId[m[1]];
+      if (!c || !a.has || !item || item.querySelector("[data-cp-tray]")) continue;
+      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.setAttribute("data-cp-tray", "1"); item.appendChild(p);
+    }
+  }
+  function watchTray(a, hidden) {
+    if (trayWatch || typeof MutationObserver === "undefined" || !document.body) return;
+    let t = 0;
+    trayWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => enhanceTray(a, hidden), 150); });
+    trayWatch.observe(document.body, { childList: true, subtree: true });
+    enhanceTray(a, hidden);
+  }
+  // /courses (Todos os cursos): our pill per subject and, on every course, "Tirar do painel" / "Mostrar no painel".
+  function coursesPage(a, hidden, setHidden) {
+    for (const row of document.querySelectorAll("#my_courses_table tbody tr")) {
+      const link = row.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href") || "");
+      if (!m || row.querySelector("[data-cp-row]")) continue;
+      const id = m[1], c = a.byCanvasId[id], cell = link.parentNode, box = el("span"); box.setAttribute("data-cp-row", "1");
+      box.style.cssText = "display:inline-flex;gap:8px;align-items:center;margin-left:10px;vertical-align:middle";
+      if (c && a.has) { const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.style.marginTop = "0"; box.appendChild(p); }
+      const off = hidden().includes(id), b = el("button", null, off ? "Mostrar no painel" : "Tirar do painel"); b.type = "button";
+      b.style.cssText = "font:500 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:5px 10px;border-radius:8px;border:1px solid #ECE4D3;background:#fff;color:#5F6675;cursor:pointer";
+      b.addEventListener("click", async () => { const now = hidden(), next = now.includes(id) ? now.filter(x => x !== id) : now.concat([id]); await setHidden(next); b.textContent = next.includes(id) ? "Mostrar no painel" : "Tirar do painel"; });
+      box.appendChild(b); cell.appendChild(box);
+    }
+  }
+
+  // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
+  // deadlines (the planner, read a month at a time when outside the last reading), our exams and the student's own tasks.
+  // "Calendário do Canvas" brings the original back (prefs.nativeCal).
+  const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  function calendarPage(a, cache, prefs, marks) {
+    const box = panelHost("cp-cal");
+    if (!box) return;
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-cal");
+    const months = [], first = C.TERM_END.slice(0, 4) === today().slice(0, 4) ? today().slice(0, 4) : String(Number(C.TERM_END.slice(0, 4)) - 1);
+    for (let d = new Date(Number(first), 7, 1); C.localISO(d) <= C.TERM_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(C.localISO(d).slice(0, 7));
+    let cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : months[0];
+    const extra = {}, base = agenda(a, cache, marks);
+    const ruleItems = (a.rules ? a.mine : []).flatMap(c => c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, course: C.SHORT[c.id] || c.name, date: it.date, exam: it.exam, task: !it.exam, url: courseOf[c.id] ? location.origin + "/courses/" + courseOf[c.id] : null, rule: true })));
+    const hd = el("div", "hd"); hd.append(mark(), wordmark());
+    const nav = el("span", "calnav"), prev = el("button", null, "‹"), next = el("button", null, "›"), now = el("button", null, "Hoje"), title = el("b", "calt");
+    prev.type = next.type = now.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
+    nav.append(prev, title, next, now); hd.appendChild(nav);
+    const natB = el("button", "find natv", prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"); natB.type = "button";
+    natB.addEventListener("click", async () => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { nativeCal: !prefs.nativeCal }) }); prefs = cpPrefs(Object.assign({}, prefs, { nativeCal: !prefs.nativeCal })); natB.textContent = prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"; setTimeout(() => window.dispatchEvent && window.dispatchEvent(new Event("resize")), 60); });   // Canvas's calendar measures itself when shown
+    hd.appendChild(natB);
+    const grid = el("div", "card cal"), legend = el("div", "muted src", "Prazos do Canvas, provas do Plano de Ensino e as suas tarefas · clique para abrir");
+    box.append(hd, grid, legend);
+    const itemsOf = ym => {
+      const seen = new Set(), out = [];
+      for (const x of base.concat(extra[ym] || [], ruleItems)) {
+        if (!x.date || x.date.slice(0, 7) !== ym) continue;
+        const k = (x.rule ? x.course + x.date : x.key);
+        if (x.rule && base.some(y => y.exam && y.date === x.date && y.ours && (C.SHORT[y.ours.id] || "") === x.course)) continue;
+        if (seen.has(k)) continue; seen.add(k); out.push(x);
+      }
+      return out.sort((p, q) => (p.due || p.date).localeCompare(q.due || q.date));
+    };
+    const draw = () => {
+      const [y, m] = cur.split("-").map(Number), start = new Date(y, m - 1, 1), pad = start.getDay(), days = new Date(y, m, 0).getDate(), items = itemsOf(cur);
+      title.textContent = MONTHS[m - 1] + " " + y; prev.disabled = cur === months[0]; next.disabled = cur === months[months.length - 1];
+      grid.replaceChildren();
+      for (const w of WD) grid.appendChild(el("span", "cwd", w));
+      for (let i = 0; i < pad; i++) grid.appendChild(el("span", "cday off"));
+      for (let d = 1; d <= days; d++) {
+        const iso = cur + "-" + String(d).padStart(2, "0"), cell = el("div", "cday" + (iso === today() ? " today" : "") + (new Date(iso + "T12:00:00").getDay() % 6 === 0 ? " we" : ""));
+        cell.appendChild(el("span", "cn", String(d)));
+        const its = items.filter(x => x.date === iso);
+        for (const x of its.slice(0, 3)) {
+          const c = el(x.url ? "a" : "span", "ev " + (fin(x) ? "ok dn" : x.exam ? "ex" : x.own ? "in" : x.late ? "bd" : "wa"));
+          if (x.url) c.href = x.url;
+          c.title = (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title + " · " + x.course + (x.due ? " · " + hhmm(x.due) : "");
+          c.appendChild(el("span", "t", (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title)); cell.appendChild(c);
+        }
+        if (its.length > 3) { const more = el("span", "ev more", "+" + (its.length - 3)); more.title = its.slice(3).map(x => x.title).join("\n"); cell.appendChild(more); }
+        grid.appendChild(cell);
+      }
+      for (let i = (pad + days) % 7; i && i < 7; i++) grid.appendChild(el("span", "cday off"));   // the rest of the last week
+    };
+    const load = async ym => {   // a month outside the last reading: its planner items, read once
+      if (extra[ym] || (base.some(x => x.date && x.date.slice(0, 7) === ym) && ym === today().slice(0, 7))) return;
+      const [y, m] = ym.split("-").map(Number), last = new Date(y, m, 0).getDate();
+      try {
+        const got = await getAll("/api/v1/planner/items?start_date=" + ym + "-01&end_date=" + ym + "-" + String(last).padStart(2, "0") + "&per_page=100");
+        extra[ym] = agenda(a, Object.assign({}, cache, { planner: got }), marks).filter(x => !x.exam);
+      } catch (e) { extra[ym] = []; }
+      if (ym === cur) draw();
+    };
+    prev.addEventListener("click", () => { const i = months.indexOf(cur); if (i > 0) { cur = months[i - 1]; draw(); load(cur); } });
+    next.addEventListener("click", () => { const i = months.indexOf(cur); if (i < months.length - 1) { cur = months[i + 1]; draw(); load(cur); } });
+    now.addEventListener("click", () => { cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : cur; draw(); });
+    draw(); load(cur);
+  }
 
   // Canvas login and logout pages (the content script runs on every pucpr.instructure.com page): the next student may be
   // someone else, so the user and the last reading are forgotten.
@@ -858,7 +1179,6 @@
 
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
-    navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
     if (prefs.scroll) scrollButtons();
     let cache;
@@ -870,7 +1190,9 @@
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
   let cardWatch = null;
   async function draw(cache, prefs, again) {
-    const a = analyse(cache), marks = await myMarks(cache.user);
+    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7));
+    let a = analyse(cache, await myHand(cache.user)); const marks = await myMarks(cache.user);
+    await loadTasks(cache.user); await loadChanges(cache.user);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
@@ -882,18 +1204,57 @@
         if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); }
       }, true);
     }
+    if (/^\/calendar\/?$/.test(location.pathname) && prefs.calendar) calendarPage(a, cache, prefs, marks);
+    { // trays (every page) and the course list use the courses taken off the dashboard
+      const { hidden } = await chrome.storage.local.get("hidden");
+      let off = Array.isArray(hidden) ? hidden.map(String) : [];
+      const getOff = () => off, setOff = async list => { off = list.map(String); await chrome.storage.local.set({ hidden: off }); };
+      watchTray(a, getOff);
+      if (/^\/courses\/?$/.test(location.pathname)) coursesPage(a, getOff, setOff);
+    }
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};
-      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null);
-      if (!prefs.grades || !a.rules) return;
-      decorateCards(a, again);
+      const onMode = async (k, meta, native) => {   // switch from the panel (mode, meta, native dashboard, or a change of tasks): saved, redrawn at once
+        if (meta != null) T = meta;
+        const { prefs: saved } = await chrome.storage.local.get("prefs"), was = cpPrefs(saved);
+        if (was.mode !== k || (meta != null && Number(was.meta) !== meta) || (native != null && was.native !== native)) {
+          const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next);
+        }
+        if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); gradeA = a; for (const b of (document.querySelectorAll ? document.querySelectorAll("[data-cp-grade]") : [])) b.remove(); enhanceGradeCards(); }
+        const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
+        const old = document.getElementById("cp-dash"); if (old) old.remove();
+        dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode); placeDash();
+        sendReminders(agenda(a, cache, m2), prefs, cache);
+      };
+      window.cpRedraw = () => onMode(prefs.mode);
+      // the popup changes the mode, the meta or the native dashboard: the panel follows at once (one listener per page)
+      window.cpPrefsChanged = async next => {
+        const p2 = cpPrefs(next);
+        if (p2.mode === prefs.mode && p2.meta === prefs.meta && p2.native === prefs.native) return;
+        const metaN = Math.min(10, Math.max(5, Number(String(p2.meta).replace(",", ".")) || 7));
+        prefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
+        onMode(p2.mode);
+      };
+      window.cpHiddenChanged = list => { ctx.hidden = (Array.isArray(list) ? list : []).map(String); decorateCards(a, true, ctx); hideGradeCards(ctx.hidden); };   // unticked in the popup: off at once
+      if (!window.cpPrefsListen && chrome.storage.onChanged) { window.cpPrefsListen = 1; chrome.storage.onChanged.addListener((ch, area) => {
+        if (area !== "local") return;
+        if (ch.prefs && window.cpPrefsChanged) window.cpPrefsChanged(ch.prefs.newValue);
+        if (ch.hidden && window.cpHiddenChanged) window.cpHiddenChanged(ch.hidden.newValue);
+      }); }
+      if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
+      const { hidden } = await chrome.storage.local.get("hidden");
+      const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
+      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
+      gradeA = a; watchDash(); enhanceGradeCards();
+      decorateCards(a, again, ctx); hideGradeCards(ctx.hidden);
+      window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
-      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); });
+      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a, false, ctx), 250); });
       watch.observe(document.body, { childList: true, subtree: true });
       setTimeout(() => watch.disconnect(), 20000);
     }

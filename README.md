@@ -11,6 +11,9 @@ Caderno+ é uma extensão do Chrome, Brave e Edge que roda dentro do Canvas da P
 - **Simular notas e anotações:** na página da matéria, digite notas hipotéticas e veja na hora se garante a meta; anotações por matéria, só no seu computador.
 - **Exportar .ics** das entregas e provas para Google Agenda, Outlook ou celular.
 - **Foco:** timer de 25 minutos de estudo e 5 de pausa no botão da extensão.
+- **Aparência própria:** o Canvas inteiro com a identidade do Caderno+: 9 temas (Caderno, Kraft, Marca-texto, Menta, Oceano, Pastel, Grafite, Contraste, Original), fonte, cor do menu, cards em grade/compactos/lista com cor por matéria e a próxima entrega.
+- **Modos Limpo e Foco:** Limpo tira a bagunça do Canvas e deixa só o que importa; Foco mostra só uma lista do que fazer agora.
+- **O que mudou** desde a última visita (arquivos, módulos, tarefas, avisos) e **Minhas tarefas** (também com + no Ctrl+K).
 - **Conforto:** temas escuro, escuro suave e escuro à noite; cards do painel recolhíveis; botões ↑ ↓ em páginas longas. O painel aparece na hora com a última leitura enquanto atualiza.
 - **Busca (Ctrl+K ou ⌘K):** em qualquer página do Canvas, procura matérias, tarefas e itens dos módulos de todas as matérias e abre com Enter.
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos marcados.
@@ -19,7 +22,7 @@ Caderno+ é uma extensão do Chrome, Brave e Edge que roda dentro do Canvas da P
 - **Quanto falta:** em cada card e em cada matéria, quanto você precisa tirar nas próximas avaliações, com os pesos dos Planos de Ensino. As regras ficam em um arquivo por turma (`rules/<semestre>/<turma>.json`), reconhecida pelo número da matéria no Canvas. Turmas com regras: <!--TURMAS-->Ciência da Computação, manhã, 2026/2 ([`rules/2026-2/cc-manha.json`](rules/2026-2/cc-manha.json))<!--TURMAS-->. Em outras turmas o Caderno+ mostra a semana, os avisos, os lembretes das tarefas do Canvas e os arquivos, sem as notas; turmas novas entram como um arquivo em `rules/` (veja [Adicionar uma turma](CONTRIBUTING.md#adicionar-uma-turma)). Depois de 31/01/2027 as regras de 2026/2 saem do ar até a versão do próximo semestre. Não é oficial: "garantido" vale pelas notas lançadas, sem frequência nem recuperação.
 - **Arquivos:** baixa os arquivos da matéria organizados em `Downloads/PUCPR/<matéria>/<tipo>/`.
 - **Ícone:** os dias até a próxima prova.
-- **Calculadora completa** (o módulo Quanto falta: meta, calendário, notas à mão, backup): no item **Caderno+** do menu lateral do Canvas, já com as notas lidas; o botão "Abrir no Caderno+" de cada matéria abre direto nela.
+- **Calculadora dentro do Canvas:** meta no painel; na página de cada matéria, o quanto falta por avaliação, o simulador e as notas lançadas à mão (onde o Canvas não tem); backup no botão da extensão.
 
 Cada parte pode ser desligada no botão da extensão; o botão "Atualizar agora" faz a próxima página do Canvas ler tudo de novo. Num computador compartilhado, as notas da calculadora ficam separadas por usuário do Canvas. O Feedback abre uma issue pública no GitHub: não escreva nome, RA nem notas. Sem senha, sem token e sem servidor: tudo fica no seu navegador ([privacidade](https://falta-quanto.vercel.app/privacidade.html)).
 

@@ -10,7 +10,7 @@ assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://
 assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_idle"], "theme before the page paints, the rest after it loads");
 assert.strictEqual([].concat(...manifest.content_scripts.map(c => c.js)).filter(f => f === "prefs.js").length, 1, "prefs.js once: the scripts share one scope, a second copy would redeclare its consts");
 const pack = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
-for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.background.service_worker, "popup.js", "popup.html", "popup.css", "app.html", "app-ui.js", "app-boot.js"]) {
+for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.background.service_worker, "popup.js", "popup.html", "popup.css"]) {
   assert(fs.existsSync(path.join(dir, f)), "file " + f); assert(new RegExp("\\b" + f.replace(".", "\\.") + "\\b").test(pack), "packaged: " + f); }
 for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(dir, f)), "icon " + f);
 const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
@@ -27,10 +27,7 @@ global.fetch = async url => {
   throw new Error("unexpected " + url);
 };
 const collect = new Function(fs.readFileSync(path.join(dir, "core.js"), "utf8") + "\n" + fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();   // the term label comes from the core
-const app = fs.readFileSync(path.join(dir, "app.html"), "utf8");
-assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(app) && !/\son\w+=/.test(app), "calculator page in the extension: no inline script or handler (MV3)");
-assert(/default-src 'none'; script-src 'self';/.test(app) && !/script-src[^;"]*unsafe-inline/.test(app), "calculator page: scripts from the package only, network blocked");
-assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.html"], matches: ["https://pucpr.instructure.com/*"] }], "only the calculator page can be framed, only by the PUCPR Canvas");
+assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/*.woff2"], matches: ["https://pucpr.instructure.com/*"] }], "only the fonts, only to the PUCPR Canvas (no extension page is exposed)");
 (async () => {
   const seen = {}, out = await collect(seen);
   assert.deepStrictEqual(seen.courses, [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }], "the course list is handed back, so the caller does not fetch it again");
@@ -49,10 +46,25 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.ht
   const pel = id => els[id] || (els[id] = { id, value: "", textContent: "", listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
   const palarms = {}, pchrome = { runtime: { getManifest: () => manifest, getURL: f => f }, tabs: { create() {} },
     alarms: { create: async (n, o) => { palarms[n] = o; }, clear: async n => { delete palarms[n]; } },
-    storage: { local: { get: async k => ({ [k]: store[k] }), set: async o => { Object.assign(store, o); }, remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
+    storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => { Object.assign(store, o); }, remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
   const popupSrc = ["prefs.js", "popup.js"].map(f => fs.readFileSync(path.join(dir, f), "utf8")).join("\n");
   const ticks = [];
-  new Function("document", "chrome", "setInterval", popupSrc)({ getElementById: pel, querySelectorAll: () => [] }, pchrome, f => ticks.push(f));
+  const oldLs = { "notas-pucpr-2026-2:u5": JSON.stringify({ grades: { "abd:s3": "1,1", "imp:pbl08": "9", "bad key": "1" }, meta: "8" }), other: "x" }, ks = Object.keys(oldLs);
+  const pwin = { localStorage: { length: ks.length, key: i => ks[i], getItem: k => oldLs[k] } };
+  store.hand = { 5: { "imp:pbl08": "7" } };
+  new Function("document", "chrome", "setInterval", "window", popupSrc)({ getElementById: pel, querySelectorAll: () => [] }, pchrome, f => ticks.push(f), pwin);
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(store.hand, { 5: { "imp:pbl08": "7", "abd:s3": "1,1" } }, "old Caderno+ page grades move into the Canvas panels (grades already there win, odd keys dropped)");
+  assert(store.migrated === 1 && store.prefs.meta === "8", "once, with the old meta");
+  store.prefs = Object.assign({}, store.prefs, { mode: "foco" });   // changed by the Canvas panel while the popup is open
+  await pel("theme").listeners.change(); await new Promise(r => setTimeout(r, 5));
+  assert.strictEqual(store.prefs.mode, "foco", "a popup change writes only its own key: the panel's mode survives");
+  global.location.hash = "#tab";   // the import runs in a tab (a file dialog closes the popup)
+  store.tasks = { 9: [{ id: "a", title: "do outro", date: null }] };
+  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09" }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
+  await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
+  assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
+  assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
   assert(/id="refresh"/.test(html), "popup has the Atualizar agora button");
   await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.cache.at, 0, "reading marked old"); assert.strictEqual(store.refreshing, undefined, "no read lock left"); assert.match(pel("status").textContent, /Atualiza/, "says what happens next");
@@ -64,5 +76,5 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.ht
   await pel("fstop").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert(!palarms["focus|pausa"] && !store.focus && pel("fstop").hidden, "Parar clears it");
   assert(!/rascunho|nova-turma|issues\/new/.test(html + fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "no turma draft or issue in the popup (planned inside the extension, not shipped)");
-  console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, calculator page without inline scripts, off-origin and 401 returned as errors");
+  console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });
