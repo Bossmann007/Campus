@@ -15,6 +15,9 @@ chrome.storage.local.get("prefs").then(({ prefs }) => {
   const looks = [...document.querySelectorAll("[data-look]")], mark = () => looks.forEach(b => b.setAttribute("aria-checked", String(b.dataset.look === p.look)));
   for (const b of looks) b.addEventListener("click", () => { p = Object.assign({}, p, { look: b.dataset.look }); save(); mark(); });
   mark();
+  const modes = [...document.querySelectorAll("[data-mode]")], markMode = () => modes.forEach(b => b.setAttribute("aria-checked", String(b.dataset.mode === p.mode)));
+  for (const b of modes) b.addEventListener("click", () => { p = Object.assign({}, p, { mode: b.dataset.mode }); save(); markMode(); });
+  markMode();
   for (const box of document.querySelectorAll("[data-pref]")) {
     box.checked = p[box.dataset.pref];
     box.addEventListener("change", () => { p = Object.assign({}, p, { [box.dataset.pref]: box.checked }); save(); });

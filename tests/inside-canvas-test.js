@@ -520,6 +520,18 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await listeners.alarm({ name: "focus|pausa", scheduledTime: Date.now() }); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(notes[1].title, "Pausa acabou"); ok();
 
+  // modes on the dashboard panel: limpo drops the KPI row and read announcements; foco is one "Agora" list; switch in the header
+  const mFull = await runContent("/", null);
+  const mClean = await runContent("/", null, { prefs: { mode: "limpo" } });
+  assert(/Média atual/.test(text(mFull.anchor)) && !/Média atual/.test(text(mClean.anchor)) && /Próximos 7 dias/.test(text(mClean.anchor)), "limpo: no KPI row, the week stays");
+  assert(/Prova adiada/.test(text(mClean.anchor)) && !/Bem-vindos/.test(text(mClean.anchor)), "limpo: only unread announcements");
+  const mFocus = await runContent("/", null, { prefs: { mode: "foco" } }), ft = all(mFocus.anchor).filter(e => e.tag !== "style").map(e => e.textContent).join(" | ");
+  assert(/Agora \| 2 coisas/.test(ft) && /atrasada[ |]+Relatório/.test(ft) && /Lista 3/.test(ft) && !/Próximos 7 dias|Avisos|Média atual|Quiz feito/.test(ft), "foco: only what to do now: " + ft.slice(0, 200));
+  const segB = all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Foco");
+  assert(segB && all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Completo")["aria-checked"] === "true", "the header switch shows the mode");
+  await segB.listeners.click(); await new Promise(r => setTimeout(r, 10));
+  assert(mFull.store.prefs.mode === "foco" && /Agora/.test(text(mFull.anchor)) && all(mFull.anchor).filter(e => e.id === "cp-dash").length === 1, "switched from the panel: saved and redrawn once"); ok();
+
   // course cards: next deadline, a color per course (kept here, never sent to Canvas), gradient
   const cd = await runContent("/", null, { prefs: { gradient: true } });
   assert.match(text(cd.header), /Próx\.: Lista 3 · amanhã \d\d:\d\d/, "the next deadline on the card");
@@ -622,7 +634,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const lookCss = () => lk.styles.find(x => x.id === "cp-look").textContent;
   assert(["cp-look", "cp-look-nav", "cp-look-font"].every(c => lk.cls.has(c)) && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look, menu and font");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()) && /Fraunces/.test(lookCss()), "cards and serif titles");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true }), "kept for the next first paint");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true, mode: "completo" }), "kept for the next first paint");
+  lk.listen.change({ prefs: { newValue: { mode: "limpo" } } }, "local");
+  assert(lk.cls.has("cp-mode-limpo") && /#right-side-wrapper, #right-side, #footer/.test(lookCss()) && !/#DashboardCard_Container/.test(lookCss()), "limpo: Canvas clutter hidden, cards kept");
+  lk.listen.change({ prefs: { newValue: { mode: "foco" } } }, "local");
+  assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && /#DashboardCard_Container/.test(lookCss()), "foco: the cards go too");
   lk.listen.change({ prefs: { newValue: { cardStyle: "lista", cardImg: false } } }, "local");
   assert(/grid-template-columns:72px 1fr/.test(lookCss()) && /__header_image \{ background-image:none/.test(lookCss()), "cards as a list, without pictures");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "original", font: "original" } } }, "local");
@@ -675,5 +691,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes)");
 })().catch(e => { console.error(e); process.exit(1); });

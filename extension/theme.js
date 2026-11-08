@@ -7,6 +7,11 @@
   const LOOKS = {   // paper, card, ink, muted, line, accent, link, menu
     caderno: ["#FBF7EF", "#FFFFFF", "#1D2433", "#5F6675", "#ECE4D3", "#E2482B", "#B8361C", "#1D2433"],
     pastel: ["#F6F4FB", "#FFFFFF", "#2A2540", "#625C78", "#E6E1F2", "#7C5CDB", "#6246C2", "#3B3363"],
+    kraft: ["#F3EBDD", "#FBF6EC", "#3B2F25", "#6E6052", "#E2D5BF", "#C2611F", "#9A4A12", "#3B2F25"],
+    marca: ["#FFFFFF", "#FFFFFF", "#1C1C1C", "#5C5C5C", "#ECECEC", "#E0A800", "#1C1C1C", "#1C1C1C"],
+    menta: ["#F2F8F5", "#FFFFFF", "#1E3B32", "#55706A", "#D9EAE2", "#2F9E74", "#1F7A57", "#1E3B32"],
+    oceano: ["#F3F7FB", "#FFFFFF", "#14273E", "#566A80", "#DCE6F1", "#1E6FD9", "#1857B0", "#14273E"],
+    grafite: ["#F7F7F5", "#FFFFFF", "#111111", "#666666", "#E6E6E3", "#111111", "#111111", "#111111"],
     contraste: ["#FFFFFF", "#FFFFFF", "#000000", "#1F1F1F", "#000000", "#0040C1", "#0033A0", "#000000"]
   };
   const NAV = { tinta: "#1D2433", coral: "#B8361C", verde: "#1F5C42", azul: "#1E3A6E", roxo: "#3B3363" };
@@ -18,6 +23,11 @@
   const font = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL ? chrome.runtime.getURL("fonts/fraunces-latin-500-normal.woff2") : "";
   const css = (look, nav, f, cards) => {
     const L = LOOKS[look], out = [];
+    // limpo: Canvas's side columns, footers, activity streams and card icons go away; foco: also the course cards and the menu labels
+    if (cards.mode === "limpo" || cards.mode === "foco") out.push(`#right-side-wrapper, #right-side, #footer, .recent_activity, #dashboard-activity, .ic-DashboardCard__action-container,
+.ic-app-header__logomark-container, .ic-Dashboard-header__actions .ic-Super-toggle__container { display:none !important; }
+.ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; margin-right:auto !important; }`);
+    if (cards.mode === "foco") out.push(`#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, .ic-app-header .menu-item__text, #cp-scroll { display:none !important; }`);
     if (cards.cardStyle === "compacto") out.push(`.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:64px !important; } .ic-DashboardCard { min-height:0 !important; } .ic-DashboardCard__action-container { display:none !important; }`);
     if (cards.cardStyle === "lista") out.push(`.ic-DashboardCard__box { display:grid !important; grid-template-columns:1fr; gap:8px; } .ic-DashboardCard { width:auto !important; margin:0 !important; display:grid !important; grid-template-columns:72px 1fr; align-items:stretch; }
 .ic-DashboardCard__header { display:contents; } .ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:auto !important; min-height:64px; grid-row:span 2; } .ic-DashboardCard__action-container { justify-content:flex-start; }`);
@@ -65,11 +75,12 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .
     const t = p.theme, on = t === "dark" || t === "dim" || (t === "auto" && dark.matches) || (t === "night" && night()), cl = document.documentElement.classList;
     cl.toggle("cp-dark", on); cl.toggle("cp-dim", on && t === "dim");
     look.textContent = css(p.look, p.nav, p.font, p);
+    cl.toggle("cp-mode-limpo", p.mode === "limpo"); cl.toggle("cp-mode-foco", p.mode === "foco");
     cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look])); cl.toggle("cp-look-font", !!FONTS[p.font]);
   };
   const take = prefs => {
     p = cpPrefs(prefs); apply();
-    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, font: p.font, cardStyle: p.cardStyle, cardImg: p.cardImg })); } catch (e) { /* no storage */ }
+    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, font: p.font, cardStyle: p.cardStyle, cardImg: p.cardImg, mode: p.mode })); } catch (e) { /* no storage */ }
   };
   apply();
   setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);

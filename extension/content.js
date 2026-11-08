@@ -275,7 +275,7 @@
 
   const CSS = `
     :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
-      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:#FFE6DF; --band2:#FFF5F1;
+      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, #fff); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, #fff);
       --paper:var(--cp-paper,#FBF7EF); --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
@@ -388,6 +388,10 @@
     .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
     .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini { margin-left:10px; }
+    .seg { display:inline-flex; margin-left:12px; padding:2px; border-radius:999px; background:var(--track); }
+    .seg button { padding:3px 10px; border:0; border-radius:999px; background:none; font-size:12px; color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
+    .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
+    .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:96px minmax(0,1fr) auto; }
     .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
     .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
@@ -603,17 +607,44 @@
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
-  function dashPanel(a, cache, prefs, marks, rec) {
+  // Modes: completo (everything), limpo (only what matters: next assessment, subjects, the week, what is new) and foco
+  // (one list: what to do now, nothing else). The page side (Canvas clutter hidden) is theme.js.
+  const MODES = [["completo", "Completo"], ["limpo", "Limpo"], ["foco", "Foco"]];
+  function focusView(list) {
+    const t = today(), end = addDays(6), now = list.filter(x => (x.task || x.exam) && !fin(x) && (x.late ? x.date >= addDays(-7) : x.date >= t) && x.date <= end).slice(0, 7);
+    const sec = el("section", "card week focus"), h = el("h3", null, "Agora");
+    h.appendChild(el("span", "pill " + (now.some(x => x.late) ? "bad" : now.length ? "warn" : "ok"), now.length ? now.length + (now.length === 1 ? " coisa" : " coisas") : "nada pendente"));
+    sec.appendChild(h);
+    if (!now.length) { sec.appendChild(el("div", "empty", "Tudo em dia. Aproveita.")); return sec; }
+    const ul = el("ul");
+    for (const x of now) {
+      const li = el("li", "row");
+      li.append(el("span", "d", x.late ? "atrasada" : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.course),
+        x.exam ? el("span", "pill " + needTone(x.exam), need(x.exam)) : el("span", "pill " + (x.late ? "bad" : "warn"), x.late ? "atrasada" : "a entregar"));
+      ul.appendChild(li);
+    }
+    sec.appendChild(ul); return sec;
+  }
+  function dashPanel(a, cache, prefs, marks, rec, onMode) {
+    const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
-    if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length)) return;
+    if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
+    const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
+    for (const [k, label] of MODES) {
+      const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(mode === k));
+      b.title = { completo: "Tudo do Caderno+", limpo: "Só o que importa, sem a bagunça do Canvas", foco: "Só o que fazer agora" }[k];
+      if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
+    }
+    hd.appendChild(seg);
     if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
-    if (APP) { const brand = el("a", "brand", "Abrir Caderno+ →"); brand.href = "#campus"; hd.appendChild(brand); }
+    if (APP && mode === "completo") { const brand = el("a", "brand", "Abrir Caderno+ →"); brand.href = "#campus"; hd.appendChild(brand); }
     box.append(hd);
-    if (grades) box.append(...gradesView(a));
+    if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
+    if (grades) { const g = gradesView(a); box.append(...(clean ? g.filter(x => !/kpis|src/.test(x.className)) : g)); }
     else if (why) box.append(el("div", "muted why", why));
     box.appendChild(grid);
     if (week) {
@@ -622,7 +653,7 @@
       const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
     }
-    const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < 30 * 864e5).slice(0, 5) : [];
+    const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < (clean ? 3 : 30) * 864e5).slice(0, 5) : [];
     if (recent.length) {   // the latest grades, newest first; "nova" for the last 3 days
       const sec = el("section", "card news grades-new"), h = el("h3", null, "Notas novas"), fresh = recent.filter(r => Date.now() - r.at < 3 * 864e5).length;
       if (fresh) h.appendChild(el("span", "pill ok", fresh + (fresh === 1 ? " nova" : " novas")));
@@ -641,8 +672,8 @@
       for (const m of cache.inbox) { const li = el("li", "row unread"); li.append(el("span", "dot", "não lida"), mid(m.subject, location.origin + "/conversations", m.from), el("span", "d", m.at ? ago(C.localISO(new Date(m.at))) : "")); ul.appendChild(li); }
       sec.appendChild(ul); foldable(sec, h, "inbox"); grid.appendChild(sec);
     }
-    if (news) {
-      const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
+    if (news && !(clean && !cache.data.announcements.some(x => x.unread))) {
+      const all = cache.data.announcements.slice().filter(x => !clean || x.unread).sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
       const sec = el("section", "card news"), h = el("h3", null, "Avisos");
       if (unread) h.appendChild(el("span", "pill nt", unread + (unread === 1 ? " não lido" : " não lidos")));
       sec.appendChild(h);
@@ -918,7 +949,12 @@
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};
-      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null);
+      const onMode = async k => {   // switch from the panel: saved for the popup and theme.js, the panel redrawn at once
+        const { prefs: saved } = await chrome.storage.local.get("prefs"), next = Object.assign({}, saved, { mode: k });
+        await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); const old = document.getElementById("cp-dash"); if (old) old.remove();
+        dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
+      };
+      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       const { colors } = await chrome.storage.local.get("colors");
       const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };
       ctx.setColor = async (id, color) => {
