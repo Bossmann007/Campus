@@ -96,21 +96,4 @@ assert.deepStrictEqual(termPacks(tmp, "2026-12-01", { CP_RULES_NEW_TERM: "1" }).
 fs.rmSync(tmp, { recursive: true });
 ok("a newer term folder cannot silently drop a term that is still running");
 
-// draft for a turma without rules: names, points, dates and groups; never grades, submissions or who the student is
-const reading = { v: 1, ext: "1.0.1", courses: [
-  { id: 71306, name: "Arquitetura de Banco de Dados (Turma 2º B) - 2026 / 2º Sem", assignments: [{ name: "Avaliação somativa RA1", points: 1.25, score: 1 }] },
-  { id: 555001, name: "Cálculo I (Turma 1º C) - Engenharia (Noite) - 2026 / 2º Sem", groupWeights: true, groups: [{ id: 1, name: "Provas", weight: 70 }, { id: 2, name: "Trabalhos", weight: 30 }],
-    assignments: [{ name: "Prova 1", points: 10, score: 7.5, due: "2026-09-21T22:00:00Z", missing: false, submitted: true, online: false, stats: { mean: 6, min: 1, max: 10 }, group: 1 },
-                  { name: "Lista 1", points: 2, score: null, due: null, missing: true, submitted: false, online: true, stats: null, group: 2 }, { name: 5 }] } ],
-  announcements: [{ course: "Cálculo I", title: "Aviso pessoal", unread: true }], user: 42 };
-const draft = C1.draftPack(reading), text = JSON.stringify(draft);
-assert(!/score|submitted|missing|stats|unread|announcements|"user"|7\.5|Aviso pessoal/.test(text), "no grades, submissions, announcements or user: " + text);
-assert.deepStrictEqual(draft.subjects.map(s => s.canvasIds), [[555001]], "only courses without rules");
-assert.deepStrictEqual(draft.subjects[0].assignments, [{ name: "Prova 1", points: 10, due: "2026-09-21", group: "Provas", groupWeight: 70 }, { name: "Lista 1", points: 2, due: null, group: "Trabalhos", groupWeight: 30 }]);
-assert.strictEqual(draft.subjects[0].name, "Cálculo I"); assert.strictEqual(draft.subjects[0].canvasName, reading.courses[1].name); assert.strictEqual(draft.term, "2026 / 2");
-assert.strictEqual(draft.subjects[0].groupWeights, true);
-assert(checkPacks([{ file: "rascunho.json", data: draft }]).length > 0, "a draft is not a valid pack until someone fills it in");
-assert.deepStrictEqual(C1.draftPack({ v: 1, courses: [{ id: 9, name: "X - 2026 / 2", assignments: [{ name: "A", points: 1, due: "2026-10-01" }] }] }).subjects[0].assignments, [{ name: "A", points: 1, due: "2026-10-01", group: null, groupWeight: null }], "no groups read: null");
-assert.deepStrictEqual(C1.draftPack(null).subjects, []); assert.deepStrictEqual(C1.draftPack({ courses: "x" }).subjects, []);
-ok("draft pack: course id and name, assignment names, points, dates and groups; no grades or personal data");
 console.log("rules ok: all " + n + " checks passed");

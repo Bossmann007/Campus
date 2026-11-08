@@ -279,18 +279,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(ob && !all(ob).some(e => /kpi|tile|upnext/.test(e.className)), "other turma: no grade parts");
   assert(all(ob).some(e => e.className === "muted why" && e.textContent === "O Quanto falta ainda não tem as regras da sua turma."), "other turma: the muted line");
   assert.match(text(ob), /Próximos 7 dias/); assert.match(text(ob), /Prova adiada/, "week and announcements still shown");
-  // and a button that copies a draft of the turma's rules: names, points and dates, never the grades read from Canvas
-  const dbtn = all(ob).find(e => e.tag === "button" && e.textContent === "Copiar rascunho da minha turma");
-  assert(dbtn && all(ob).some(e => e.textContent === "Leva só nomes, pontos e datas das avaliações — nenhuma nota."), "other turma: the draft button and what it carries");
-  const nav0 = Object.getOwnPropertyDescriptor(globalThis, "navigator"), clip = [];
-  Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async t => { clip.push(t); } } }, configurable: true });
-  try { await dbtn.listeners.click(); } finally { if (nav0) Object.defineProperty(globalThis, "navigator", nav0); else delete globalThis.navigator; }
-  const dj = JSON.parse(clip[0]);
-  assert.deepStrictEqual(dj.subjects.map(x => [x.canvasIds, x.name, x.assignments.length]), [[[42], "Arquitetura de Banco de Dados", 4]], "the course of the other turma, with its assignments");
-  assert(!/score|"user"|Prova adiada/.test(clip[0]) && dj.subjects[0].assignments.every(x => Object.keys(x).join() === "name,points,due,group,groupWeight"), "no grades, user or announcements in the draft");
-  assert.match(text(ob), /Copiado/, "says it was copied");
-  const mineDash = (await runContent("/", null, {})).anchor.kids.find(k => k.id === "cp-dash");
-  assert(!all(mineDash).some(e => e.textContent === "Copiar rascunho da minha turma"), "our turma: no draft button");
+  assert(!all(ob).some(e => e.tag === "button" && /rascunho/i.test(e.textContent)) && !/rascunho/i.test(text(ob)), "other turma: just the note, no draft button");
   assert.strictEqual(text(ot.header), "", "no pill on the dashboard cards");
   assert(!ot.sent.find(m => m.type === "remind").items.some(i => i.key.startsWith("qf:")), "no Plano exams in the reminders");
   assert(ot.sent.find(m => m.type === "remind").items.some(i => i.key === "assignment:1"), "real Canvas tasks still reminded");
