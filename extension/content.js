@@ -137,7 +137,8 @@
     let date = null;
     if (last === "hoje") date = addDays(0); else if (last === "amanha") date = addDays(1);
     else if (wd >= 0) { const d = (wd - new Date().getDay() + 7) % 7 || 7; date = addDays(d); }
-    else { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(last); if (m) { const y = new Date().getFullYear(), iso = y + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0"); date = iso < addDays(-1) ? (y + 1) + iso.slice(4) : iso; } }
+    else { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(last); if (m) { const y = new Date().getFullYear(), iso = y + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0"), d = new Date(iso + "T12:00:00");
+      if (!isNaN(d) && C.localISO(d) === iso) date = iso < addDays(-1) ? (y + 1) + iso.slice(4) : iso; } }   // 31/02 is not a day: the words stay in the title
     return { title: (date ? words.slice(0, -1) : words).join(" "), date };
   }
   // "Desde a sua última visita": new assignments and announcements (from the reading) and new files and modules (one GET
@@ -284,7 +285,7 @@
       const id = m[1], c = a.byCanvasId[id], head = card.querySelector(".ic-DashboardCard__header_content") || card, add = x => { card.cpAdded.push(x); head.appendChild(x); return x; };
       if (c && prefs.grades && a.rules) {
         const st = a.state(c), p = add(pill(a.label(st), a.tone(st)));
-        p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
+        p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta " + fmt(T, T % 1 ? 1 : 0) + ")";
       }
       const nx = prefs.cardNext && ctx.list.find(x => String(x.cid) === id && x.task && !fin(x) && x.date >= today());
       if (nx) { const d = add(el("span", null, "Próx.: " + nx.title + " · " + dayLabel(nx.date) + (nx.due ? " " + hhmm(nx.due) : ""))); d.title = nx.title;
@@ -705,6 +706,7 @@
     if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
     const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
@@ -718,7 +720,7 @@
     // the meta (goal) every number is computed against
     const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
     dn.type = upb.type = "button"; dn.setAttribute("aria-label", "Meta menor"); upb.setAttribute("aria-label", "Meta maior"); meta.title = "A nota que você quer em cada matéria";
-    const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };
+    const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };   // onMode sets T before any wait, so quick clicks add up
     dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
     meta.append(el("span", null, "Meta"), dn, mv, upb); hd.appendChild(meta);
     box.append(hd);
@@ -1054,16 +1056,17 @@
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};
       const onMode = async (k, meta) => {   // switch from the panel (mode, meta, or a change of tasks): saved, redrawn at once with fresh ticks and tasks
+        if (meta != null) T = meta;
         const { prefs: saved } = await chrome.storage.local.get("prefs"), was = cpPrefs(saved);
         if (was.mode !== k || (meta != null && Number(was.meta) !== meta)) { const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); }
-        if (meta != null) { T = meta; a = analyse(cache, await myHand(cache.user)); }
+        if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); }
         const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
         const old = document.getElementById("cp-dash"); if (old) old.remove();
         dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
         sendReminders(agenda(a, cache, m2), prefs, cache);
       };
       window.cpRedraw = () => onMode(prefs.mode);
-      if (prefs.changes) whatChanged(cache).then(got => { if (got) onMode(prefs.mode); }, () => {});   // in the background: the panel never waits for it
+      if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // not while the student types in the panel   // in the background: the panel never waits for it
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       const { colors } = await chrome.storage.local.get("colors");
       const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };
@@ -1072,6 +1075,7 @@
         ctx.colors = next; await chrome.storage.local.set({ colors: next }); decorateCards(a, true, ctx);
       };
       decorateCards(a, again, ctx);
+      window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;

@@ -539,8 +539,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const tk = await runContent("/", null, { tasks: { 9: [{ id: "x", title: "do outro", date: null }] } });
   const tcard = () => all(tk.anchor).find(e => /card news tasks/.test(e.className));
   assert(tcard() && !/do outro/.test(text(tcard())), "the card is there; another user's tasks are not mine");
-  const [tin, tdate] = all(tcard()).filter(e => e.tag === "input");
-  tin.value = "imprimir resumo amanhã"; await all(tcard()).find(e => e.tag === "form").listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+  const [tin] = all(tcard()).filter(e => e.tag === "input");
+  tin.value = "prova 31/02"; await all(tcard()).find(e => e.tag === "form").listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+  assert(tk.store.tasks[5][0].title === "prova 31/02" && tk.store.tasks[5][0].date === null, "31/02 is not a day: kept in the title");
+  await all(tcard()).find(e => /^Apagar: prova/.test(e["aria-label"] || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
+  all(tcard()).find(e => e.tag === "input").value = "imprimir resumo amanhã"; await all(tcard()).find(e => e.tag === "form").listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
   assert(tk.store.tasks[5].length === 1 && tk.store.tasks[5][0].title === "imprimir resumo" && tk.store.tasks[5][0].date === isoIn(1) && tk.store.tasks[9], "saved per user, the day read from the words");
   assert(all(tk.anchor).some(e => /^ev /.test(e.className) && /^imprimir resumo · Minha tarefa/.test(e["aria-label"] || "")), "a task with a day shows in the week");
   assert(tk.sent.filter(m => m.type === "remind").pop().items.some(i => /imprimir resumo/.test(i.title)), "and gets a reminder");
@@ -656,7 +659,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     doc.createElement = () => { const st = {}; styles.push(st); return st; };
     const storage = { getItem: k => ls[k] == null ? null : ls[k], setItem: (k, v) => { ls[k] = String(v); } };
     if (last) ls["cp-look"] = JSON.stringify(last);
-    new Function("document", "chrome", "matchMedia", "setInterval", "Date", "localStorage", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }), f => ticks.push(f), D, storage);
+    new Function("document", "chrome", "matchMedia", "setInterval", "Date", "localStorage", "location", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }), f => ticks.push(f), D, storage, { pathname: (more && more.path) || "/" });
     return { cls, listen, ticks, styles, ls };
   };
   const th = theme("dark", false); await new Promise(r => setTimeout(r, 5));
@@ -674,8 +677,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true, mode: "completo" }), "kept for the next first paint");
   lk.listen.change({ prefs: { newValue: { mode: "limpo" } } }, "local");
   assert(lk.cls.has("cp-mode-limpo") && /#right-side-wrapper, #right-side, #footer/.test(lookCss()) && !/#DashboardCard_Container/.test(lookCss()), "limpo: Canvas clutter hidden, cards kept");
+  assert(lk.cls.has("cp-dash-page") && /:root\.cp-dash-page :is\(#right-side-wrapper/.test(lookCss()), "the clutter rules apply on the dashboard only");
+  const quizPage = theme("off", false, undefined, undefined, { path: "/courses/1/quizzes/2/take", mode: "limpo" }); await new Promise(r => setTimeout(r, 5));
+  assert(!quizPage.cls.has("cp-dash-page"), "a quiz page keeps its side column (timer, questions)");
   lk.listen.change({ prefs: { newValue: { mode: "foco" } } }, "local");
-  assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && /#DashboardCard_Container/.test(lookCss()), "foco: the cards go too");
+  assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && /cp-dash-page\.cp-has-panel :is\(#DashboardCard_Container/.test(lookCss()), "foco: the cards go too, only once our panel is drawn");
   lk.listen.change({ prefs: { newValue: { cardStyle: "lista", cardImg: false } } }, "local");
   assert(/grid-template-columns:72px 1fr/.test(lookCss()) && /__header_image \{ background-image:none/.test(lookCss()), "cards as a list, without pictures");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "original", font: "original" } } }, "local");
@@ -692,7 +698,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const metaUp = all(camp.anchor).find(e => e["aria-label"] === "Meta maior");
   assert(metaUp && /Meta[ |]+−[ |]+7[ |]+\+/.test(text(all(camp.anchor).find(e => e.className === "meta"))), "meta 7 on the dashboard");
   await metaUp.listeners.click(); await new Promise(r => setTimeout(r, 15));
-  assert(camp.store.prefs.meta === "7.5" && /Meta[ |]+−[ |]+7,5/.test(text(all(camp.anchor).find(e => e.className === "meta"))), "meta raised, saved and redrawn"); ok();
+  assert(camp.store.prefs.meta === "7.5" && /Meta[ |]+−[ |]+7,5/.test(text(all(camp.anchor).find(e => e.className === "meta"))), "meta raised, saved and redrawn");
+  const up2 = all(camp.anchor).find(e => e["aria-label"] === "Meta maior"); up2.listeners.click(); up2.listeners.click(); await new Promise(r => setTimeout(r, 30));
+  assert.strictEqual(camp.store.prefs.meta, "8.5", "two quick clicks add up"); ok();
 
   // the bookmarklet on the site: the extension's page scripts, bundled with an in-memory chrome stand-in
   const lit = fs.readFileSync(path.join(root, "index.html"), "utf8").match(/\/\*CP-BM\*\/("(?:[^"\\]|\\.)*")\/\*CP-BM\*\//);

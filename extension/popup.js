@@ -1,5 +1,5 @@
-// Popup: the Caderno+ settings (chrome.storage.local "prefs") and the way into the full calculator (the extension's app.html,
-// which reads the last Canvas reading that content.js saved).
+// Popup: the Caderno+ settings (chrome.storage.local "prefs"), the Foco timer and the student's data (backup, import).
+// Opened in a tab (popup.html#tab) for the import: a file dialog closes the popup on some systems.
 const $ = id => document.getElementById(id);
 $("ver").textContent = "v" + chrome.runtime.getManifest().version;
 
@@ -43,12 +43,22 @@ $("export").addEventListener("click", async () => {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = "caderno-plus-backup.json"; a.click();
   $("status").textContent = "Backup salvo nos Downloads.";
 });
-$("import").addEventListener("click", () => $("importFile").click());
+$("import").addEventListener("click", () => { if (location.hash === "#tab") $("importFile").click(); else chrome.tabs.create({ url: chrome.runtime.getURL("popup.html#tab") }); });
+if (location.hash === "#tab") document.body.classList.add("tab");
 $("importFile").addEventListener("change", async () => {
   const f = $("importFile").files && $("importFile").files[0]; if (!f) return;
   let d; try { d = JSON.parse(await f.text()); } catch (e) { d = null; }
   if (!d || d.app !== "caderno-plus") { $("status").textContent = "Esse arquivo não é um backup do Caderno+."; return; }
-  const out = {}; for (const k of KEEP) if (d[k] && typeof d[k] === "object" && !Array.isArray(d[k])) out[k] = d[k];
+  // merged per Canvas user (other students on this computer keep theirs); only well-formed values
+  const str = (v, n) => typeof v === "string" && v.length <= n, iso = v => typeof v === "string" && /^\d{4}-\d\d-\d\d$/.test(v), obj = v => v && typeof v === "object" && !Array.isArray(v);
+  const keepIf = (m, ok) => obj(m) ? Object.fromEntries(Object.entries(m).filter(([k, v]) => str(k, 60) && ok(v))) : {};
+  const per = { hand: u => keepIf(u, v => str(v, 12)), marks: u => keepIf(u, iso), notes: u => keepIf(u, v => str(v, 5000)),
+    tasks: u => Array.isArray(u) ? u.filter(t => t && str(t.id, 40) && str(t.title, 140) && (t.date === null || iso(t.date))).slice(0, 100).map(t => ({ id: t.id, title: t.title, date: t.date })) : [] };
+  const cur = await chrome.storage.local.get(KEEP), out = {};
+  for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, per[k](v)])));
+  if (obj(d.colors)) out.colors = Object.assign({}, cur.colors, keepIf(d.colors, v => /^#[0-9a-f]{6}$/i.test(v)));
+  if (obj(d.prefs)) out.prefs = cpPrefs(Object.assign({}, cur.prefs, d.prefs));
+  if (obj(d.fold)) out.fold = keepIf(d.fold, v => typeof v === "boolean");
   await chrome.storage.local.set(out); $("status").textContent = "Backup aplicado (" + Object.keys(out).length + " partes). Recarregue o Canvas.";
 });
 // Once: the grades and the meta typed in the old Caderno+ page (this extension's localStorage, per Canvas user) become

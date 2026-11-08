@@ -23,11 +23,12 @@
   const font = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL ? chrome.runtime.getURL("fonts/fraunces-latin-500-normal.woff2") : "";
   const css = (look, nav, f, cards) => {
     const L = LOOKS[look], out = [];
-    // limpo: Canvas's side columns, footers, activity streams and card icons go away; foco: also the course cards and the menu labels
-    if (cards.mode === "limpo" || cards.mode === "foco") out.push(`#right-side-wrapper, #right-side, #footer, .recent_activity, #dashboard-activity, .ic-DashboardCard__action-container,
-.ic-app-header__logomark-container, .ic-Dashboard-header__actions .ic-Super-toggle__container { display:none !important; }
-.ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; margin-right:auto !important; }`);
-    if (cards.mode === "foco") out.push(`#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, .ic-app-header .menu-item__text, #cp-scroll { display:none !important; }`);
+    // Only on the dashboard (quizzes, grades and assignments keep their side column: timers, totals and submissions live there).
+    // limpo: the side column, footer, activity stream and card icons go; foco: also the course cards, once our panel is drawn
+    const D = ":root.cp-dash-page";
+    if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${D} :is(#right-side-wrapper, #right-side, #footer, .recent_activity, #dashboard-activity, .ic-DashboardCard__action-container) { display:none !important; }
+${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; margin-right:auto !important; }`);
+    if (cards.mode === "foco") out.push(`${D}.cp-has-panel :is(#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, #cp-scroll) { display:none !important; }`);
     if (cards.cardStyle === "compacto") out.push(`.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:64px !important; } .ic-DashboardCard { min-height:0 !important; } .ic-DashboardCard__action-container { display:none !important; }`);
     if (cards.cardStyle === "lista") out.push(`.ic-DashboardCard__box { display:grid !important; grid-template-columns:1fr; gap:8px; } .ic-DashboardCard { width:auto !important; margin:0 !important; display:grid !important; grid-template-columns:72px 1fr; align-items:stretch; }
 .ic-DashboardCard__header { display:contents; } .ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:auto !important; min-height:64px; grid-row:span 2; } .ic-DashboardCard__action-container { justify-content:flex-start; }`);
@@ -58,6 +59,7 @@
     }
     return out.join("\n");
   };
+  if (typeof location !== "undefined" && /^\/(dashboard)?\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-dash-page", true);
   const style = document.createElement("style"), look = document.createElement("style");
   style.id = "cp-theme"; look.id = "cp-look";
   style.textContent = `html.cp-dark { background:#fff !important; filter:${BACK} contrast(.9); }
