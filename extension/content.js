@@ -1,4 +1,4 @@
-// Campus+ on pucpr.instructure.com pages (after prefs.js, collect.js, core.js and files.js). Each part can be turned off in the popup:
+// Caderno+ on pucpr.instructure.com pages (after prefs.js, collect.js, core.js and files.js). Each part can be turned off in the popup:
 // dashboard: the week (deadlines and exams of every course) and the announcements; cards: the course status (quanto falta);
 // course pages: the next assessments, what each needs, and a files download; reminders handed to the service worker.
 // Same-origin read-only GETs with the student's session; everything stays in chrome.storage.local on this computer.
@@ -45,7 +45,7 @@
     if (cache && cache.user !== id) await forget();
     return id;
   }
-  const forget = () => chrome.storage.local.remove("cache");
+  const forget = () => chrome.storage.local.remove(["cache", "search"]);
   // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
   // time: while another tab is reading (lock under a minute old), this one uses the last reading.
   async function load() {
@@ -64,6 +64,22 @@
       await chrome.storage.local.set({ cache: fresh });
       return fresh;
     } finally { await chrome.storage.local.remove("refreshing"); }
+  }
+  // Ticked as done, per Canvas user: { <user>: { <planner key>: <due day> } } in chrome.storage.local "marks"; kept 30 days.
+  async function myMarks(user) {
+    const { marks } = await chrome.storage.local.get("marks");
+    const mine = marks && typeof marks === "object" ? marks[user] : null;
+    return mine && typeof mine === "object" ? mine : {};
+  }
+  let markQ = Promise.resolve();   // one write at a time, so two quick ticks do not overwrite each other
+  const setMark = (user, x, on) => (markQ = markQ.catch(() => {}).then(() => writeMark(user, x, on)));
+  async function writeMark(user, x, on) {
+    const { marks } = await chrome.storage.local.get("marks"), all = marks && typeof marks === "object" ? marks : {}, old = addDays(-30);
+    const mine = Object.assign({}, all[user]);
+    if (on) mine[x.key] = x.date; else delete mine[x.key];
+    for (const k of Object.keys(mine)) if (!(mine[k] >= old)) delete mine[k];
+    await chrome.storage.local.set({ marks: Object.assign({}, all, { [user]: mine }) });
+    return mine;
   }
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
@@ -85,15 +101,18 @@
     chrome.runtime.sendMessage({ type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" }).catch(() => {});
   }
 
-  // Deadlines from the Canvas planner (every course) plus our exams that are not in Canvas, from today on.
-  function agenda(a, cache) {
-    const short = (name, id) => { const c = a.byCanvasId[id]; return c ? c.name : String(name || "").split(" (")[0].split(" - ")[0]; };
+  // Deadlines from the Canvas planner (every course) plus our exams that are not in Canvas, from today on. marks: what the
+  // student ticked as done here (never written to Canvas); done is what Canvas says (handed in, graded).
+  const shortName = name => String(name || "").split(" (")[0].split(" - ")[0];
+  function agenda(a, cache, marks) {
+    const short = (name, id) => { const c = a.byCanvasId[id]; return c ? c.name : shortName(name); };
     const out = [];
     for (const p of cache.planner || []) {
       if (!p || !p.plannable || typeof p.plannable_date !== "string" || /^(announcement|planner_note)$/.test(p.plannable_type)) continue;
       const s = p.submissions || {};
       const url = p.html_url ? new URL(p.html_url, location.href).href : "";
-      out.push({ key: p.plannable_type + ":" + p.plannable_id, title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
+      const key = p.plannable_type + ":" + p.plannable_id;
+      out.push({ key, mine: !!(marks && marks[key]), title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
         task: !!p.submissions, date: C.localISO(new Date(p.plannable_date)), due: p.plannable_date, url: url.startsWith(location.origin + "/") ? url : null,   // task: has a submission (events and pages do not)
         done: !!(s.submitted || s.graded || s.excused || (p.planner_override && p.planner_override.marked_complete)), late: !!s.missing });
     }
@@ -101,6 +120,7 @@
       out.push({ key: "qf:" + C.key(u.course, u.item), title: u.item.name, course: u.course.name, ours: u.course, date: u.item.date, due: null, url: null, done: false, late: false, exam: u });
     return out.sort((x, y) => (x.due || x.date + "T12:00:00").localeCompare(y.due || y.date + "T12:00:00"));
   }
+  const fin = x => x.done || x.mine;   // handed in, or ticked as done here
   const need = u => u.req.impossible ? "não dá" : u.req.f <= 1e-9 ? "já garantido" : "precisa " + up(u.req.raw, u.item.inMax >= 5 ? 1 : 2) + (u.item.inMax === 10 ? "" : " de " + fmt(u.item.inMax, u.item.inMax >= 5 ? 1 : 2));
 
   // What the service worker should remind: work not yet handed in and exams, in the next 14 days. Without a planner reading
@@ -108,7 +128,7 @@
   function sendReminders(list, prefs, cache) {
     if (prefs.remind && !cache.planner) return;
     const t = today(), end = addDays(14);
-    const items = prefs.remind ? list.filter(x => (x.task || x.exam) && !x.done && x.date >= t && x.date <= end).slice(0, 60)
+    const items = prefs.remind ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
       .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
     chrome.runtime.sendMessage({ type: "remind", items }).catch(() => {});
   }
@@ -129,12 +149,12 @@
       card.dataset.qf = "1";
       if (!c) continue;
       const st = a.state(c), p = pill(a.label(st), a.tone(st));
-      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Campus+ · quanto falta (notas do Canvas, meta 7)";
+      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
       (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
     }
   }
 
-  // The Campus+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
+  // The Caderno+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
   // #campus=<subject id> (course page button) opens it on that subject.
   function campusPage() {
     const cur = document.getElementById("cp-app"), m = /^#campus(?:=([a-z0-9]{1,20})(?:@\d{1,12})?)?$/.exec(location.hash);
@@ -144,7 +164,7 @@
     const nav = document.querySelector(".ic-app-header"), left = nav && nav.getBoundingClientRect ? Math.round(nav.getBoundingClientRect().width) : 0;
     const box = el("div"); box.id = "cp-app";
     box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:" + left + "px;z-index:9999;background:#FBF7EF";
-    const frame = el("iframe"); frame.src = src; frame.title = "Campus+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
+    const frame = el("iframe"); frame.src = src; frame.title = "Caderno+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
     const close = el("button", null, "Fechar"); close.type = "button";
     close.style.cssText = "position:absolute;bottom:16px;right:16px;font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:10px 16px;border-radius:10px;border:1px solid #1D2433;background:#1D2433;color:#FBF7EF;cursor:pointer;box-shadow:0 2px 0 #E2482B,0 8px 20px -8px rgba(29,36,51,.5)";
     close.addEventListener("click", closeCampus);
@@ -156,7 +176,7 @@
     if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
     history.replaceState(null, "", location.pathname + location.search); campusPage();
   }
-  // "Campus+" in the Canvas left menu, after Painel.
+  // "Caderno+" in the Canvas left menu, after Painel.
   function navItem() {
     const menu = document.getElementById("menu");
     if (!menu || !APP || document.getElementById("cp-nav")) return;
@@ -168,7 +188,7 @@
     plus.style.cssText = "font:700 14px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#FF7A5C;vertical-align:8px;margin-left:1px";
     icon.appendChild(plus);
     icon.style.color = "var(--ic-brand-global-nav-ic-icon-svg-fill,#fff)";
-    a.append(icon, el("div", "menu-item__text", "Campus+")); li.appendChild(a);
+    a.append(icon, el("div", "menu-item__text", "Caderno+")); li.appendChild(a);
     const dash = document.getElementById("global_nav_dashboard_link"), after = dash && dash.closest ? dash.closest("li") : null;
     menu.insertBefore(li, after ? after.nextSibling : null);
   }
@@ -248,7 +268,7 @@
     @container cp (min-width:760px) { .news > ul { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:32px; } }
     .empty { padding:14px 12px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); font:italic 14px/1.4 var(--serif); text-align:center; }
     .late { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:4px 0 12px; }
-    .late .ev { max-width:240px; }
+    .late .ev { max-width:240px; } .late .evw { flex:none; }
     .tl { position:relative; margin-top:6px; }
     .heads, .lanes, .rules { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
     .heads .dh { padding:0 6px 6px; font-size:11.5px; font-weight:600; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -278,6 +298,22 @@
     .tip b { font-weight:650; } .tip span { opacity:.78; }
     .ev.r .tip { left:auto; right:0; }
     .ev:hover .tip, .ev:focus-visible .tip { opacity:1; visibility:visible; transform:none; transition-delay:0s; }
+    .evw { position:relative; min-width:0; }
+    .ck { position:absolute; top:-7px; right:-5px; z-index:3; width:20px; height:20px; padding:0; border-radius:50%; font:700 11px/18px var(--sans); text-align:center; color:var(--muted); background:var(--bg); border:1px solid var(--line);
+      opacity:0; transition:opacity .12s, background-color .15s, color .15s; }
+    .evw:hover .ck, .ck:focus-visible, .ck[aria-pressed="true"], .row .ck { opacity:1; } .ck[aria-pressed="true"] { background:var(--ok); border-color:var(--ok); color:var(--bg); }
+    .row .ck { position:static; margin-right:6px; } .end { display:flex; align-items:center; } .row.dn .n { color:var(--muted); text-decoration:line-through; }
+    .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
+    .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
+    .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
+    .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
+    .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
+    .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
+    .pal-q { all:unset; box-sizing:border-box; display:block; width:100%; padding:14px 16px; font:500 16px/1.3 var(--sans); color:var(--fg); border-bottom:1px solid var(--line); }
+    .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
+    .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
+    .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -287,7 +323,7 @@
     :host-context(html.cp-dark) .ev.bd { background:#3A1F1D; color:#FFA28C; border-color:#5A2E29; } :host-context(html.cp-dark) .ev.ex { color:#1B1210; } :host-context(html.cp-dark) .trk i.ok { background:var(--ok); }`;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const mark = () => { const m = el("span", "mk"); m.setAttribute("aria-hidden", "true"); return m; };   // the logo tile, drawn in CSS
-  const wordmark = () => { const b = el("b", null, "Campus"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Campus+"); return b; };
+  const wordmark = () => { const b = el("b", null, "Caderno"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Caderno+"); return b; };
 
   // A panel in a shadow root at the top of the page content; null when it is already there or the page has no content area.
   function panelHost(id) {
@@ -307,12 +343,21 @@
   // The next 7 days as a timeline (today + 6): a column per day, each item a chip in its due day (lanes so none overlap), the
   // exam days banded, a marker at the current time; overdue work in a row above. Narrow panels show the same days as a list
   // (both are built; a container query picks one). Every link goes through the same origin check as before.
-  function weekView(list, prefs) {
+  // onMark(x, on): tick work as done here (not exams, not what Canvas already counts as handed in); done work is greyed.
+  function weekView(list, prefs, onMark) {
     const t = today(), cols = [0, 1, 2, 3, 4, 5, 6].map(addDays);
-    const late = list.filter(x => x.late && !x.done && x.date < t), next = list.filter(x => x.date >= t && x.date <= cols[6]);
-    const status = x => x.done ? "entregue" : x.late ? "atrasada" : x.exam ? (prefs.grades ? need(x.exam) : "prova") : x.task ? "a entregar" : "evento";
+    const overdue = list.filter(x => x.late && !x.done && x.date < t), late = overdue.filter(x => !x.mine), next = list.filter(x => x.date >= t && x.date <= cols[6]);
+    const status = x => x.done ? "entregue" : x.mine ? "feito" : x.late ? "atrasada" : x.exam ? (prefs.grades ? need(x.exam) : "prova") : x.task ? "a entregar" : "evento";
     const name = x => (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title;   // core names already say "Prova do RA2"
-    const kind = x => x.late && !x.done ? "bd" : x.done ? "ok" : x.exam ? "ex" : x.task ? "wa" : "in";
+    const kind = x => x.late && !fin(x) ? "bd" : fin(x) ? "ok dn" : x.exam ? "ex" : x.task ? "wa" : "in";
+    const check = x => {
+      if (x.exam || x.done || !onMark) return null;
+      const b = el("button", "ck", "✓"); b.type = "button";
+      b.setAttribute("aria-pressed", String(x.mine)); b.setAttribute("aria-label", (x.mine ? "Desmarcar: " : "Marcar como feito: ") + name(x));
+      b.title = x.mine ? "Desmarcar" : "Marcar como feito (só aqui, o Canvas não muda)";
+      b.addEventListener("click", e => { e.preventDefault(); onMark(x, !x.mine); });
+      return b;
+    };
     const chip = (x, text, right, sub) => {
       const c = el(x.url ? "a" : "span", "ev " + kind(x) + (right ? " r" : ""));
       if (x.url) c.href = x.url; else c.tabIndex = 0;   // focusable either way, so the tooltip opens from the keyboard too
@@ -323,13 +368,20 @@
       c.append(el("span", "t", text)); if (sub) c.appendChild(el("span", "s", sub)); c.appendChild(tip);
       return c;
     };
-    const sec = el("section", "card week"), h = el("h3", null, "Próximos 7 dias"), open = next.filter(x => (x.task || x.exam) && !x.done).length;
+    const sec = el("section", "card week"), h = el("h3", null, "Próximos 7 dias"), open = next.filter(x => (x.task || x.exam) && !fin(x)).length;
     h.appendChild(el("span", "pill " + (late.length ? "bad" : open ? "warn" : "ok"), late.length ? late.length + (late.length === 1 ? " atrasada" : " atrasadas") : open ? open + " pela frente" : "tudo entregue"));
+    const work = next.filter(x => !x.exam), got = work.filter(fin).length;   // the week's progress: work done of all work
+    if (work.length) {
+      const pr = el("span", "prog"), r = el("i"), pct = got / work.length * 100;
+      r.style.background = "conic-gradient(var(--ok) 0 " + pct + "%, var(--track) " + pct + "% 100%)";
+      pr.append(r, el("span", null, got + " de " + work.length + " feitas"));
+      pr.setAttribute("aria-label", got + " de " + work.length + " feitas nesta semana"); h.appendChild(pr);
+    }
     sec.appendChild(h);
-    if (late.length) {
-      const row = el("div", "late"); row.appendChild(el("span", "pill bad", "Atrasadas"));
-      late.slice(0, 6).forEach(x => row.appendChild(chip(x, x.title + " · " + dmy(x.date))));
-      if (late.length > 6) row.appendChild(el("span", "muted", "+" + (late.length - 6)));
+    if (overdue.length) {   // ticked overdue work stays here greyed (so it can be unticked) until it leaves the planner window
+      const row = el("div", "late"); row.appendChild(el("span", "pill " + (late.length ? "bad" : "ok"), "Atrasadas"));
+      overdue.slice(0, 6).forEach(x => { const w = el("div", "evw"), ck = check(x); w.appendChild(chip(x, x.title + " · " + dmy(x.date))); if (ck) w.appendChild(ck); row.appendChild(w); });
+      if (overdue.length > 6) row.appendChild(el("span", "muted", "+" + (overdue.length - 6)));
       sec.appendChild(row);
     }
     if (!next.length) { sec.appendChild(el("div", "empty", late.length ? "Nada novo nos próximos 7 dias: dá para pôr as atrasadas em dia." : "Nada nos próximos 7 dias. Semana livre!")); return sec; }
@@ -353,7 +405,12 @@
     const MAX = 4;
     cols.forEach((iso, col) => {
       const day = el("div", "col"), items = next.filter(x => x.date === iso), shown = items.length > MAX ? items.slice(0, MAX - 1) : items;
-      for (const x of shown) day.appendChild(chip(x, name(x), col >= 4, x.done ? "✓ entregue" : x.exam ? (prefs.grades ? need(x.exam) : "prova") : x.due ? hhmm(x.due) : "dia todo"));
+      for (const x of shown) {
+        const w = el("div", "evw"), ck = check(x);
+        w.appendChild(chip(x, name(x), col >= 4, x.done ? "✓ entregue" : x.mine ? "✓ feito" : x.exam ? (prefs.grades ? need(x.exam) : "prova") : x.due ? hhmm(x.due) : "dia todo"));
+        if (ck) w.appendChild(ck);
+        day.appendChild(w);
+      }
       const rest = items.slice(shown.length);
       if (rest.length) {
         const more = el("span", "ev more" + (col >= 4 ? " r" : ""), "+" + rest.length); more.tabIndex = 0;
@@ -372,8 +429,10 @@
     for (const x of next) {
       const g = cap(dayLabel(x.date));
       if (g !== group) { group = g; const day = el("li", "day"); rows = el("ul"); day.append(el("div", "dh", g), rows); wl.appendChild(day); }
-      const right = x.done ? el("span", "pill ok", "entregue") : x.exam ? el("span", "pill " + (prefs.grades ? needTone(x.exam) : "nt"), prefs.grades ? need(x.exam) : "prova") : el("span");
-      const li = el("li", "row");
+      const right = el("span", "end"), ck = check(x);
+      if (ck) right.appendChild(ck);
+      right.appendChild(x.done ? el("span", "pill ok", "entregue") : x.mine ? el("span", "pill ok", "feito") : x.exam ? el("span", "pill " + (prefs.grades ? needTone(x.exam) : "nt"), prefs.grades ? need(x.exam) : "prova") : el("span"));
+      const li = el("li", "row" + (fin(x) ? " dn" : ""));
       li.append(el("span", "d", x.due ? hhmm(x.due) : "–"), mid(name(x), x.url, x.course), right);
       rows.appendChild(li);
     }
@@ -381,8 +440,8 @@
     return sec;
   }
 
-  // The calculator's own components, drawn from the shared core (same numbers as the Campus+ page): ring, next card,
-  // KPI row and subject tiles. Links open Campus+ on a subject (#campus=<id>); in the bookmarklet they are plain text.
+  // The calculator's own components, drawn from the shared core (same numbers as the Caderno+ page): ring, next card,
+  // KPI row and subject tiles. Links open Caderno+ on a subject (#campus=<id>); in the bookmarklet they are plain text.
   const toCampus = (tag, cls, id) => { const x = el(APP ? "a" : tag, cls); if (APP) x.href = "#campus" + (id ? "=" + id + (courseOf[id] ? "@" + courseOf[id] : "") : ""); return x; };   // @<Canvas course id>: Fechar goes there
   const earnedText = st => st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1);
   function ring(st, big) {
@@ -441,19 +500,25 @@
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
-  function dashPanel(a, cache, prefs) {
+  function dashPanel(a, cache, prefs, marks) {
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
     if (!grades && !why && !week && !news) return;
     const box = panelHost("cp-dash");
     if (!box) return;
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
-    if (APP) { const brand = el("a", "brand", "Abrir Campus+ →"); brand.href = "#campus"; hd.appendChild(brand); }
+    if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
+    if (APP) { const brand = el("a", "brand", "Abrir Caderno+ →"); brand.href = "#campus"; hd.appendChild(brand); }
     box.append(hd);
     if (grades) box.append(...gradesView(a));
     else if (why) box.append(el("div", "muted why", why));
     box.appendChild(grid);
-    if (week) grid.appendChild(weekView(agenda(a, cache), prefs));
+    if (week) {
+      let sec = null;
+      const draw = () => { const nx = weekView(agenda(a, cache, marks), prefs, mark); if (sec) { grid.insertBefore(nx, sec); sec.remove(); } else grid.appendChild(nx); sec = nx; };
+      const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
+      draw();
+    }
     if (news) {
       const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
       const sec = el("section", "card news"), h = el("h3", null, "Avisos");
@@ -472,7 +537,7 @@
   }
 
   // Course pages: the ring card (earned, what is left, the needed grade), every assessment of the subject with its weight
-  // and grade or what it needs, and the actions (files download, open Campus+ on this subject).
+  // and grade or what it needs, and the actions (files download, open Caderno+ on this subject).
   function coursePanel(courseId, a, cache, prefs) {
     const c = prefs.grades && a.has ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
     if (!c && !prefs.files) return;
@@ -508,7 +573,7 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
-    if (c && APP) { const open = el("button", null, "Abrir no Campus+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
+    if (c && APP) { const open = el("button", null, "Abrir no Caderno+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
     acts.appendChild(status); box.appendChild(acts);
   }
 
@@ -549,6 +614,84 @@
     } catch (e) { status.textContent = "Não consegui listar: " + (e && e.message || e); btn.disabled = false; }
   }
 
+  // Ctrl+K (⌘K on a Mac): search the term's courses, assignments and module items, and open one. Courses and assignments
+  // come from the last reading; the modules are read on the first search (one GET per course) and kept for 6 hours.
+  const SEARCH_TTL = 6 * 3600 * 1000;
+  const KEYS = typeof navigator !== "undefined" && /Mac|iP/.test(navigator.platform || "") ? "⌘K" : "Ctrl+K";
+  const fold = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const inCanvas = u => { try { const h = new URL(u, location.href).href; return h.startsWith(location.origin + "/") ? h : null; } catch (e) { return null; } };
+  const KIND = { Assignment: "tarefa", Quiz: "quiz", Page: "página", File: "arquivo", Discussion: "fórum", ExternalUrl: "link", ExternalTool: "ferramenta" };
+  function baseIndex(a, cache) {
+    const out = [];
+    for (const c of cache.data.courses) {
+      const nm = shortName(c.name);
+      out.push({ t: nm, c: "Matéria", u: "/courses/" + c.id, k: "matéria" });
+      for (const x of c.assignments) if (x.url) out.push({ t: x.name, c: nm, u: x.url, k: "tarefa" });
+    }
+    if (APP) for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Caderno+", u: "#campus=" + c.id + "@" + courseOf[c.id], k: "campus" });
+    return out;
+  }
+  async function moduleIndex(cache) {
+    const { search } = await chrome.storage.local.get("search");
+    if (search && search.user === cache.user && Date.now() - search.at < SEARCH_TTL && Array.isArray(search.items)) return search.items;
+    const items = []; let read = 0;
+    for (const c of cache.data.courses) {
+      try {
+        for (const m of await getAll("/api/v1/courses/" + c.id + "/modules?include[]=items&per_page=100"))
+          for (const it of m.items || []) if (it && it.title && it.html_url && it.type !== "SubHeader") items.push({ t: String(it.title), c: shortName(c.name) + " · " + String(m.name || ""), u: it.html_url, k: KIND[it.type] || "item" });
+        read++;
+      } catch (e) { /* modules hidden in this course */ }
+    }
+    if (read) await chrome.storage.local.set({ search: { user: cache.user, at: Date.now(), items } });
+    return items;
+  }
+  // Every word must appear in the title or the course; titles that start with the first word come first. Empty: the courses.
+  function find(items, q) {
+    const ws = fold(q).split(/\s+/).filter(Boolean), seen = new Set();
+    const ranked = ws.length ? items.map(x => {
+      const t = fold(x.t);
+      if (!ws.every(w => (t + " " + fold(x.c)).includes(w))) return null;
+      return [t.startsWith(ws[0]) ? 0 : (" " + t).includes(" " + ws[0]) ? 1 : t.includes(ws[0]) ? 2 : 3, x];
+    }).filter(Boolean).sort((p, r) => p[0] - r[0] || p[1].t.length - r[1].t.length).map(p => p[1]) : items.filter(x => x.k === "matéria" || x.k === "campus");
+    return ranked.filter(x => { const id = fold(x.t) + "|" + x.u; if (seen.has(id)) return false; seen.add(id); return true; }).slice(0, 30);
+  }
+  function openSearch(a, cache) {
+    const cur = document.getElementById("cp-search");
+    if (cur) { cur.remove(); return; }   // the shortcut again closes it
+    const host = el("div", "cp-host"); host.id = "cp-search";
+    host.style.cssText = "position:fixed;inset:0;z-index:10000;margin:0";
+    const root = host.attachShadow({ mode: "open" }), style = el("style"), back = el("div", "pal-back"), dlg = el("div", "pal");
+    style.textContent = CSS;
+    dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true"); dlg.setAttribute("aria-label", "Buscar no Canvas");
+    const q = el("input", "pal-q"); q.type = "text"; q.autocomplete = "off"; q.placeholder = "Buscar tarefas, módulos e matérias…"; q.setAttribute("aria-label", "Buscar");
+    const ul = el("ul", "pal-r"), note = el("div", "pal-s", "Lendo os módulos das matérias…");
+    ul.setAttribute("role", "listbox"); ul.id = "pal-r"; q.setAttribute("aria-controls", "pal-r");
+    let items = inCanvasOnly(baseIndex(a, cache)), hits = [], sel = 0;
+    const close = () => host.remove();
+    const go = x => { close(); if (x.u.startsWith("#")) location.hash = x.u.slice(1); else location.assign(inCanvas(x.u)); };
+    const draw = () => {
+      hits = find(items, q.value); sel = Math.min(sel, Math.max(0, hits.length - 1)); ul.replaceChildren();
+      hits.forEach((x, i) => {
+        const li = el("li", "pal-i" + (i === sel ? " on" : "")); li.setAttribute("role", "option"); li.setAttribute("aria-selected", String(i === sel));
+        li.append(el("span", "pal-k", x.k), mid(x.t, null, x.c)); li.addEventListener("click", () => go(x)); ul.appendChild(li);
+      });
+      if (!hits.length) ul.appendChild(el("li", "pal-e", q.value ? "Nada encontrado." : "Digite para buscar."));
+    };
+    q.addEventListener("input", () => { sel = 0; draw(); });
+    q.addEventListener("keydown", e => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, Math.min(hits.length - 1, sel + (e.key === "ArrowDown" ? 1 : -1))); draw(); }
+      else if (e.key === "Enter" && hits[sel]) { e.preventDefault(); go(hits[sel]); }
+      else if (e.key === "Escape") { e.preventDefault(); close(); }
+    });
+    back.addEventListener("click", close);
+    dlg.append(q, ul, note); root.append(style, back, dlg); document.body.appendChild(host);
+    if (q.focus) q.focus();
+    draw();
+    moduleIndex(cache).then(mods => { items = items.concat(inCanvasOnly(mods)); note.textContent = KEYS + " abre e fecha · ↑↓ escolhe · Enter abre"; draw(); },
+      () => { note.textContent = "Não consegui ler os módulos agora; busca só nas tarefas e matérias."; });
+  }
+  const inCanvasOnly = list => list.filter(x => x.u.startsWith("#campus=") || inCanvas(x.u));
+
   // Canvas login and logout pages (the content script runs on every pucpr.instructure.com page): the next student may be
   // someone else, so the user and the last reading are forgotten.
   const SIGN = /^\/(login|logout)(\/|$)|^\/users\/sign_out(\/|$)/;
@@ -560,13 +703,20 @@
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
     let cache;
     try { cache = await load(); } catch (e) { return; }   // logged out or Canvas down: stay quiet
-    const a = analyse(cache);
+    const a = analyse(cache), marks = await myMarks(cache.user);
     sendNext(a);
-    sendReminders(agenda(a, cache), prefs, cache);
+    sendReminders(agenda(a, cache, marks), prefs, cache);
+    if (prefs.search) {   // the bookmarklet can run again on the same page: one listener, opening the latest reading
+      const first = !window.cpSearch;
+      window.cpSearch = () => openSearch(a, cache);
+      if (first) addEventListener("keydown", e => {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); }
+      }, true);
+    }
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
-      dashPanel(a, cache, prefs);
+      dashPanel(a, cache, prefs, marks);
       if (!prefs.grades || !a.rules) return;
       decorateCards(a);
       let t = 0;

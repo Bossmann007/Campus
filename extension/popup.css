@@ -1,4 +1,4 @@
-/* Campus+ identity "Caderno": paper and ink, coral accent, Fraunces (fonts/OFL.txt) for the wordmark and headings. */
+/* Caderno+ identity "Caderno": paper and ink, coral accent, Fraunces (fonts/OFL.txt) for the wordmark and headings. */
 @font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
 :root { color-scheme:light dark; --bg:#FBF7EF; --card:#fff; --txt:#1D2433; --muted:#5F6675; --line:#ECE4D3; --soft:#F4EEE3; --off:#DCD1BC; --knob:#fff; --coral:#E2482B;
   --ok:#2F7D5B; --bad:#C2361F; --tile:#1D2433; --tile-c:#FBF7EF; --serif:"Fraunces","Iowan Old Style","New York",Georgia,serif; }

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- Video scene for media/demo.mp4 (not deployed). scripts/render-video serves the repo over localhost and loads this page once per
      frame with headless virtual time. The page is a mock Canvas tab running the real extension (content.js) on made-up data:
-     0-6 s the dashboard panel, 6-10.5 s the calculator (the real app.html) opened from the "Campus+" menu item, then a course
-     page whose "Abrir no Campus+" button opens that subject. chrome.* and the Canvas API are stubbed below (no real student data). -->
+     0-6 s the dashboard panel, 6-10.5 s the calculator (the real app.html) opened from the "Caderno+" menu item, then a course
+     page whose "Abrir no Caderno+" button opens that subject. chrome.* and the Canvas API are stubbed below (no real student data). -->
 <html lang="pt-BR"><head><meta charset="UTF-8"><title>scene</title>
 <style>
   * { box-sizing:border-box; } html { overflow:hidden; }
@@ -16,7 +16,7 @@
   .addr { display:flex; align-items:center; gap:10px; height:38px; padding:0 12px; background:#fff; }
   .url { flex:1; height:28px; border-radius:999px; background:#F3EFE6; display:flex; align-items:center; padding:0 14px; color:#5F6675; font-size:13px; }
   .page { position:absolute; top:76px; left:0; right:0; bottom:0; overflow:clip; display:flex; background:#fff; }
-  /* mock Canvas: the dark global nav (#menu, where content.js adds "Campus+") and the page content (#content, where it adds its panels) */
+  /* mock Canvas: the dark global nav (#menu, where content.js adds "Caderno+") and the page content (#content, where it adds its panels) */
   .ic-app-header { flex:none; width:84px; background:#2D3B45; }
   #menu { margin:0; padding:8px 0; list-style:none; text-align:center; }
   #menu li { padding:2px 0; } .ic-app-header__menu-list-link { display:block; padding:7px 0; color:#fff; text-decoration:none; }
@@ -110,7 +110,7 @@ history.replaceState(null, "", "/");   // the Canvas dashboard path, so content.
 </div>
 <svg class="cursor" id="cur" viewBox="0 0 24 24"><path d="M4 2l15 9-7 1.5L9 20z" fill="#fff" stroke="#1D2433" stroke-width="1.4" stroke-linejoin="round"/></svg>
 <span class="ring" id="ring"></span>
-<div class="cap" id="cap">No Canvas, o Campus+ mostra a semana inteira</div>
+<div class="cap" id="cap">No Canvas, o Caderno+ mostra a semana inteira</div>
 <script src="/ext/collect.js"></script><script src="/ext/core.js"></script><script src="/ext/files.js"></script><script src="/ext/content.js"></script>
 <script>
 const $ = id => document.getElementById(id), at = (ms, f) => setTimeout(f, ms);
@@ -146,11 +146,11 @@ at(900, () => { const r = shadow("cp-dash"), w = r && r.querySelector(".week"); 
 at(2300, () => { const c = chip(); if (c) { const p = center(c); move(p.x + 6, p.y + 2, 800); } });
 at(3150, () => { const c = chip(); if (c) { const s = document.createElement("style"); s.textContent = ".lanes .col:nth-child(3) .ev:first-child .tip { opacity:1; visibility:visible; transform:none; } .lanes .col:nth-child(3) .ev:first-child { transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); z-index:4; }";
   shadow("cp-dash").appendChild(s); cap("Passe o mouse: prazo, matéria e se já entregou"); } });
-// 2. "Campus+" in the left menu opens the calculator over Canvas
+// 2. "Caderno+" in the left menu opens the calculator over Canvas
 at(5000, () => { const r = shadow("cp-dash"), s = r && r.querySelector("style:last-of-type"); if (s && s.textContent.includes(".tip")) s.remove(); const n = $("cp-nav"); if (n) { const p = center(n); move(p.x + 4, p.y, 800); } });
-at(5900, () => { const n = $("cp-nav"); if (n) { const p = center(n); click(p.x, p.y); location.hash = "#campus"; } cap("Um clique em Campus+ e a calculadora abre no próprio Canvas"); });
+at(5900, () => { const n = $("cp-nav"); if (n) { const p = center(n); click(p.x, p.y); location.hash = "#campus"; } cap("Um clique em Caderno+ e a calculadora abre no próprio Canvas"); });
 at(6300, () => move(820, 520, 900));
-// 3. a course page: the ring and the grades table; "Abrir no Campus+" opens that subject
+// 3. a course page: the ring and the grades table; "Abrir no Caderno+" opens that subject
 at(10200, () => {
   history.replaceState(null, "", "/courses/71306"); const old = $("cp-app"); if (old) old.remove(); const d = $("cp-dash"); if (d) d.remove();
   $("nav-dash").classList.remove("on"); $("nav-courses").classList.add("on");
@@ -161,7 +161,7 @@ at(10200, () => {
   const s = document.createElement("script"); s.src = "/ext/content.js?course"; document.body.appendChild(s);   // a new page load runs the content script again
   cap("Em cada matéria: quanto já tem, o peso e a nota que falta");
 });
-const openBtn = () => { const r = shadow("qf-panel"); return r && [...r.querySelectorAll("button")].find(b => b.textContent.includes("Abrir no Campus+")); };
+const openBtn = () => { const r = shadow("qf-panel"); return r && [...r.querySelectorAll("button")].find(b => b.textContent.includes("Abrir no Caderno+")); };
 at(11500, () => scrollTo_(230, 900));   // done before the cursor reads the button position
 at(12450, () => { const b = openBtn(); if (b) { const p = center(b); move(p.x - 10, p.y + 4, 800); } });
 at(13350, () => { const b = openBtn(); if (b) { const p = center(b); click(p.x - 4, p.y); b.click(); } cap("E abre direto no cartão da matéria"); });

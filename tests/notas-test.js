@@ -217,7 +217,7 @@ assert.strictEqual(C.subjectOf({ id: 72006, name: "x" }, true).id, "etica"); ass
 ok("Canvas courses pair to subjects by course id; name prefix only for data without ids");
 assert.strictEqual(C.TERM, "2026 / 2"); assert.strictEqual(C.TERM_END, "2027-01-31");
 assert.strictEqual(C.expired("2027-01-31"), false); assert.strictEqual(C.expired("2027-02-01"), true);
-assert.strictEqual(C.EXPIRED_NOTE, "As regras de 2026/2 acabaram. Atualize o Campus+ quando sair a versão do próximo semestre.");
+assert.strictEqual(C.EXPIRED_NOTE, "As regras de 2026/2 acabaram. Atualize o Caderno+ quando sair a versão do próximo semestre.");
 const cpx = { data: { v: 1, courses: [] }, user: 5 };
 assert.deepStrictEqual(C.extBoot(cpx, "2027-01-31"), { notice: null, autoImport: true }, "in the term: the Canvas reading is applied");
 assert.deepStrictEqual(C.extBoot(cpx, "2027-02-10"), { notice: C.EXPIRED_NOTE, autoImport: false }, "term over: the notice, no auto import");

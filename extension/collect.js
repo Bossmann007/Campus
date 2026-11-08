@@ -1,5 +1,5 @@
 // Reads the student's own Canvas data on the Canvas page (content script, or the bookmarklet): same-origin, read-only GETs.
-// Returns { v:1, courses:[{ id, name, assignments:[{ name, points, score, due, missing, submitted, online, stats }] }], announcements } for the
+// Returns { v:1, courses:[{ id, name, assignments:[{ name, points, url, score, due, missing, submitted, online, stats }] }], announcements } for the
 // courses of the term (NotasCore.TERM), or { error } (never rejects). seen.courses gets every active course ({ id, name }), so the caller
 // does not fetch the list again.
 async function collectCanvasGrades(seen) {
@@ -22,7 +22,7 @@ async function collectCanvasGrades(seen) {
   const courses = [];
   for (const c of cs) {
     const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100");
-    courses.push({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible,
+    courses.push({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null,
       score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
       due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
       submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),

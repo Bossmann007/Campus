@@ -61,11 +61,13 @@ const items = [{ id: 1, url: "https://pucpr.instructure.com/files/1/download", f
 function fakeEl(tag) {
   const e = { tag, kids: [], style: {}, dataset: {}, className: "", textContent: "", listeners: {}, parent: null,
     append(...c) { c.forEach(x => { x.parent = this; }); this.kids.push(...c); }, appendChild(c) { this.append(c); return c; },
+    replaceChildren(...c) { this.kids.forEach(k => { k.parent = null; }); this.kids = []; this.append(...c); },
     prepend(c) { c.parent = this; this.kids.unshift(c); }, insertBefore(c, ref) { c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); },
     remove() { if (this.parent) this.parent.kids.splice(this.parent.kids.indexOf(this), 1); this.parent = null; this.removed = true; },
     addEventListener(t, f) { this.listeners[t] = f; }, setAttribute(k, v) { this[k] = v; }, attachShadow() { this.shadow = fakeEl("#shadow"); return this.shadow; } };
   return e;
 }
+const colOf = e => e.parent && e.parent.className === "evw" ? e.parent.parent : e.parent;   // timeline chips sit in a wrapper with their tick button
 const all = e => [e, ...(e.shadow ? all(e.shadow) : []), ...e.kids.flatMap(all)];
 const text = e => all(e).map(x => x.textContent).join(" | ");
 const page = body => ({ ok: true, text: async () => "while(1);" + JSON.stringify(body), headers: { get: () => null } });
@@ -97,7 +99,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if (url === "/api/v1/users/self") return page({ id: opts.selfId || 5 });
     if (url.startsWith("/api/v1/courses?") && opts.failCourses) return { ok: false, status: 500, text: async () => "", headers: { get: () => null } };
     if (url.startsWith("/api/v1/courses?")) return page([{ id: cid, name: opts.courseName || BD }].concat(opts.more || []));
-    if (url.startsWith("/api/v1/courses/" + cid + "/assignments")) return page([{ name: "Entrega PjBL - Parte 1 03/09", points_possible: 1, submission: { score: 1 } },
+    if (url.startsWith("/api/v1/courses/" + cid + "/assignments")) return page([{ name: "Entrega PjBL - Parte 1 03/09", points_possible: 1, html_url: "/courses/71306/assignments/11", submission: { score: 1 } },
       { name: "Avaliação somativa RA1 10/09", points_possible: 1.25, submission: { score: 1.25 } }, { name: "Avaliação somativa RA2 22/10", points_possible: 3, submission: { score: 3 } },
       { name: "Entrega PjBL - Parte 2 15/10", points_possible: 2, submission: { score: 2 } }]);
     if ((opts.more || []).some(c => url.startsWith("/api/v1/courses/" + c.id + "/assignments"))) return page([]);
@@ -105,6 +107,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
       { context_code: "course_" + cid, title: "Bem-vindos", posted_at: "2026-08-01T12:00:00Z", read_state: "read", html_url: "https://evil.example/x" }]);
     if (url.startsWith("/api/v1/planner/items?")) return plannerFails ? { ok: false, status: 500, text: async () => "", headers: { get: () => null } } : page(plannerItems || PLANNER);
     if (url.startsWith("/api/v1/courses/71306/files?")) return files ? page(files) : { ok: false, status: 401, text: async () => "", headers: { get: () => null } };
+    if (opts.modules && url.startsWith("/api/v1/courses/71306/modules?")) return page(opts.modules);
     if (url.startsWith("/api/v1/courses/71306/modules?")) return page([{ items: [{ type: "File", content_id: 9 }, { type: "Page" }] }]);
     if (url === "/api/v1/courses/71306/files/9") return page({ id: 9, display_name: "Aula 9.pdf", url: "https://pucpr.instructure.com/files/9/download?verifier=v", size: 5 });
     throw new Error("unexpected " + url);
@@ -138,7 +141,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     { id: 2, display_name: "virus.exe", url: "/files/2/download", size: 5 }, { id: 3, display_name: "Gabarito.pdf", url: "/files/3/download", locked_for_user: true, size: 5 }]);
   const host = course.anchor.kids[0];
   assert(host && host.id === "qf-panel" && host.shadow, "course panel in a shadow root");
-  assert.match(text(host), /Campus\+/);
+  assert.match(text(host), /Caderno\+/);
   const abd = C.COURSES.find(c => c.id === "abd"), st42 = C.courseState(abd, C.fromCanvas(course.store.cache.data).grades, isoIn(0), 7);
   assert.match(text(host), new RegExp((st42.earned >= 10 ? "10" : f1(Math.floor(st42.earned * 10) / 10)) + " garantidos de 10"), "ring card: points earned, from the core");
   const irows = all(host).filter(e => e.className === "ir");
@@ -195,13 +198,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // dashboard: the next 7 days as a timeline (planner + our exams), overdue work above it, and the announcements
   const dash2 = await runContent("/", null), wk = dash2.anchor.kids.find(k => k.id === "cp-dash");
   assert(wk && wk.className === "cp-host", "dashboard panel, kept as is by the dark theme");
-  const wt = text(wk), chips = all(wk).filter(e => /^ev /.test(e.className)), inGrid = re => chips.find(e => e.parent && e.parent.className === "col" && re.test(e["aria-label"]));
+  const wt = text(wk), chips = all(wk).filter(e => /^ev /.test(e.className)), inGrid = re => chips.find(e => colOf(e) && colOf(e).className === "col" && re.test(e["aria-label"]));
   assert.match(wt, /Próximos 7 dias/); assert.match(wt, /1 atrasada/);
   const lista = inGrid(/^Lista 3 /);
   assert(lista && /^ev wa/.test(lista.className) && lista.tag === "a", "a deadline still to hand in: an amber chip");
   const cols = all(wk).find(e => e.className === "lanes").kids;
   assert(cols.length === 7 && cols.every(c => c.className === "col"), "one column per day");
-  assert.strictEqual(cols.indexOf(lista.parent), 1, "only in its own day (tomorrow is the second column)");
+  assert.strictEqual(cols.indexOf(colOf(lista)), 1, "only in its own day (tomorrow is the second column)");
   assert.match(text(lista), /^ \| Lista 3 \| \d\d:\d\d \|/, "chip: title, then the time"); assert.match(text(lista), /Amanhã, \d\d:\d\d · a entregar/, "tooltip: day, time and status");
   assert.strictEqual(lista.href, "https://pucpr.instructure.com/courses/71306/assignments/1");
   const late = all(wk).find(e => e.className === "late" && e.tag === "div");
@@ -215,10 +218,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
     context_name: BD, course_id: 71306, html_url: "/courses/71306/assignments/" + (100 + i), submissions: {} })));
   const busy = await runContent("/", null); plannerItems = null;
   const busyCol = all(busy.anchor.kids.find(k => k.id === "cp-dash")).find(e => e.className === "lanes").kids[3];
-  assert.deepStrictEqual(busyCol.kids.map(e => /more/.test(e.className) ? e.textContent : e.kids[0].textContent), ["Tarefa 1", "Tarefa 2", "Tarefa 3", "+2"], "a busy day shows 3 chips and +N");
+  assert.deepStrictEqual(busyCol.kids.map(e => /more/.test(e.className) ? e.textContent : e.kids[0].kids[0].textContent), ["Tarefa 1", "Tarefa 2", "Tarefa 3", "+2"], "a busy day shows 3 chips and +N");
   assert.match(busyCol.kids[3]["aria-label"], /Tarefa 4.*Tarefa 5/, "+N lists the rest"); assert.strictEqual(busyCol.kids[3].tabIndex, 0);
   const wl = all(wk).find(e => e.className === "wl");
-  assert.match(text(wl), /Amanhã/, "narrow fallback: the same days as a list"); assert.match(text(wl), /Quiz feito \| Inglês \| entregue/);
+  assert.match(text(wl), /Amanhã/, "narrow fallback: the same days as a list"); assert.match(text(wl), /Quiz feito \| Inglês \|  \| entregue/);
   const wlAula = all(wl).find(e => e.textContent === "Aula");
   assert(wlAula && wlAula.tag === "span" && !wlAula.href, "the list keeps the off-Canvas check too");
   assert(!chips.some(e => /Aviso/.test(e["aria-label"])), "planner announcements stay out of the week");
@@ -231,12 +234,68 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(rem.items.filter(i => i.key.startsWith("qf:")).every(i => i.due === null && i.date >= isoIn(0) && i.date <= isoIn(14) && /^Prova: /.test(i.title)), "our exams: by date, next 14 days");
   assert.strictEqual(rem.items[0].title, "Entrega: Lista 3"); ok();
 
+  // ticking work as done (only here, per Canvas user): greyed in the week, counted in the progress, no reminder; untick undoes it
+  const tick = await runContent("/", null, { marks: { 9: { "assignment:1": isoIn(1) } } });
+  const tickBox = () => tick.anchor.kids.find(k => k.id === "cp-dash");
+  const grid = () => all(tickBox()).filter(e => /^ev /.test(e.className) && colOf(e).className === "col");
+  const listaChip = () => grid().find(e => /^Lista 3 /.test(e["aria-label"]));
+  assert(/^ev wa/.test(listaChip().className), "another user's ticks are not mine");
+  assert.match(text(tickBox()), /1 de 3 feitas/, "progress: Canvas-handed-in work counts as done");
+  assert(!all(tickBox()).some(e => e.className === "ck" && /Quiz feito|Prova/.test(e["aria-label"])), "no tick on handed-in work or exams");
+  const ck = listaChip().parent.kids.find(e => e.className === "ck");
+  assert(ck && ck["aria-pressed"] === "false" && /^Marcar como feito: Lista 3/.test(ck["aria-label"]));
+  await ck.listeners.click({ preventDefault() {} }); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(tick.store.marks[5], { "assignment:1": isoIn(1) }, "saved under this user"); assert(tick.store.marks[9], "the other user's ticks are kept");
+  assert(/^ev ok dn/.test(listaChip().className) && /✓ feito/.test(text(listaChip())) && / · feito$/.test(listaChip()["aria-label"]), "ticked: greyed, says feito");
+  assert.match(text(tickBox()), /2 de 3 feitas/); assert.strictEqual(all(tickBox()).filter(e => /card week/.test(e.className)).length, 1, "the week is redrawn in place");
+  assert(!tick.sent.filter(m => m.type === "remind").pop().items.some(i => i.key === "assignment:1"), "no reminder for ticked work");
+  assert(/Lista 3.*feito/.test(text(all(tickBox()).find(e => e.className === "wl"))), "the narrow list says feito too");
+  await listaChip().parent.kids.find(e => e.className === "ck").listeners.click({ preventDefault() {} }); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(tick.store.marks[5], {}, "untick"); assert(/^ev wa/.test(listaChip().className));
+  assert(tick.sent.filter(m => m.type === "remind").pop().items.some(i => i.key === "assignment:1"), "the reminder is back");
+  const lateRow = () => all(tickBox()).find(e => e.className === "late"), rel = () => all(lateRow()).find(e => /^ev /.test(e.className));
+  await rel().parent.kids.find(e => e.className === "ck").listeners.click({ preventDefault() {} }); await new Promise(r => setTimeout(r, 10));
+  assert(tick.store.marks[5]["assignment:2"] && !/atrasada/.test(text(all(tickBox()).find(e => e.tag === "h3"))), "overdue work can be ticked: no longer counted late");
+  assert(/^ev ok dn/.test(rel().className) && /^Desmarcar/.test(rel().parent.kids[1]["aria-label"]), "it stays in the overdue row, greyed, so it can be unticked");
+  await Promise.all([rel().parent.kids[1].listeners.click({ preventDefault() {} }), listaChip().parent.kids[1].listeners.click({ preventDefault() {} })]); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(tick.store.marks[5], { "assignment:1": isoIn(1) }, "two quick clicks both count");
+  const kept = await runContent("/", null, { marks: { 5: { "assignment:1": isoIn(1), "assignment:99": isoIn(-40) } } });
+  assert(/^ev ok dn/.test(all(kept.anchor).find(e => /^Lista 3 /.test(e["aria-label"] || "") && /^ev /.test(e.className)).className), "ticks survive a reload");
+  assert(!kept.sent.find(m => m.type === "remind").items.some(i => i.key === "assignment:1"), "reminders skip ticked work from the first run"); ok();
+
+  // Ctrl+K: the term's courses, assignments and module items; Enter opens the chosen one in Canvas
+  const MODS = [{ name: "Unidade 2", items: [{ type: "File", title: "Aula 7 - JOIN.pdf", html_url: "https://pucpr.instructure.com/courses/71306/modules/items/5" },
+    { type: "SubHeader", title: "Leituras", html_url: "https://pucpr.instructure.com/courses/71306/modules/items/6" }, { type: "ExternalUrl", title: "Aula externa", html_url: "https://evil.example/aula" }] }];
+  const sr = await runContent("/", null, {}, { modules: MODS }), key = k => sr.winListeners.keydown(Object.assign({ key: k, preventDefault() {}, stopPropagation() {} }, k === "k" ? { ctrlKey: true } : {}));
+  assert(all(sr.anchor).some(e => e.className === "find" && /^Buscar (Ctrl\+K|⌘K)$/.test(e.textContent)), "the dashboard shows the shortcut");
+  key("k"); await new Promise(r => setTimeout(r, 20));
+  const pal = sr.body.kids.find(k => k.id === "cp-search"), q = all(pal).find(e => e.className === "pal-q"), hits = () => all(pal).filter(e => /^pal-i/.test(e.className));
+  assert(pal && pal.shadow && q, "Ctrl+K opens the search");
+  assert.deepStrictEqual(hits().map(h => h.kids[0].textContent), ["matéria", "campus"], "empty: the courses and the Caderno+ subjects");
+  assert(sr.store.search && sr.store.search.user === 5 && sr.store.search.items.length === 2, "modules kept for this user, sub-headers dropped");
+  q.value = "aula"; q.listeners.input();
+  assert.deepStrictEqual(hits().map(h => text(h.kids[1])), [" | Aula 7 - JOIN.pdf | Arquitetura de Banco de Dados · Unidade 2"], "off-Canvas module links never show");
+  q.value = "entrega pjbl"; q.listeners.input();
+  assert.match(text(hits()[0]), /tarefa \|.*Entrega PjBL - Parte 1/, "assignments from the last reading");
+  q.value = "BANCO aula"; q.listeners.input(); q.listeners.keydown({ key: "Enter", preventDefault() {} });
+  assert.strictEqual(sr.env.location.assigned, "https://pucpr.instructure.com/courses/71306/modules/items/5", "Enter opens it, any case, words in any field");
+  assert(!sr.body.kids.some(k => k.id === "cp-search"), "and closes the search");
+  const n0 = sr.fetches.length; key("k"); await new Promise(r => setTimeout(r, 20));
+  assert.strictEqual(sr.fetches.length, n0, "modules not read again within 6 hours");
+  key("k"); assert(!sr.body.kids.some(k => k.id === "cp-search"), "the shortcut again closes it");
+  key("k"); const q2 = all(sr.body.kids.find(k => k.id === "cp-search")).find(e => e.className === "pal-q");
+  q2.listeners.keydown({ key: "Escape", preventDefault() {} }); assert(!sr.body.kids.some(k => k.id === "cp-search"), "Esc closes it");
+  const noFind = await runContent("/", null, { prefs: { search: false } });
+  assert(!noFind.winListeners.keydown && !all(noFind.anchor).some(e => e.className === "find"), "switched off in the popup: no shortcut, no button");
+  const bye = await runContent("/logout", null, { search: { user: 5, at: Date.now(), items: [] }, cache: {} });
+  assert(!bye.store.search && !bye.store.cache, "logging out forgets the search index too"); ok();
+
   // our exams in the timeline (with what each needs) and the exam-week band; a week with nothing shows a friendly line
   const fakeDate = iso => { const T = Date.parse(iso); return class extends Date { constructor(...a) { if (a.length) super(...a); else super(T); } static now() { return T; } }; };
   plannerItems = [];
   const MORE = [{ id: 72009, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem" }, { id: 72011, name: "Conectividade em Sistemas Ciberfísicos (Turma 2º B) - 2026 / 2º Sem" }];
   const exams = await runContent("/", null, {}, { Date: fakeDate("2026-11-08T12:00:00-03:00"), more: MORE });
-  const eb = exams.anchor.kids.find(k => k.id === "cp-dash"), ex = all(eb).filter(e => /^ev ex/.test(e.className) && e.parent.className === "col");
+  const eb = exams.anchor.kids.find(k => k.id === "cp-dash"), ex = all(eb).filter(e => /^ev ex/.test(e.className) && colOf(e).className === "col");
   assert(ex.length >= 2, "our exams of the week are coral chips in the grid");
   assert(ex.every(e => /^(precisa [\d,]+( de [\d,]+)?|já garantido|não dá)$/.test(all(e).find(k => k.className === "s").textContent)), "exam chips say what each needs");
   const band = all(eb).find(e => e.className === "band");
@@ -260,7 +319,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   if (nx) assert(nextCard && nextCard.href === "#campus=" + nx.course.id + "@" + cvOf(nx.course.id) && text(nextCard).includes(nx.item.name), "next card: the soonest assessment that still counts, opens its subject");
   else assert(!nextCard, "nothing left that counts: no next card");
   const tiles = all(gb).filter(e => e.className === "card tile");
-  assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "#campus=" + c.id + "@" + cvOf(c.id)), "a tile per enrolled subject, each opening Campus+ on it and naming its Canvas course");
+  assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "#campus=" + c.id + "@" + cvOf(c.id)), "a tile per enrolled subject, each opening Caderno+ on it and naming its Canvas course");
   assert(tiles.every((t, i) => text(t).includes(C.SHORT[mine[i].id])), "tiles named like the calculator");
   assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · Ciência da Computação, manhã · não oficial, confira no Canvas"), "dashboard grades: source line");
   gd.env.location.hash = tiles[0].href; gd.winListeners.hashchange();
@@ -298,7 +357,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the term ended: no grade parts, the update line; no course of the term: the announcements say so
   const old = await runContent("/", null, {}, { Date: fakeDate("2027-02-10T12:00:00-03:00") }), obx = old.anchor.kids.find(k => k.id === "cp-dash");
   assert(obx && !all(obx).some(e => /kpi|tile|upnext/.test(e.className)), "term over: no grade parts");
-  assert(all(obx).some(e => e.className === "muted why" && e.textContent === "As regras de 2026/2 acabaram. Atualize o Campus+ quando sair a versão do próximo semestre."), "term over: the update line");
+  assert(all(obx).some(e => e.className === "muted why" && e.textContent === "As regras de 2026/2 acabaram. Atualize o Caderno+ quando sair a versão do próximo semestre."), "term over: the update line");
   assert(!old.sent.find(m => m.type === "remind").items.some(i => i.key.startsWith("qf:")), "term over: no Plano exams reminded");
   const noTerm = await runContent("/", null, {}, { courseName: "Inglês Instrumental - 2025 / 1º Sem" }), ntb = noTerm.anchor.kids.find(k => k.id === "cp-dash");
   assert(all(ntb).some(e => e.textContent === "Nenhuma matéria de 2026/2 no seu Canvas."), "no course of the term: the announcements say so");
@@ -385,11 +444,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const auto = theme("auto", true), light = theme(undefined, true); await new Promise(r => setTimeout(r, 5));
   assert(auto.cls.has("cp-dark") && !light.cls.has("cp-dark"), "auto follows the system; default is the Canvas light theme"); ok();
 
-  // the Campus+ page: a left-menu item, and the calculator over Canvas on #campus
+  // the Caderno+ page: a left-menu item, and the calculator over Canvas on #campus
   const camp = await runContent("/", null);
   const item = camp.menu.kids.find(k => k.id === "cp-nav");
-  assert(item && all(item).some(e => e.href === "#campus") && /Campus\+/.test(text(item)), "Campus+ item in the Canvas left menu");
-  assert(all(camp.anchor).some(e => e.href === "#campus"), "the dashboard panel opens the Campus+ page");
+  assert(item && all(item).some(e => e.href === "#campus") && /Caderno\+/.test(text(item)), "Caderno+ item in the Canvas left menu");
+  assert(all(camp.anchor).some(e => e.href === "#campus"), "the dashboard panel opens the Caderno+ page");
   assert(!camp.body.kids.some(k => k.id === "cp-app"), "closed until asked");
   camp.env.location.hash = "#campus"; camp.winListeners.hashchange();
   const page1 = camp.body.kids.find(k => k.id === "cp-app"), frame = page1 && all(page1).find(e => e.tag === "iframe");
@@ -398,8 +457,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!camp.body.kids.some(k => k.id === "cp-app") && camp.env.location.hash === "", "Fechar closes it and clears the address");
   const direct = await runContent("/courses/71306", [], {}, { hash: "#campus" });
   assert(direct.body.kids.some(k => k.id === "cp-app"), "a link straight to #campus opens it");
-  const openBtn = all(direct.anchor).find(e => e.textContent === "Abrir no Campus+ →");
-  assert(openBtn, "course panel opens the Campus+ page");
+  const openBtn = all(direct.anchor).find(e => e.textContent === "Abrir no Caderno+ →");
+  assert(openBtn, "course panel opens the Caderno+ page");
   direct.env.location.hash = ""; direct.winListeners.hashchange();
   await openBtn.listeners.click();
   assert(/^campus=[a-z0-9]+$/.test(direct.env.location.hash), "the course button asks for that subject: " + direct.env.location.hash);
@@ -418,7 +477,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   new Function(bm);   // valid code
   const bmDash = await runContent("/", null, {}, { src: bm });
   assert.match(text(bmDash.anchor), /Próximos 7 dias/); assert.match(text(bmDash.anchor), /Prova adiada/);
-  assert(!all(bmDash.anchor).some(e => e.href === "#campus") && !bmDash.menu.kids.length, "no Campus+ page without the extension");
+  assert(!all(bmDash.anchor).some(e => e.href === "#campus") && !bmDash.menu.kids.length, "no Caderno+ page without the extension");
   const bmCourse = await runContent("/courses/71306", [], {}, { src: bm });
   assert.match(text(bmCourse.anchor), /garantidos de 10/);
   assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no/.test(e.textContent)), "no downloads and no calculator page in the bookmarklet");
@@ -427,5 +486,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Campus+ page, bookmarklet)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search)");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -10,7 +10,7 @@ Obrigado por querer ajudar! Tudo é HTML, CSS e JavaScript puro: não há build 
 ## Onde fica cada coisa
 
 - `index.html`: a página inicial (download e favorito). `app.html`: a calculadora, que vai para dentro da extensão. O bloco `<script id="core">` tem as contas, e os pesos vêm das regras em `rules/` (embutidas entre os marcadores `/*RULES*/` por `scripts/sync-rules`); o `<script id="ui">` desenha a tela. Depois de mexer em `app.html` ou na extensão, rode `./scripts/sync-ext-core` e `./scripts/sync-bookmarklet` (o teste acusa se esquecer).
-- `extension/`: a extensão Campus+, que roda dentro do Canvas. Para testar, abra `chrome://extensions`, ligue o modo do desenvolvedor e use "Carregar sem compactação" nessa pasta. `extension/core.js` é gerado do `app.html` por `scripts/sync-ext-core`: não edite à mão.
+- `extension/`: a extensão Caderno+, que roda dentro do Canvas. Para testar, abra `chrome://extensions`, ligue o modo do desenvolvedor e use "Carregar sem compactação" nessa pasta. `extension/core.js` é gerado do `app.html` por `scripts/sync-ext-core`: não edite à mão.
 - `tests/`: os testes que o `scripts/verify` roda.
 - `rules/<semestre>/<turma>.json`: as regras de cada turma (pesos, datas e quais tarefas do Canvas viram cada avaliação). O formato está em `rules/schema.json`. (`canvas/mapping.json` é o levantamento original da turma de Ciência da Computação, manhã; as regras valem a partir de `rules/`.)
 

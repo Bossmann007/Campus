@@ -1,4 +1,4 @@
-// Campus+ service worker: saves the files the Canvas page asks for, keeps the days-to-next-exam number on the icon,
+// Caderno+ service worker: saves the files the Canvas page asks for, keeps the days-to-next-exam number on the icon,
 // and shows the reminders (1 day and 1 hour before each deadline) the Canvas page hands over.
 importScripts("prefs.js");
 const CANVAS = "https://pucpr.instructure.com";
@@ -15,10 +15,10 @@ function okDownload(it) {
 async function showNext() {
   const { next } = await chrome.storage.local.get("next");
   const d = next && typeof next.date === "string" ? daysTo(next.date) : -1;
-  if (d < 0) { await chrome.action.setBadgeText({ text: "" }); await chrome.action.setTitle({ title: "Campus+" }); return; }
+  if (d < 0) { await chrome.action.setBadgeText({ text: "" }); await chrome.action.setTitle({ title: "Caderno+" }); return; }
   await chrome.action.setBadgeText({ text: d === 0 ? "hoje" : d + "d" });
   await chrome.action.setBadgeBackgroundColor({ color: d <= 3 ? "#d13415" : d <= 7 ? "#ab6400" : "#646464" });
-  await chrome.action.setTitle({ title: "Campus+ · próxima prova: " + next.label + (d === 0 ? " (hoje)" : d === 1 ? " (amanhã)" : " (em " + d + " dias)") });
+  await chrome.action.setTitle({ title: "Caderno+ · próxima prova: " + next.label + (d === 0 ? " (hoje)" : d === 1 ? " (amanhã)" : " (em " + d + " dias)") });
 }
 
 // Reminders: alarms named "r|<key>|<when>" plus their text in storage, rebuilt from the list the Canvas page sends.

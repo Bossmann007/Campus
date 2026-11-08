@@ -4,23 +4,25 @@ Upload: `./scripts/package-extension` gera `dist/quanto-falta-extension-<versão
 
 ## Item
 
-- **Nome:** Campus+ · PUCPR
-- **Resumo (até 132 caracteres):** O Canvas da PUCPR melhorado: semana, avisos, lembretes, tema escuro, quanto falta e arquivos. Feito por um aluno, para alunos.
+- **Nome:** Caderno+ · PUCPR
+- **Resumo (até 132 caracteres):** O Canvas da PUCPR melhorado: semana, avisos, lembretes, busca, tema escuro, quanto falta e arquivos. Não oficial.
 - **Categoria:** Educação
 - **Idioma:** Português (Brasil)
 - **Ícone:** `extension/icons/icon128.png`
 - **Capturas (1280x800):** `store/screenshot-1280x800.png`, `store/screenshot-2-1280x800.png`
 - **Site:** https://falta-quanto.vercel.app/
 - **Política de privacidade:** https://falta-quanto.vercel.app/privacidade.html
-- **Suporte:** https://github.com/Bossmann007/quanto-falta-pucpr/issues
+- **Suporte:** https://github.com/Bossmann007/Campus/issues
 
 ## Descrição
 
-O Canvas da PUCPR do jeito que o aluno usa. Feito por um aluno, para alunos (2026/2).
+O Canvas da PUCPR do jeito que o aluno usa (2026/2). Projeto independente, sem vínculo com a PUCPR nem com a Instructure.
 
 Dentro do Canvas, sem configurar nada:
 
 - **Próximos 7 dias:** no painel, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que já foi entregue e o que está atrasado;
+- **Marcar como feito:** um ✓ em cada tarefa da semana; ela fica cinza, sai dos lembretes e conta no progresso da semana (a marca fica só no seu computador, o Canvas não muda);
+- **Busca (Ctrl+K ou ⌘K):** em qualquer página do Canvas, acha matérias, tarefas e itens dos módulos de todas as matérias e abre com Enter;
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos contados;
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova;
 - **Tema escuro** (ou igual ao sistema);
@@ -30,7 +32,7 @@ Dentro do Canvas, sem configurar nada:
 
 Cada parte pode ser desligada no botão da extensão.
 
-No item Campus+ do menu lateral do Canvas, a calculadora completa mostra:
+No item Caderno+ do menu lateral do Canvas, a calculadora completa mostra:
 
 - quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino;
 - o mínimo em cada prova se você tirar nota cheia no resto;
@@ -42,8 +44,8 @@ No item Campus+ do menu lateral do Canvas, a calculadora completa mostra:
 
 Privacidade: a extensão usa o login que você já tem no Canvas, não pede senha nem token, só lê (nunca grava no Canvas) e não envia nada para servidor nenhum. As notas ficam só no seu navegador.
 
-Código aberto: https://github.com/Bossmann007/quanto-falta-pucpr
-Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure.
+Código aberto: https://github.com/Bossmann007/Campus
+Projeto independente e não oficial, sem vínculo com a PUCPR nem com a Instructure. Canvas é marca da Instructure.
 
 ## Práticas de privacidade (aba Privacy)
 
