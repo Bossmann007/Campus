@@ -509,7 +509,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].indexOf(label)];
   assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
   assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
-  assert(/Próximos 7 dias|Esta matéria nos próximos 7 dias/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
+  assert(/A seguir/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).filter(e => /^mc-day/.test(e.className)).length >= 28 && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
   assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
   await tabB("Anotações").listeners.click(); await new Promise(r => setTimeout(r, 5));
   const ta = all(paneOf("Anotações")).find(e => e.tag === "textarea");

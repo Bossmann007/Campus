@@ -45,7 +45,7 @@
 :root:has(#nav-tray-portal [role="dialog"]) .ic-app-header { transform:none; } }`);   // a tray (Cursos, Histórico...) keeps the menu out
     // the classic dashboard header: our greeting in place of the title (kept for screen readers), calmer buttons
     out.push(`:root.cp-greet-on .cp-greet ~ * { position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
-:root.cp-greet-on .ic-Dashboard-header__layout { padding:10px 0 6px; } :root.cp-greet-on .ic-Dashboard-header__actions :is(button, a) { border-radius:999px !important; }
+:root.cp-greet-on .ic-Dashboard-header__layout { padding:10px 0 6px; } .ic-Dashboard-header__actions { display:flex !important; flex-wrap:nowrap; gap:8px; align-items:center; } :root.cp-greet-on .ic-Dashboard-header__actions :is(button, a) { border-radius:999px !important; }
 :root.cp-greet-on .ic-Dashboard-header__actions [data-testid="switch-to-new-dashboard-button"] { font-size:13px !important; padding:0 14px !important; }`);
     // the left-menu trays (Cursos, Grupos, Histórico, Ajuda) in #nav-tray-portal: paper, items as small cards
     if (L) out.push(`:root.cp-look #nav-tray-portal [role="dialog"], :root.cp-look #nav-tray-portal [role="dialog"] > div { background:var(--cp-paper) !important; }
@@ -136,12 +136,14 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look #section-tabs li a:hover { background:color-mix(in srgb, var(--cp-accent) 8%, transparent) !important; text-decoration:none !important; }
 :root.cp-look #section-tabs li a.active { background:color-mix(in srgb, var(--cp-accent) 15%, transparent) !important; font-weight:650 !important; }
 :root.cp-look .context_module { border:1px solid var(--cp-line) !important; border-radius:14px !important; overflow:hidden; background:var(--cp-card) !important; margin-bottom:14px !important; box-shadow:0 1px 2px rgba(29,36,51,.05); }
-:root.cp-look .context_module > .ig-header { background:var(--cp-paper) !important; border:0 !important; border-bottom:1px solid var(--cp-line) !important; padding:10px 14px !important; font-weight:600; }
+:root.cp-look .context_module > .ig-header { background:var(--cp-paper) !important; border:0 !important; border-bottom:1px solid var(--cp-line) !important; padding:10px 14px !important; font-weight:600; min-height:0 !important; height:auto !important; display:flex !important; align-items:center; }
+:root.cp-look .context_module .context_module_item { margin:0 !important; } :root.cp-look .context_module .ig-row { border:0 !important; border-top:1px solid var(--cp-line) !important; background:none !important; }
+:root.cp-look .context_module .context_module_item:first-child .ig-row { border-top:0 !important; }
 :root.cp-look .context_module .ig-row { border-color:var(--cp-line) !important; transition:background-color .15s; }
 :root.cp-look .context_module > .footer:not(:has(*:not(:empty))) { display:none !important; }   /* the empty band under each module */
 :root.cp-look .context_module_item:hover .ig-row { background:color-mix(in srgb, var(--cp-accent) 5%, transparent) !important; }
 `);
-      if (look === "contraste") out.push(`:root.cp-look a { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
+      if (look === "contraste") out.push(`:root.cp-look #content a:not(.ic-DashboardCard__link) { text-decoration:underline; } :root.cp-look .ic-DashboardCard__header-title { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
     if (menu) out.push(`:root.cp-look-nav { --ic-brand-global-nav-bgd:${menu} !important; --ic-brand-global-nav-ic-icon-svg-fill:#FBF7EF !important; --ic-brand-global-nav-menu-item__text-color:#FBF7EF !important; }
@@ -156,7 +158,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
   style.id = "cp-theme"; look.id = "cp-look";
   style.textContent = `html.cp-dark { background:#fff !important; filter:${BACK} contrast(.9); }
 html.cp-dark.cp-dim { filter:${BACK} contrast(.78) brightness(1.08); }
-html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) { filter:${BACK}; }
+html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .mobile-header, #mobile-header, .ic-DashboardCard__header_hero, [style*="background-image"]) { filter:${BACK}; }
 html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) :is(img, video, picture, canvas, [style*="background-image"], .ic-DashboardCard__header_hero) { filter:none; }`;
   (document.head || document.documentElement).append(style, look);
   const dark = matchMedia("(prefers-color-scheme: dark)");

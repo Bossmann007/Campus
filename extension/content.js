@@ -277,7 +277,8 @@
   const firstName = () => { for (const sc of (document.scripts || [])) { const m = /"current_user":\{[^}]*?"display_name":"([^"]+)"/.exec(sc.textContent || ""); if (m) return m[1].split(/\s+/)[0]; } return ""; };
   const WD_FULL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
   function greet(list) {
-    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null, item = layout && layout.firstElementChild && layout.firstElementChild.firstElementChild;
+    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null;
+    const first = layout && layout.firstElementChild, item = first && (first.tagName === "H1" ? (layout.querySelector(".cp-greet-box") || (() => { const b = el("div", "cp-greet-box"); layout.insertBefore(b, first); b.appendChild(first); return b; })()) : first.firstElementChild);   // a plain <h1> title: wrapped, so the rule hiding it applies
     if (!item || item.querySelector(".cp-greet")) return;
     const h = new Date().getHours(), hi = h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite", name = firstName();
     const t = today(), soon = list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= addDays(6)), todays = soon.filter(x => x.date === t && !x.exam).length, exam = soon.find(x => x.exam);
@@ -307,7 +308,10 @@
       card.cpAdded.push(p); head.appendChild(p);
     }
     const shown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length, root = document.documentElement;
-    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(colsFor(shown)));
+    const box = document.getElementById("DashboardCard_Container"), fit = box && box.clientWidth ? Math.max(1, Math.floor((box.clientWidth + 24) / 298)) : 4;
+    const rows = shown ? Math.ceil(shown / Math.min(colsFor(shown), fit)) : 1, cols = shown ? Math.ceil(shown / rows) : 1;   // never one card alone on the last row
+    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(cols));
+    if (!window.cpColsResize && typeof window.addEventListener === "function") { window.cpColsResize = 1; let t = 0; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => window.cpCards && window.cpCards(gradeA), 200); }); }
   }
 
 
@@ -429,7 +433,7 @@
     .seg { display:inline-flex; margin-left:12px; padding:2px; border-radius:999px; background:var(--track); }
     .seg button { padding:3px 10px; border:0; border-radius:999px; background:none; font-size:12px; color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
-    .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:96px minmax(0,1fr) auto; }
+    .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:112px minmax(0,1fr) auto; }
     .natv + .find, .find + .natv { margin-left:8px; } .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
     .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
@@ -455,7 +459,7 @@
     .cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; padding:0; overflow:hidden; background:var(--line); }
     .cwd { padding:8px 10px; background:var(--soft); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
     .cday { min-height:118px; padding:6px; background:var(--bg); display:flex; flex-direction:column; gap:4px; min-width:0; } .cday.off { background:var(--soft); } .cday.we { background:color-mix(in srgb, var(--soft) 55%, var(--bg)); }
-    .cday .cn { font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
+    .cday .cn { display:inline-grid; place-items:center; height:24px; font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
     .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
     .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
@@ -475,8 +479,21 @@
     .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:11.5px; font-weight:650; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
     .mi { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:6px 4px; border-top:1px solid var(--line); }
+    .mcal { display:grid; grid-template-columns:260px minmax(0,1fr); gap:20px; padding:14px; }
+    .mc-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; } .mc-h b { font:600 14px/1 var(--serif); text-transform:capitalize; }
+    .mc-h button { width:26px; height:26px; padding:0; border-radius:8px; font-size:14px; }
+    .mc-g { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; } .mc-w { text-align:center; font-size:10.5px; font-weight:600; color:var(--muted); padding:2px 0 4px; }
+    .mc-day { position:relative; display:grid; place-items:center; height:34px; padding:0; border:0; border-radius:8px; background:none; font:500 12.5px/1 var(--sans); color:var(--fg); }
+    .mc-day:hover:not(:disabled) { background:var(--soft); transform:none; } .mc-day.has { font-weight:700; } .mc-day.on { background:var(--fg); color:var(--bg); }
+    .mc-day.today > span:first-child { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--coral); }
+    .mc-dots { position:absolute; bottom:3px; left:0; right:0; display:flex; justify-content:center; gap:2px; } .mc-dots i, .mc-i > i { width:5px; height:5px; border-radius:50%; background:var(--warn); }
+    .mc-dots i.ex, .mc-i.ex > i { background:var(--coral); } .mc-dots i.ok, .mc-i.ok > i { background:var(--ok); }
+    .mc-k { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:4px 0 8px; }
+    .mc-i { display:grid; grid-template-columns:8px 78px minmax(0,1fr); gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--line); } .mc-i:first-of-type { border-top:0; }
+    .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:12px; color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
+    @container cp (max-width:620px) { .mcal { grid-template-columns:minmax(0,1fr); } }
     .wl { display:none; }
-    @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
+    @container cp (max-width:760px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
     :host-context(html.cp-dark) .ok { background:#173229; color:#8FD8B3; } :host-context(html.cp-dark) .warn { background:#33291A; color:#F0C67E; }
     :host-context(html.cp-dark) .bad { background:#3A1F1D; color:#FFA28C; }
@@ -1010,20 +1027,47 @@
     return typeof col === "string" && /^#[0-9a-f]{3,8}$/i.test(col) ? col : null;
   }
   // Visão geral: what comes next in this course, its latest announcement and the shortcuts to Canvas's own pages.
-  function overview(courseId, c, a, cache, prefs) {
-    // the same day-by-day timeline as the dashboard, with this course only; what comes after the 7 days below it
-    const out = [], t = today(), mine = agenda(a, cache, {}).filter(x => String(x.cid) === courseId || (c && x.ours === c));
-    const week = weekView(mine, Object.assign({}, prefs, { grades: !!c }), null), h3 = week.querySelector ? week.querySelector("h3") : null;
-    if (h3 && h3.firstChild) h3.firstChild.textContent = "Esta matéria nos próximos 7 dias";
-    out.push(week);
-    const later = mine.filter(x => !fin(x) && x.date > addDays(6)).slice(0, 6);
-    if (later.length) {
-      const sec = el("section", "card news"), row = el("div", "late");
-      sec.appendChild(el("h3", null, "Depois"));
-      for (const x of later) { const ch = el(x.url ? "a" : "span", "ev " + (x.exam ? "ex" : x.task ? "wa" : "in")); if (x.url) ch.href = x.url;
-        ch.appendChild(el("span", "t", (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title + " · " + dmy(x.date))); row.appendChild(ch); }
-      sec.appendChild(row); out.push(sec);
+  // Visão geral: a mini calendar of the month (a dot on each day with something: coral for exams, amber for work, green when
+  // done; today ringed); clicking a day lists it on the right, which otherwise shows what comes next. Canvas deadlines of
+  // this course plus every assessment of the Plano de Ensino.
+  function miniCal(courseId, c, a, cache) {
+    const t = today(), seen = new Set(), items = [];
+    const rule = c ? c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, date: it.date, exam: it.exam, task: !it.exam, url: null, rule: true })) : [];
+    for (const x of agenda(a, cache, {}).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(rule)) {
+      const k = x.date + "|" + fold(x.title).slice(0, 24); if (seen.has(k)) continue; seen.add(k); items.push(x);
     }
+    const sec = el("section", "card mcal"), left = el("div", "mc-l"), right = el("div", "mc-r"), head = el("div", "mc-h"), prev = el("button", null, "‹"), next = el("button", null, "›"), title = el("b");
+    prev.type = next.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
+    head.append(prev, title, next); const grid = el("div", "mc-g"); left.append(head, grid); sec.append(left, right);
+    let cur = t.slice(0, 7), pick = null;
+    const tone = x => fin(x) ? "ok" : x.exam ? "ex" : "wa";
+    const listOf = (list, label) => {
+      right.replaceChildren(el("div", "mc-k", label));
+      if (!list.length) { right.appendChild(el("div", "muted", pick ? "Nada neste dia." : "Nada pela frente nesta matéria.")); return; }
+      for (const x of list.slice(0, 5)) { const r = el("div", "mc-i " + tone(x)), when = el("span", "mc-d" + (x.late && !fin(x) && x.date < t ? " lt" : ""), x.date === t ? "hoje" : dmy(x.date) + (x.due ? " " + hhmm(x.due) : ""));
+        r.append(el("i"), when, link((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url)); right.appendChild(r); }
+    };
+    const draw = () => {
+      const [y, m] = cur.split("-").map(Number), pad = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate();
+      title.textContent = MONTHS[m - 1] + " " + y; grid.replaceChildren();
+      for (const w of ["D", "S", "T", "Q", "Q", "S", "S"]) grid.appendChild(el("span", "mc-w", w));
+      for (let i = 0; i < pad; i++) grid.appendChild(el("span"));
+      for (let d = 1; d <= days; d++) {
+        const iso = cur + "-" + String(d).padStart(2, "0"), its = items.filter(x => x.date === iso), b = el("button", "mc-day" + (iso === t ? " today" : "") + (iso === pick ? " on" : "") + (its.length ? " has" : ""));
+        b.type = "button"; b.appendChild(el("span", null, String(d)));
+        if (its.length) { const dots = el("span", "mc-dots"); for (const x of its.slice(0, 3)) dots.appendChild(el("i", tone(x))); b.appendChild(dots); b.title = its.map(x => x.title).join("\n"); }
+        b.addEventListener("click", () => { pick = pick === iso ? null : iso; draw(); });
+        grid.appendChild(b);
+      }
+      if (pick) listOf(items.filter(x => x.date === pick), cap(dayLabel(pick)));
+      else listOf(items.filter(x => !fin(x) && (x.date >= t || (x.late && x.date >= addDays(-7)))).sort((p, q) => p.date.localeCompare(q.date)), "A seguir");
+    };
+    const shift = n => { const [y, m] = cur.split("-").map(Number), d = new Date(y, m - 1 + n, 1); cur = C.localISO(d).slice(0, 7); pick = null; draw(); };
+    prev.addEventListener("click", () => shift(-1)); next.addEventListener("click", () => shift(1));
+    draw(); return sec;
+  }
+  function overview(courseId, c, a, cache, prefs) {
+    const out = [miniCal(courseId, c, a, cache)];
     const last = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
     if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
       li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
@@ -1263,7 +1307,13 @@
   // the eye button (show / hide) used by the course menu and the modules editors
   const EYE = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z'/><circle cx='8' cy='8' r='2'/></svg>")`, EYE_OFF = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z'/><path d='M2.5 13.5l11-11'/></svg>")`;
   const eyeCss = pfx => `${pfx} .cp-eye { margin-left:auto; flex:none; width:22px; height:22px; padding:0; border:0; border-radius:6px; cursor:pointer; background:currentColor; opacity:.65; -webkit-mask:${EYE} no-repeat center / 16px; mask:${EYE} no-repeat center / 16px; }
-${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opacity:.45; } ${pfx} .cp-eye:hover { opacity:1; }`;
+${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opacity:.6; } ${pfx} .cp-eye:hover { opacity:1; }`;
+  const FOLD_CSS = `#cp-navfold { display:flex; align-items:center; gap:6px; margin:0 0 10px 6px; padding:5px 10px 5px 6px; border:1px solid currentColor; border-radius:999px; background:none; color:inherit; opacity:.55; cursor:pointer; font:600 11.5px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; letter-spacing:.02em; transition:opacity .15s; }
+#cp-navfold:hover, #cp-navfold:focus-visible { opacity:1; }
+#cp-navfold i, #cp-navopen i { display:block; width:14px; height:14px; background:currentColor; -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M10 3.5 5.5 8l4.5 4.5'/></svg>") no-repeat center / contain; mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M10 3.5 5.5 8l4.5 4.5'/></svg>") no-repeat center / contain; }
+#cp-navopen { position:fixed; top:96px; left:var(--cp-navleft, 84px); z-index:999; display:grid; place-items:center; width:20px; height:52px; padding:0; border:0; border-radius:0 12px 12px 0; background:var(--ic-brand-primary, #E2482B); color:#fff; cursor:pointer; box-shadow:3px 2px 12px -6px rgba(0,0,0,.5); transition:width .15s; }
+#cp-navopen:hover, #cp-navopen:focus-visible { width:26px; }
+#cp-navopen i { -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M6 3.5 10.5 8 6 12.5'/></svg>"); mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M6 3.5 10.5 8 6 12.5'/></svg>"); }`;
   const tabKey = a => [...(a.classList || [])].find(c => c !== "active") || (a.className || "").split(" ").find(c => c && c !== "active") || "";
   async function courseNav(courseId) {
     const nav = document.getElementById("section-tabs");
@@ -1274,7 +1324,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     const links = [...nav.querySelectorAll("li > a")];
     const paint = () => {
       st.textContent = (editing ? hidden.map(k => '#section-tabs li > a.' + k + ' { opacity:.4; text-decoration:line-through; }') : hidden.map(k => '#section-tabs li:has(> a.' + k + ') { display:none !important; }')).join("\n")
-        + '\n' + eyeCss("#section-tabs");
+        + '\n' + eyeCss("#section-tabs") + '\n' + FOLD_CSS;
       for (const a of links) { let b = a.parentNode.querySelector(".cp-eye"); const k = tabKey(a);
         if (!editing || !k || k === "home") { if (b) b.remove(); continue; }
         if (!b) { b = el("button", "cp-eye"); b.type = "button"; b.addEventListener("click", async e => { e.preventDefault(); e.stopPropagation();
@@ -1288,10 +1338,8 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     // the arrow: fold the course menu away (Canvas's own course-menu-expanded body class, so its layout follows) and back
     const { navFold } = await chrome.storage.local.get("navFold");
     const tab = el("button"), fold = el("button"); tab.type = fold.type = "button"; tab.id = "cp-navopen";
-    fold.textContent = "‹"; fold.title = "Esconder o menu da matéria"; fold.setAttribute("aria-label", fold.title);
-    fold.style.cssText = "float:right;margin:-2px 4px 4px 0;width:26px;height:26px;border-radius:8px;border:1px solid currentColor;background:none;color:inherit;opacity:.6;cursor:pointer;font:600 15px/1 -apple-system,sans-serif";
-    tab.textContent = "›"; tab.title = "Mostrar o menu da matéria"; tab.setAttribute("aria-label", tab.title);
-    tab.style.cssText = "position:fixed;top:120px;left:var(--cp-navleft,84px);z-index:999;width:22px;height:44px;border:0;border-radius:0 10px 10px 0;background:var(--ic-brand-primary,#E2482B);color:#fff;cursor:pointer;font:600 16px/1 -apple-system,sans-serif;box-shadow:2px 2px 10px -4px rgba(0,0,0,.4)";
+    fold.id = "cp-navfold"; fold.title = "Recolher o menu da matéria"; fold.setAttribute("aria-label", fold.title); fold.appendChild(el("i")); fold.appendChild(el("span", null, "Recolher"));
+    tab.title = "Mostrar o menu da matéria"; tab.setAttribute("aria-label", tab.title); tab.appendChild(el("i"));
     const header = document.querySelector ? document.querySelector(".ic-app-header") : null;
     if (header && header.getBoundingClientRect && document.documentElement.style) document.documentElement.style.setProperty("--cp-navleft", Math.round(header.getBoundingClientRect().right) + "px");
     const setFold = async on => { if (document.body.classList) document.body.classList.toggle("course-menu-expanded", !on); tab.style.display = on ? "block" : "none"; await chrome.storage.local.set({ navFold: on }); };
@@ -1299,7 +1347,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     if (nav.parentNode) nav.parentNode.insertBefore(fold, nav); document.body.appendChild(tab);
     tab.style.display = "none"; if (navFold === true) setFold(true);
     const li = el("li", "section"), edit = el("button"); li.id = "cp-navedit"; edit.type = "button";
-    edit.style.cssText = "margin:10px 0 0 10px;padding:5px 10px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.7;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
+    edit.style.cssText = "margin:10px 0 0 6px;padding:5px 10px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.7;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
     edit.addEventListener("click", () => { editing = !editing; paint(); });
     li.appendChild(edit); nav.appendChild(li); paint();
   }

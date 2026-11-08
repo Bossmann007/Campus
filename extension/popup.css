@@ -48,3 +48,4 @@ footer { display:flex; justify-content:space-between; align-items:flex-end; gap:
 .grp > summary { cursor:pointer; padding:8px 12px; font-size:12.5px; font-weight:600; list-style:none; display:flex; justify-content:space-between; align-items:center; }
 .grp > summary::-webkit-details-marker { display:none; } .grp > summary::after { content:"▸"; color:var(--muted); transition:transform .15s; } .grp[open] > summary::after { transform:rotate(90deg); }
 .grp > .list, .grp > .fine, .grp > .acts { margin:0 12px 10px; } .grp .row { margin:0; padding:0; }
+.list:empty { display:none; }
