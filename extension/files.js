@@ -40,10 +40,10 @@ const QFFiles = (() => {
     if (stem.length > 150) stem = stem.slice(0, 150).trim();
     return stem + ext;
   }
-  // Our course name when the Canvas course (by id when known, else by name) is one of the six, else the Canvas name without
+  // Our course name when the Canvas course (by id when known, else by name) has rules (any turma), else the Canvas name without
   // turma and semester.
   function courseFolder(canvasName, courses, canvas, cid) {
-    const ours = courses.find(c => canvas[c.id] && (cid != null ? String(canvas[c.id].cid) === String(cid) : canvasName.startsWith(canvas[c.id].match)));
+    const ours = courses.find(c => canvas[c.id] && (cid != null ? canvas[c.id].cids.some(x => String(x) === String(cid)) : canvasName.startsWith(canvas[c.id].match)));
     return safeName(ours ? ours.name : canvasName.split(" (")[0].split(" - ")[0]) || "Curso";
   }
   // Downloads-relative path, or null when the file must not be saved (blocked type or too big).

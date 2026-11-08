@@ -5,6 +5,8 @@
   try { LS = C.storageKey(localStorage, window.CP_EXT && window.CP_EXT.user, !!window.CP_EXT); } catch (e) { /* storage off: the save warning covers it */ }
   const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
   const SHORT = C.SHORT;
+  // The student's turma (from the Canvas reading inside the extension); every subject when there is no match.
+  const COURSES = C.coursesFor(window.CP_EXT && window.CP_EXT.data);
   let saved;
   try { saved = JSON.parse(localStorage.getItem(LS)); } catch (e) { saved = null; }
   if (!saved || typeof saved !== "object" || !saved.grades || typeof saved.grades !== "object" || Array.isArray(saved.grades))
@@ -115,7 +117,7 @@
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
     const main = $("cards");
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const card = el("article", "card"); card.id = "card-" + c.id;
       const head = el("div", "chead"); head.tabIndex = 0; head.setAttribute("role", "button");
       const pill = badge("done", "…"); pill.id = "pill-" + c.id;
@@ -161,7 +163,7 @@
 
     metaEl.addEventListener("input", () => { saved.meta = metaEl.value; store(); calc(); });
     let metaT;
-    const metaRun = () => { clearTimeout(metaT); metaT = setTimeout(() => { const T = target(), st = C.COURSES.map(c => C.courseState(c, saved.grades, today, T));
+    const metaRun = () => { clearTimeout(metaT); metaT = setTimeout(() => { const T = target(), st = COURSES.map(c => C.courseState(c, saved.grades, today, T));
       con.run({ ask:"Mudar a meta para " + fmt(T, 1), title:"Recalculando", doneTitle:"Recalculado", steps:[["6 matérias", st.filter(x => x.status === "garantido").length + " garantidas, " + st.filter(x => x.status === "precisa").length + " precisam de nota"]],
         text:"Com a meta " + fmt(T, 1) + ":", lines:nextLines(saved.grades, 2) }); }, 450); };
     metaEl.addEventListener("input", metaRun);
@@ -185,7 +187,7 @@
       const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
       const add = (id, date, title, desc) => ev.push("BEGIN:VEVENT", "UID:" + id + "@quanto-falta", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + day(date), "DTEND;VALUE=DATE:" + next(date),
         "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
-      for (const u of C.upcoming(C.COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Campus+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
+      for (const u of C.upcoming(COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Campus+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
       if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
         .forEach(t => add("todo-" + [...(t.courseName + "|" + t.name)].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 7).toString(36) + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
       const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Campus+//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Campus+"].concat(ev, "END:VCALENDAR").join("\r\n");
@@ -232,7 +234,7 @@
     const T = target();
     const groups = { garantido:[], precisa:[], "depende-atrasadas":[], "nao-da":[] };
     const states = {};
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const st = states[c.id] = C.courseState(c, saved.grades, today, T);
       groups[st.status].push(SHORT[c.id]);
 
@@ -282,15 +284,15 @@
 
     const sum = $("summary"); sum.textContent = "";
     if (!groups[cardFilter] || !groups[cardFilter].length) cardFilter = "all";
-    [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
+    [["all", "Todas", COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
       const count = n != null ? n : groups[k].length; if (!count) return;
       const b = el("button", null, l); b.type = "button"; b.setAttribute("aria-pressed", k === cardFilter);
       b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); swap($("cards")); }); sum.appendChild(b); });
-    for (const c of C.COURSES) { const cd = $("card-" + c.id); cd.hidden = cardFilter !== "all" && states[c.id].status !== cardFilter && !cd.contains(document.activeElement); }
+    for (const c of COURSES) { const cd = $("card-" + c.id); cd.hidden = cardFilter !== "all" && states[c.id].status !== cardFilter && !cd.contains(document.activeElement); }
 
     const next = $("next"); next.textContent = "";
     const hr = el("div", "row head"); ["Data", "Avaliação", "Precisa", "Mín"].forEach(x => hr.appendChild(el("div", null, x))); next.appendChild(hr);
-    const list = C.upcoming(C.COURSES, saved.grades, today, T)
+    const list = C.upcoming(COURSES, saved.grades, today, T)
       .filter(u => filter === "all" || (filter === "exam" ? u.item.exam : days(u.item.date) <= 7));
     if (!list.length) next.appendChild(el("div", "empty", filter === "all" ? "Nada pendente." : "Nada neste filtro."));
     for (const u of showAll ? list : list.slice(0, 6)) {
@@ -310,7 +312,7 @@
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const st = states[c.id];
       if (!st.late.length) continue;
       any = true;
@@ -330,6 +332,7 @@
   const wait = ms => new Promise(r => setTimeout(r, RM ? 0 : ms));
   const CHECK = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const COLORS = { imp:"#E9A77F", abd:"#8FB4D9", rpnd:"#B9A6DA", web:"#E8C766", etica:"#E6A0B0", cscf:"#8CCBB4" };
+  { const pal = Object.values(COLORS); COURSES.forEach((c, i) => { COLORS[c.id] = COLORS[c.id] || pal[i % pal.length]; }); }   // other turmas: the same palette
   function stepRow(title, sub) {
     const r = el("div", "stp enter"), ic = el("span", "ico-s"), tx = el("div"), t = el("span", "t");
     ic.appendChild(el("span", "spin")); tx.append(el("span", null, title), el("span", "sub", sub)); r.append(ic, tx, t);
@@ -351,7 +354,7 @@
     main.setAttribute("aria-live", "polite");
     side.appendChild(el("h4", null, "Matérias · 2026/2"));
     const smalls = {};
-    for (const c of C.COURSES) { const r = el("a", "srow"), av = el("span", "av", SHORT[c.id].slice(0, 2).toUpperCase()), t = el("div"), sm = el("small", null, "—");
+    for (const c of COURSES) { const r = el("a", "srow"), av = el("span", "av", SHORT[c.id].slice(0, 2).toUpperCase()), t = el("div"), sm = el("small", null, "—");
       r.href = "#card-" + c.id; av.style.background = COLORS[c.id]; t.append(el("b", null, SHORT[c.id]), sm); r.append(av, t); side.appendChild(r); smalls[c.id] = sm; }
     body.append(side, main); w.append(bar, body);
     let run = 0, busy = false, used = false;
@@ -384,7 +387,7 @@
   $("demo-hero").appendChild(con.el);
   // What matters next, as short lines, for any set of grades (used before and after applying an import).
   function nextLines(grades, n) {
-    return C.upcoming(C.COURSES, grades, today, target()).filter(u => u.st.status !== "garantido").slice(0, n)
+    return C.upcoming(COURSES, grades, today, target()).filter(u => u.st.status !== "garantido").slice(0, n)
       .map(u => SHORT[u.course.id] + ": " + reqText(u.req, u.item, u.st) + " em " + u.item.name + " (" + dmy(u.item.date) + ")");
   }
   const pl = (n, one, many) => n + " " + (n === 1 ? one : many);
@@ -403,14 +406,14 @@
   let calMonth = null, calDay = null;
   const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   function calEvents(T) {
-    const ev = [], up = new Map(C.upcoming(C.COURSES, saved.grades, today, T).map(u => [C.key(u.course, u.item), u]));
-    for (const c of C.COURSES) for (const it of c.items) {
+    const ev = [], up = new Map(C.upcoming(COURSES, saved.grades, today, T).map(u => [C.key(u.course, u.item), u]));
+    for (const c of COURSES) for (const it of c.items) {
       const k = C.key(c, it), p = C.itemPoints(it, saved.grades[k]), graded = p !== null && !Number.isNaN(p), u = up.get(k);
       ev.push({ date:it.date, course:c.id, kind:graded ? "done" : "", label:(it.exam ? "Prova · " : "") + it.name,
         info:graded ? "nota lançada" : u ? "precisa " + reqText(u.req, u.item, u.st) : "falta a nota" });
     }
     if (saved.todo) for (const t of saved.todo.list) if (t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due))
-      ev.push({ date:t.due, course:C.COURSES.some(c => c.id === t.course) ? t.course : null, kind:"todo", label:"Entregar: " + t.name, info:"prazo no Canvas" });
+      ev.push({ date:t.due, course:COURSES.some(c => c.id === t.course) ? t.course : null, kind:"todo", label:"Entregar: " + t.name, info:"prazo no Canvas" });
     return ev;
   }
   function chip(e) {
@@ -456,15 +459,15 @@
   function renderFocus(T) {
     const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
     const any = Object.keys(saved.grades).some(k => String(saved.grades[k]).trim() !== "");
-    const list = C.stillCounts(C.COURSES, saved.grades, today, T);
+    const list = C.stillCounts(COURSES, saved.grades, today, T);
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     document.body.classList.toggle("fresh", !any);
     if (!any) { con.side({}, false); if (!con.busy) con.idle("Ainda sem notas. Importe do Canvas ou lance uma nota: cada passo aparece aqui.", []); }
     if (any) { const side = {};
-      for (const c of C.COURSES) side[c.id] = $("pill-" + c.id).textContent;
+      for (const c of COURSES) side[c.id] = $("pill-" + c.id).textContent;
       con.side(side, true);
       if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
-    const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
+    const open = COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
     $("h1a").textContent = !any ? "Campus+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
     $("h1b").textContent = !any ? "quanto falta?" : open ? "pra fechar o semestre." : "bom descanso.";
     const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
@@ -488,8 +491,8 @@
   function renderKpis(states, T) {
     const box = $("kpis"); box.textContent = "";
     const card = (k, v, sub, cls) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v num" + (cls ? " " + cls : ""), v), el("div", "s", sub)); box.appendChild(d); return d; };
-    const sem = C.semester(C.COURSES, saved.grades, today, T), mean = sem.mean, tight = sem.tight, count = s => sem.counts[s] || 0;
-    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + C.COURSES.length + " matérias · meta " + fmt(T, 1));
+    const sem = C.semester(COURSES, saved.grades, today, T), mean = sem.mean, tight = sem.tight, count = s => sem.counts[s] || 0;
+    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + COURSES.length + " matérias · meta " + fmt(T, 1));
     const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
     fill.style.width = Math.min(100, mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); avg.insertBefore(meter, avg.lastChild);
     if (tight) card("Quanto falta", up(states[tight.id].fraction * 10, 1), "em 10 em cada item que falta, em " + SHORT[tight.id] + " (a mais apertada)", "need");
@@ -510,7 +513,7 @@
     const arc = (cls, from, len) => { const c = document.createElementNS(NS, "circle");
       c.setAttribute("class", cls); c.setAttribute("cx", 32); c.setAttribute("cy", 32); c.setAttribute("r", R);
       c.setAttribute("stroke-dasharray", Math.max(0, len) + " " + L); c.setAttribute("stroke-dashoffset", -from); return c; };
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const st = states[c.id], rp = C.ringParts(st), e = rp.earned * L, f = rp.future * L, cls = C.statusTone(st);
       const t = el("a", "tile"); t.href = "#card-" + c.id;
       const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
@@ -530,7 +533,7 @@
     $("avisosat").textContent = (unread ? unread + (unread === 1 ? " não lido" : " não lidos") + " · " : "") + "lido do Canvas em " + dmy(nw.at);
     for (const a of showAllNews ? list : list.slice(0, 5)) {
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
-      const ours = C.COURSES.find(c => c.id === a.course); sub.textContent = ours ? SHORT[ours.id] : String(a.courseName || "");
+      const ours = COURSES.find(c => c.id === a.course); sub.textContent = ours ? SHORT[ours.id] : String(a.courseName || "");
       // The link is rebuilt from two numbers; no imported text reaches href.
       const m = typeof a.url === "string" ? /^https:\/\/pucpr\.instructure\.com\/courses\/(\d+)\/discussion_topics\/(\d+)$/.exec(a.url) : null;
       const t = m ? el("a", "title", a.title) : el("span", "title", a.title);
@@ -551,7 +554,7 @@
     const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
     for (const t of list) {
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub"), d = days(t.due);
-      const ours = C.COURSES.find(c => c.id === t.course);
+      const ours = COURSES.find(c => c.id === t.course);
       if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); } else sub.textContent = String(t.courseName || "");
       name.append(el("span", "title", t.name), sub);
       const w = cell("Prazo", "when"); w.append(el("span", "d num", dmy(t.due)), el("span", "rel" + (d <= 3 ? " soon" : d <= 7 ? " week" : ""), d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias"));
@@ -570,7 +573,7 @@
     for (const p of showAllPend ? okList : okList.slice(0, 6)) {
       if (!p || typeof p.name !== "string") continue;
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
-      const ours = C.COURSES.find(c => c.id === p.course);   // link built from our own ids only, never from imported text
+      const ours = COURSES.find(c => c.id === p.course);   // link built from our own ids only, never from imported text
       if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); }
       else sub.textContent = String(p.courseName || "");
       name.append(el("span", "title", p.name), sub);

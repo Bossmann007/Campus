@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+// Validates the rule packs (rules/<term>/<turma>.json) against rules/schema.json plus what a schema cannot say: weights sum
+// to 10, real dates inside the term, unique ids, Canvas course ids in one turma only, Canvas rules pointing at real items.
+// Usage: scripts/check-rules [file.json ...]   (no arguments: every pack under rules/). Exit 1 with pt-BR messages naming
+// file and field. Also required by scripts/sync-rules and tests/rules-test.js.
+"use strict";
+const fs = require("fs"), path = require("path");
+const ROOT = path.join(__dirname, ".."), SCHEMA = JSON.parse(fs.readFileSync(path.join(ROOT, "rules", "schema.json"), "utf8"));
+const TERM_DIR = /^\d{4}-[12]$/;
+const num = x => String(Math.round(x * 1e6) / 1e6).replace(".", ",");
+const isDate = s => !Number.isNaN(Date.parse(s + "T00:00:00Z")) && new Date(s + "T00:00:00Z").toISOString().slice(0, 10) === s;
+const PATTERN_MSG = { "^[a-z0-9]{1,20}$": v => JSON.stringify(v) + " deve ter só letras minúsculas e números (até 20)",
+  "^\\d{4}-\\d{2}-\\d{2}$": v => JSON.stringify(v) + " não está no formato AAAA-MM-DD", "^\\d{4} / [12]$": v => JSON.stringify(v) + " deve ser como \"2026 / 2\"" };
+
+// The subset of JSON Schema that rules/schema.json uses: object (properties, required, additionalProperties), array (items,
+// minItems, uniqueItems), string (minLength, pattern), number and integer (exclusiveMinimum), boolean, $ref.
+function shape(s, v, at, err) {
+  if (s.$ref) s = SCHEMA.$defs[s.$ref.split("/").pop()];
+  const say = m => err(at, m);
+  if (s.type === "object") {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return say("deve ser um objeto { }");
+    for (const k of s.required || []) if (!(k in v)) say("campo obrigatório " + JSON.stringify(k) + " ausente");
+    for (const [k, x] of Object.entries(v)) {
+      const sub = s.properties && s.properties[k] || (typeof s.additionalProperties === "object" ? s.additionalProperties : null);
+      const p = at ? at + "." + k : k;
+      if (sub) shape(sub, x, p, err); else say("campo desconhecido " + JSON.stringify(k));
+    }
+  } else if (s.type === "array") {
+    if (!Array.isArray(v)) return say("deve ser uma lista [ ]");
+    if (v.length < (s.minItems || 0)) say("a lista não pode ficar vazia");
+    v.forEach((x, i) => shape(s.items, x, at + "[" + i + "]", err));
+    if (s.uniqueItems) v.forEach((x, i) => { if (v.indexOf(x) !== i) say(at.endsWith("canvasIds") ? "a matéria " + x + " do Canvas aparece repetida" : JSON.stringify(x) + " aparece repetido"); });
+  } else if (s.type === "string") {
+    if (typeof v !== "string") return say("deve ser texto");
+    if (v.trim().length < (s.minLength || 0)) return say("não pode ficar vazio");
+    if (s.pattern && !new RegExp(s.pattern).test(v)) say((PATTERN_MSG[s.pattern] || (x => JSON.stringify(x) + " tem formato inválido"))(v));
+  } else if (s.type === "number" || s.type === "integer") {
+    if (typeof v !== "number" || !Number.isFinite(v) || (s.type === "integer" && !Number.isInteger(v)) || ("exclusiveMinimum" in s && !(v > s.exclusiveMinimum)))
+      say("deve ser um número" + (s.type === "integer" ? " inteiro" : "") + " maior que " + (s.exclusiveMinimum || 0));
+  } else if (s.type === "boolean") { if (typeof v !== "boolean") say("deve ser true ou false"); }
+}
+
+// entries: [{ file, data, error? }]. Returns ["<file>: <field>: <message>", ...]; [] when every pack is valid.
+function checkPacks(entries) {
+  const out = [], firstOfTerm = {}, subjectIds = {}, canvasIds = {};
+  for (const { file, data, error } of entries) {
+    const err = (at, m) => out.push(file + ": " + (at ? at + ": " : "") + m);
+    if (error) { err("", "JSON inválido: " + error); continue; }
+    shape(SCHEMA, data, "", err);
+    if (!data || typeof data !== "object") continue;
+    const dir = path.basename(path.dirname(file)), term = typeof data.term === "string" ? data.term : null;
+    if (term && TERM_DIR.test(dir) && dir !== term.replace(" / ", "-")) err("term", JSON.stringify(term) + " não bate com a pasta " + dir + " (use rules/" + term.replace(" / ", "-") + "/)");
+    if (TERM_DIR.test(dir) && !/^[a-z0-9-]+\.json$/.test(path.basename(file))) err("", "nome do arquivo deve ser só letras minúsculas, números e hífen (ex.: cc-manha.json)");
+    if (typeof data.termEnd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data.termEnd) && !isDate(data.termEnd)) err("termEnd", JSON.stringify(data.termEnd) + " é uma data inválida");
+    if (term) {
+      const ref = firstOfTerm[term];
+      if (!ref) firstOfTerm[term] = { file, termEnd: data.termEnd };
+      else if (data.termEnd !== ref.termEnd) err("termEnd", JSON.stringify(data.termEnd) + " difere de " + JSON.stringify(ref.termEnd) + " (" + ref.file + "); packs do mesmo semestre usam a mesma data");
+    }
+    const start = term && /^\d{4} \/ [12]$/.test(term) ? term.slice(0, 4) + (term.endsWith("1") ? "-01-01" : "-07-01") : null;
+    const end = typeof data.termEnd === "string" && isDate(data.termEnd) ? data.termEnd : null;
+    const sIds = subjectIds[term] || (subjectIds[term] = {}), cIds = canvasIds[term] || (canvasIds[term] = {});
+    (Array.isArray(data.subjects) ? data.subjects : []).forEach((s, i) => {
+      const at = "subjects[" + i + "]";
+      if (!s || typeof s !== "object") return;
+      if (typeof s.id === "string") {
+        const prev = sIds[s.id];
+        if (prev) err(at + ".id", "id de matéria " + JSON.stringify(s.id) + " já usado em " + (prev.file === file ? prev.at + " desta turma" : prev.file) + " (ids são únicos no semestre)");
+        else sIds[s.id] = { file, at };
+      }
+      if (Array.isArray(s.canvasIds)) for (const cid of new Set(s.canvasIds)) {
+        const prev = cIds[cid];
+        if (prev && prev.file !== file) err(at + ".canvasIds", "a matéria " + cid + " do Canvas já está em " + prev.file + " (cada matéria do Canvas fica em uma turma só)");
+        else if (prev) err(at + ".canvasIds", "a matéria " + cid + " do Canvas aparece repetida (também em " + prev.at + ")");
+        else cIds[cid] = { file, at };
+      }
+      const items = Array.isArray(s.items) ? s.items.filter(it => it && typeof it === "object") : [];
+      const seen = new Set();
+      (Array.isArray(s.items) ? s.items : []).forEach((it, j) => {
+        if (!it || typeof it !== "object") return;
+        const ia = at + ".items[" + j + "]";
+        if (typeof it.id === "string") { if (seen.has(it.id)) err(ia + ".id", "id " + JSON.stringify(it.id) + " repetido nesta matéria"); seen.add(it.id); }
+        if (typeof it.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(it.date)) {
+          if (!isDate(it.date)) err(ia + ".date", JSON.stringify(it.date) + " é uma data inválida");
+          else if (start && end && (it.date < start || it.date > end)) err(ia + ".date", JSON.stringify(it.date) + " está fora do semestre (" + start + " a " + end + ")");
+        }
+      });
+      if (items.length && items.every(it => typeof it.max === "number" && Number.isFinite(it.max))) {
+        const sum = items.reduce((a, it) => a + it.max, 0);
+        if (Math.abs(sum - 10) > 1e-6) err(at, "a soma dos pesos (max) é " + num(sum) + "; precisa ser 10 (a nota final)");
+      }
+      const rules = s.canvas && typeof s.canvas === "object" && s.canvas.items && typeof s.canvas.items === "object" ? s.canvas.items : {};
+      for (const [k, r] of Object.entries(rules)) {
+        const ra = at + ".canvas.items." + k;
+        if (!seen.has(k)) err(ra, "avaliação " + JSON.stringify(k) + " não existe em items");
+        if (!r || typeof r !== "object") continue;
+        if (["one", "avg", "sum"].filter(x => x in r).length !== 1) err(ra, "use exatamente um de one, avg, sum");
+        if ("sum" in r && !("factor" in r)) err(ra, "\"sum\" precisa de \"factor\"");
+        if ("factor" in r && !("sum" in r)) err(ra, "\"factor\" só vale com \"sum\"");
+      }
+    });
+  }
+  return out;
+}
+
+// Every pack under rules/<term>/ (term folders like 2026-2), file names relative to the repo, sorted.
+function loadPacks(dir, files) {
+  const list = files || fs.readdirSync(dir).filter(d => TERM_DIR.test(d)).sort()
+    .flatMap(d => fs.readdirSync(path.join(dir, d)).filter(f => f.endsWith(".json")).sort().map(f => path.join(dir, d, f)));
+  return list.map(f => {
+    const file = path.relative(ROOT, path.resolve(f)).split(path.sep).join("/");
+    try { return { file, data: JSON.parse(fs.readFileSync(f, "utf8")) }; } catch (e) { return { file, data: null, error: e.message }; }
+  });
+}
+
+module.exports = { checkPacks, loadPacks };
+if (require.main === module) {
+  const args = process.argv.slice(2), packs = loadPacks(path.join(ROOT, "rules"), args.length ? args : null);
+  // single files are checked next to the other packs of the repo, so repeated ids and Canvas courses are caught too
+  const all = args.length ? loadPacks(path.join(ROOT, "rules")).filter(p => !packs.some(q => q.file === p.file)).concat(packs) : packs;
+  const errs = checkPacks(all);
+  if (errs.length) { console.error(errs.join("\n")); console.error(errs.length + (errs.length === 1 ? " problema" : " problemas") + " nas regras"); process.exit(1); }
+  console.log("rules ok: " + packs.length + (packs.length === 1 ? " pack" : " packs") + " (" + packs.map(p => p.file).join(", ") + ")");
+}

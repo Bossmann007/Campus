@@ -1,6 +1,6 @@
 // Reads the student's own Canvas data on the Canvas page (content script, or the bookmarklet): same-origin, read-only GETs.
-// Returns { v:1, courses:[{ id, name, assignments:[{ name, points, score, due, missing, submitted, online, stats }] }], announcements } for the
-// courses of the term (NotasCore.TERM), or { error } (never rejects). seen.courses gets every active course ({ id, name }), so the caller
+// Returns { v:1, courses:[{ id, name, assignments:[{ name, points, score, due, missing, submitted, online, stats, group? }], groups?,
+// groupWeights? }], announcements } for the courses of the term (NotasCore.TERM), or { error } (never rejects). seen.courses gets every active course ({ id, name }), so the caller
 // does not fetch the list again.
 async function collectCanvasGrades(seen) {
   const get = async url => {
@@ -19,7 +19,7 @@ async function collectCanvasGrades(seen) {
   const active = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string");
   if (seen) seen.courses = active.map(c => ({ id: c.id, name: c.name }));
   const cs = active.filter(c => c.name.includes(NotasCore.TERM));
-  const courses = [];
+  const courses = [], anyKnown = cs.some(c => NotasCore.subjectOf({ id: c.id }, true));   // the draft is offered only when none has rules
   for (const c of cs) {
     const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100");
     courses.push({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible,
@@ -29,6 +29,16 @@ async function collectCanvasGrades(seen) {
       online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),
       stats: a.score_statistics && typeof a.score_statistics.mean === "number"
         ? { mean: a.score_statistics.mean, min: a.score_statistics.min, max: a.score_statistics.max } : null })) });
+    // No course of the student has rules (another turma): the assignment groups (name, weight) for the "Copiar rascunho da
+    // minha turma" draft. Optional: a failure leaves the course as it is.
+    if (!anyKnown) {
+      try {
+        const gs = await get("/api/v1/courses/" + c.id + "/assignment_groups?per_page=100"), cur = courses[courses.length - 1];
+        cur.groups = gs.filter(g => g && typeof g.name === "string").map(g => ({ id: g.id, name: g.name, weight: typeof g.group_weight === "number" ? g.group_weight : null }));
+        cur.groupWeights = c.apply_assignment_group_weights === true;
+        cur.assignments.forEach((x, i) => { x.group = as[i].assignment_group_id == null ? null : as[i].assignment_group_id; });
+      } catch (e) { /* groups are optional */ }
+    }
   }
   // Professors' announcements from the last 60 days; optional, a failure here never blocks the grades.
   let announcements = null;

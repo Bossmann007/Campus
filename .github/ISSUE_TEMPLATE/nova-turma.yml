@@ -1,0 +1,40 @@
+name: Adicionar minha turma
+description: Mande as regras da sua turma para o Quanto falta calcular as suas notas também
+title: "Turma: "
+labels: [turma]
+body:
+  - type: markdown
+    attributes:
+      value: "Esta issue é **pública**. Não cole notas, nome, RA, tokens nem o texto copiado da calculadora. O rascunho do Campus+ leva só nomes, pontos e datas das avaliações."
+  - type: input
+    id: curso
+    attributes: { label: Curso, placeholder: "Ex.: Sistemas de Informação" }
+    validations: { required: true }
+  - type: input
+    id: turno
+    attributes: { label: Turno e turma, placeholder: "Ex.: noite, Turma 3º A" }
+    validations: { required: true }
+  - type: input
+    id: semestre
+    attributes: { label: Semestre, placeholder: "Ex.: 2026 / 2" }
+    validations: { required: true }
+  - type: textarea
+    id: rascunho
+    attributes:
+      label: Rascunho da turma
+      description: "No botão do Campus+ na barra do navegador (ou no painel do Canvas), clique em \"Copiar rascunho da minha turma\" e cole aqui."
+      render: json
+    validations: { required: true }
+  - type: textarea
+    id: pesos
+    attributes:
+      label: Pesos do Plano de Ensino
+      description: "Link ou trecho do Plano de Ensino de cada matéria com os pesos e as datas das avaliações (ex.: \"RA1 = 40%: prova 30%, trabalho 10%\")."
+    validations: { required: true }
+  - type: checkboxes
+    id: privacidade
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: Não colei notas nem dados pessoais (nome, RA, e-mail, token).
+          required: true

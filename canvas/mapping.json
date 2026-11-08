@@ -1,5 +1,5 @@
 {
-  "_about": "Canvas PUCPR 2026/2 assignment names -> calculator items. Read-only listing from Canvas API on 2026-11-04 (one 2026/2 turma: Ciência da Computação, manhã). grade = mean(score / points_possible) * inMax over the listed assignments. 'manual' items have no single Canvas assignment.",
+  "_about": "Historical (phase 1); the live mapping is canvas.items in rules/2026-2/cc-manha.json. Canvas PUCPR 2026/2 assignment names -> calculator items. Read-only listing from Canvas API on 2026-11-04 (one 2026/2 turma: Ciência da Computação, manhã). grade = mean(score / points_possible) * inMax over the listed assignments. 'manual' items have no single Canvas assignment.",
   "courses": {
     "imp": {
       "match": "Programação Imperativa",

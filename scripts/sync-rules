@@ -1,0 +1,50 @@
+#!/usr/bin/env node
+// Embeds the rule packs of the current term (the latest rules/<term>/ folder) into app.html's core block, between the
+// /*RULES*/ markers, so the calculator stays synchronous and offline (nothing is fetched at runtime). Also writes the list of
+// turmas between the <!--TURMAS--> markers of README.md and index.html. Fails when a pack does not pass scripts/check-rules.
+// Run by scripts/sync-ext-core (which then copies the core into the extension); scripts/verify checks the output is current.
+"use strict";
+const fs = require("fs"), path = require("path");
+const { checkPacks, loadPacks } = require("./check-rules");
+const ROOT = path.join(__dirname, "..");
+
+// The packs of the latest term folder, validated with every pack of that term. The core holds one term, so a newer folder
+// replaces the older one; while an older term has not ended (its termEnd >= today) the sync stops instead of dropping it,
+// unless CP_RULES_NEW_TERM=1 says the switch is on purpose (e.g. releasing next term's version ahead of time).
+function termPacks(dir, today, env) {
+  today = today || new Date().toISOString().slice(0, 10); env = env || process.env;
+  const termOf = p => path.basename(path.dirname(p.file)), all = loadPacks(dir), latest = all.map(termOf).sort().pop();
+  const packs = all.filter(p => termOf(p) === latest);
+  const running = all.find(p => termOf(p) !== latest && p.data && typeof p.data.termEnd === "string" && p.data.termEnd >= today);
+  if (running && env.CP_RULES_NEW_TERM !== "1") throw new Error("o semestre " + running.data.term + " ainda vale até " + running.data.termEnd + " (" + running.file + ") e a pasta " + latest +
+    " o tiraria do Campus+. Espere ele acabar ou rode com CP_RULES_NEW_TERM=1 se a troca é de propósito.");
+  const errs = checkPacks(packs);
+  if (errs.length) throw new Error("regras inválidas:\n" + errs.join("\n"));
+  if (!packs.length) throw new Error("nenhuma regra em rules/<semestre>/*.json");
+  return packs;
+}
+// JS literal of the packs: one line per assessment, every "<" written as \u003c so no pack text can open a tag or a comment
+// inside <script>.
+function rulesBlock(packs) {
+  const j = x => JSON.stringify(x).replace(/</g, "\\u003c");
+  return "[\n" + packs.map(({ data: d }) => "    { term:" + j(d.term) + ", termEnd:" + j(d.termEnd) + ", turma:" + j(d.turma) + ", subjects:[\n" +
+    d.subjects.map(s => "      { id:" + j(s.id) + ", name:" + j(s.name) + ", short:" + j(s.short) + ", canvasIds:" + j(s.canvasIds) + ", formula:" + j(s.formula) + ", src:" + j(s.src) +
+      ",\n        canvas:" + j(s.canvas || { items: {} }) + ",\n        items:[\n" + s.items.map(it => "          " + j(it)).join(",\n") + " ] }").join(",\n") + " ] }").join(",\n") + " ]";
+}
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function replaceOnce(file, re, text) {
+  const src = fs.readFileSync(file, "utf8");
+  let n = 0; const out = src.replace(re, m => { n++; return text(m); });
+  if (n !== 1) throw new Error(path.relative(ROOT, file) + ": esperava um par de marcadores, achei " + n);
+  if (out !== src) fs.writeFileSync(file, out);
+}
+
+module.exports = { termPacks, rulesBlock };
+if (require.main === module) {
+  const packs = termPacks(path.join(ROOT, "rules")), term = packs[0].data.term.replace(/ /g, "");
+  replaceOnce(path.join(ROOT, "app.html"), /\/\*RULES\*\/[\s\S]*?\/\*RULES\*\//g, () => "/*RULES*/" + rulesBlock(packs) + "/*RULES*/");
+  replaceOnce(path.join(ROOT, "README.md"), /<!--TURMAS-->[\s\S]*?<!--TURMAS-->/g, () => "<!--TURMAS-->" +
+    packs.map(p => p.data.turma + ", " + term + " ([`" + p.file + "`](" + p.file + "))").join("; ") + "<!--TURMAS-->");
+  replaceOnce(path.join(ROOT, "index.html"), /<!--TURMAS-->[\s\S]*?<!--TURMAS-->/g, () => "<!--TURMAS-->" + packs.map(p => "<b>" + esc(p.data.turma) + "</b>").join(", ") + " (" + term + ")<!--TURMAS-->");
+  console.log("rules: " + packs.length + (packs.length === 1 ? " turma embutida" : " turmas embutidas") + " no core (" + term + ")");
+}
