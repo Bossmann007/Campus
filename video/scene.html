@@ -1,115 +1,171 @@
 <!DOCTYPE html>
-<!-- Video scene for media/demo.mp4 (not deployed). scripts/render-video loads it once per frame with headless virtual time:
-     0-6 s a mock Canvas tab and the extension popup; from 6 s the real app.html in an iframe, importing made-up grades. -->
+<!-- Video scene for media/demo.mp4 (not deployed). scripts/render-video serves the repo over localhost and loads this page once per
+     frame with headless virtual time. The page is a mock Canvas tab running the real extension (content.js) on made-up data:
+     0-6 s the dashboard panel, 6-10.5 s the calculator (the real app.html) opened from the "Campus+" menu item, then a course
+     page whose "Abrir no Campus+" button opens that subject. chrome.* and the Canvas API are stubbed below (no real student data). -->
 <html lang="pt-BR"><head><meta charset="UTF-8"><title>scene</title>
 <style>
-  * { box-sizing:border-box; } html { overflow:hidden; } body { margin:0; width:1280px; height:720px; overflow:hidden; background:#111; font:14px -apple-system,BlinkMacSystemFont,"Inter",sans-serif; color:#eee; }
-  .browser { position:fixed; overflow:clip; inset:18px 28px; border-radius:14px; overflow:hidden; background:#191919; border:1px solid #333; box-shadow:0 30px 80px rgba(0,0,0,.5); }
-  .chrome { height:76px; background:#222; border-bottom:1px solid #333; }
+  * { box-sizing:border-box; } html { overflow:hidden; }
+  body { margin:0; width:1280px; height:100vh; overflow:hidden; background:radial-gradient(120% 90% at 50% 0%, #2A3347 0%, #1D2433 60%); font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#1D2433; }
+  .browser { position:fixed; inset:18px 28px; border-radius:14px; overflow:hidden; background:#fff; border:1px solid #11161f; box-shadow:0 30px 80px rgba(0,0,0,.5); }
+  .chrome { height:76px; background:#ECE7DC; border-bottom:1px solid #D9D1C0; }
   .tabs { display:flex; gap:6px; padding:8px 12px 0 84px; height:38px; position:relative; }
   .dots { position:absolute; left:14px; top:14px; display:flex; gap:7px; } .dots i { width:11px; height:11px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2){background:#febc2e} .dots i:nth-child(3){background:#28c840}
-  .tab { display:flex; align-items:center; gap:8px; padding:0 14px; border-radius:9px 9px 0 0; font-size:12.5px; color:#aaa; width:220px; }
-  .tab.on { background:#191919; color:#eee; } .fav { width:14px; height:14px; border-radius:4px; }
-  .addr { display:flex; align-items:center; gap:10px; height:38px; padding:0 12px; }
-  .url { flex:1; height:28px; border-radius:999px; background:#191919; display:flex; align-items:center; padding:0 14px; color:#bbb; font-size:13px; }
-  .ext { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; } .ext.hot { background:#333; }
-  .page { position:absolute; top:76px; left:0; right:0; bottom:0; overflow:clip; }   /* clip: not scrollable by the app's scrollIntoView */
-  /* mock Canvas */
-  .cv { position:absolute; inset:0; display:grid; grid-template-columns:84px 220px 1fr; background:#fff; color:#2d3b45; }
-  .cv .gnav { background:#e4473a; } .cv .cnav { border-right:1px solid #e5e5e5; padding:20px 16px; font-size:13px; line-height:2.2; color:#e4473a; }
-  .cv .main { padding:26px 30px; } .cv h2 { margin:0 0 4px; font-size:22px; font-weight:600; } .cv .sub { color:#6b7780; font-size:13px; margin-bottom:18px; }
-  .cv table { width:100%; border-collapse:collapse; font-size:13px; } .cv td, .cv th { text-align:left; padding:10px 8px; border-bottom:1px solid #eee; } .cv th { color:#6b7780; font-weight:500; }
-  /* extension popup (same look as extension/popup.html) */
-  .pop { position:absolute; top:62px; right:22px; width:320px; background:#1f1f1f; border:1px solid #3a3a3a; border-radius:12px; padding:16px; box-shadow:0 20px 50px rgba(0,0,0,.45);
-         transform-origin:top right; opacity:0; z-index:3; color:#eee; } .pop header { display:flex; align-items:center; gap:8px; font-weight:650; margin-bottom:10px; }
-  .pop p { margin:0 0 12px; font-size:13px; color:#bbb; } .pop p.ok { color:#71d083; }
-  .pop .b { display:block; width:100%; padding:9px 12px; border-radius:999px; border:1px solid #3a3a3a; background:#262626; color:#eee; font:inherit; font-size:13px; text-align:center; margin-top:8px; }
-  .pop .b.p { background:#eee; color:#191919; border-color:#eee; } .pop .fine { font-size:11.5px; color:#888; margin:12px 0 0; }
-  .spin { display:inline-block; width:12px; height:12px; border-radius:50%; border:2px solid #555; border-top-color:#70b8ff; animation:s .7s linear infinite; vertical-align:-2px; margin-right:6px; } @keyframes s { to { transform:rotate(360deg); } }
-  iframe { position:absolute; left:0; top:0; width:1700px; height:6000px; border:0; background:#191919; transform-origin:0 0; }
-  .cursor { position:fixed; z-index:9; width:22px; height:22px; left:0; top:0; pointer-events:none; }
-  .ring { position:fixed; z-index:8; width:30px; height:30px; margin:-11px 0 0 -11px; border-radius:50%; border:2px solid #70b8ff; opacity:0; }
+  .tab { display:flex; align-items:center; gap:8px; padding:0 14px; border-radius:9px 9px 0 0; font-size:12.5px; color:#5F6675; width:250px; white-space:nowrap; overflow:hidden; }
+  .tab.on { background:#fff; color:#1D2433; } .fav { flex:none; width:14px; height:14px; border-radius:4px; background:#E2482B; }
+  .addr { display:flex; align-items:center; gap:10px; height:38px; padding:0 12px; background:#fff; }
+  .url { flex:1; height:28px; border-radius:999px; background:#F3EFE6; display:flex; align-items:center; padding:0 14px; color:#5F6675; font-size:13px; }
+  .page { position:absolute; top:76px; left:0; right:0; bottom:0; overflow:clip; display:flex; background:#fff; }
+  /* mock Canvas: the dark global nav (#menu, where content.js adds "Campus+") and the page content (#content, where it adds its panels) */
+  .ic-app-header { flex:none; width:84px; background:#2D3B45; }
+  #menu { margin:0; padding:8px 0; list-style:none; text-align:center; }
+  #menu li { padding:2px 0; } .ic-app-header__menu-list-link { display:block; padding:7px 0; color:#fff; text-decoration:none; }
+  .menu-item-icon-container { font-size:21px; line-height:26px; color:#fff; } .menu-item__text { font-size:11.5px; color:#fff; margin-top:1px; }
+  .logo { width:44px; height:44px; margin:6px auto 8px; border-radius:50%; background:#3E5160; }
+  #menu li.on { background:#fff; } #menu li.on .ic-app-header__menu-list-link, #menu li.on .menu-item-icon-container, #menu li.on .menu-item__text { color:#2D3B45; }
+  .cv { flex:1; position:relative; overflow:clip; }
+  .scroller { position:absolute; left:0; right:0; top:0; padding:20px 34px 40px; }
+  .crumbs { color:#2B7ABC; font-size:14px; margin-bottom:12px; } .crumbs span { color:#2D3B45; }
+  h1.pg { margin:0 0 14px; font:400 26px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#2D3B45; padding-bottom:12px; border-bottom:1px solid #C7CDD1; }
+  .ic-DashboardCard { display:inline-block; width:250px; height:160px; margin:0 14px 14px 0; border:1px solid #C7CDD1; border-radius:4px; vertical-align:top; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,.08); }
+  .ic-DashboardCard i { display:block; height:92px; } .ic-DashboardCard a { display:block; padding:10px 12px; color:#2B7ABC; text-decoration:none; font-size:13px; }
+  .course { display:grid; grid-template-columns:170px minmax(0,1fr); gap:28px; }
+  .cnav { font-size:14px; line-height:2.3; color:#2B7ABC; } .cnav b { color:#2D3B45; font-weight:400; border-left:3px solid #2D3B45; padding-left:8px; margin-left:-11px; }
+  .mods { border:1px solid #C7CDD1; border-radius:4px; } .mods div { padding:12px 14px; border-top:1px solid #E5E8EA; color:#2D3B45; } .mods div:first-child { border:0; background:#F5F5F5; font-weight:600; }
+  /* fit the calculator overlay (position:fixed in content.js) into the drawn browser window */
+  #cp-app { top:95px !important; left:113px !important; right:29px !important; bottom:19px !important; border-bottom-right-radius:13px; overflow:hidden; }
 
-  .cap { position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:10; background:rgba(20,20,20,.88); border:1px solid #3a3a3a; color:#eee; padding:8px 16px; border-radius:999px; font-size:14px;
-         white-space:nowrap; }
-</style></head><body>
+  .cursor { position:fixed; z-index:99999; width:22px; height:22px; left:0; top:0; pointer-events:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+  .ring { position:fixed; z-index:99998; width:30px; height:30px; margin:-11px 0 0 -11px; border-radius:50%; border:2.5px solid #E2482B; opacity:0; pointer-events:none; }
+  .cap { position:fixed; left:50%; bottom:34px; transform:translateX(-50%); z-index:100000; display:flex; align-items:center; gap:9px; background:#1D2433; color:#FBF7EF;
+         padding:9px 18px 9px 14px; border-radius:999px; font-size:14.5px; font-weight:500; white-space:nowrap; box-shadow:0 2px 0 #E2482B, 0 12px 30px -10px rgba(0,0,0,.6); }
+  /* ?still=dash|app: a frameless 1280x800 Canvas page for the store screenshots */
+  .still .browser { inset:0; border:0; border-radius:0; } .still .chrome { display:none; } .still .page { top:0; }
+  .still #cp-app { top:0 !important; left:84px !important; right:0 !important; bottom:0 !important; border-radius:0; } .still .cursor, .still .ring, .still .cap { display:none; }
+  .cap::before { content:""; width:8px; height:8px; border-radius:50%; background:#E2482B; }
+</style>
+<script>
+// Made-up Canvas account (same shape as the Canvas API), dates relative to today. Nothing here is a real student's data.
+const iso = n => { const d = new Date(Date.now() + n * 864e5); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const atd = (n, h, m) => new Date(iso(n) + "T" + String(h).padStart(2, "0") + ":" + String(m || 0).padStart(2, "0") + ":00").toISOString();
+const store = { prefs: { theme: "off", remind: false } };
+window.chrome = { runtime: { getManifest: () => ({ version: "1.0.0" }), getURL: f => "/extapp/" + f, sendMessage: async () => ({ ok: true }) },
+  storage: { local: { get: async k => ({ [k]: store[k] }), set: async o => { Object.assign(store, o); }, remove: async k => { delete store[k]; } }, onChanged: { addListener() {} } } };
+const N = { imp: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem", abd: "Arquitetura de Banco de Dados (Turma 2º B) - 2026 / 2º Sem", rpnd: "Resolução de Problemas de Natureza Discreta - 2026 / 2º Sem",
+  web: "Programação WEB (Turma B) - 2026 / 2º Sem", etica: "Ética - 2026 / 2º Sem", cscf: "Conectividade em Sistemas Ciberfísicos - 2026 / 2º Sem" };
+const ID = { imp: 11, abd: 12, rpnd: 13, web: 14, etica: 15, cscf: 16 };
+const G = (name, pts, score, extra) => Object.assign({ name, points_possible: pts, submission: score == null ? { score: null } : { score, workflow_state: "graded" } }, extra || {});
+const AS = { 11: [G("TDE 1", 10, 9), G("TDE 2", 10, 8), G("PBL01", 10, 9), G("PBL02", 10, 8.5), G("PBL03", 10, 9), G("PBL04", 10, 10), G("PBL05", 10, 7), G("Prova do RA1", 10, 6.5), G("PBL06", 10, 9), G("PBL07", 10, 8), G("PBL08", 10, null), G("PBL09", 10, null), G("PBL10", 10, null)],
+  12: [G("PjBL - Parte 1", 1, 1), G("Avaliação somativa RA1", 1.25, 1), G("PjBL - Parte 2", 2, 1.8), G("Avaliação somativa RA2", 3, 2.2), G("Pjbl Parte 3", 1, null)],
+  13: [G("AS 01", 0.5, 0.5), G("AS 02", 0.5, 0.4), G("AS 03", 1, 1), G("AS 04", 1, 0.8), G("AS 05", 7, 5.5), G("AS 06", 1.5, 1.2), G("AS 07", 1.5, null)],
+  14: [G("Avaliação Somativa RA1 - GRUPO B e GRUPO A", 10, 7), G("Entrega TDE", 10, null, { submission: { score: null, missing: true } })],
+  15: [G("Aula 4 - TAREFA SOMATIVA", 10, 9), G("Aula 7 - TAREFA SOMATIVA", 10, 8), G("Avaliação somativa -  Prova", 10, 7), G("TDE - TAREFA SOMATIVA - VÍDEO", 3, null)],
+  16: [G("AS01 - NOTAS", 0, 5), G("Projeto CSCF", 10, null)] };
+const P = (id, t, day, h, m, course, extra) => Object.assign({ plannable_type: "assignment", plannable_id: id, plannable: { title: t }, plannable_date: atd(day, h, m), context_name: N[course], course_id: ID[course],
+  html_url: "/courses/" + ID[course] + "/assignments/" + id, submissions: {} }, extra || {});
+const PLAN = [P(1, "Relatório de redes", -2, 23, 59, "cscf", { submissions: { missing: true } }), P(2, "Lista 6: ponteiros e structs", -1, 18, 0, "imp", { submissions: { missing: true } }),
+  P(3, "Quiz 7", 0, 12, 0, "etica", { submissions: { submitted: true } }), P(4, "Lista 4: subconsultas", 0, 23, 59, "abd"), P(5, "PBL08 arquivos binários", 1, 23, 59, "imp"),
+  P(6, "Fórum: dilemas éticos", 1, 20, 0, "etica"), P(7, "Entrega PjBL - Parte 3", 2, 23, 59, "abd"), P(8, "Monitoria de WEB", 3, 19, 0, "web", { plannable_type: "calendar_event", submissions: false }),
+  P(9, "Formulário PHP + MySQL", 4, 23, 59, "web"), P(10, "Questionário AS07", 4, 21, 0, "rpnd", { submissions: { graded: true } }), P(11, "Leitura cap. 5", 6, 8, 0, "etica")];
+const ANN = [{ context_code: "course_12", title: "RA3: sala alterada para o bloco 8", posted_at: atd(0, 9), read_state: "unread", html_url: location.origin + "/courses/12/discussion_topics/1" },
+  { context_code: "course_14", title: "Material da aula 12 publicado", posted_at: atd(-1, 15), read_state: "unread", html_url: location.origin + "/courses/14/discussion_topics/2" },
+  { context_code: "course_11", title: "Grupos do PBL atualizados", posted_at: atd(-3, 10), read_state: "read", html_url: location.origin + "/courses/11/discussion_topics/3" },
+  { context_code: "course_15", title: "Leitura recomendada para sexta", posted_at: atd(-5, 10), read_state: "read", html_url: location.origin + "/courses/15/discussion_topics/4" }];
+const R = b => new Response("while(1);" + JSON.stringify(b), { headers: { "Content-Type": "application/json" } });
+const realFetch = window.fetch;
+window.fetch = async u => { u = String(u);
+  if (u.startsWith("/api/v1/users/self")) return R({ id: 1 });
+  if (u.startsWith("/api/v1/courses?")) return R(Object.keys(N).map(k => ({ id: ID[k], name: N[k] })));
+  const m = /\/api\/v1\/courses\/(\d+)\/assignments/.exec(u); if (m) return R(AS[m[1]] || []);
+  if (u.startsWith("/api/v1/announcements")) return R(ANN);
+  if (u.startsWith("/api/v1/planner")) return R(PLAN);
+  return new Response("[]", { status: 404 }); };
+const STILL = new URLSearchParams(location.search).get("still");
+if (STILL) document.documentElement.classList.add("still");
+history.replaceState(null, "", "/");   // the Canvas dashboard path, so content.js draws the dashboard panel
+</script>
+<script src="/ext/prefs.js"></script><script src="/ext/theme.js"></script>
+</head><body>
 <div class="browser">
   <div class="chrome">
-    <div class="tabs"><span class="dots"><i></i><i></i><i></i></span>
-      <span class="tab on" id="tab1"><span class="fav" style="background:#e4473a"></span>Notas · Canvas PUCPR</span>
-      <span class="tab" id="tab2" style="display:none"></span></div>
-    <div class="addr"><span style="color:#777">‹ ›</span><span class="url" id="url">pucpr.instructure.com/courses/72009/grades</span>
-      <span class="ext" id="ext"><svg viewBox="0 0 32 32" width="20" height="20"><rect x="1" y="1" width="30" height="30" rx="9" fill="#eee"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="#191919" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="#2fb36b" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <div class="tabs"><span class="dots"><i></i><i></i><i></i></span><span class="tab on"><span class="fav"></span><span id="tabt">Painel</span></span></div>
+    <div class="addr"><span style="color:#8A8F99">‹ ›</span><span class="url" id="url">pucpr.instructure.com</span></div>
   </div>
-  <div class="page" id="page">
-    <div class="cv" id="cv"><div class="gnav"></div>
-      <div class="cnav">Página inicial<br>Avisos<br>Tarefas<br><b>Notas</b><br>Pessoas<br>Módulos</div>
-      <div class="main"><h2>Notas de exemplo</h2><div class="sub">Programação Imperativa · 2026/2 (demonstração)</div>
-        <table><tr><th>Nome</th><th>Vencimento</th><th>Nota</th><th>De</th></tr>
-          <tr><td>Prova do RA1</td><td>16 set</td><td>7</td><td>10</td></tr><tr><td>PBL05</td><td>14 set</td><td>9</td><td>10</td></tr>
-          <tr><td>TDE 2: Boas práticas</td><td>14 set</td><td>10</td><td>10</td></tr><tr><td>Trabalho do RA2</td><td>18 nov</td><td>–</td><td>10</td></tr>
-          <tr><td>Prova do RA2</td><td>11 nov</td><td>–</td><td>10</td></tr></table></div></div>
-    <div class="pop" id="pop"><header><svg viewBox="0 0 32 32" width="22" height="22"><rect x="1" y="1" width="30" height="30" rx="9" fill="#eee"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="#191919" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="#2fb36b" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Quanto falta</header>
-      <p id="st">Abra o Canvas da PUCPR e clique em Importar.</p>
-      <span class="b p" id="go">Importar notas do Canvas</span><span class="b" id="open" style="display:none">Abrir no Quanto falta</span>
-      <p class="fine">v0.5.0 · Só lê as suas notas. Nada é enviado para servidor nenhum.</p></div>
+  <div class="page">
+    <header class="ic-app-header"><div class="logo"></div>
+      <ul id="menu" class="ic-app-header__menu-list">
+        <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9786;</div><div class="menu-item__text">Conta</div></a></li>
+        <li class="menu-item ic-app-header__menu-list-item on" id="nav-dash"><a id="global_nav_dashboard_link" class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9638;</div><div class="menu-item__text">Painel</div></a></li>
+        <li class="menu-item ic-app-header__menu-list-item" id="nav-courses"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9776;</div><div class="menu-item__text">Cursos</div></a></li>
+        <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9783;</div><div class="menu-item__text">Calendário</div></a></li>
+        <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9993;</div><div class="menu-item__text">Caixa de entrada</div></a></li>
+        <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">?</div><div class="menu-item__text">Ajuda</div></a></li>
+      </ul></header>
+    <div class="cv"><div class="scroller" id="scroller">
+      <h1 class="pg" id="pgtitle">Painel</h1>
+      <div id="content">
+        <div class="ic-DashboardCard"><i style="background:#5B7FA6"></i><a href="/courses/11">Programação Imperativa</a></div><div class="ic-DashboardCard"><i style="background:#8A6FB0"></i><a href="/courses/12">Arquitetura de Banco de Dados</a></div><div class="ic-DashboardCard"><i style="background:#3F8F86"></i><a href="/courses/13">Resolução de Problemas</a></div>
+      </div></div></div>
   </div>
 </div>
-<svg class="cursor" id="cur" viewBox="0 0 24 24"><path d="M4 2l15 9-7 1.5L9 20z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+<svg class="cursor" id="cur" viewBox="0 0 24 24"><path d="M4 2l15 9-7 1.5L9 20z" fill="#fff" stroke="#1D2433" stroke-width="1.4" stroke-linejoin="round"/></svg>
 <span class="ring" id="ring"></span>
-<div class="cap" id="cap">No Canvas, um clique na extensão</div>
+<div class="cap" id="cap">No Canvas, o Campus+ mostra a semana inteira</div>
+<script src="/ext/collect.js"></script><script src="/ext/core.js"></script><script src="/ext/files.js"></script><script src="/ext/content.js"></script>
 <script>
 const $ = id => document.getElementById(id), at = (ms, f) => setTimeout(f, ms);
 const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 function tween(ms, step) { const t0 = performance.now(); const id = setInterval(() => { const k = Math.min(1, (performance.now() - t0) / ms); step(ease(k)); if (k >= 1) clearInterval(id); }, 16); }
-let cx = 640, cy = 520;
+let cx = 760, cy = 560, sy = 0;
 const place = () => { $("cur").style.transform = "translate(" + cx + "px," + cy + "px)"; };
 const move = (x, y, ms) => { const x0 = cx, y0 = cy; tween(ms || 700, k => { cx = x0 + (x - x0) * k; cy = y0 + (y - y0) * k; place(); }); };
-const click = (x, y) => { const r = $("ring"); r.style.left = x + "px"; r.style.top = y + "px"; tween(450, k => { r.style.opacity = String(.9 * (1 - k)); r.style.transform = "scale(" + (.4 + k) + ")"; }); };
-const show = (el, on) => tween(180, k => { const v = on ? k : 1 - k; el.style.opacity = String(v); el.style.transform = "scale(" + (.96 + .04 * v) + ")"; });
-let appY = 0;
-const setApp = () => { $("app").style.transform = "translateY(" + appY + "px) scale(.72)"; };
-const scrollApp = (docY, ms) => { const y0 = appY, y1 = -Math.max(0, docY * .72 - 16); tween(ms, k => { appY = y0 + (y1 - y0) * k; setApp(); }); };
+const click = (x, y) => { const r = $("ring"); r.style.left = x + "px"; r.style.top = y + "px"; tween(450, k => { r.style.opacity = String(.95 * (1 - k)); r.style.transform = "scale(" + (.4 + k) + ")"; }); };
+const scrollTo_ = (y, ms) => { const y0 = sy; tween(ms, k => { sy = y0 + (y - y0) * k; $("scroller").style.transform = "translateY(" + -sy + "px)"; }); };
 const cap = t => { $("cap").textContent = t; };
-// Made-up export, same shape as the extension's (no real student data).
-const now = Date.now(), d = n => new Date(now + n * 864e5).toISOString();
-const C = (n, a) => ({ name: n + " (Turma 2º B) - Ciência da Computação (Manhã) - 2026 / 2º Sem", assignments: a });
-const A = (name, points, score, due, extra) => Object.assign({ name, points, score, due, missing: false, submitted: score !== null, online: true, stats: null }, extra || {});
-const data = { v: 1, ext: "0.5.0", courses: [
-  C("Programação Imperativa", [A("Prova do RA1", 10, 7, "2026-09-16T12:00:00Z", { stats: { mean: 6.4, min: 0, max: 10 } }), A("Prova do RA2", 10, null, d(7)), A("Trabalho do RA2", 10, null, d(13))]),
-  C("Arquitetura de Banco de Dados", [A("Entrega PjBL - Parte 1", 1, 0.8, "2026-09-03T12:00:00Z", { stats: { mean: 0.8, min: 0.7, max: 0.9 } }), A("Avaliação somativa RA1", 1.25, 1, "2026-09-10T12:00:00Z", { stats: { mean: 0.9, min: 0, max: 1.3 } }),
-    A("Entrega PjBL - Parte 2", 2, 1.7, "2026-10-15T12:00:00Z"), A("Avaliação somativa RA2", 3, 2.4, "2026-10-22T12:00:00Z", { stats: { mean: 2, min: 0, max: 3 } })]),
-  C("Resolução de Problemas de Natureza Discreta", [A("AS 01", 10, 7, "2026-08-17T12:00:00Z", { stats: { mean: 6.5, min: 3.8, max: 9 } }), A("AS 02", 10, 6, "2026-08-26T12:00:00Z"), A("AS 03", 10, 8, "2026-09-09T12:00:00Z")]),
-  C("Ética", [A("Avaliação somativa -  Prova", 10, 8, "2026-10-17T12:00:00Z", { stats: { mean: 5.9, min: 0, max: 9 } }), A("TDE - TAREFA SOMATIVA - VÍDEO", 10, null, d(5))]),
-  C("Conectividade em Sistemas Ciberfísicos", [A("AS01 - NOTAS", 0, 7.5, null), A("Projeto CSCF", 10, null, d(4))])],
-  announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", title: "Calendário final da disciplina", at: d(-1), unread: true, url: "https://pucpr.instructure.com/courses/1/discussion_topics/1" },
-    { course: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem", title: "Exercícios de revisão do RA2", at: d(-2), unread: true, url: "https://pucpr.instructure.com/courses/1/discussion_topics/2" }] };
-const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const shadow = id => { const h = $(id); return h && h.shadowRoot; };
+const center = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+// Headless virtual time does not run CSS transitions/animations: show everything in its end state.
+const NOANIM = "*, *::before, *::after { animation:none !important; transition:none !important; }";
+const calm = root => { const s = document.createElement("style"); s.textContent = NOANIM; root.appendChild(s); };
+calm(document.head);
+new MutationObserver(() => {
+  for (const id of ["cp-dash", "qf-panel"]) { const r = shadow(id); if (r && !r.cpCalm) { r.cpCalm = 1; calm(r); } }
+  const box = $("cp-app"), f = box && box.cpFrame;
+  if (f && !f.cpCalm) { f.cpCalm = 1; f.addEventListener("load", () => { calm(f.contentDocument.head); f.contentDocument.documentElement.style.scrollBehavior = "auto";
+    const m = /[?&]m=([a-z0-9]+)/.exec(f.src); if (m) setTimeout(() => { const d = f.contentDocument, c = d.getElementById("card-" + m[1]); if (c) { const y = c.getBoundingClientRect().top + f.contentWindow.scrollY - 24;
+      const b = d.body, y0 = 0; tween(700, k => { b.style.transform = "translateY(" + -(y0 + y * k) + "px)"; }); } }, 350); }); }
+}).observe(document.body, { childList: true, subtree: true });
 place();
-setInterval(() => { if (scrollX || scrollY) scrollTo(0, 0); const f = $("app"); if (f && f.contentWindow && f.contentWindow.scrollY) f.contentWindow.scrollTo(0, 0); }, 8);   // the app's scrollIntoView must not move the scene itself
-at(600, () => move(1188, 76));                       // to the extension icon
-at(1400, () => { click(1200, 88); $("ext").classList.add("hot"); show($("pop"), true); cap("A extensão lê o Canvas com o login que você já tem"); });
-at(2100, () => move(1070, 222));                     // to "Importar notas do Canvas"
-at(2900, () => { click(1082, 234); $("st").innerHTML = '<span class="spin"></span>Lendo suas notas…'; $("go").style.opacity = ".5"; });
-at(4300, () => { $("st").className = "ok"; $("st").textContent = "5 matérias lidas, 11 avaliações com nota."; $("go").style.display = "none"; $("open").style.display = "block"; });
-at(4700, () => move(1070, 268));
-at(5500, () => { click(1082, 280); cap("O app abre e confere tudo, passo a passo"); });
-at(5900, () => {                                      // new tab: the real app, reading the export from the hash
-  $("pop").style.opacity = "0"; $("ext").classList.remove("hot"); $("tab1").classList.remove("on");
-  const t2 = $("tab2"); t2.style.display = "flex"; t2.className = "tab on"; t2.innerHTML = '<span class="fav" style="background:#eee"></span>Minhas matérias · Quanto falta';
-  $("url").textContent = "falta-quanto.vercel.app/app"; $("cv").style.display = "none";
-  const f = document.createElement("iframe"); f.src = "../app.html#canvas=" + b64; f.id = "app";
-  // Headless virtual time does not advance CSS animations: show entering elements in their end state in the recording.
-  f.addEventListener("load", () => { const st = f.contentDocument.createElement("style"); st.textContent = ".enter { animation:none !important; }"; f.contentDocument.head.appendChild(st); }); $("page").appendChild(f); setApp(); move(900, 600);
+if (STILL === "dash") at(900, () => { const r = shadow("cp-dash"), w = r && r.querySelector(".week"); if (w) { sy = Math.max(0, $("cp-dash").getBoundingClientRect().top - 14); $("scroller").style.transform = "translateY(" + -sy + "px)"; }
+  const s = document.createElement("style"); s.textContent = ".lanes .col:nth-child(3) .ev:first-child .tip { opacity:1; visibility:visible; transform:none; }"; r.appendChild(s); });
+if (STILL === "app") location.hash = "#campus";
+if (!STILL) {
+// 1. the dashboard panel; hover a chip in the 7-day timeline
+const chip = () => { const r = shadow("cp-dash"); return r && r.querySelector(".lanes .col:nth-child(3) .ev"); };
+at(900, () => { const r = shadow("cp-dash"), w = r && r.querySelector(".week"); if (w) scrollTo_(Math.max(0, w.getBoundingClientRect().top - 95 - 150), 1100); });
+at(2300, () => { const c = chip(); if (c) { const p = center(c); move(p.x + 6, p.y + 2, 800); } });
+at(3150, () => { const c = chip(); if (c) { const s = document.createElement("style"); s.textContent = ".lanes .col:nth-child(3) .ev:first-child .tip { opacity:1; visibility:visible; transform:none; } .lanes .col:nth-child(3) .ev:first-child { transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); z-index:4; }";
+  shadow("cp-dash").appendChild(s); cap("Passe o mouse: prazo, matéria e se já entregou"); } });
+// 2. "Campus+" in the left menu opens the calculator over Canvas
+at(5000, () => { const r = shadow("cp-dash"), s = r && r.querySelector("style:last-of-type"); if (s && s.textContent.includes(".tip")) s.remove(); const n = $("cp-nav"); if (n) { const p = center(n); move(p.x + 4, p.y, 800); } });
+at(5900, () => { const n = $("cp-nav"); if (n) { const p = center(n); click(p.x, p.y); location.hash = "#campus"; } cap("Um clique em Campus+ e a calculadora abre no próprio Canvas"); });
+at(6300, () => move(820, 520, 900));
+// 3. a course page: the ring and the grades table; "Abrir no Campus+" opens that subject
+at(10200, () => {
+  history.replaceState(null, "", "/courses/12"); const old = $("cp-app"); if (old) old.remove(); const d = $("cp-dash"); if (d) d.remove();
+  $("nav-dash").classList.remove("on"); $("nav-courses").classList.add("on");
+  $("tabt").textContent = "Arquitetura de Banco de Dados"; $("url").textContent = "pucpr.instructure.com/courses/12";
+  sy = 0; $("scroller").style.transform = "none";
+  $("scroller").innerHTML = '<div class="crumbs">Arquitetura de Banco de Dados &rsaquo; <span>Página inicial</span></div><div class="course"><nav class="cnav"><b>Página inicial</b><br>Avisos<br>Tarefas<br>Notas<br>Pessoas<br>Módulos<br>Arquivos</nav>' +
+    '<div id="content"><div class="mods"><div>Módulo 1: Modelagem</div><div>Aula 1: Modelo entidade-relacionamento</div><div>Aula 2: Normalização</div></div></div></div>';
+  const s = document.createElement("script"); s.src = "/ext/content.js?course"; document.body.appendChild(s);   // a new page load runs the content script again
+  cap("Em cada matéria: quanto já tem, o peso e a nota que falta");
 });
-const toScene = r => ({ x: 29 + (r.left + r.width / 2) * .72, y: 95 + appY + (r.top + r.height / 2) * .72 });
-const docTop = sel => { const d = $("app").contentDocument, e = d && d.querySelector(sel); return e ? e.getBoundingClientRect().top + $("app").contentWindow.scrollY : null; };
-at(6900, () => { const y = docTop(".win"); if (y !== null) scrollApp(y - 40, 900); });
-const btn = () => { const d = $("app").contentDocument; return d && d.querySelector(".win .apply-demo button"); };
-at(8900, () => { const b = btn(); if (b) { const p = toScene(b.getBoundingClientRect()); move(p.x - 6, p.y - 4, 800); } });
-at(9750, () => { const b = btn(); if (b) { const p = toScene(b.getBoundingClientRect()); cx = p.x - 6; cy = p.y - 4; place(); click(p.x, p.y); } });
-at(9950, () => { const b = btn(); if (b) b.click(); cap("Um clique em Aplicar e os números já estão certos"); });
-at(11300, () => { const y = docTop("#panorama"); if (y !== null) scrollApp(y - 60, 1100);
-  move(1120, 650, 900); cap("Média da turma, avisos e o quanto falta em cada matéria"); });
+const openBtn = () => { const r = shadow("qf-panel"); return r && [...r.querySelectorAll("button")].find(b => b.textContent.includes("Abrir no Campus+")); };
+at(11500, () => scrollTo_(230, 900));   // done before the cursor reads the button position
+at(12450, () => { const b = openBtn(); if (b) { const p = center(b); move(p.x - 10, p.y + 4, 800); } });
+at(13350, () => { const b = openBtn(); if (b) { const p = center(b); click(p.x - 4, p.y); b.click(); } cap("E abre direto no cartão da matéria"); });
+at(13850, () => move(900, 560, 900));
+}
 </script>
 </body></html>

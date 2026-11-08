@@ -1,19 +1,41 @@
 #!/bin/sh
 # Render media/demo.mp4 (and a poster) from video/scene.html: one headless frame per step of virtual time.
-# The scene shows a mock Canvas tab, then the real app.html importing made-up grades. Needs Brave or Chrome and ffmpeg.
+# The scene is a mock Canvas tab running the real extension on made-up data. It is served over localhost (content.js reads
+# location.pathname, and the calculator iframe needs a same-origin copy of app.html wired to the scene's stubbed chrome.storage).
+# Needs Brave or Chrome, python3 and ffmpeg. FRAMES="ms ms ..." renders only those moments to $OUT (default /tmp/cp-media) for review;
+# STILL=1 renders the two store screenshots (1280x800) instead.
 set -eu
 cd "$(dirname "$0")/.."
 B="${BROWSER:-/Applications/Brave Browser.app/Contents/MacOS/Brave Browser}"
-fps=20; secs=15; tmp=$(mktemp -d)
+fps=20; secs=16; tmp=$(mktemp -d); root=$(mktemp -d)
+ln -s "$PWD/extension" "$root/ext"; ln -s "$PWD/video" "$root/video"; mkdir "$root/extapp"
+for f in extension/*; do ln -s "$PWD/$f" "$root/extapp/"; done
+rm "$root/extapp/app.html"
+sed 's#<script src="core.js"></script>#<script src="/video/ext-stub.js"></script>&#' extension/app.html > "$root/extapp/app.html"
+grep -q ext-stub "$root/extapp/app.html" || { echo "app.html: core.js script tag not found"; exit 1; }
+port=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+python3 -m http.server "$port" --bind 127.0.0.1 --directory "$root" >/dev/null 2>&1 & srv=$!
+trap 'kill $srv 2>/dev/null; rm -rf "$tmp" "$root"' EXIT
+sleep 1
+shot() {   # $1 = virtual ms, $2 = output png, $3 = query, $4 = window height
+  "$B" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --blink-settings=preferredColorScheme=1 --virtual-time-budget="$1" --window-size=1280,${4:-720} \
+    --screenshot="$2" "http://127.0.0.1:$port/video/scene.html${3:-}" 2>/dev/null
+}
+if [ -n "${STILL:-}" ]; then   # store screenshots: STILL=1 renders both
+  shot 3000 store/screenshot-1280x800.png "?still=dash" 800; shot 3000 store/screenshot-2-1280x800.png "?still=app" 800
+  ls -la store; exit 0
+fi
+if [ -n "${FRAMES:-}" ]; then
+  out="${OUT:-/tmp/cp-media}"; mkdir -p "$out"
+  for t in $FRAMES; do shot "$t" "$out/frame-$t.png"; done
+  ls -la "$out"; exit 0
+fi
 n=$((fps * secs)); i=0
 while [ $i -lt $n ]; do
-  t=$((i * 1000 / fps + 50))
-  "$B" --headless --disable-gpu --hide-scrollbars --allow-file-access-from-files --force-device-scale-factor=1 \
-    --virtual-time-budget=$t --window-size=1280,720 --screenshot="$tmp/$(printf %04d $i).png" "file://$PWD/video/scene.html" 2>/dev/null
+  shot $((i * 1000 / fps + 50)) "$tmp/$(printf %04d $i).png"
   i=$((i + 1))
 done
 mkdir -p media
 ffmpeg -loglevel error -y -framerate $fps -i "$tmp/%04d.png" -c:v libx264 -pix_fmt yuv420p -crf 26 -preset slow -movflags +faststart media/demo.mp4
-cp "$tmp/$(printf %04d $((fps * 12)))" media/demo-poster.png 2>/dev/null || cp "$tmp/0240.png" media/demo-poster.png
-rm -rf "$tmp"
+cp "$tmp/$(printf %04d $((fps * 3 + 10)))".png media/demo-poster.png
 ls -la media
