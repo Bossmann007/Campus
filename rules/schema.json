@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Bossmann007/quanto-falta-pucpr/blob/main/rules/schema.json",
+  "title": "Regras de uma turma (Campus+ · Quanto falta)",
+  "description": "Um arquivo = uma turma num semestre: rules/<semestre>/<turma>.json, por exemplo rules/2026-2/cc-manha.json. O scripts/check-rules confere este formato e mais: pesos somam 10, datas dentro do semestre, ids únicos e matérias do Canvas sem repetir entre turmas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["term", "termEnd", "turma", "subjects"],
+  "properties": {
+    "term": { "type": "string", "pattern": "^\\d{4} / [12]$", "description": "Semestre como o Canvas escreve no nome das matérias, por exemplo \"2026 / 2\". A pasta do arquivo é o mesmo semestre sem espaços e com hífen (2026-2)." },
+    "termEnd": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Último dia em que as regras valem (AAAA-MM-DD). Depois dele o Quanto falta some até a versão do próximo semestre. Todas as turmas do semestre usam a mesma data." },
+    "turma": { "type": "string", "minLength": 1, "description": "Curso e turno da turma, como o aluno reconhece, por exemplo \"Ciência da Computação, manhã\". Aparece embaixo dos números." },
+    "subjects": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/subject" }, "description": "As matérias da turma, uma por matéria do Canvas (ou mais de uma, se a mesma regra vale para várias)." }
+  },
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "short", "canvasIds", "formula", "src", "items"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]{1,20}$", "description": "Identificador curto da matéria (só letras minúsculas e números, até 20). Único entre todas as turmas do semestre, porque as notas salvas e os backups usam \"matéria:avaliação\". Em turma nova, comece com uma sigla da turma (ex.: sinbd)." },
+        "name": { "type": "string", "minLength": 1, "description": "Nome da matéria como começa no Canvas (ex.: \"Programação WEB\"). Também serve para casar dados antigos que não têm o número da matéria." },
+        "short": { "type": "string", "minLength": 1, "description": "Nome curto para os cartões e o calendário (ex.: \"WEB\")." },
+        "canvasIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "integer", "exclusiveMinimum": 0 }, "description": "Números da matéria no Canvas (o 71306 de pucpr.instructure.com/courses/71306). É assim que o Campus+ sabe que o aluno é desta turma; cada número só pode aparecer em uma turma." },
+        "formula": { "type": "string", "minLength": 1, "description": "Como o Plano de Ensino calcula a nota final, em uma frase (ex.: \"Final = 25% RA1 + 40% RA2 + 35% RA3\")." },
+        "src": { "type": "string", "minLength": 1, "description": "De onde vêm os pesos: Plano de Ensino (com página ou linha), tabela do professor ou aviso." },
+        "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/item" }, "description": "As avaliações. A soma de todos os max da matéria precisa dar 10 (a nota final)." },
+        "canvas": {
+          "type": "object", "additionalProperties": false, "required": ["items"],
+          "description": "Opcional: como ler cada avaliação das tarefas do Canvas. Avaliação sem regra aqui é lançada à mão pelo aluno.",
+          "properties": {
+            "items": { "type": "object", "additionalProperties": { "$ref": "#/$defs/canvasRule" }, "description": "Chave = id de uma avaliação de items; valor = quais tarefas do Canvas formam a nota dela." }
+          }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "max", "inMax", "date", "dateSrc", "wSrc"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]{1,20}$", "description": "Identificador da avaliação dentro da matéria (só letras minúsculas e números, até 20; ex.: p1)." },
+        "name": { "type": "string", "minLength": 1, "description": "Nome da avaliação como aparece para o aluno (ex.: \"Prova do RA1\")." },
+        "max": { "type": "number", "exclusiveMinimum": 0, "description": "Quanto a avaliação vale na nota final, em pontos de 10 (30% = 3)." },
+        "inMax": { "type": "number", "exclusiveMinimum": 0, "description": "A escala em que o professor lança a nota (10 se a prova vale de 0 a 10; 1,25 se lança direto em pontos da final)." },
+        "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Data da avaliação ou do prazo (AAAA-MM-DD), dentro do semestre." },
+        "dateSrc": { "type": "string", "minLength": 1, "description": "De onde veio a data (Plano de Ensino, Canvas, aviso do professor)." },
+        "wSrc": { "type": "string", "minLength": 1, "description": "De onde veio o peso (ex.: \"Plano l.359: 30%\")." },
+        "exam": { "type": "boolean", "description": "true se é prova (entra nos lembretes de prova e no número do ícone)." },
+        "unv": { "type": "boolean", "description": "true se a data ainda não foi confirmada (aparece como \"a confirmar\")." },
+        "alt": { "type": "string", "minLength": 1, "description": "Outra data que aparece em outra fonte e conflita com date (ex.: \"Plano l.349: 18/11\")." }
+      }
+    },
+    "canvasRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Use exatamente um de one, avg ou sum. Os nomes casam por trecho do nome da tarefa no Canvas, e cada trecho precisa achar uma tarefa só.",
+      "properties": {
+        "one": { "type": "string", "minLength": 1, "description": "Uma tarefa do Canvas: nota = pontos tirados / pontos da tarefa, na escala inMax." },
+        "avg": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "description": "Várias tarefas com o mesmo peso: média de (pontos tirados / pontos da tarefa)." },
+        "sum": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "description": "Várias tarefas somadas: cada uma vira 0 a 10, a soma é multiplicada por factor e já fica na escala inMax." },
+        "factor": { "type": "number", "exclusiveMinimum": 0, "description": "Só com sum: o multiplicador da soma (ex.: três tarefas de 10 que valem 7 no total: 7/30 = 0.2333…)." },
+        "pts": { "type": "number", "exclusiveMinimum": 0, "description": "Escala a usar quando a tarefa aparece com 0 pontos no Canvas." }
+      }
+    }
+  }
+}

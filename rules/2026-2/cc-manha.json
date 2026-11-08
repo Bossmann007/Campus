@@ -1,0 +1,495 @@
+{
+  "term": "2026 / 2",
+  "termEnd": "2027-01-31",
+  "turma": "Ciência da Computação, manhã",
+  "subjects": [
+    {
+      "id": "imp",
+      "name": "Programação Imperativa",
+      "short": "Imperativa",
+      "canvasIds": [
+        72009
+      ],
+      "formula": "Pesos diretos na nota do semestre (10/30/10/10/40%)",
+      "src": "Plano de Ensino de Programação Imperativa l.335-371",
+      "items": [
+        {
+          "id": "ex1",
+          "name": "Exercícios do RA1 (TDE 1, TDE 2, PBL01–05)",
+          "max": 1,
+          "inMax": 10,
+          "date": "2026-09-13",
+          "dateSrc": "Plano: de 5/8 a 13/9",
+          "wSrc": "Plano l.341: 10%"
+        },
+        {
+          "id": "p1",
+          "name": "Prova do RA1",
+          "max": 3,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-09-16",
+          "dateSrc": "Plano",
+          "wSrc": "Plano l.359: 30%"
+        },
+        {
+          "id": "ex2",
+          "name": "Exercícios do RA2 (PBL06–10)",
+          "max": 1,
+          "inMax": 10,
+          "date": "2026-10-28",
+          "dateSrc": "Plano: de 23/9 a 28/10",
+          "alt": "Canvas: PBL10 até 03/11",
+          "unv": true,
+          "wSrc": "Plano l.360: 10%"
+        },
+        {
+          "id": "t2",
+          "name": "Trabalho do RA2 (equipe)",
+          "max": 1,
+          "inMax": 10,
+          "date": "2026-11-17",
+          "dateSrc": "Canvas: 17/11 23:59",
+          "alt": "Plano l.349: 18/11",
+          "wSrc": "Plano l.361: 10%"
+        },
+        {
+          "id": "p2",
+          "name": "Prova do RA2",
+          "max": 4,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-11-11",
+          "dateSrc": "Canvas: 11/11 14:10; Plano l.365",
+          "wSrc": "Plano l.371: 40%"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "ex1": {
+            "avg": [
+              "TDE 1:",
+              "TDE 2:",
+              "PBL01",
+              "PBL02",
+              "PBL03",
+              "PBL04",
+              "PBL05"
+            ]
+          },
+          "p1": {
+            "one": "Prova do RA1"
+          },
+          "ex2": {
+            "avg": [
+              "PBL06",
+              "PBL07",
+              "PBL08",
+              "PBL09",
+              "PBL10"
+            ]
+          },
+          "t2": {
+            "one": "Trabalho do RA2"
+          },
+          "p2": {
+            "one": "Prova do RA2"
+          }
+        }
+      }
+    },
+    {
+      "id": "abd",
+      "name": "Arquitetura de Banco de Dados",
+      "short": "Banco de Dados",
+      "canvasIds": [
+        71306
+      ],
+      "formula": "Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; PjBL II na escala do Canvas (0–2).",
+      "src": "Plano de Ensino de Arquitetura de Banco de Dados l.365-446",
+      "items": [
+        {
+          "id": "pj1",
+          "name": "RA1 · PjBL Parte I",
+          "max": 1,
+          "inMax": 1,
+          "date": "2026-09-03",
+          "dateSrc": "Plano",
+          "wSrc": "Plano: 40% de RA1 (25%) = 1,0 pt"
+        },
+        {
+          "id": "s1",
+          "name": "RA1 · Somativa individual I",
+          "max": 1.25,
+          "inMax": 1.25,
+          "exam": true,
+          "date": "2026-09-10",
+          "dateSrc": "Plano",
+          "wSrc": "Plano: 50% de RA1 = 1,25 pt"
+        },
+        {
+          "id": "tde1",
+          "name": "RA1 · TDE",
+          "max": 0.25,
+          "inMax": 0.25,
+          "date": "2026-11-12",
+          "dateSrc": "Plano l.436: TDE 12/11",
+          "unv": true,
+          "wSrc": "Plano: 10% de RA1 = 0,25 pt"
+        },
+        {
+          "id": "pj2",
+          "name": "RA2 · PjBL Parte II",
+          "max": 1.5,
+          "inMax": 2,
+          "date": "2026-10-15",
+          "dateSrc": "Plano",
+          "wSrc": "Tabela do prof.: 30% de RA2 (50%) = 1,5 pt (Canvas lança de 0 a 2)"
+        },
+        {
+          "id": "s2",
+          "name": "RA2 · Somativa individual II",
+          "max": 3,
+          "inMax": 3,
+          "exam": true,
+          "date": "2026-10-22",
+          "dateSrc": "Plano l.396",
+          "wSrc": "Tabela do prof.: 60% de RA2 (50%) = 3,0 pt"
+        },
+        {
+          "id": "tde2",
+          "name": "RA2 · TDE",
+          "max": 0.5,
+          "inMax": 0.5,
+          "date": "2026-11-12",
+          "dateSrc": "Tabela do prof.: TDE 12/11",
+          "unv": true,
+          "wSrc": "Tabela do prof.: 10% de RA2 = 0,5 pt"
+        },
+        {
+          "id": "pj3",
+          "name": "RA3 · PjBL Parte III (entrega final)",
+          "max": 1,
+          "inMax": 1,
+          "date": "2026-11-18",
+          "dateSrc": "Canvas: 18/11 10:40",
+          "alt": "Plano l.426: 19/11",
+          "wSrc": "Plano: 40% de RA3 (25%) = 1,0 pt"
+        },
+        {
+          "id": "s3",
+          "name": "RA3 · Somativa individual III",
+          "max": 1.25,
+          "inMax": 1.25,
+          "exam": true,
+          "date": "2026-11-19",
+          "dateSrc": "Plano l.416",
+          "wSrc": "Plano: 50% de RA3 = 1,25 pt"
+        },
+        {
+          "id": "tde3",
+          "name": "RA3 · TDE",
+          "max": 0.25,
+          "inMax": 0.25,
+          "date": "2026-11-12",
+          "dateSrc": "Plano l.436: TDE 12/11",
+          "unv": true,
+          "wSrc": "Plano: 10% de RA3 = 0,25 pt"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "pj1": {
+            "one": "PjBL - Parte 1"
+          },
+          "s1": {
+            "one": "Avaliação somativa RA1"
+          },
+          "pj2": {
+            "one": "PjBL - Parte 2"
+          },
+          "s2": {
+            "one": "Avaliação somativa RA2"
+          },
+          "pj3": {
+            "one": "Pjbl Parte 3"
+          },
+          "s3": {
+            "one": "Avaliação somativa RA3"
+          }
+        }
+      }
+    },
+    {
+      "id": "rpnd",
+      "name": "Resolução de Problemas de Natureza Discreta",
+      "short": "RPND",
+      "canvasIds": [
+        72005
+      ],
+      "formula": "Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)",
+      "src": "Plano de Ensino de RPND l.315-374",
+      "items": [
+        {
+          "id": "as1",
+          "name": "RA1 · AS 01 (grupo)",
+          "max": 0.3,
+          "inMax": 0.5,
+          "date": "2026-08-17",
+          "dateSrc": "Plano l.319",
+          "wSrc": "Plano: 0,5 de 10 no RA1"
+        },
+        {
+          "id": "as2",
+          "name": "RA1 · AS 02 (grupo)",
+          "max": 0.3,
+          "inMax": 0.5,
+          "date": "2026-08-26",
+          "dateSrc": "Plano l.325",
+          "wSrc": "Plano: 0,5 de 10 no RA1"
+        },
+        {
+          "id": "as3",
+          "name": "RA1 · AS 03 (grupo)",
+          "max": 0.6,
+          "inMax": 1,
+          "date": "2026-09-09",
+          "dateSrc": "Plano l.331",
+          "wSrc": "Plano: 1,0 de 10 no RA1"
+        },
+        {
+          "id": "as4",
+          "name": "RA1 · AS 04 (grupo)",
+          "max": 0.6,
+          "inMax": 1,
+          "date": "2026-09-23",
+          "dateSrc": "Plano l.337",
+          "wSrc": "Plano: 1,0 de 10 no RA1"
+        },
+        {
+          "id": "as5",
+          "name": "RA1 · AS 05 (individual)",
+          "max": 4.2,
+          "inMax": 7,
+          "exam": true,
+          "date": "2026-09-28",
+          "dateSrc": "Plano l.343",
+          "wSrc": "Plano: 7,0 de 10 no RA1"
+        },
+        {
+          "id": "as6",
+          "name": "RA2 · AS 06 (grupo)",
+          "max": 0.6,
+          "inMax": 1.5,
+          "date": "2026-10-21",
+          "dateSrc": "Plano l.349",
+          "wSrc": "Plano: 1,5 de 10 no RA2"
+        },
+        {
+          "id": "as7",
+          "name": "RA2 · AS 07 (grupo)",
+          "max": 0.6,
+          "inMax": 1.5,
+          "date": "2026-11-11",
+          "dateSrc": "Canvas: 11/11 14:10; Plano l.355",
+          "wSrc": "Plano: 1,5 de 10 no RA2"
+        },
+        {
+          "id": "as8",
+          "name": "RA2 · AS 08 (individual)",
+          "max": 2.8,
+          "inMax": 7,
+          "exam": true,
+          "date": "2026-11-18",
+          "dateSrc": "Canvas: 18/11 14:10; Plano l.361",
+          "wSrc": "Plano: 7,0 de 10 no RA2"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "as1": {
+            "one": "AS 01"
+          },
+          "as2": {
+            "one": "AS 02"
+          },
+          "as3": {
+            "one": "AS 03"
+          },
+          "as4": {
+            "one": "AS 04"
+          },
+          "as5": {
+            "one": "AS 05"
+          },
+          "as6": {
+            "one": "AS 06"
+          },
+          "as7": {
+            "one": "AS 07"
+          },
+          "as8": {
+            "one": "AS 08"
+          }
+        }
+      }
+    },
+    {
+      "id": "web",
+      "name": "Programação WEB",
+      "short": "WEB",
+      "canvasIds": [
+        71310
+      ],
+      "formula": "Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE",
+      "src": "PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376",
+      "items": [
+        {
+          "id": "p1",
+          "name": "Prova do RA1",
+          "max": 2.125,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-09-28",
+          "dateSrc": "Plano",
+          "wSrc": "85% de RA1 (25%)"
+        },
+        {
+          "id": "tde",
+          "name": "TDE (CRUD, conta nos 3 RAs)",
+          "max": 1.5,
+          "inMax": 10,
+          "date": "2026-11-06",
+          "dateSrc": "PDF do trabalho: 06/11 07:50",
+          "alt": "Plano l.368: 09/nov",
+          "unv": true,
+          "wSrc": "15% de cada RA"
+        },
+        {
+          "id": "p23",
+          "name": "Prova do RA2 e do RA3 (uma prova, conta nos dois)",
+          "max": 6.375,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-11-13",
+          "dateSrc": "Cronograma: 13/11",
+          "alt": "Plano l.358: 16/nov",
+          "unv": true,
+          "wSrc": "85% de RA2 (40%) + 85% de RA3 (35%) = 3,4 + 2,975"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "p1": {
+            "one": "Avaliação Somativa RA1 - GRUPO B e GRUPO A"
+          },
+          "tde": {
+            "one": "Entrega TDE"
+          }
+        }
+      }
+    },
+    {
+      "id": "etica",
+      "name": "Ética",
+      "short": "Ética",
+      "canvasIds": [
+        72006
+      ],
+      "formula": "Final = 70% RA1 + 30% RA2; notas em pontos da final",
+      "src": "Plano de Ensino de Ética l.208 e l.261",
+      "items": [
+        {
+          "id": "ra1",
+          "name": "RA1 (prova e atividades)",
+          "max": 7,
+          "inMax": 7,
+          "exam": true,
+          "date": "2026-10-16",
+          "dateSrc": "Plano l.409: prova 16/10",
+          "wSrc": "Plano l.208: 70%"
+        },
+        {
+          "id": "ra2",
+          "name": "RA2 · TDE vídeo (TBL)",
+          "max": 3,
+          "inMax": 3,
+          "date": "2026-11-10",
+          "dateSrc": "Prof.: link 10/11, apresenta 13/11",
+          "unv": true,
+          "wSrc": "Plano l.261: 30%"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "ra1": {
+            "sum": [
+              "Aula 4 - TAREFA SOMATIVA",
+              "Aula 7 - TAREFA SOMATIVA",
+              "Avaliação somativa -  Prova"
+            ],
+            "factor": 0.23333333333333334
+          },
+          "ra2": {
+            "one": "TDE - TAREFA SOMATIVA - VÍDEO"
+          }
+        }
+      }
+    },
+    {
+      "id": "cscf",
+      "name": "Conectividade em Sistemas Ciberfísicos",
+      "short": "Conectividade",
+      "canvasIds": [
+        72011
+      ],
+      "formula": "Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)",
+      "src": "Plano de Ensino de Conectividade l.288-306 e l.554",
+      "items": [
+        {
+          "id": "as1",
+          "name": "RA1 · Avaliação Somativa 1 (nota do RA1)",
+          "max": 5,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-09-21",
+          "dateSrc": "Data não confirmada no Plano",
+          "unv": true,
+          "wSrc": "Plano l.294: AS1 = 100% do RA1"
+        },
+        {
+          "id": "as2",
+          "name": "RA2 · Avaliação Somativa 2",
+          "max": 3,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-11-09",
+          "dateSrc": "Aviso em aula: 09/11 07:50",
+          "unv": true,
+          "wSrc": "Plano l.300: 60% do RA2"
+        },
+        {
+          "id": "pj",
+          "name": "RA2 · Projeto PjBL (MQTT)",
+          "max": 2,
+          "inMax": 10,
+          "date": "2026-11-09",
+          "dateSrc": "Canvas: 09/11 (hora a conferir)",
+          "unv": true,
+          "wSrc": "Plano l.306: 40% do RA2"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "as1": {
+            "one": "AS01 - NOTAS",
+            "pts": 10
+          },
+          "pj": {
+            "one": "Projeto CSCF"
+          }
+        }
+      }
+    }
+  ]
+}

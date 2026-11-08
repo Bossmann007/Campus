@@ -181,7 +181,7 @@ assert(!/Enzo|~\//.test(publicText), "no personal data in the page outside the f
 // landing page: no personal data, the real download, video and bookmarklet; the calculator is no longer on the site
 const landing = fs.readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
 assert(!/Enzo|~\//.test(landing), "no personal data on the landing page");
-assert(!/href="\/app/.test(landing) && landing.includes('id="bm"'), "no links to the old /app; the bookmarklet is offered");
+assert(/href="\/app"/.test(landing) && landing.includes('id="bm"'), "the landing links the browser calculator (temporary) and offers the bookmarklet");
 assert(landing.includes('releases/latest/download/quanto-falta-extension.zip') && landing.includes('src="/media/demo.mp4"'), "download link and demo video");
 assert(fs.existsSync(require("path").join(__dirname, "..", "media", "demo.mp4")), "demo video is in the repo");
 ok("landing page is clean, has the download, the video and the bookmarklet");
@@ -199,10 +199,10 @@ ok("landing page is clean, has the download, the video and the bookmarklet");
 }
 ok("old /app grades can be downloaded as a backup from the landing page");
 const vj = JSON.parse(fs.readFileSync(require("path").join(__dirname, "..", "vercel.json"), "utf8"));
-assert.deepStrictEqual(vj.redirects.map(r => [r.source, r.destination]), [["/app", "/"], ["/calendario", "/"]], "old calculator addresses go to the landing page");
-assert(!/^!app\.html$/m.test(fs.readFileSync(require("path").join(__dirname, "..", ".vercelignore"), "utf8")), "app.html is not deployed: it lives in the extension");
+assert.deepStrictEqual(vj.redirects.map(r => [r.source, r.destination]), [["/calendario", "/app?view=calendario"]], "the old calendar address opens the calculator's calendar");
+assert(fs.readFileSync(__dirname + "/../.vercelignore", "utf8").includes("!app.html"), "the site deploys the browser calculator (temporary, until the extension is in the store)");
 assert(/const urlCal = \(\) =>/.test(html) && html.includes('id="viewsw"'), "the calculator switches to the calendar view");
-ok("the site serves no calculator; old addresses redirect");
+ok("the site serves the browser calculator at /app for now");
 // ---- turma by Canvas course id, the term in one place, per-user storage ----
 assert.deepStrictEqual(Object.fromEntries(Object.entries(C.CANVAS).map(([k, v]) => [k, v.cid])), { imp: 72009, abd: 71306, rpnd: 72005, web: 71310, etica: 72006, cscf: 72011 }, "each rule knows its Canvas course id");
 const BDn = "Arquitetura de Banco de Dados (Turma 2º B) - Ciência da Computação (Manhã) - 2026 / 2º Sem";

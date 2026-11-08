@@ -1,14 +1,17 @@
 #!/bin/sh
-# Exit 0 = all tests pass, generated files match their sources, and every script parses.
+# Exit 0 = all tests pass, the rule packs are valid, generated files match their sources, and every script parses.
 set -e
 cd "$(dirname "$0")/.."
 TZ=America/Sao_Paulo node tests/notas-test.js app.html   # due dates are shown in local (Brasília) days
 node tests/extension-test.js
+./scripts/check-rules                                   # rule packs: schema, weights sum to 10, dates in the term, unique ids
+node tests/rules-test.js                                # validator on bad packs, two turmas in one core, draft without grades
+TZ=America/Sao_Paulo node tests/rules-golden.js app.html   # cc-manha numbers identical to before the rule packs
 TZ=America/Sao_Paulo node tests/inside-canvas-test.js
 for f in extension/*.js; do node --check "$f"; done
-# generated files (extension calculator page, core copy, bookmarklet) must match their sources
-t=$(mktemp -d); cp -R app.html index.html extension scripts "$t"; (cd "$t" && ./scripts/sync-ext-core >/dev/null && ./scripts/sync-bookmarklet >/dev/null)
-diff -rq extension "$t/extension" && cmp -s index.html "$t/index.html" && echo "generated files up to date" || { echo "stale generated files: run scripts/sync-ext-core and scripts/sync-bookmarklet"; rm -rf "$t"; exit 1; }
+# generated files (rules block and turma lists, extension calculator page, core copy, bookmarklet) must match their sources
+t=$(mktemp -d); cp -R app.html index.html README.md extension scripts rules "$t"; (cd "$t" && ./scripts/sync-ext-core >/dev/null && ./scripts/sync-bookmarklet >/dev/null)
+diff -rq extension "$t/extension" && cmp -s index.html "$t/index.html" && cmp -s app.html "$t/app.html" && cmp -s README.md "$t/README.md" && echo "generated files up to date" || { echo "stale generated files: run scripts/sync-ext-core and scripts/sync-bookmarklet"; rm -rf "$t"; exit 1; }
 rm -rf "$t"
 python3 -c "import re;s=open('app.html').read();open('/tmp/notas-ui-check.js','w').write(re.search(r'<script id=\"ui\">([\s\S]*?)</script>',s).group(1))"
 node --check /tmp/notas-ui-check.js && echo "ui script parses"

@@ -1,0 +1,2143 @@
+{
+ "courses": [
+  {
+   "id": "imp",
+   "name": "Programação Imperativa",
+   "formula": "Pesos diretos na nota do semestre (10/30/10/10/40%)",
+   "src": "Plano de Ensino de Programação Imperativa l.335-371",
+   "items": [
+    {
+     "id": "ex1",
+     "name": "Exercícios do RA1 (TDE 1, TDE 2, PBL01–05)",
+     "max": 1,
+     "inMax": 10,
+     "date": "2026-09-13",
+     "dateSrc": "Plano: de 5/8 a 13/9",
+     "wSrc": "Plano l.341: 10%"
+    },
+    {
+     "id": "p1",
+     "name": "Prova do RA1",
+     "max": 3,
+     "inMax": 10,
+     "exam": true,
+     "date": "2026-09-16",
+     "dateSrc": "Plano",
+     "wSrc": "Plano l.359: 30%"
+    },
+    {
+     "id": "ex2",
+     "name": "Exercícios do RA2 (PBL06–10)",
+     "max": 1,
+     "inMax": 10,
+     "date": "2026-10-28",
+     "dateSrc": "Plano: de 23/9 a 28/10",
+     "alt": "Canvas: PBL10 até 03/11",
+     "unv": true,
+     "wSrc": "Plano l.360: 10%"
+    },
+    {
+     "id": "t2",
+     "name": "Trabalho do RA2 (equipe)",
+     "max": 1,
+     "inMax": 10,
+     "date": "2026-11-17",
+     "dateSrc": "Canvas: 17/11 23:59",
+     "alt": "Plano l.349: 18/11",
+     "wSrc": "Plano l.361: 10%"
+    },
+    {
+     "id": "p2",
+     "name": "Prova do RA2",
+     "max": 4,
+     "inMax": 10,
+     "exam": true,
+     "date": "2026-11-11",
+     "dateSrc": "Canvas: 11/11 14:10; Plano l.365",
+     "wSrc": "Plano l.371: 40%"
+    }
+   ]
+  },
+  {
+   "id": "abd",
+   "name": "Arquitetura de Banco de Dados",
+   "formula": "Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; PjBL II na escala do Canvas (0–2).",
+   "src": "Plano de Ensino de Arquitetura de Banco de Dados l.365-446",
+   "items": [
+    {
+     "id": "pj1",
+     "name": "RA1 · PjBL Parte I",
+     "max": 1,
+     "inMax": 1,
+     "date": "2026-09-03",
+     "dateSrc": "Plano",
+     "wSrc": "Plano: 40% de RA1 (25%) = 1,0 pt"
+    },
+    {
+     "id": "s1",
+     "name": "RA1 · Somativa individual I",
+     "max": 1.25,
+     "inMax": 1.25,
+     "exam": true,
+     "date": "2026-09-10",
+     "dateSrc": "Plano",
+     "wSrc": "Plano: 50% de RA1 = 1,25 pt"
+    },
+    {
+     "id": "tde1",
+     "name": "RA1 · TDE",
+     "max": 0.25,
+     "inMax": 0.25,
+     "date": "2026-11-12",
+     "dateSrc": "Plano l.436: TDE 12/11",
+     "unv": true,
+     "wSrc": "Plano: 10% de RA1 = 0,25 pt"
+    },
+    {
+     "id": "pj2",
+     "name": "RA2 · PjBL Parte II",
+     "max": 1.5,
+     "inMax": 2,
+     "date": "2026-10-15",
+     "dateSrc": "Plano",
+     "wSrc": "Tabela do prof.: 30% de RA2 (50%) = 1,5 pt (Canvas lança de 0 a 2)"
+    },
+    {
+     "id": "s2",
+     "name": "RA2 · Somativa individual II",
+     "max": 3,
+     "inMax": 3,
+     "exam": true,
+     "date": "2026-10-22",
+     "dateSrc": "Plano l.396",
+     "wSrc": "Tabela do prof.: 60% de RA2 (50%) = 3,0 pt"
+    },
+    {
+     "id": "tde2",
+     "name": "RA2 · TDE",
+     "max": 0.5,
+     "inMax": 0.5,
+     "date": "2026-11-12",
+     "dateSrc": "Tabela do prof.: TDE 12/11",
+     "unv": true,
+     "wSrc": "Tabela do prof.: 10% de RA2 = 0,5 pt"
+    },
+    {
+     "id": "pj3",
+     "name": "RA3 · PjBL Parte III (entrega final)",
+     "max": 1,
+     "inMax": 1,
+     "date": "2026-11-18",
+     "dateSrc": "Canvas: 18/11 10:40",
+     "alt": "Plano l.426: 19/11",
+     "wSrc": "Plano: 40% de RA3 (25%) = 1,0 pt"
+    },
+    {
+     "id": "s3",
+     "name": "RA3 · Somativa individual III",
+     "max": 1.25,
+     "inMax": 1.25,
+     "exam": true,
+     "date": "2026-11-19",
+     "dateSrc": "Plano l.416",
+     "wSrc": "Plano: 50% de RA3 = 1,25 pt"
+    },
+    {
+     "id": "tde3",
+     "name": "RA3 · TDE",
+     "max": 0.25,
+     "inMax": 0.25,
+     "date": "2026-11-12",
+     "dateSrc": "Plano l.436: TDE 12/11",
+     "unv": true,
+     "wSrc": "Plano: 10% de RA3 = 0,25 pt"
+    }
+   ]
+  },
+  {
+   "id": "rpnd",
+   "name": "Resolução de Problemas de Natureza Discreta",
+   "formula": "Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)",
+   "src": "Plano de Ensino de RPND l.315-374",
+   "items": [
+    {
+     "id": "as1",
+     "name": "RA1 · AS 01 (grupo)",
+     "max": 0.3,
+     "inMax": 0.5,
+     "date": "2026-08-17",
+     "dateSrc": "Plano l.319",
+     "wSrc": "Plano: 0,5 de 10 no RA1"
+    },
+    {
+     "id": "as2",
+     "name": "RA1 · AS 02 (grupo)",
+     "max": 0.3,
+     "inMax": 0.5,
+     "date": "2026-08-26",
+     "dateSrc": "Plano l.325",
+     "wSrc": "Plano: 0,5 de 10 no RA1"
+    },
+    {
+     "id": "as3",
+     "name": "RA1 · AS 03 (grupo)",
+     "max": 0.6,
+     "inMax": 1,
+     "date": "2026-09-09",
+     "dateSrc": "Plano l.331",
+     "wSrc": "Plano: 1,0 de 10 no RA1"
+    },
+    {
+     "id": "as4",
+     "name": "RA1 · AS 04 (grupo)",
+     "max": 0.6,
+     "inMax": 1,
+     "date": "2026-09-23",
+     "dateSrc": "Plano l.337",
+     "wSrc": "Plano: 1,0 de 10 no RA1"
+    },
+    {
+     "id": "as5",
+     "name": "RA1 · AS 05 (individual)",
+     "max": 4.2,
+     "inMax": 7,
+     "exam": true,
+     "date": "2026-09-28",
+     "dateSrc": "Plano l.343",
+     "wSrc": "Plano: 7,0 de 10 no RA1"
+    },
+    {
+     "id": "as6",
+     "name": "RA2 · AS 06 (grupo)",
+     "max": 0.6,
+     "inMax": 1.5,
+     "date": "2026-10-21",
+     "dateSrc": "Plano l.349",
+     "wSrc": "Plano: 1,5 de 10 no RA2"
+    },
+    {
+     "id": "as7",
+     "name": "RA2 · AS 07 (grupo)",
+     "max": 0.6,
+     "inMax": 1.5,
+     "date": "2026-11-11",
+     "dateSrc": "Canvas: 11/11 14:10; Plano l.355",
+     "wSrc": "Plano: 1,5 de 10 no RA2"
+    },
+    {
+     "id": "as8",
+     "name": "RA2 · AS 08 (individual)",
+     "max": 2.8,
+     "inMax": 7,
+     "exam": true,
+     "date": "2026-11-18",
+     "dateSrc": "Canvas: 18/11 14:10; Plano l.361",
+     "wSrc": "Plano: 7,0 de 10 no RA2"
+    }
+   ]
+  },
+  {
+   "id": "web",
+   "name": "Programação WEB",
+   "formula": "Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE",
+   "src": "PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376",
+   "items": [
+    {
+     "id": "p1",
+     "name": "Prova do RA1",
+     "max": 2.125,
+     "inMax": 10,
+     "exam": true,
+     "date": "2026-09-28",
+     "dateSrc": "Plano",
+     "wSrc": "85% de RA1 (25%)"
+    },
+    {
+     "id": "tde",
+     "name": "TDE (CRUD, conta nos 3 RAs)",
+     "max": 1.5,
+     "inMax": 10,
+     "date": "2026-11-06",
+     "dateSrc": "PDF do trabalho: 06/11 07:50",
+     "alt": "Plano l.368: 09/nov",
+     "unv": true,
+     "wSrc": "15% de cada RA"
+    },
+    {
+     "id": "p23",
+     "name": "Prova do RA2 e do RA3 (uma prova, conta nos dois)",
+     "max": 6.375,
+     "inMax": 10,
+     "exam": true,
+     "date": "2026-11-13",
+     "dateSrc": "Cronograma: 13/11",
+     "alt": "Plano l.358: 16/nov",
+     "unv": true,
+     "wSrc": "85% de RA2 (40%) + 85% de RA3 (35%) = 3,4 + 2,975"
+    }
+   ]
+  },
+  {
+   "id": "etica",
+   "name": "Ética",
+   "formula": "Final = 70% RA1 + 30% RA2; notas em pontos da final",
+   "src": "Plano de Ensino de Ética l.208 e l.261",
+   "items": [
+    {
+     "id": "ra1",
+     "name": "RA1 (prova e atividades)",
+     "max": 7,
+     "inMax": 7,
+     "exam": true,
+     "date": "2026-10-16",
+     "dateSrc": "Plano l.409: prova 16/10",
+     "wSrc": "Plano l.208: 70%"
+    },
+    {
+     "id": "ra2",
+     "name": "RA2 · TDE vídeo (TBL)",
+     "max": 3,
+     "inMax": 3,
+     "date": "2026-11-10",
+     "dateSrc": "Prof.: link 10/11, apresenta 13/11",
+     "unv": true,
+     "wSrc": "Plano l.261: 30%"
+    }
+   ]
+  },
+  {
+   "id": "cscf",
+   "name": "Conectividade em Sistemas Ciberfísicos",
+   "formula": "Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)",
+   "src": "Plano de Ensino de Conectividade l.288-306 e l.554",
+   "items": [
+    {
+     "id": "as1",
+     "name": "RA1 · Avaliação Somativa 1 (nota do RA1)",
+     "max": 5,
+     "inMax": 10,
+     "exam": true,
+     "date": "2026-09-21",
+     "dateSrc": "Data não confirmada no Plano",
+     "unv": true,
+     "wSrc": "Plano l.294: AS1 = 100% do RA1"
+    },
+    {
+     "id": "as2",
+     "name": "RA2 · Avaliação Somativa 2",
+     "max": 3,
+     "inMax": 10,
+     "exam": true,
+     "date": "2026-11-09",
+     "dateSrc": "Aviso em aula: 09/11 07:50",
+     "unv": true,
+     "wSrc": "Plano l.300: 60% do RA2"
+    },
+    {
+     "id": "pj",
+     "name": "RA2 · Projeto PjBL (MQTT)",
+     "max": 2,
+     "inMax": 10,
+     "date": "2026-11-09",
+     "dateSrc": "Canvas: 09/11 (hora a conferir)",
+     "unv": true,
+     "wSrc": "Plano l.306: 40% do RA2"
+    }
+   ]
+  }
+ ],
+ "canvas": {
+  "imp": {
+   "cid": 72009,
+   "match": "Programação Imperativa",
+   "items": {
+    "ex1": {
+     "avg": [
+      "TDE 1:",
+      "TDE 2:",
+      "PBL01",
+      "PBL02",
+      "PBL03",
+      "PBL04",
+      "PBL05"
+     ]
+    },
+    "p1": {
+     "one": "Prova do RA1"
+    },
+    "ex2": {
+     "avg": [
+      "PBL06",
+      "PBL07",
+      "PBL08",
+      "PBL09",
+      "PBL10"
+     ]
+    },
+    "t2": {
+     "one": "Trabalho do RA2"
+    },
+    "p2": {
+     "one": "Prova do RA2"
+    }
+   }
+  },
+  "abd": {
+   "cid": 71306,
+   "match": "Arquitetura de Banco de Dados",
+   "items": {
+    "pj1": {
+     "one": "PjBL - Parte 1"
+    },
+    "s1": {
+     "one": "Avaliação somativa RA1"
+    },
+    "pj2": {
+     "one": "PjBL - Parte 2"
+    },
+    "s2": {
+     "one": "Avaliação somativa RA2"
+    },
+    "pj3": {
+     "one": "Pjbl Parte 3"
+    },
+    "s3": {
+     "one": "Avaliação somativa RA3"
+    }
+   }
+  },
+  "rpnd": {
+   "cid": 72005,
+   "match": "Resolução de Problemas de Natureza Discreta",
+   "items": {
+    "as1": {
+     "one": "AS 01"
+    },
+    "as2": {
+     "one": "AS 02"
+    },
+    "as3": {
+     "one": "AS 03"
+    },
+    "as4": {
+     "one": "AS 04"
+    },
+    "as5": {
+     "one": "AS 05"
+    },
+    "as6": {
+     "one": "AS 06"
+    },
+    "as7": {
+     "one": "AS 07"
+    },
+    "as8": {
+     "one": "AS 08"
+    }
+   }
+  },
+  "web": {
+   "cid": 71310,
+   "match": "Programação WEB",
+   "items": {
+    "p1": {
+     "one": "Avaliação Somativa RA1 - GRUPO B e GRUPO A"
+    },
+    "tde": {
+     "one": "Entrega TDE"
+    }
+   }
+  },
+  "etica": {
+   "cid": 72006,
+   "match": "Ética",
+   "items": {
+    "ra1": {
+     "sum": [
+      "Aula 4 - TAREFA SOMATIVA",
+      "Aula 7 - TAREFA SOMATIVA",
+      "Avaliação somativa -  Prova"
+     ],
+     "factor": 0.23333333333333334
+    },
+    "ra2": {
+     "one": "TDE - TAREFA SOMATIVA - VÍDEO"
+    }
+   }
+  },
+  "cscf": {
+   "cid": 72011,
+   "match": "Conectividade em Sistemas Ciberfísicos",
+   "items": {
+    "as1": {
+     "one": "AS01 - NOTAS",
+     "pts": 10
+    },
+    "pj": {
+     "one": "Projeto CSCF"
+    }
+   }
+  }
+ },
+ "short": [
+  "Imperativa",
+  "Banco de Dados",
+  "RPND",
+  "WEB",
+  "Ética",
+  "Conectividade"
+ ],
+ "term": "2026 / 2",
+ "termEnd": "2027-01-31",
+ "turma": "Ciência da Computação, manhã",
+ "semesterKey": "2026-2",
+ "weightSum": [
+  10,
+  10,
+  10,
+  10,
+  10,
+  10
+ ],
+ "runs": {
+  "empty@2026-08-01@5": "caaabbc25292b628",
+  "empty@2026-08-01@7": "a182d7109bc074ae",
+  "empty@2026-08-01@10": "6ec18f3b204f2e3f",
+  "empty@2026-09-28@5": "75edebc658df9574",
+  "empty@2026-09-28@7": "d83c5b0c76944cc4",
+  "empty@2026-09-28@10": "d0238b6c7608cbf9",
+  "empty@2026-11-04@5": "b58926c4cb1d9f56",
+  "empty@2026-11-04@7": "27f38218ec5eb6cd",
+  "empty@2026-11-04@10": "3fdaf3951c3739ef",
+  "empty@2026-11-10@5": "51bbe35f2f159a56",
+  "empty@2026-11-10@7": "cf4a723a18772613",
+  "empty@2026-11-10@10": "a82fcd9eed27ba07",
+  "empty@2026-11-19@5": "0065c7ff946829a1",
+  "empty@2026-11-19@7": "c3158c59fca2b0fe",
+  "empty@2026-11-19@10": "8a0e804b09cbeb43",
+  "empty@2027-02-01@5": "c0cf3a19fe882089",
+  "empty@2027-02-01@7": "64ca3b9432651fa3",
+  "empty@2027-02-01@10": "560a697eec0e48b0",
+  "fix@2026-08-01@5": "9017c633aa5e300b",
+  "fix@2026-08-01@7": "0bf2fc6d3ab622b6",
+  "fix@2026-08-01@10": "b23f06f691b3f446",
+  "fix@2026-09-28@5": "3d4861594315aa9f",
+  "fix@2026-09-28@7": "1208df2e013682f4",
+  "fix@2026-09-28@10": "7d0a678a3e727ec0",
+  "fix@2026-11-04@5": "530674c54ba8ac95",
+  "fix@2026-11-04@7": "f4b5b51d8f43eb77",
+  "fix@2026-11-04@10": "69e5b369be8945d5",
+  "fix@2026-11-10@5": "9dc8fae4e025334c",
+  "fix@2026-11-10@7": "7d3cc820eef03173",
+  "fix@2026-11-10@10": "5e08748c1ae8229b",
+  "fix@2026-11-19@5": "bcbb96d815ea51a8",
+  "fix@2026-11-19@7": "1289a628f1de0fa1",
+  "fix@2026-11-19@10": "74a27fa30cee5ac5",
+  "fix@2027-02-01@5": "3652f549bb6e2150",
+  "fix@2027-02-01@7": "df66491a216b3fc5",
+  "fix@2027-02-01@10": "f4567a88712b4431",
+  "full@2026-08-01@5": "71b0dfd3df634178",
+  "full@2026-08-01@7": "71b0dfd3df634178",
+  "full@2026-08-01@10": "71b0dfd3df634178",
+  "full@2026-09-28@5": "71b0dfd3df634178",
+  "full@2026-09-28@7": "71b0dfd3df634178",
+  "full@2026-09-28@10": "71b0dfd3df634178",
+  "full@2026-11-04@5": "71b0dfd3df634178",
+  "full@2026-11-04@7": "71b0dfd3df634178",
+  "full@2026-11-04@10": "71b0dfd3df634178",
+  "full@2026-11-10@5": "71b0dfd3df634178",
+  "full@2026-11-10@7": "71b0dfd3df634178",
+  "full@2026-11-10@10": "71b0dfd3df634178",
+  "full@2026-11-19@5": "71b0dfd3df634178",
+  "full@2026-11-19@7": "71b0dfd3df634178",
+  "full@2026-11-19@10": "71b0dfd3df634178",
+  "full@2027-02-01@5": "71b0dfd3df634178",
+  "full@2027-02-01@7": "71b0dfd3df634178",
+  "full@2027-02-01@10": "71b0dfd3df634178",
+  "half@2026-08-01@5": "6213610473b6b9b0",
+  "half@2026-08-01@7": "7f03869d66f5d9fa",
+  "half@2026-08-01@10": "887811c88f395fa4",
+  "half@2026-09-28@5": "6213610473b6b9b0",
+  "half@2026-09-28@7": "7f03869d66f5d9fa",
+  "half@2026-09-28@10": "887811c88f395fa4",
+  "half@2026-11-04@5": "6213610473b6b9b0",
+  "half@2026-11-04@7": "7f03869d66f5d9fa",
+  "half@2026-11-04@10": "887811c88f395fa4",
+  "half@2026-11-10@5": "6213610473b6b9b0",
+  "half@2026-11-10@7": "7f03869d66f5d9fa",
+  "half@2026-11-10@10": "887811c88f395fa4",
+  "half@2026-11-19@5": "6213610473b6b9b0",
+  "half@2026-11-19@7": "7f03869d66f5d9fa",
+  "half@2026-11-19@10": "887811c88f395fa4",
+  "half@2027-02-01@5": "6213610473b6b9b0",
+  "half@2027-02-01@7": "7f03869d66f5d9fa",
+  "half@2027-02-01@10": "887811c88f395fa4",
+  "odd@2026-08-01@5": "7c706089668d8f5d",
+  "odd@2026-08-01@7": "85f7e7eff832c681",
+  "odd@2026-08-01@10": "b39feedf51f77f5f",
+  "odd@2026-09-28@5": "3e1687b312bde49d",
+  "odd@2026-09-28@7": "01f7352713baf43c",
+  "odd@2026-09-28@10": "b5b8d3e82c4cc0bb",
+  "odd@2026-11-04@5": "9d2b33f723a53bf6",
+  "odd@2026-11-04@7": "20e1dee9e8249d2f",
+  "odd@2026-11-04@10": "d298eefae3985428",
+  "odd@2026-11-10@5": "e6c0cb53dc7b7a7f",
+  "odd@2026-11-10@7": "57b18e1e9d5d7b7c",
+  "odd@2026-11-10@10": "ab08f1da2d441856",
+  "odd@2026-11-19@5": "4845bf803a977cf0",
+  "odd@2026-11-19@7": "9c8baef905469cc1",
+  "odd@2026-11-19@10": "aef8006e6d50a5ab",
+  "odd@2027-02-01@5": "29002333a2ae0d58",
+  "odd@2027-02-01@7": "6863d19a414d7e4f",
+  "odd@2027-02-01@10": "92dedca1eeb87262",
+  "comma@2026-08-01@5": "d927f1e5a80e1cd9",
+  "comma@2026-08-01@7": "797ce4bb0831ce95",
+  "comma@2026-08-01@10": "753e2ecb3857dc97",
+  "comma@2026-09-28@5": "fd2e78d32ffac0c0",
+  "comma@2026-09-28@7": "cf7771032e5b11dd",
+  "comma@2026-09-28@10": "cf282df22951c809",
+  "comma@2026-11-04@5": "69b623ac344669cc",
+  "comma@2026-11-04@7": "84a161ce16516f57",
+  "comma@2026-11-04@10": "4ba3efd2d86d4e1d",
+  "comma@2026-11-10@5": "d08efd714d13735c",
+  "comma@2026-11-10@7": "cd46ea769c055505",
+  "comma@2026-11-10@10": "a34940150905f568",
+  "comma@2026-11-19@5": "9c60916862e3349d",
+  "comma@2026-11-19@7": "e7e590a923c5f01b",
+  "comma@2026-11-19@10": "9f9136047149c441",
+  "comma@2027-02-01@5": "d77087788df24471",
+  "comma@2027-02-01@7": "9fbaadb5ed379fc4",
+  "comma@2027-02-01@10": "8c68ff07bf59571f"
+ },
+ "fromCanvas": {
+  "exp": {
+   "grades": {
+    "imp:ex1": "9",
+    "imp:p1": "6.5",
+    "abd:pj1": "0.75",
+    "abd:s2": "2.4",
+    "rpnd:as1": "0.4",
+    "rpnd:as5": "3.5",
+    "web:p1": "10",
+    "web:tde": "10"
+   },
+   "missing": [
+    {
+     "key": "imp:ex2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "imp:t2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "imp:p2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:s1",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj3",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "rpnd:as2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "rpnd:as3",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "rpnd:as4",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "rpnd:as6",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "rpnd:as7",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "rpnd:as8",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "etica:ra1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "etica:ra2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "cscf:pj",
+     "reason": "matéria não veio do Canvas"
+    }
+   ],
+   "notes": [
+    {
+     "key": "web:tde",
+     "reason": "nota acima do máximo no Canvas: usei a nota cheia"
+    }
+   ],
+   "pending": null,
+   "todo": null,
+   "dates": {},
+   "stats": null,
+   "news": null,
+   "ext": null,
+   "extOld": true
+  },
+  "cscf0": {
+   "grades": {
+    "cscf:as1": "7.5"
+   },
+   "missing": [
+    {
+     "key": "imp:ex1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:ex2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:t2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:pj1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "rpnd:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as4",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as5",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as6",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as7",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as8",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:tde",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "etica:ra1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "etica:ra2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "cscf:pj",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    }
+   ],
+   "notes": [],
+   "pending": null,
+   "todo": null,
+   "dates": {},
+   "stats": null,
+   "news": null,
+   "ext": null,
+   "extOld": true
+  },
+  "etica": {
+   "grades": {
+    "etica:ra1": "5.833"
+   },
+   "missing": [
+    {
+     "key": "imp:ex1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:ex2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:t2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:pj1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "rpnd:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as4",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as5",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as6",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as7",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as8",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:tde",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "etica:ra2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "cscf:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "cscf:pj",
+     "reason": "matéria não veio do Canvas"
+    }
+   ],
+   "notes": [],
+   "pending": null,
+   "todo": null,
+   "dates": {},
+   "stats": null,
+   "news": null,
+   "ext": null,
+   "extOld": true
+  },
+  "dup": {
+   "grades": {},
+   "missing": [
+    {
+     "key": "imp:ex1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:ex2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:t2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:pj1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "rpnd:as1",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "rpnd:as2",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "rpnd:as3",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "rpnd:as4",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "rpnd:as5",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "rpnd:as6",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "rpnd:as7",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "rpnd:as8",
+     "reason": "a matéria aparece em mais de uma turma no Canvas: lance à mão"
+    },
+    {
+     "key": "web:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:tde",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "etica:ra1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "etica:ra2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "cscf:pj",
+     "reason": "matéria não veio do Canvas"
+    }
+   ],
+   "notes": [],
+   "pending": null,
+   "todo": null,
+   "dates": {},
+   "stats": null,
+   "news": null,
+   "ext": null,
+   "extOld": true
+  },
+  "byIdOurs": {
+   "grades": {
+    "abd:pj1": "0.75"
+   },
+   "missing": [
+    {
+     "key": "imp:ex1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:ex2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:t2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s1",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:s2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj3",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "rpnd:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as4",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as5",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as6",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as7",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as8",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:tde",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "etica:ra1",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "etica:ra2",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "cscf:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "cscf:pj",
+     "reason": "matéria não veio do Canvas"
+    }
+   ],
+   "notes": [],
+   "pending": null,
+   "todo": null,
+   "dates": {},
+   "stats": null,
+   "news": null,
+   "ext": null,
+   "extOld": true
+  },
+  "byIdOther": {
+   "grades": {},
+   "missing": [
+    {
+     "key": "imp:ex1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:ex2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:t2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "imp:p2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:pj1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "rpnd:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as3",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as4",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as5",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as6",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as7",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "rpnd:as8",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:tde",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "etica:ra1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "etica:ra2",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as1",
+     "reason": "matéria não veio do Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "cscf:pj",
+     "reason": "matéria não veio do Canvas"
+    }
+   ],
+   "notes": [],
+   "pending": [
+    {
+     "course": null,
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega PjBL - Parte 1 03/09",
+     "due": "2026-10-01"
+    }
+   ],
+   "todo": null,
+   "dates": {},
+   "stats": null,
+   "news": [
+    {
+     "course": null,
+     "courseName": "x",
+     "title": "Oi",
+     "at": null,
+     "unread": false,
+     "url": null
+    }
+   ],
+   "ext": null,
+   "extOld": true
+  },
+  "real": {
+   "grades": {
+    "imp:p2": "10",
+    "abd:s1": "1.25",
+    "abd:pj3": "0.5",
+    "rpnd:as1": "0",
+    "rpnd:as2": "0.125",
+    "rpnd:as3": "0.5",
+    "rpnd:as6": "0",
+    "rpnd:as7": "1.125",
+    "rpnd:as8": "7",
+    "web:tde": "0",
+    "etica:ra1": "1.75",
+    "cscf:as1": "0",
+    "cscf:pj": "10"
+   },
+   "missing": [
+    {
+     "key": "imp:ex1",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "imp:p1",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "imp:ex2",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "imp:t2",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "abd:pj1",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:pj2",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "abd:s2",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "rpnd:as4",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "rpnd:as5",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "web:p1",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "etica:ra2",
+     "reason": "sem nota ainda no Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    }
+   ],
+   "notes": [],
+   "pending": [
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega atividade 13/08",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Formativa 2 - PACKET TRACER - INTRODUÇÃO (Grupo)",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Atividade Desafio - Protocolos da Camada de Aplicação",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "etica",
+     "courseName": "Ética",
+     "name": "Aula 3 TAREFA FORMATIVA - ENTREGA - O dilema do trem",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL01",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega atividade 07/08",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "rpnd",
+     "courseName": "Resolução de Problemas de Natureza Discreta",
+     "name": "AS 01",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega Pjbl Parte 3 - 18/11",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "7 - PACKET TRACER - ENDEREÇOS IP",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "POLIWEEK - Certificado",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "25 - SERVIÇO DE TRANSFERÊNCIA DE ARQUIVOS",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "ENTREGA CERTIFICADOS POLIWEEK",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "TDE 3 - Protocolos da Camada de Aplicação TCP/IP (4ha)",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Desafio 05 - Identificação de portas",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "etica",
+     "courseName": "Ética",
+     "name": "Avaliação somativa -  Prova",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "TDE 2: Boas práticas de codificação",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Avaliação Somativa RA1 - GRUPO A",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "rpnd",
+     "courseName": "Resolução de Problemas de Natureza Discreta",
+     "name": "Certificado da POLIWEEK 2026",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "18 - WAN - CAMADA DE APLICAÇÃO",
+     "due": "2026-11-18"
+    }
+   ],
+   "todo": [
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega Avaliação Formativa PARTE 2 ",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "5 - GERENCIAMENTO DE RECURSOS (individual)",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "20 - IoT SERVIDOR TCP MULTITHREAD",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL08",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega TDE",
+     "due": "2026-11-10"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega Proposta Pjbl - 13/08",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Atividade 29/10",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "3 - LOCAL AREA NETWORK (Individual)",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "6 - THREADS E PROCESSOS  (GRUPO)",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Atividade Desafio — Instalando e Testando um Broker MQTT Mosquitto",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "etica",
+     "courseName": "Ética",
+     "name": "Aula 4 - TAREFA FORMATIVA - A justiça em Aristóteles",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL02",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL09",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega atividade 14/08",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega atividade 21/08",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "rpnd",
+     "courseName": "Resolução de Problemas de Natureza Discreta",
+     "name": "AS 02",
+     "due": "2026-11-11"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega atividade 27/08",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "4 - PACKET TRACER - LAN (Grupo)",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "23 - IoT TCP CONSOLE INTERNA",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Desafio 01 – A Letra \"A\" pelas Camadas OSI!",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "etica",
+     "courseName": "Ética",
+     "name": "Aula 4 - TAREFA SOMATIVA ENTREGA - A justiça em Aristóteles",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "TDE 1: Motivação para o estudo da linguagem C",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega atividade 28/08",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "rpnd",
+     "courseName": "Resolução de Problemas de Natureza Discreta",
+     "name": "AS 03",
+     "due": "2026-11-12"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Atividade - 08/10 ",
+     "due": "2026-11-13"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "8 - WAN - ENDEREÇOS IP E CAMADA DE REDE - R2",
+     "due": "2026-11-13"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "24 - IoT TCP CONSOLE REMOTA",
+     "due": "2026-11-13"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL10",
+     "due": "2026-11-13"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Atividade - 16/09",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "14 - WAN - CAMADA DE TRANSPORTE E DETALHAMENTO TCP",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Desafio 03 – Rede local com HUB e SWITCH",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "etica",
+     "courseName": "Ética",
+     "name": "Aula 6 - TAREFA  FORMATIVA - Assistir o filme \"decisão de Risco\"",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL04",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega atividade 11/09",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "rpnd",
+     "courseName": "Resolução de Problemas de Natureza Discreta",
+     "name": "Recuperação Parcial RA 01",
+     "due": "2026-11-14"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Atividade - 24/09",
+     "due": "2026-11-15"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "TDE 2 - Atividade de Preparação para a Avaliação Somativa 01 - Resumo e folha de consulta (8ha)",
+     "due": "2026-11-15"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "26 - DETALHAMENTO FTP",
+     "due": "2026-11-15"
+    },
+    {
+     "course": "etica",
+     "courseName": "Ética",
+     "name": "Aula 7 - TAREFA SOMATIVA - O utilitarismo ",
+     "due": "2026-11-15"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL05",
+     "due": "2026-11-15"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega atividade 18/09 - Revisão",
+     "due": "2026-11-15"
+    },
+    {
+     "course": "rpnd",
+     "courseName": "Resolução de Problemas de Natureza Discreta",
+     "name": "AS 06",
+     "due": "2026-11-15"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega atividade - Avaliação formativa 03/09 - GABARITO",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "16 - SOCKETS TCP",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "27 - DETALHAMENTO DNS DHCP",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "Prova de Recuperação do RA2",
+     "due": "2026-11-16"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "17 - SOCKETS UDP",
+     "due": "2026-11-17"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Formativa 1 - MODELO EM CAMADAS",
+     "due": "2026-11-17"
+    },
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Atividade - 15/10",
+     "due": "2026-11-18"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "TDE 5 - Atividade de Preparação para a Avaliação Somativa 02 - Resumo e folha de consulta (4ha) ",
+     "due": "2026-11-18"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "Lista de Exercícios – Endereçamento IP, Máscara e CIDR",
+     "due": "2026-11-18"
+    },
+    {
+     "course": "imp",
+     "courseName": "Programação Imperativa",
+     "name": "PBL06",
+     "due": "2026-11-18"
+    },
+    {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Entrega atividade - REFAZER PROVA",
+     "due": "2026-11-18"
+    },
+    {
+     "course": "rpnd",
+     "courseName": "Resolução de Problemas de Natureza Discreta",
+     "name": "AS 07",
+     "due": "2026-11-18"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "19 - PACKET TRACER CAMADA DE APLICAÇÃO",
+     "due": "2026-11-19"
+    },
+    {
+     "course": "cscf",
+     "courseName": "Conectividade em Sistemas Ciberfísicos",
+     "name": "AS01 - NOTAS",
+     "due": "2026-11-19"
+    }
+   ],
+   "dates": {
+    "imp:p1": "2026-11-17",
+    "imp:t2": "2026-11-15",
+    "imp:p2": "2026-11-14",
+    "abd:pj1": "2026-11-13",
+    "abd:s1": "2026-11-14",
+    "abd:pj2": "2026-11-17",
+    "abd:s2": "2026-11-15",
+    "abd:pj3": "2026-11-12",
+    "rpnd:as1": "2026-11-10",
+    "rpnd:as2": "2026-11-11",
+    "rpnd:as3": "2026-11-12",
+    "rpnd:as4": "2026-11-13",
+    "rpnd:as5": "2026-11-17",
+    "rpnd:as6": "2026-11-15",
+    "rpnd:as7": "2026-11-18",
+    "rpnd:as8": "2026-11-19",
+    "web:p1": "2026-11-17",
+    "web:tde": "2026-11-10",
+    "etica:ra2": "2026-11-17",
+    "cscf:as1": "2026-11-19",
+    "cscf:pj": "2026-11-19"
+   },
+   "stats": {
+    "rpnd:as2": {
+     "mean": 0.25,
+     "min": 0,
+     "max": 0.5
+    },
+    "rpnd:as6": {
+     "mean": 0.75,
+     "min": 0,
+     "max": 1.5
+    },
+    "rpnd:as8": {
+     "mean": 3.5,
+     "min": 0,
+     "max": 7
+    },
+    "cscf:as1": {
+     "mean": 0,
+     "min": 0,
+     "max": 0
+    },
+    "cscf:pj": {
+     "mean": 5,
+     "min": 0,
+     "max": 10
+    }
+   },
+   "news": [
+    {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "title": "Aviso",
+     "at": "2026-11-03",
+     "unread": true,
+     "url": "https://pucpr.instructure.com/courses/1"
+    }
+   ],
+   "ext": "EXT_LATEST",
+   "extOld": false
+  },
+  "realNoIds": {
+   "grades": {
+    "imp:ex1": "10",
+    "imp:p1": "10",
+    "imp:ex2": "10",
+    "imp:t2": "10",
+    "imp:p2": "10",
+    "abd:pj1": "1",
+    "abd:s1": "1.25",
+    "abd:pj2": "2",
+    "abd:s2": "3",
+    "abd:pj3": "1",
+    "rpnd:as1": "0.5",
+    "rpnd:as2": "0.5",
+    "rpnd:as3": "1",
+    "rpnd:as4": "1",
+    "rpnd:as5": "7",
+    "rpnd:as6": "1.5",
+    "rpnd:as7": "1.5",
+    "rpnd:as8": "7",
+    "web:p1": "10",
+    "web:tde": "10",
+    "etica:ra1": "7",
+    "etica:ra2": "3",
+    "cscf:as1": "0",
+    "cscf:pj": "10"
+   },
+   "missing": [
+    {
+     "key": "abd:tde1",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:tde2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "abd:s3",
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
+    },
+    {
+     "key": "abd:tde3",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "web:p23",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    },
+    {
+     "key": "cscf:as2",
+     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+    }
+   ],
+   "notes": [],
+   "pending": null,
+   "todo": null,
+   "dates": {},
+   "stats": null,
+   "news": null,
+   "ext": null,
+   "extOld": true
+  }
+ },
+ "subjectOf": [
+  "etica",
+  null,
+  "etica",
+  "web",
+  "web"
+ ],
+ "backup": {
+  "app": "quanto-falta",
+  "v": 1,
+  "semester": "2026-2",
+  "meta": "6,5",
+  "grades": {
+   "imp:p1": "7,5",
+   "abd:pj1": "0.9",
+   "abd:s1": "1",
+   "abd:pj2": "2",
+   "abd:s2": "2.6",
+   "etica:ra1": "6.3",
+   "cscf:as1": "8"
+  }
+ },
+ "fromBackup": {
+  "grades": {
+   "imp:ex1": "5",
+   "imp:p1": "5",
+   "imp:ex2": "5",
+   "imp:t2": "5",
+   "imp:p2": "5",
+   "abd:pj1": "0.5",
+   "abd:s1": "0.625",
+   "abd:tde1": "0.125",
+   "abd:pj2": "1",
+   "abd:s2": "1.5",
+   "abd:tde2": "0.25",
+   "abd:pj3": "0.5",
+   "abd:s3": "0.625",
+   "abd:tde3": "0.125",
+   "rpnd:as1": "0.25",
+   "rpnd:as2": "0.25",
+   "rpnd:as3": "0.5",
+   "rpnd:as4": "0.5",
+   "rpnd:as5": "3.5",
+   "rpnd:as6": "0.75",
+   "rpnd:as7": "0.75",
+   "rpnd:as8": "3.5",
+   "web:tde": "5",
+   "web:p23": "5",
+   "etica:ra1": "3.5",
+   "etica:ra2": "1.5",
+   "cscf:as1": "5",
+   "cscf:as2": "5",
+   "cscf:pj": "5"
+  },
+  "missing": [
+   {
+    "key": "web:p1",
+    "reason": "nota em formato estranho, ignorada"
+   },
+   {
+    "key": "abd:xx",
+    "reason": "avaliação que não existe nesta calculadora"
+   }
+  ],
+  "notes": [],
+  "meta": null
+ },
+ "itemByKey": [
+  "RA3 · Somativa individual III",
+  "Prova do RA2 e do RA3 (uma prova, conta nos dois)",
+  null,
+  null
+ ]
+}

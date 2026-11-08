@@ -1,0 +1,109 @@
+{
+  "term": "2026 / 2",
+  "termEnd": "2027-01-31",
+  "turma": "Sistemas de Informação, noite (exemplo de teste)",
+  "subjects": [
+    {
+      "id": "sibd",
+      "name": "Banco de Dados I",
+      "short": "BD I",
+      "canvasIds": [
+        900001
+      ],
+      "formula": "Final = 40% RA1 + 60% RA2",
+      "src": "Plano de Ensino de exemplo, p.3",
+      "items": [
+        {
+          "id": "p1",
+          "name": "Prova do RA1",
+          "max": 4,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-09-20",
+          "dateSrc": "Plano p.4",
+          "wSrc": "Plano p.3: 40%"
+        },
+        {
+          "id": "t2",
+          "name": "Trabalho do RA2",
+          "max": 1.5,
+          "inMax": 10,
+          "date": "2026-11-05",
+          "dateSrc": "Canvas: 05/11",
+          "unv": true,
+          "wSrc": "Plano p.3: 20%"
+        },
+        {
+          "id": "p2",
+          "name": "Prova do RA2",
+          "max": 4,
+          "inMax": 10,
+          "exam": true,
+          "date": "2026-11-25",
+          "dateSrc": "Plano p.4",
+          "alt": "Aviso: 26/11",
+          "wSrc": "Plano p.3: 40%"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "p1": {
+            "one": "Prova RA1"
+          },
+          "t2": {
+            "avg": [
+              "Trabalho parte 1",
+              "Trabalho parte 2"
+            ]
+          },
+          "p2": {
+            "one": "Prova RA2",
+            "pts": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "siweb",
+      "name": "Desenvolvimento Web",
+      "short": "Web",
+      "canvasIds": [
+        900002,
+        900003
+      ],
+      "formula": "Final = soma das atividades",
+      "src": "Plano de Ensino de exemplo, p.5",
+      "items": [
+        {
+          "id": "a1",
+          "name": "Atividades",
+          "max": 3.5,
+          "inMax": 3.5,
+          "date": "2026-10-10",
+          "dateSrc": "Plano p.6",
+          "wSrc": "Plano p.5: 35%"
+        },
+        {
+          "id": "pf",
+          "name": "Projeto final",
+          "max": 6.5,
+          "inMax": 10,
+          "date": "2026-12-01",
+          "dateSrc": "Plano p.6",
+          "wSrc": "Plano p.5: 65%"
+        }
+      ],
+      "canvas": {
+        "items": {
+          "a1": {
+            "sum": [
+              "Atividade 1",
+              "Atividade 2"
+            ],
+            "factor": 0.175
+          }
+        }
+      }
+    }
+  ]
+}

@@ -589,58 +589,63 @@
 const NotasCore = (() => {
   const EPS = 1e-9;
   const r9 = x => Math.round(x * 1e9) / 1e9;
-  const P = c => "Plano de Ensino de " + c;
 
-  // Every item: max = points of the FINAL grade (course sum = 10); inMax = the scale the professor uses for that grade.
-  // date = the date used; dateSrc = where it came from; alt = a conflicting date; unv = date not verified.
-  const COURSES = [
-    { id:"imp", name:"Programação Imperativa", formula:"Pesos diretos na nota do semestre (10/30/10/10/40%)", src:P("Programação Imperativa") + " l.335-371",
-      items:[
-        { id:"ex1", name:"Exercícios do RA1 (TDE 1, TDE 2, PBL01–05)", max:1.0, inMax:10, date:"2026-09-13", dateSrc:"Plano: de 5/8 a 13/9", wSrc:"Plano l.341: 10%" },
-        { id:"p1", name:"Prova do RA1", max:3.0, inMax:10, exam:true, date:"2026-09-16", dateSrc:"Plano", wSrc:"Plano l.359: 30%" },
-        { id:"ex2", name:"Exercícios do RA2 (PBL06–10)", max:1.0, inMax:10, date:"2026-10-28", dateSrc:"Plano: de 23/9 a 28/10", alt:"Canvas: PBL10 até 03/11", unv:true, wSrc:"Plano l.360: 10%" },
-        { id:"t2", name:"Trabalho do RA2 (equipe)", max:1.0, inMax:10, date:"2026-11-17", dateSrc:"Canvas: 17/11 23:59", alt:"Plano l.349: 18/11", wSrc:"Plano l.361: 10%" },
-        { id:"p2", name:"Prova do RA2", max:4.0, inMax:10, exam:true, date:"2026-11-11", dateSrc:"Canvas: 11/11 14:10; Plano l.365", wSrc:"Plano l.371: 40%" } ] },
-    { id:"abd", name:"Arquitetura de Banco de Dados",
-      formula:"Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; PjBL II na escala do Canvas (0–2).",
-      src:P("Arquitetura de Banco de Dados") + " l.365-446",
-      items:[
-        { id:"pj1", name:"RA1 · PjBL Parte I", max:1.0, inMax:1.0, date:"2026-09-03", dateSrc:"Plano", wSrc:"Plano: 40% de RA1 (25%) = 1,0 pt" },
-        { id:"s1", name:"RA1 · Somativa individual I", max:1.25, inMax:1.25, exam:true, date:"2026-09-10", dateSrc:"Plano", wSrc:"Plano: 50% de RA1 = 1,25 pt" },
-        { id:"tde1", name:"RA1 · TDE", max:0.25, inMax:0.25, date:"2026-11-12", dateSrc:"Plano l.436: TDE 12/11", unv:true, wSrc:"Plano: 10% de RA1 = 0,25 pt" },
-        { id:"pj2", name:"RA2 · PjBL Parte II", max:1.5, inMax:2.0, date:"2026-10-15", dateSrc:"Plano", wSrc:"Tabela do prof.: 30% de RA2 (50%) = 1,5 pt (Canvas lança de 0 a 2)" },
-        { id:"s2", name:"RA2 · Somativa individual II", max:3.0, inMax:3.0, exam:true, date:"2026-10-22", dateSrc:"Plano l.396", wSrc:"Tabela do prof.: 60% de RA2 (50%) = 3,0 pt" },
-        { id:"tde2", name:"RA2 · TDE", max:0.5, inMax:0.5, date:"2026-11-12", dateSrc:"Tabela do prof.: TDE 12/11", unv:true, wSrc:"Tabela do prof.: 10% de RA2 = 0,5 pt" },
-        { id:"pj3", name:"RA3 · PjBL Parte III (entrega final)", max:1.0, inMax:1.0, date:"2026-11-18", dateSrc:"Canvas: 18/11 10:40", alt:"Plano l.426: 19/11", wSrc:"Plano: 40% de RA3 (25%) = 1,0 pt" },
-        { id:"s3", name:"RA3 · Somativa individual III", max:1.25, inMax:1.25, exam:true, date:"2026-11-19", dateSrc:"Plano l.416", wSrc:"Plano: 50% de RA3 = 1,25 pt" },
-        { id:"tde3", name:"RA3 · TDE", max:0.25, inMax:0.25, date:"2026-11-12", dateSrc:"Plano l.436: TDE 12/11", unv:true, wSrc:"Plano: 10% de RA3 = 0,25 pt" } ] },
-    { id:"rpnd", name:"Resolução de Problemas de Natureza Discreta", formula:"Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)",
-      src:P("RPND") + " l.315-374",
-      items:[
-        { id:"as1", name:"RA1 · AS 01 (grupo)", max:0.3, inMax:0.5, date:"2026-08-17", dateSrc:"Plano l.319", wSrc:"Plano: 0,5 de 10 no RA1" },
-        { id:"as2", name:"RA1 · AS 02 (grupo)", max:0.3, inMax:0.5, date:"2026-08-26", dateSrc:"Plano l.325", wSrc:"Plano: 0,5 de 10 no RA1" },
-        { id:"as3", name:"RA1 · AS 03 (grupo)", max:0.6, inMax:1.0, date:"2026-09-09", dateSrc:"Plano l.331", wSrc:"Plano: 1,0 de 10 no RA1" },
-        { id:"as4", name:"RA1 · AS 04 (grupo)", max:0.6, inMax:1.0, date:"2026-09-23", dateSrc:"Plano l.337", wSrc:"Plano: 1,0 de 10 no RA1" },
-        { id:"as5", name:"RA1 · AS 05 (individual)", max:4.2, inMax:7.0, exam:true, date:"2026-09-28", dateSrc:"Plano l.343", wSrc:"Plano: 7,0 de 10 no RA1" },
-        { id:"as6", name:"RA2 · AS 06 (grupo)", max:0.6, inMax:1.5, date:"2026-10-21", dateSrc:"Plano l.349", wSrc:"Plano: 1,5 de 10 no RA2" },
-        { id:"as7", name:"RA2 · AS 07 (grupo)", max:0.6, inMax:1.5, date:"2026-11-11", dateSrc:"Canvas: 11/11 14:10; Plano l.355", wSrc:"Plano: 1,5 de 10 no RA2" },
-        { id:"as8", name:"RA2 · AS 08 (individual)", max:2.8, inMax:7.0, exam:true, date:"2026-11-18", dateSrc:"Canvas: 18/11 14:10; Plano l.361", wSrc:"Plano: 7,0 de 10 no RA2" } ] },
-    { id:"web", name:"Programação WEB", formula:"Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE",
-      src:"PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376",
-      items:[
-        { id:"p1", name:"Prova do RA1", max:2.125, inMax:10, exam:true, date:"2026-09-28", dateSrc:"Plano", wSrc:"85% de RA1 (25%)" },
-        { id:"tde", name:"TDE (CRUD, conta nos 3 RAs)", max:1.5, inMax:10, date:"2026-11-06", dateSrc:"PDF do trabalho: 06/11 07:50", alt:"Plano l.368: 09/nov", unv:true, wSrc:"15% de cada RA" },
-        { id:"p23", name:"Prova do RA2 e do RA3 (uma prova, conta nos dois)", max:6.375, inMax:10, exam:true, date:"2026-11-13", dateSrc:"Cronograma: 13/11", alt:"Plano l.358: 16/nov", unv:true, wSrc:"85% de RA2 (40%) + 85% de RA3 (35%) = 3,4 + 2,975" } ] },
-    { id:"etica", name:"Ética", formula:"Final = 70% RA1 + 30% RA2; notas em pontos da final", src:P("Ética") + " l.208 e l.261",
-      items:[
-        { id:"ra1", name:"RA1 (prova e atividades)", max:7.0, inMax:7.0, exam:true, date:"2026-10-16", dateSrc:"Plano l.409: prova 16/10", wSrc:"Plano l.208: 70%" },
-        { id:"ra2", name:"RA2 · TDE vídeo (TBL)", max:3.0, inMax:3.0, date:"2026-11-10", dateSrc:"Prof.: link 10/11, apresenta 13/11", unv:true, wSrc:"Plano l.261: 30%" } ] },
-    { id:"cscf", name:"Conectividade em Sistemas Ciberfísicos", formula:"Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)", src:P("Conectividade") + " l.288-306 e l.554",
-      items:[
-        { id:"as1", name:"RA1 · Avaliação Somativa 1 (nota do RA1)", max:5.0, inMax:10, exam:true, date:"2026-09-21", dateSrc:"Data não confirmada no Plano", unv:true, wSrc:"Plano l.294: AS1 = 100% do RA1" },
-        { id:"as2", name:"RA2 · Avaliação Somativa 2", max:3.0, inMax:10, exam:true, date:"2026-11-09", dateSrc:"Aviso em aula: 09/11 07:50", unv:true, wSrc:"Plano l.300: 60% do RA2" },
-        { id:"pj", name:"RA2 · Projeto PjBL (MQTT)", max:2.0, inMax:10, date:"2026-11-09", dateSrc:"Canvas: 09/11 (hora a conferir)", unv:true, wSrc:"Plano l.306: 40% do RA2" } ] }
-  ];
+  // The rules come from rule packs, one per turma: rules/<term>/<turma>.json (format in rules/schema.json, checked by
+  // scripts/check-rules), embedded below by scripts/sync-rules so nothing is fetched at runtime. Every item: max = points of
+  // the FINAL grade (course sum = 10); inMax = the scale the professor uses for that grade; date = the date used; dateSrc =
+  // where it came from; alt = a conflicting date; unv = date not verified. Subject ids are unique across the term's packs.
+  const PACKS = /*RULES*/[
+    { term:"2026 / 2", termEnd:"2027-01-31", turma:"Ciência da Computação, manhã", subjects:[
+      { id:"imp", name:"Programação Imperativa", short:"Imperativa", canvasIds:[72009], formula:"Pesos diretos na nota do semestre (10/30/10/10/40%)", src:"Plano de Ensino de Programação Imperativa l.335-371",
+        canvas:{"items":{"ex1":{"avg":["TDE 1:","TDE 2:","PBL01","PBL02","PBL03","PBL04","PBL05"]},"p1":{"one":"Prova do RA1"},"ex2":{"avg":["PBL06","PBL07","PBL08","PBL09","PBL10"]},"t2":{"one":"Trabalho do RA2"},"p2":{"one":"Prova do RA2"}}},
+        items:[
+          {"id":"ex1","name":"Exercícios do RA1 (TDE 1, TDE 2, PBL01–05)","max":1,"inMax":10,"date":"2026-09-13","dateSrc":"Plano: de 5/8 a 13/9","wSrc":"Plano l.341: 10%"},
+          {"id":"p1","name":"Prova do RA1","max":3,"inMax":10,"exam":true,"date":"2026-09-16","dateSrc":"Plano","wSrc":"Plano l.359: 30%"},
+          {"id":"ex2","name":"Exercícios do RA2 (PBL06–10)","max":1,"inMax":10,"date":"2026-10-28","dateSrc":"Plano: de 23/9 a 28/10","alt":"Canvas: PBL10 até 03/11","unv":true,"wSrc":"Plano l.360: 10%"},
+          {"id":"t2","name":"Trabalho do RA2 (equipe)","max":1,"inMax":10,"date":"2026-11-17","dateSrc":"Canvas: 17/11 23:59","alt":"Plano l.349: 18/11","wSrc":"Plano l.361: 10%"},
+          {"id":"p2","name":"Prova do RA2","max":4,"inMax":10,"exam":true,"date":"2026-11-11","dateSrc":"Canvas: 11/11 14:10; Plano l.365","wSrc":"Plano l.371: 40%"} ] },
+      { id:"abd", name:"Arquitetura de Banco de Dados", short:"Banco de Dados", canvasIds:[71306], formula:"Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; PjBL II na escala do Canvas (0–2).", src:"Plano de Ensino de Arquitetura de Banco de Dados l.365-446",
+        canvas:{"items":{"pj1":{"one":"PjBL - Parte 1"},"s1":{"one":"Avaliação somativa RA1"},"pj2":{"one":"PjBL - Parte 2"},"s2":{"one":"Avaliação somativa RA2"},"pj3":{"one":"Pjbl Parte 3"},"s3":{"one":"Avaliação somativa RA3"}}},
+        items:[
+          {"id":"pj1","name":"RA1 · PjBL Parte I","max":1,"inMax":1,"date":"2026-09-03","dateSrc":"Plano","wSrc":"Plano: 40% de RA1 (25%) = 1,0 pt"},
+          {"id":"s1","name":"RA1 · Somativa individual I","max":1.25,"inMax":1.25,"exam":true,"date":"2026-09-10","dateSrc":"Plano","wSrc":"Plano: 50% de RA1 = 1,25 pt"},
+          {"id":"tde1","name":"RA1 · TDE","max":0.25,"inMax":0.25,"date":"2026-11-12","dateSrc":"Plano l.436: TDE 12/11","unv":true,"wSrc":"Plano: 10% de RA1 = 0,25 pt"},
+          {"id":"pj2","name":"RA2 · PjBL Parte II","max":1.5,"inMax":2,"date":"2026-10-15","dateSrc":"Plano","wSrc":"Tabela do prof.: 30% de RA2 (50%) = 1,5 pt (Canvas lança de 0 a 2)"},
+          {"id":"s2","name":"RA2 · Somativa individual II","max":3,"inMax":3,"exam":true,"date":"2026-10-22","dateSrc":"Plano l.396","wSrc":"Tabela do prof.: 60% de RA2 (50%) = 3,0 pt"},
+          {"id":"tde2","name":"RA2 · TDE","max":0.5,"inMax":0.5,"date":"2026-11-12","dateSrc":"Tabela do prof.: TDE 12/11","unv":true,"wSrc":"Tabela do prof.: 10% de RA2 = 0,5 pt"},
+          {"id":"pj3","name":"RA3 · PjBL Parte III (entrega final)","max":1,"inMax":1,"date":"2026-11-18","dateSrc":"Canvas: 18/11 10:40","alt":"Plano l.426: 19/11","wSrc":"Plano: 40% de RA3 (25%) = 1,0 pt"},
+          {"id":"s3","name":"RA3 · Somativa individual III","max":1.25,"inMax":1.25,"exam":true,"date":"2026-11-19","dateSrc":"Plano l.416","wSrc":"Plano: 50% de RA3 = 1,25 pt"},
+          {"id":"tde3","name":"RA3 · TDE","max":0.25,"inMax":0.25,"date":"2026-11-12","dateSrc":"Plano l.436: TDE 12/11","unv":true,"wSrc":"Plano: 10% de RA3 = 0,25 pt"} ] },
+      { id:"rpnd", name:"Resolução de Problemas de Natureza Discreta", short:"RPND", canvasIds:[72005], formula:"Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)", src:"Plano de Ensino de RPND l.315-374",
+        canvas:{"items":{"as1":{"one":"AS 01"},"as2":{"one":"AS 02"},"as3":{"one":"AS 03"},"as4":{"one":"AS 04"},"as5":{"one":"AS 05"},"as6":{"one":"AS 06"},"as7":{"one":"AS 07"},"as8":{"one":"AS 08"}}},
+        items:[
+          {"id":"as1","name":"RA1 · AS 01 (grupo)","max":0.3,"inMax":0.5,"date":"2026-08-17","dateSrc":"Plano l.319","wSrc":"Plano: 0,5 de 10 no RA1"},
+          {"id":"as2","name":"RA1 · AS 02 (grupo)","max":0.3,"inMax":0.5,"date":"2026-08-26","dateSrc":"Plano l.325","wSrc":"Plano: 0,5 de 10 no RA1"},
+          {"id":"as3","name":"RA1 · AS 03 (grupo)","max":0.6,"inMax":1,"date":"2026-09-09","dateSrc":"Plano l.331","wSrc":"Plano: 1,0 de 10 no RA1"},
+          {"id":"as4","name":"RA1 · AS 04 (grupo)","max":0.6,"inMax":1,"date":"2026-09-23","dateSrc":"Plano l.337","wSrc":"Plano: 1,0 de 10 no RA1"},
+          {"id":"as5","name":"RA1 · AS 05 (individual)","max":4.2,"inMax":7,"exam":true,"date":"2026-09-28","dateSrc":"Plano l.343","wSrc":"Plano: 7,0 de 10 no RA1"},
+          {"id":"as6","name":"RA2 · AS 06 (grupo)","max":0.6,"inMax":1.5,"date":"2026-10-21","dateSrc":"Plano l.349","wSrc":"Plano: 1,5 de 10 no RA2"},
+          {"id":"as7","name":"RA2 · AS 07 (grupo)","max":0.6,"inMax":1.5,"date":"2026-11-11","dateSrc":"Canvas: 11/11 14:10; Plano l.355","wSrc":"Plano: 1,5 de 10 no RA2"},
+          {"id":"as8","name":"RA2 · AS 08 (individual)","max":2.8,"inMax":7,"exam":true,"date":"2026-11-18","dateSrc":"Canvas: 18/11 14:10; Plano l.361","wSrc":"Plano: 7,0 de 10 no RA2"} ] },
+      { id:"web", name:"Programação WEB", short:"WEB", canvasIds:[71310], formula:"Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE", src:"PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376",
+        canvas:{"items":{"p1":{"one":"Avaliação Somativa RA1 - GRUPO B e GRUPO A"},"tde":{"one":"Entrega TDE"}}},
+        items:[
+          {"id":"p1","name":"Prova do RA1","max":2.125,"inMax":10,"exam":true,"date":"2026-09-28","dateSrc":"Plano","wSrc":"85% de RA1 (25%)"},
+          {"id":"tde","name":"TDE (CRUD, conta nos 3 RAs)","max":1.5,"inMax":10,"date":"2026-11-06","dateSrc":"PDF do trabalho: 06/11 07:50","alt":"Plano l.368: 09/nov","unv":true,"wSrc":"15% de cada RA"},
+          {"id":"p23","name":"Prova do RA2 e do RA3 (uma prova, conta nos dois)","max":6.375,"inMax":10,"exam":true,"date":"2026-11-13","dateSrc":"Cronograma: 13/11","alt":"Plano l.358: 16/nov","unv":true,"wSrc":"85% de RA2 (40%) + 85% de RA3 (35%) = 3,4 + 2,975"} ] },
+      { id:"etica", name:"Ética", short:"Ética", canvasIds:[72006], formula:"Final = 70% RA1 + 30% RA2; notas em pontos da final", src:"Plano de Ensino de Ética l.208 e l.261",
+        canvas:{"items":{"ra1":{"sum":["Aula 4 - TAREFA SOMATIVA","Aula 7 - TAREFA SOMATIVA","Avaliação somativa -  Prova"],"factor":0.23333333333333334},"ra2":{"one":"TDE - TAREFA SOMATIVA - VÍDEO"}}},
+        items:[
+          {"id":"ra1","name":"RA1 (prova e atividades)","max":7,"inMax":7,"exam":true,"date":"2026-10-16","dateSrc":"Plano l.409: prova 16/10","wSrc":"Plano l.208: 70%"},
+          {"id":"ra2","name":"RA2 · TDE vídeo (TBL)","max":3,"inMax":3,"date":"2026-11-10","dateSrc":"Prof.: link 10/11, apresenta 13/11","unv":true,"wSrc":"Plano l.261: 30%"} ] },
+      { id:"cscf", name:"Conectividade em Sistemas Ciberfísicos", short:"Conectividade", canvasIds:[72011], formula:"Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)", src:"Plano de Ensino de Conectividade l.288-306 e l.554",
+        canvas:{"items":{"as1":{"one":"AS01 - NOTAS","pts":10},"pj":{"one":"Projeto CSCF"}}},
+        items:[
+          {"id":"as1","name":"RA1 · Avaliação Somativa 1 (nota do RA1)","max":5,"inMax":10,"exam":true,"date":"2026-09-21","dateSrc":"Data não confirmada no Plano","unv":true,"wSrc":"Plano l.294: AS1 = 100% do RA1"},
+          {"id":"as2","name":"RA2 · Avaliação Somativa 2","max":3,"inMax":10,"exam":true,"date":"2026-11-09","dateSrc":"Aviso em aula: 09/11 07:50","unv":true,"wSrc":"Plano l.300: 60% do RA2"},
+          {"id":"pj","name":"RA2 · Projeto PjBL (MQTT)","max":2,"inMax":10,"date":"2026-11-09","dateSrc":"Canvas: 09/11 (hora a conferir)","unv":true,"wSrc":"Plano l.306: 40% do RA2"} ] } ] } ]/*RULES*/;
+  const COURSES = [], PACK_OF = {};
+  for (const p of PACKS) for (const s of p.subjects) { COURSES.push({ id:s.id, name:s.name, formula:s.formula, src:s.src, items:s.items }); PACK_OF[s.id] = p; }
 
   // Public build: everyone starts empty; grades live only in each visitor's browser.
   const SEED = {};
@@ -714,34 +719,30 @@ const NotasCore = (() => {
     return g;
   }
 
-  // The rules are for one turma: Ciência da Computação, manhã, 2026/2. cid = its Canvas course id; other turmas (same course
-  // names, other ids) get no grades from these rules. TERM is how Canvas names the semester; after TERM_END the rules are old.
-  const TERM = "2026 / 2", TERM_END = "2027-01-31", TURMA = "Ciência da Computação, manhã";
+  // A turma is recognised by its Canvas course ids (canvasIds); other turmas (same course names, other ids) get no grades
+  // from its rules. TERM is how Canvas names the semester (one term per build); after TERM_END the rules are old.
+  const TERM = PACKS[0].term, TERM_END = PACKS[0].termEnd, TURMA = PACKS.map(p => p.turma).join(" / ");
+  const turmaOf = c => PACK_OF[c.id] ? PACK_OF[c.id].turma : null;
   const expired = today => today > TERM_END;
   const EXPIRED_NOTE = "As regras de " + TERM.replace(/ /g, "") + " acabaram. Atualize o Campus+ quando sair a versão do próximo semestre.";
   // The calculator inside the extension (cpExt = window.CP_EXT): after the term, the notice and no automatic import of the
   // Canvas reading. Site copy (no cpExt): unchanged.
   const extBoot = (cpExt, today) => ({ notice: cpExt && expired(today) ? EXPIRED_NOTE : null, autoImport: !!(cpExt && cpExt.data) && !expired(today) });
-  // Canvas assignment names per item (canvas/mapping.json, read from one 2026/2 turma on 2026-11-04).
+  // Canvas assignment names per item, from each pack's canvas.items; cids = the subject's Canvas course ids (cid: the first).
   // one: one assignment; avg: mean of score/points over all parts; sum: (each part on 0-10) summed times factor, already in the item's scale; pts: scale to use when Canvas lists 0 points; missing ids are typed by hand.
-  const CANVAS = {
-    imp:   { cid:72009, match:"Programação Imperativa", items:{ ex1:{ avg:["TDE 1:", "TDE 2:", "PBL01", "PBL02", "PBL03", "PBL04", "PBL05"] }, p1:{ one:"Prova do RA1" },
-             ex2:{ avg:["PBL06", "PBL07", "PBL08", "PBL09", "PBL10"] }, t2:{ one:"Trabalho do RA2" }, p2:{ one:"Prova do RA2" } } },
-    abd:   { cid:71306, match:"Arquitetura de Banco de Dados", items:{ pj1:{ one:"PjBL - Parte 1" }, s1:{ one:"Avaliação somativa RA1" }, pj2:{ one:"PjBL - Parte 2" },
-             s2:{ one:"Avaliação somativa RA2" }, pj3:{ one:"Pjbl Parte 3" }, s3:{ one:"Avaliação somativa RA3" } } },
-    rpnd:  { cid:72005, match:"Resolução de Problemas de Natureza Discreta", items:{ as1:{ one:"AS 01" }, as2:{ one:"AS 02" }, as3:{ one:"AS 03" }, as4:{ one:"AS 04" },
-             as5:{ one:"AS 05" }, as6:{ one:"AS 06" }, as7:{ one:"AS 07" }, as8:{ one:"AS 08" } } },
-    web:   { cid:71310, match:"Programação WEB", items:{ p1:{ one:"Avaliação Somativa RA1 - GRUPO B e GRUPO A" }, tde:{ one:"Entrega TDE" } } },
-    etica: { cid:72006, match:"Ética", items:{ ra1:{ sum:["Aula 4 - TAREFA SOMATIVA", "Aula 7 - TAREFA SOMATIVA", "Avaliação somativa -  Prova"], factor:7 / 30 },
-             ra2:{ one:"TDE - TAREFA SOMATIVA - VÍDEO" } } },
-    cscf:  { cid:72011, match:"Conectividade em Sistemas Ciberfísicos", items:{ as1:{ one:"AS01 - NOTAS", pts:10 }, pj:{ one:"Projeto CSCF" } } }
-  };
+  const CANVAS = {};
+  for (const p of PACKS) for (const s of p.subjects) CANVAS[s.id] = { cid:s.canvasIds[0], cids:s.canvasIds, match:s.name, items:(s.canvas || {}).items || {} };
   const str = x => typeof x === "string" ? x : null;
   const num = x => typeof x === "number" && Number.isFinite(x) ? x : null;
   const cidOf = x => typeof x === "number" && Number.isInteger(x) && x > 0 ? x : typeof x === "string" && /^\d{1,15}$/.test(x) ? Number(x) : null;
   // The subject of one Canvas course ({ id, name }): by course id when the data has ids; by name prefix only for data without
   // ids (old backups, older exports).
-  const subjectOf = (cv, byId) => COURSES.find(c => CANVAS[c.id] && (byId ? cidOf(cv.id) === CANVAS[c.id].cid : typeof cv.name === "string" && cv.name.startsWith(CANVAS[c.id].match))) || null;
+  // A name shared by subjects of two turmas pairs to none (no guessing).
+  function subjectOf(cv, byId) {
+    if (byId) return COURSES.find(c => CANVAS[c.id].cids.includes(cidOf(cv.id))) || null;
+    const hits = typeof cv.name === "string" ? COURSES.filter(c => cv.name.startsWith(CANVAS[c.id].match)) : [];
+    return hits.length === 1 ? hits[0] : null;
+  }
   // Extension export -> { grades: {"course:item": "x"}, missing: [{key, reason}], notes: [{key, reason}] }. Never evaluates input.
   function fromCanvas(input) {
     let data = input;
@@ -773,7 +774,9 @@ const NotasCore = (() => {
     const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {}, stats = {};
     const knownStats = Array.isArray(data.courses) && data.courses.some(c => c && Array.isArray(c.assignments) && c.assignments.some(a => a && "stats" in a));
     const grades = {}, missing = [], notes = [];
+    const turmas = new Set(courses.map(cv => subjectOf(cv, byId)).filter(Boolean).map(c => PACK_OF[c.id]));   // the reading's turmas
     for (const c of COURSES) {
+      if (turmas.size && !turmas.has(PACK_OF[c.id])) continue;   // another turma's subject: not this student's
       const map = CANVAS[c.id], cvs = map ? courses.filter(x => subjectOf(x, byId) === c) : [], cv = cvs.length === 1 ? cvs[0] : null;
       for (const it of c.items) {
         const k = key(c, it), rule = map && map.items[it.id];
@@ -809,12 +812,12 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "1.0.1";
+  const EXT_LATEST = "1.0.2";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
   // Backup file (#7): the student's own grades as JSON, to move between browsers. Only known items, text values.
-  const SEMESTER = "2026-2";
+  const SEMESTER = TERM.replace(" / ", "-");
   const itemByKey = k => { const p = String(k).split(":"); if (p.length !== 2) return null; const [cid, iid] = p; const c = COURSES.find(x => x.id === cid); return c && c.items.find(i => i.id === iid) || null; };
   function toBackup(grades, meta) {
     const out = {};
@@ -840,7 +843,7 @@ const NotasCore = (() => {
   // localStorage key of the calculator: per Canvas user inside the extension (a shared computer keeps each student's grades
   // apart); the first user to open it adopts grades saved before the key had a user, and the old key is never written there
   // again. Inside the extension without a user (no Canvas reading): a key of its own that nobody adopts. Site copy: the old key.
-  const STORE = "notas-pucpr-2026-2";
+  const STORE = "notas-pucpr-" + SEMESTER;
   function storageKey(ls, user, inExt) {
     const u = user != null && /^\d{1,20}$/.test(String(user)) ? String(user) : null;
     if (!u) return inExt ? STORE + ":nouser" : STORE;
@@ -850,7 +853,30 @@ const NotasCore = (() => {
   }
   // "garantido" is a reading of the grades, not an official result.
   const GARANTIDO_TIP = "Garantido pelas notas lançadas; não considera frequência nem recuperação";
-  const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
+  const SHORT = Object.fromEntries(PACKS.flatMap(p => p.subjects.map(s => [s.id, s.short])));
+  // The subjects the calculator shows: the whole turma(s) of the Canvas courses in the reading; every subject when the
+  // reading matches no turma (or there is none), as with a single turma.
+  function coursesFor(data) {
+    const cs = data && Array.isArray(data.courses) ? data.courses.filter(c => c && typeof c === "object") : [];
+    const turmas = new Set(cs.map(c => subjectOf({ id:c.id }, true)).filter(Boolean).map(c => PACK_OF[c.id]));
+    return turmas.size ? COURSES.filter(c => turmas.has(PACK_OF[c.id])) : COURSES;
+  }
+  // Draft of a rule pack for a turma without rules, from the Canvas reading: per course of the term not paired to any turma,
+  // its Canvas id and name, and per assignment its name, points, due date and assignment group (name, weight). Built from a
+  // whitelist: no score, submission, statistics, announcement or user id ever goes in. The student pastes it in an issue.
+  function draftPack(data) {
+    const cs = data && Array.isArray(data.courses) ? data.courses.filter(c => c && str(c.name) !== null && Array.isArray(c.assignments) && !subjectOf({ id:c.id }, true)) : [];
+    return { _rascunho:"Rascunho do Campus+: só nomes, pontos e datas das avaliações do Canvas, nenhuma nota. Complete com o Plano de Ensino (pesos em items, max somando 10) e apague os campos _rascunho, assignments, canvasName e groupWeights.",
+      term:TERM, termEnd:"AAAA-MM-DD (último dia do semestre)", turma:"PREENCHA: curso, turno",
+      subjects:cs.map(c => {
+        const groups = Array.isArray(c.groups) ? c.groups.filter(g => g && typeof g === "object") : [], g = id => groups.find(x => x.id === id) || null;
+        return { id:"", name:c.name.split(" (")[0].split(" - ")[0], short:"", canvasIds:cidOf(c.id) ? [cidOf(c.id)] : [], canvasName:c.name, groupWeights:c.groupWeights === true,
+          formula:"PREENCHA: a fórmula da nota final do Plano de Ensino", src:"PREENCHA: Plano de Ensino (página ou linha)", items:[], canvas:{ items:{} },
+          assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points),
+            due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)),
+            group:g(a.group) && str(g(a.group).name), groupWeight:g(a.group) ? num(g(a.group).weight) : null })) };
+      }) };
+  }
   // Shared by the calculator page and the panels inside Canvas (extension/content.js), so both show the same numbers.
   const fractionTone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
   const statusTone = st => st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : fractionTone(st.fraction);
@@ -883,7 +909,7 @@ const NotasCore = (() => {
     items.sort((a, b) => a.item.date.localeCompare(b.item.date));
     return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok").length, late: items.filter(x => x.s === "late").length };
   }
-  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, turmaOf, coursesFor, draftPack, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();
 </script>
@@ -894,6 +920,8 @@ const NotasCore = (() => {
   try { LS = C.storageKey(localStorage, window.CP_EXT && window.CP_EXT.user, !!window.CP_EXT); } catch (e) { /* storage off: the save warning covers it */ }
   const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
   const SHORT = C.SHORT;
+  // The student's turma (from the Canvas reading inside the extension); every subject when there is no match.
+  const COURSES = C.coursesFor(window.CP_EXT && window.CP_EXT.data);
   let saved;
   try { saved = JSON.parse(localStorage.getItem(LS)); } catch (e) { saved = null; }
   if (!saved || typeof saved !== "object" || !saved.grades || typeof saved.grades !== "object" || Array.isArray(saved.grades))
@@ -1004,7 +1032,7 @@ const NotasCore = (() => {
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
     const main = $("cards");
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const card = el("article", "card"); card.id = "card-" + c.id;
       const head = el("div", "chead"); head.tabIndex = 0; head.setAttribute("role", "button");
       const pill = badge("done", "…"); pill.id = "pill-" + c.id;
@@ -1050,7 +1078,7 @@ const NotasCore = (() => {
 
     metaEl.addEventListener("input", () => { saved.meta = metaEl.value; store(); calc(); });
     let metaT;
-    const metaRun = () => { clearTimeout(metaT); metaT = setTimeout(() => { const T = target(), st = C.COURSES.map(c => C.courseState(c, saved.grades, today, T));
+    const metaRun = () => { clearTimeout(metaT); metaT = setTimeout(() => { const T = target(), st = COURSES.map(c => C.courseState(c, saved.grades, today, T));
       con.run({ ask:"Mudar a meta para " + fmt(T, 1), title:"Recalculando", doneTitle:"Recalculado", steps:[["6 matérias", st.filter(x => x.status === "garantido").length + " garantidas, " + st.filter(x => x.status === "precisa").length + " precisam de nota"]],
         text:"Com a meta " + fmt(T, 1) + ":", lines:nextLines(saved.grades, 2) }); }, 450); };
     metaEl.addEventListener("input", metaRun);
@@ -1074,7 +1102,7 @@ const NotasCore = (() => {
       const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
       const add = (id, date, title, desc) => ev.push("BEGIN:VEVENT", "UID:" + id + "@quanto-falta", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + day(date), "DTEND;VALUE=DATE:" + next(date),
         "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
-      for (const u of C.upcoming(C.COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Campus+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
+      for (const u of C.upcoming(COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Campus+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
       if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
         .forEach(t => add("todo-" + [...(t.courseName + "|" + t.name)].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 7).toString(36) + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
       const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Campus+//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Campus+"].concat(ev, "END:VCALENDAR").join("\r\n");
@@ -1121,7 +1149,7 @@ const NotasCore = (() => {
     const T = target();
     const groups = { garantido:[], precisa:[], "depende-atrasadas":[], "nao-da":[] };
     const states = {};
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const st = states[c.id] = C.courseState(c, saved.grades, today, T);
       groups[st.status].push(SHORT[c.id]);
 
@@ -1171,15 +1199,15 @@ const NotasCore = (() => {
 
     const sum = $("summary"); sum.textContent = "";
     if (!groups[cardFilter] || !groups[cardFilter].length) cardFilter = "all";
-    [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
+    [["all", "Todas", COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
       const count = n != null ? n : groups[k].length; if (!count) return;
       const b = el("button", null, l); b.type = "button"; b.setAttribute("aria-pressed", k === cardFilter);
       b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); swap($("cards")); }); sum.appendChild(b); });
-    for (const c of C.COURSES) { const cd = $("card-" + c.id); cd.hidden = cardFilter !== "all" && states[c.id].status !== cardFilter && !cd.contains(document.activeElement); }
+    for (const c of COURSES) { const cd = $("card-" + c.id); cd.hidden = cardFilter !== "all" && states[c.id].status !== cardFilter && !cd.contains(document.activeElement); }
 
     const next = $("next"); next.textContent = "";
     const hr = el("div", "row head"); ["Data", "Avaliação", "Precisa", "Mín"].forEach(x => hr.appendChild(el("div", null, x))); next.appendChild(hr);
-    const list = C.upcoming(C.COURSES, saved.grades, today, T)
+    const list = C.upcoming(COURSES, saved.grades, today, T)
       .filter(u => filter === "all" || (filter === "exam" ? u.item.exam : days(u.item.date) <= 7));
     if (!list.length) next.appendChild(el("div", "empty", filter === "all" ? "Nada pendente." : "Nada neste filtro."));
     for (const u of showAll ? list : list.slice(0, 6)) {
@@ -1199,7 +1227,7 @@ const NotasCore = (() => {
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const st = states[c.id];
       if (!st.late.length) continue;
       any = true;
@@ -1219,6 +1247,7 @@ const NotasCore = (() => {
   const wait = ms => new Promise(r => setTimeout(r, RM ? 0 : ms));
   const CHECK = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const COLORS = { imp:"#E9A77F", abd:"#8FB4D9", rpnd:"#B9A6DA", web:"#E8C766", etica:"#E6A0B0", cscf:"#8CCBB4" };
+  { const pal = Object.values(COLORS); COURSES.forEach((c, i) => { COLORS[c.id] = COLORS[c.id] || pal[i % pal.length]; }); }   // other turmas: the same palette
   function stepRow(title, sub) {
     const r = el("div", "stp enter"), ic = el("span", "ico-s"), tx = el("div"), t = el("span", "t");
     ic.appendChild(el("span", "spin")); tx.append(el("span", null, title), el("span", "sub", sub)); r.append(ic, tx, t);
@@ -1240,7 +1269,7 @@ const NotasCore = (() => {
     main.setAttribute("aria-live", "polite");
     side.appendChild(el("h4", null, "Matérias · 2026/2"));
     const smalls = {};
-    for (const c of C.COURSES) { const r = el("a", "srow"), av = el("span", "av", SHORT[c.id].slice(0, 2).toUpperCase()), t = el("div"), sm = el("small", null, "—");
+    for (const c of COURSES) { const r = el("a", "srow"), av = el("span", "av", SHORT[c.id].slice(0, 2).toUpperCase()), t = el("div"), sm = el("small", null, "—");
       r.href = "#card-" + c.id; av.style.background = COLORS[c.id]; t.append(el("b", null, SHORT[c.id]), sm); r.append(av, t); side.appendChild(r); smalls[c.id] = sm; }
     body.append(side, main); w.append(bar, body);
     let run = 0, busy = false, used = false;
@@ -1273,7 +1302,7 @@ const NotasCore = (() => {
   $("demo-hero").appendChild(con.el);
   // What matters next, as short lines, for any set of grades (used before and after applying an import).
   function nextLines(grades, n) {
-    return C.upcoming(C.COURSES, grades, today, target()).filter(u => u.st.status !== "garantido").slice(0, n)
+    return C.upcoming(COURSES, grades, today, target()).filter(u => u.st.status !== "garantido").slice(0, n)
       .map(u => SHORT[u.course.id] + ": " + reqText(u.req, u.item, u.st) + " em " + u.item.name + " (" + dmy(u.item.date) + ")");
   }
   const pl = (n, one, many) => n + " " + (n === 1 ? one : many);
@@ -1292,14 +1321,14 @@ const NotasCore = (() => {
   let calMonth = null, calDay = null;
   const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   function calEvents(T) {
-    const ev = [], up = new Map(C.upcoming(C.COURSES, saved.grades, today, T).map(u => [C.key(u.course, u.item), u]));
-    for (const c of C.COURSES) for (const it of c.items) {
+    const ev = [], up = new Map(C.upcoming(COURSES, saved.grades, today, T).map(u => [C.key(u.course, u.item), u]));
+    for (const c of COURSES) for (const it of c.items) {
       const k = C.key(c, it), p = C.itemPoints(it, saved.grades[k]), graded = p !== null && !Number.isNaN(p), u = up.get(k);
       ev.push({ date:it.date, course:c.id, kind:graded ? "done" : "", label:(it.exam ? "Prova · " : "") + it.name,
         info:graded ? "nota lançada" : u ? "precisa " + reqText(u.req, u.item, u.st) : "falta a nota" });
     }
     if (saved.todo) for (const t of saved.todo.list) if (t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due))
-      ev.push({ date:t.due, course:C.COURSES.some(c => c.id === t.course) ? t.course : null, kind:"todo", label:"Entregar: " + t.name, info:"prazo no Canvas" });
+      ev.push({ date:t.due, course:COURSES.some(c => c.id === t.course) ? t.course : null, kind:"todo", label:"Entregar: " + t.name, info:"prazo no Canvas" });
     return ev;
   }
   function chip(e) {
@@ -1345,15 +1374,15 @@ const NotasCore = (() => {
   function renderFocus(T) {
     const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
     const any = Object.keys(saved.grades).some(k => String(saved.grades[k]).trim() !== "");
-    const list = C.stillCounts(C.COURSES, saved.grades, today, T);
+    const list = C.stillCounts(COURSES, saved.grades, today, T);
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     document.body.classList.toggle("fresh", !any);
     if (!any) { con.side({}, false); if (!con.busy) con.idle("Ainda sem notas. Importe do Canvas ou lance uma nota: cada passo aparece aqui.", []); }
     if (any) { const side = {};
-      for (const c of C.COURSES) side[c.id] = $("pill-" + c.id).textContent;
+      for (const c of COURSES) side[c.id] = $("pill-" + c.id).textContent;
       con.side(side, true);
       if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
-    const open = C.COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
+    const open = COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
     $("h1a").textContent = !any ? "Campus+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
     $("h1b").textContent = !any ? "quanto falta?" : open ? "pra fechar o semestre." : "bom descanso.";
     const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
@@ -1377,8 +1406,8 @@ const NotasCore = (() => {
   function renderKpis(states, T) {
     const box = $("kpis"); box.textContent = "";
     const card = (k, v, sub, cls) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v num" + (cls ? " " + cls : ""), v), el("div", "s", sub)); box.appendChild(d); return d; };
-    const sem = C.semester(C.COURSES, saved.grades, today, T), mean = sem.mean, tight = sem.tight, count = s => sem.counts[s] || 0;
-    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + C.COURSES.length + " matérias · meta " + fmt(T, 1));
+    const sem = C.semester(COURSES, saved.grades, today, T), mean = sem.mean, tight = sem.tight, count = s => sem.counts[s] || 0;
+    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + COURSES.length + " matérias · meta " + fmt(T, 1));
     const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
     fill.style.width = Math.min(100, mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); avg.insertBefore(meter, avg.lastChild);
     if (tight) card("Quanto falta", up(states[tight.id].fraction * 10, 1), "em 10 em cada item que falta, em " + SHORT[tight.id] + " (a mais apertada)", "need");
@@ -1399,7 +1428,7 @@ const NotasCore = (() => {
     const arc = (cls, from, len) => { const c = document.createElementNS(NS, "circle");
       c.setAttribute("class", cls); c.setAttribute("cx", 32); c.setAttribute("cy", 32); c.setAttribute("r", R);
       c.setAttribute("stroke-dasharray", Math.max(0, len) + " " + L); c.setAttribute("stroke-dashoffset", -from); return c; };
-    for (const c of C.COURSES) {
+    for (const c of COURSES) {
       const st = states[c.id], rp = C.ringParts(st), e = rp.earned * L, f = rp.future * L, cls = C.statusTone(st);
       const t = el("a", "tile"); t.href = "#card-" + c.id;
       const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
@@ -1419,7 +1448,7 @@ const NotasCore = (() => {
     $("avisosat").textContent = (unread ? unread + (unread === 1 ? " não lido" : " não lidos") + " · " : "") + "lido do Canvas em " + dmy(nw.at);
     for (const a of showAllNews ? list : list.slice(0, 5)) {
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
-      const ours = C.COURSES.find(c => c.id === a.course); sub.textContent = ours ? SHORT[ours.id] : String(a.courseName || "");
+      const ours = COURSES.find(c => c.id === a.course); sub.textContent = ours ? SHORT[ours.id] : String(a.courseName || "");
       // The link is rebuilt from two numbers; no imported text reaches href.
       const m = typeof a.url === "string" ? /^https:\/\/pucpr\.instructure\.com\/courses\/(\d+)\/discussion_topics\/(\d+)$/.exec(a.url) : null;
       const t = m ? el("a", "title", a.title) : el("span", "title", a.title);
@@ -1440,7 +1469,7 @@ const NotasCore = (() => {
     const h = el("div", "row head pend-row"); ["Prazo", "Entrega"].forEach(x => h.appendChild(el("div", null, x))); box.appendChild(h);
     for (const t of list) {
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub"), d = days(t.due);
-      const ours = C.COURSES.find(c => c.id === t.course);
+      const ours = COURSES.find(c => c.id === t.course);
       if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); } else sub.textContent = String(t.courseName || "");
       name.append(el("span", "title", t.name), sub);
       const w = cell("Prazo", "when"); w.append(el("span", "d num", dmy(t.due)), el("span", "rel" + (d <= 3 ? " soon" : d <= 7 ? " week" : ""), d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias"));
@@ -1459,7 +1488,7 @@ const NotasCore = (() => {
     for (const p of showAllPend ? okList : okList.slice(0, 6)) {
       if (!p || typeof p.name !== "string") continue;
       const row = el("div", "row pend-row"), name = cell(null, "wide"), sub = el("span", "sub");
-      const ours = C.COURSES.find(c => c.id === p.course);   // link built from our own ids only, never from imported text
+      const ours = COURSES.find(c => c.id === p.course);   // link built from our own ids only, never from imported text
       if (ours) { const a = el("a", null, SHORT[ours.id]); a.href = "#card-" + ours.id; sub.appendChild(a); }
       else sub.textContent = String(p.courseName || "");
       name.append(el("span", "title", p.name), sub);

@@ -430,14 +430,27 @@
       if (st.status === "garantido") tile.title = C.GARANTIDO_TIP;
       tile.append(ring(st), txt); tiles.appendChild(tile);
     }
-    out.push(tiles, el("div", "muted src", SOURCE));
+    out.push(tiles, el("div", "muted src", source(a.mine)));
     return out;
   }
 
-  const SOURCE = "Pesos do Plano de Ensino " + TERM + " · " + C.TURMA + " · não oficial, confira no Canvas";
+  // The turma(s) whose rule pack gave these numbers (rules/<term>/<turma>.json).
+  const source = cs => "Pesos do Plano de Ensino " + TERM + " · " + [...new Set(cs.map(C.turmaOf))].join(" / ") + " · não oficial, confira no Canvas";
   // Instead of the grade parts: why they are not there (term over, or another turma); null when there is nothing to say.
   const noRules = a => a.expired ? C.EXPIRED_NOTE
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
+  // Another turma: a button that copies a draft of its rules (course ids and names; assessment names, points, dates and
+  // groups; never grades) to paste in the "Adicionar minha turma" issue. The clipboard write needs the click (user gesture).
+  function draftBox(cache) {
+    const box = el("div", "acts draft"), btn = el("button", null, "Copiar rascunho da minha turma"), note = el("span", "muted", "Leva só nomes, pontos e datas das avaliações — nenhuma nota.");
+    btn.type = "button";
+    btn.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(JSON.stringify(C.draftPack(cache.data), null, 1)); note.textContent = "Copiado. Cole na issue \u201cAdicionar minha turma\u201d (botão do Campus+ na barra do navegador, ou o GitHub do projeto)."; }
+      catch (e) { note.textContent = "Não consegui copiar aqui: use o botão do Campus+ na barra do navegador."; }
+    });
+    box.append(btn, note);
+    return box;
+  }
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
   function dashPanel(a, cache, prefs) {
@@ -450,7 +463,7 @@
     if (APP) { const brand = el("a", "brand", "Abrir Campus+ →"); brand.href = "#campus"; hd.appendChild(brand); }
     box.append(hd);
     if (grades) box.append(...gradesView(a));
-    else if (why) box.append(el("div", "muted why", why));
+    else if (why) { box.append(el("div", "muted why", why)); if (!a.expired) box.append(draftBox(cache)); }
     box.appendChild(grid);
     if (week) grid.appendChild(weekView(agenda(a, cache), prefs));
     if (news) {
@@ -499,7 +512,7 @@
         row.append(name, el("span", "w", Math.round(it.max / total * 100) + "%"), g); tbl.appendChild(row);
       }
       box.appendChild(tbl);
-      box.appendChild(el("div", "muted src", SOURCE));
+      box.appendChild(el("div", "muted src", source([c])));
     }
     const acts = el("div", "acts"), status = el("span", "muted");
     if (prefs.files) {
