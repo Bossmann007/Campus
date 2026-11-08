@@ -48,7 +48,7 @@
   }
   // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
   const forget = async () => {
-    await chrome.storage.local.remove(["cache", "search", "teachers"]);
+    await chrome.storage.local.remove(["cache", "search", "teachers", "ccolors"]);
     chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
     chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
   };
@@ -953,7 +953,7 @@
       simActs.append(sb, note, save);
     }
     // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
-    const nb = el("button", null, "Anotações"), pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
+    const pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
     ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
     pad.append(ta, saved);
     let tm = 0;
@@ -967,21 +967,21 @@
     const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || Date.now() - typed < 30000;
     chrome.storage.local.get("notes").then(({ notes }) => {
       const v = notes && notes[cache.user] && notes[cache.user][courseId];
-      if (typeof v === "string" && v) { ta.value = v; nb.textContent = "Anotações ✓"; }
+      if (typeof v === "string" && v) { ta.value = v; if (btns.anot) btns.anot.textContent = "Anotações ✓"; }
     });
     acts.appendChild(status);
     // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
     const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
     const bar = el("div", "ctabs"), panes = {}, btns = {}; bar.setAttribute("role", "tablist");
-    const show = async k => {
+    const show = async (k, byClick) => {
       for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); }
       if (k === "materiais" && !panes.materiais.cpLoaded) { panes.materiais.cpLoaded = 1; materials(courseId, panes.materiais); }
-      if (k === "anot" && ta.focus) ta.focus();
+      if (k === "anot" && byClick && ta.focus) ta.focus();   // only when the student opens it (never on page load)
       await chrome.storage.local.set({ ctab: k });
     };
     for (const [k, label] of tabs) {
-      const b = el("button", null, label + (k === "anot" && nb.textContent.includes("✓") ? " ✓" : "")); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab"); b.addEventListener("click", () => show(k)); bar.appendChild(b); btns[k] = b;
-      panes[k] = el("div", "cpane"); panes[k].setAttribute("role", "tabpanel");
+      const b = el("button", null, label); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab"); b.addEventListener("click", () => show(k, true)); bar.appendChild(b); btns[k] = b;
+      panes[k] = el("div", "cpane"); panes[k].setAttribute("role", "tabpanel"); panes[k].hidden = k !== "geral";   // no flash of every tab before the kept one is read
     }
     panes.geral.append(...overview(courseId, c, a, cache));
     if (c) panes.notas.append(...parts.notas, simActs);
@@ -1025,6 +1025,7 @@
     box.append(el("h3", null, "Módulos"), q, list); pane.appendChild(box); list.appendChild(el("div", "muted", "Lendo os módulos…"));
     let mods = [];
     try { mods = await getAll("/api/v1/courses/" + courseId + "/modules?include[]=items&per_page=100"); } catch (e) { list.replaceChildren(el("div", "muted", "Esta matéria não mostra os módulos.")); return; }
+    for (const m of mods) if (!m.items && m.items_count) { try { m.items = await getAll("/api/v1/courses/" + courseId + "/modules/" + m.id + "/items?per_page=100"); } catch (e) { m.items = []; } }   // big modules come without their items
     const draw = () => {
       const w = fold(q.value || "").trim(); let shown = 0; list.replaceChildren();
       for (const m of mods) {
