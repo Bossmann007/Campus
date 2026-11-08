@@ -19,17 +19,17 @@ async function collectCanvasGrades(seen) {
   const active = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string");
   if (seen) seen.courses = active.map(c => ({ id: c.id, name: c.name }));
   const cs = active.filter(c => c.name.includes(NotasCore.TERM));
-  const courses = [];
-  for (const c of cs) {
+  // every course at once (the order of the list is kept)
+  const courses = await Promise.all(cs.map(async c => {
     const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100");
-    courses.push({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null,
+    return ({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null,
       score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
       due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
       submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),
       online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),
       stats: a.score_statistics && typeof a.score_statistics.mean === "number"
         ? { mean: a.score_statistics.mean, min: a.score_statistics.min, max: a.score_statistics.max } : null })) });
-  }
+  }));
   // Professors' announcements from the last 60 days; optional, a failure here never blocks the grades.
   let announcements = null;
   try {

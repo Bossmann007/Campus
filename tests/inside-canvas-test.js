@@ -95,6 +95,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const cid = opts.courseId || 71306, fetches = [];
   const fetch = async url => {
     fetches.push(url);
+    if (opts.slow && url !== "/api/v1/users/self") await new Promise(r => setTimeout(r, opts.slow));
     if (opts.denied) return { ok: false, status: 401, text: async () => "", headers: { get: () => null } };
     if (url === "/api/v1/users/self") return page({ id: opts.selfId || 5 });
     if (url.startsWith("/api/v1/courses?") && opts.failCourses) return { ok: false, status: 500, text: async () => "", headers: { get: () => null } };
@@ -118,7 +119,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const history = { replaceState: (a, b, url) => { env.location.hash = ""; } };
   const src = opts.src || read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
   new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
-    class { observe() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
+    class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
   await new Promise(r => setTimeout(r, 30));
   return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches };
 }
@@ -371,17 +372,28 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // Canvas calls per dashboard load (1 course). Before: /users/self on every page + /courses twice = 6 cold, 1 warm, 6 after 10 min.
   // Now the user is always confirmed (the id in the page, else /users/self); /courses once; one tab reads at a time.
   const cold = await runContent("/", null);
-  assert.deepStrictEqual(cold.fetches.map(u => u.split("?")[0]), ["/api/v1/users/self", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/announcements", "/api/v1/planner/items"], "cold: 5 calls, /courses once");
+  assert.deepStrictEqual(cold.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 5 calls, /courses once");
   const warm = await runContent("/", null, cold.store);
   assert.deepStrictEqual(warm.fetches, ["/api/v1/users/self"], "warm, no user id in the page: only the user is confirmed (1 call)");
   const warmEnv = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"5"}' }] });
   assert.strictEqual(warmEnv.fetches.length, 0, "warm with the user id in the page: no call");
   const st10 = Object.assign({}, cold.store, { cache: Object.assign({}, cold.store.cache, { at: Date.now() - 11 * 60 * 1000 }) });
   const later = await runContent("/", null, st10);
-  assert.deepStrictEqual(later.fetches.map(u => u.split("?")[0]), ["/api/v1/users/self", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/announcements", "/api/v1/planner/items"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (5 calls)");
+  assert.deepStrictEqual(later.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (5 calls)");
   const pageEnv = [{ textContent: 'ENV = {"current_user_id":"5"}' }];
   const laterEnv = await runContent("/", null, st10, { scripts: pageEnv });
   assert.strictEqual(laterEnv.fetches.length, 4, "reading older than 10 min with the user id in the page: 4 calls");
+  // an older reading shows at once; the new one replaces it when Canvas answers (one panel, never two)
+  const oldFirst = await runContent("/", null, st10, { scripts: pageEnv, slow: 80 });
+  const dashes = () => all(oldFirst.anchor).filter(e => e.id === "cp-dash");
+  assert.strictEqual(dashes().length, 1, "the panel is drawn from the older reading before Canvas answers");
+  assert.strictEqual(oldFirst.store.cache.at, st10.cache.at, "(Canvas has not answered yet)");
+  await new Promise(r => setTimeout(r, 400));
+  assert(oldFirst.store.cache.at > st10.cache.at && dashes().length === 1 && dashes()[0] !== undefined, "new reading saved and drawn in place of the old panel");
+  const lockedSlow = await runContent("/", null, {}, { slow: 40 });
+  assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 0, "no reading at all: waits for Canvas");
+  await new Promise(r => setTimeout(r, 250));
+  assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 1, "and draws once it lands");
   const locked = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 5000 }), { scripts: pageEnv });
   assert.strictEqual(locked.fetches.length, 0, "another tab is reading: this one uses the last reading");
   assert(all(locked.anchor).some(e => /kpi/.test(e.className)), "and still draws it");

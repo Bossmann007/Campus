@@ -47,19 +47,25 @@
   }
   const forget = () => chrome.storage.local.remove(["cache", "search"]);
   // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
-  // time: while another tab is reading (lock under a minute old), this one uses the last reading.
-  async function load() {
+  // time: while another tab is reading (lock under a minute old), this one uses the last reading. An older reading of the same
+  // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas).
+  async function load(onFresh) {
     const user = await whoAmI();
     const { cache, refreshing } = await chrome.storage.local.get(["cache", "refreshing"]);
     const mine = cache && cache.v === VERSION && cache.user === user;
     if (mine && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
+    if (mine && onFresh) { refresh(user).then(onFresh, () => {}); return cache; }
+    return refresh(user);
+  }
+  async function refresh(user) {
     await chrome.storage.local.set({ refreshing: Date.now() });
     try {
+      const plan = getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders, read alongside the grades
       const got = {}, data = await collectCanvasGrades(got);
       if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
-      const planner = await getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders
+      const planner = await plan;
       const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null };
       await chrome.storage.local.set({ cache: fresh });
       return fresh;
@@ -142,7 +148,8 @@
   }
 
   // Dashboard: one status pill per card of the six courses. Cards render late (React), so watch the page.
-  function decorateCards(a) {
+  function decorateCards(a, again) {
+    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { if (card.cpPill) card.cpPill.remove(); delete card.dataset.qf; }
     for (const card of document.querySelectorAll(".ic-DashboardCard:not([data-qf])")) {
       const link = card.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href"));
       const c = m && a.byCanvasId[m[1]];
@@ -150,7 +157,7 @@
       if (!c) continue;
       const st = a.state(c), p = pill(a.label(st), a.tone(st));
       p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
-      (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
+      card.cpPill = p; (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
     }
   }
 
@@ -701,8 +708,14 @@
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
     navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
-    let cache;
-    try { cache = await load(); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    let cache, drawn = false;
+    try { cache = await load(fresh => { if (fresh.at !== cache.at) draw(fresh, prefs, drawn); }); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    drawn = true; await draw(cache, prefs, false);
+  }
+  // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
+  let cardWatch = null;
+  async function draw(cache, prefs, again) {
+    if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (old) old.remove(); }
     const a = analyse(cache), marks = await myMarks(cache.user);
     sendNext(a);
     sendReminders(agenda(a, cache, marks), prefs, cache);
@@ -718,9 +731,13 @@
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       dashPanel(a, cache, prefs, marks);
       if (!prefs.grades || !a.rules) return;
-      decorateCards(a);
+      decorateCards(a, again);
+      // the cards render late (React): watch the page for 20 seconds, then stop
+      if (cardWatch) cardWatch.disconnect();
       let t = 0;
-      new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); }).observe(document.body, { childList: true, subtree: true });
+      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); });
+      watch.observe(document.body, { childList: true, subtree: true });
+      setTimeout(() => watch.disconnect(), 20000);
     }
   }
   run();
