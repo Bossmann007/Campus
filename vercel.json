@@ -25,13 +25,8 @@
   "cleanUrls": true,
   "redirects": [
     {
-      "source": "/app",
-      "destination": "/",
-      "permanent": false
-    },
-    {
       "source": "/calendario",
-      "destination": "/",
+      "destination": "/app?view=calendario",
       "permanent": false
     }
   ]

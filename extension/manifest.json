@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Campus+ · PUCPR",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "O Canvas da PUCPR melhorado: semana com entregas e provas, avisos juntos, lembretes, tema escuro, quanto falta em cada matéria e download dos arquivos.",
   "action": {
     "default_popup": "popup.html",

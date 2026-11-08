@@ -5,7 +5,7 @@ const fs = require("fs"), path = require("path"), assert = require("assert");
 const html = fs.readFileSync(process.argv[2] || path.join(__dirname, "..", "app.html"), "utf8");
 const C = new Function(html.match(/<script id="core">([\s\S]*?)<\/script>/)[1] + "\nreturn NotasCore;")();
 const out = path.join(__dirname, "golden", "cc-manha.json");
-const enc = (k, v) => typeof v === "number" && !Number.isFinite(v) ? "num:" + v : v;
+const enc = (k, v) => k === "ext" && v === C.EXT_LATEST ? "EXT_LATEST" : typeof v === "number" && !Number.isFinite(v) ? "num:" + v : v;   // the version moves with each release; the numbers must not
 const K = (c, it) => c.id + ":" + it.id;
 const stateOut = (c, st) => Object.assign({}, st, { future: st.future.map(it => K(c, it)), late: st.late.map(it => K(c, it)), invalid: st.invalid.map(it => K(c, it)) });
 
@@ -37,7 +37,7 @@ const cv = (name, assignments, id) => Object.assign(id ? { id } : {}, { name: na
 const A = (name, points, score, extra) => Object.assign({ name, points, score }, extra || {});
 const real = JSON.parse(fs.readFileSync(path.join(__dirname, "canvas-names.json"), "utf8"));
 const cids = Object.fromEntries(Object.entries(C.CANVAS).map(([k, v]) => [v.match, v.cid]));
-const realIds = { v: 1, ext: "1.0.1", courses: real.courses.map(c => ({ id: Object.entries(cids).find(([m]) => c.name.startsWith(m)) ? Object.entries(cids).find(([m]) => c.name.startsWith(m))[1] : 1,
+const realIds = { v: 1, ext: C.EXT_LATEST, courses: real.courses.map(c => ({ id: Object.entries(cids).find(([m]) => c.name.startsWith(m)) ? Object.entries(cids).find(([m]) => c.name.startsWith(m))[1] : 1,
   name: c.name, assignments: c.assignments.map((a, i) => ({ name: a.name, points: a.points, score: i % 4 === 3 ? null : a.points * ((i % 5) / 4), due: "2026-11-1" + (i % 10) + "T15:00:00Z", missing: i % 6 === 0, submitted: i % 3 === 0, online: i % 7 !== 0, stats: i % 2 ? { mean: a.points / 2, min: 0, max: a.points } : null })) })),
   announcements: [{ course: real.courses[0].name, courseId: 71306, title: "Aviso", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/1" }] };
 const inputs = {
