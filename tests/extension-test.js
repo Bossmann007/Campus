@@ -47,13 +47,22 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.ht
   // popup: "Atualizar agora" marks the last reading as old, so the next Canvas page reads everything again
   const els = {}, store = { cache: { at: Date.now(), user: 5, data: { courses: [] } }, refreshing: Date.now() };
   const pel = id => els[id] || (els[id] = { id, value: "", textContent: "", listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
-  const pchrome = { runtime: { getManifest: () => manifest, getURL: f => f }, tabs: { create() {} },
+  const palarms = {}, pchrome = { runtime: { getManifest: () => manifest, getURL: f => f }, tabs: { create() {} },
+    alarms: { create: async (n, o) => { palarms[n] = o; }, clear: async n => { delete palarms[n]; } },
     storage: { local: { get: async k => ({ [k]: store[k] }), set: async o => { Object.assign(store, o); }, remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
   const popupSrc = ["prefs.js", "popup.js"].map(f => fs.readFileSync(path.join(dir, f), "utf8")).join("\n");
-  new Function("document", "chrome", popupSrc)({ getElementById: pel, querySelectorAll: () => [] }, pchrome);
+  const ticks = [];
+  new Function("document", "chrome", "setInterval", popupSrc)({ getElementById: pel, querySelectorAll: () => [] }, pchrome, f => ticks.push(f));
   assert(/id="refresh"/.test(html), "popup has the Atualizar agora button");
   await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.cache.at, 0, "reading marked old"); assert.strictEqual(store.refreshing, undefined, "no read lock left"); assert.match(pel("status").textContent, /Atualiza/, "says what happens next");
+  await pel("f25").listeners.click(); await new Promise(r => setTimeout(r, 5));
+  assert(palarms["focus|foco"] && store.focus.kind === "foco" && Math.abs(store.focus.end - Date.now() - 25 * 60000) < 2000, "Foco 25 min: one alarm, end saved");
+  assert.match(pel("focus").textContent, /^Foco: 2[45]:\d\d restantes$/); assert.strictEqual(pel("fstop").hidden, false); assert.strictEqual(ticks.length, 1, "the countdown ticks");
+  await pel("f5").listeners.click(); await new Promise(r => setTimeout(r, 5));
+  assert(!palarms["focus|foco"] && palarms["focus|pausa"], "a break replaces the study block");
+  await pel("fstop").listeners.click(); await new Promise(r => setTimeout(r, 5));
+  assert(!palarms["focus|pausa"] && !store.focus && pel("fstop").hidden, "Parar clears it");
   assert(!/rascunho|nova-turma|issues\/new/.test(html + fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "no turma draft or issue in the popup (planned inside the extension, not shipped)");
   console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, calculator page without inline scripts, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });

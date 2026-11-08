@@ -28,3 +28,22 @@ $("refresh").addEventListener("click", async () => {
 });
 $("open").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
 $("canvas").addEventListener("click", () => chrome.tabs.create({ url: "https://pucpr.instructure.com/" }));
+
+// Foco: 25 minutes of study or 5 of break; the service worker shows a notification when the alarm fires.
+const showFocus = async () => {
+  const { focus } = await chrome.storage.local.get("focus"), left = focus && focus.end - Date.now();
+  $("fstop").hidden = !(left > 0);
+  if (!(left > 0)) { $("focus").textContent = "Estude 25 minutos, descanse 5. Avisa quando acabar."; return; }
+  const m = Math.floor(left / 60000), sec = Math.floor(left / 1000) % 60;
+  $("focus").textContent = (focus.kind === "pausa" ? "Pausa: " : "Foco: ") + m + ":" + String(sec).padStart(2, "0") + " restantes";
+};
+const startFocus = async (kind, min) => {
+  for (const k of ["foco", "pausa"]) await chrome.alarms.clear("focus|" + k);
+  const end = Date.now() + min * 60000;
+  await chrome.alarms.create("focus|" + kind, { when: end });
+  await chrome.storage.local.set({ focus: { kind, end } }); showFocus();
+};
+$("f25").addEventListener("click", () => startFocus("foco", 25));
+$("f5").addEventListener("click", () => startFocus("pausa", 5));
+$("fstop").addEventListener("click", async () => { for (const k of ["foco", "pausa"]) await chrome.alarms.clear("focus|" + k); await chrome.storage.local.remove("focus"); showFocus(); });
+showFocus(); setInterval(showFocus, 1000);

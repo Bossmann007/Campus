@@ -130,7 +130,14 @@ chrome.downloads.onChanged.addListener(async ch => {
 });
 chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); });
 chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create("tick", { periodInMinutes: 60 }); scheduleWeek(); showNext(); });
-chrome.alarms.onAlarm.addListener(a => a.name.startsWith("r|") ? notify(a) : a.name === "week" ? summary(a) : showNext());   // "tick": the icon counts down even when Canvas is not opened
+// Foco (started in the popup): the end of a study block or a break.
+async function focusDone(alarm) {
+  await chrome.storage.local.remove("focus");
+  const study = alarm.name === "focus|foco";
+  chrome.notifications.create("f|" + Date.now(), { type: "basic", iconUrl: "icons/icon128.png", title: study ? "25 minutos de foco: hora da pausa" : "Pausa acabou",
+    message: study ? "Levante, beba água. Abra o Caderno+ para mais uma rodada depois de 5 minutos." : "Bora voltar: mais 25 minutos de foco?", priority: 2 });
+}
+chrome.alarms.onAlarm.addListener(a => a.name.startsWith("r|") ? notify(a) : a.name === "week" ? summary(a) : a.name.startsWith("focus|") ? focusDone(a) : showNext());   // "tick": the icon counts down even when Canvas is not opened
 chrome.notifications.onClicked.addListener(async id => {
   const { shown = {} } = await chrome.storage.local.get("shown");
   if (typeof shown[id] === "string" && shown[id].startsWith(CANVAS + "/")) chrome.tabs.create({ url: shown[id] });
