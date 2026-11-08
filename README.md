@@ -5,6 +5,13 @@ O Canvas da PUCPR melhorado. Projeto independente e não oficial, sem vínculo c
 Caderno+ é uma extensão do Chrome, Brave e Edge que roda dentro do Canvas da PUCPR (pucpr.instructure.com):
 
 - **Próximos 7 dias:** no painel do Canvas, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que foi entregue, o que atrasou e quanto você precisa em cada prova. Marque uma tarefa como feita (✓) e ela fica cinza, sai dos lembretes e conta no progresso da semana; a marca fica só no seu computador.
+- **Notas novas:** aviso quando sai nota (com a nota) e um card com as últimas notas no painel.
+- **Resumo da semana:** segunda às 8h, quantas entregas e provas a semana tem.
+- **Caixa de entrada:** as mensagens não lidas do Canvas (assunto e quem) no painel.
+- **Simular notas e anotações:** na página da matéria, digite notas hipotéticas e veja na hora se garante a meta; anotações por matéria, só no seu computador.
+- **Exportar .ics** das entregas e provas para Google Agenda, Outlook ou celular.
+- **Foco:** timer de 25 minutos de estudo e 5 de pausa no botão da extensão.
+- **Conforto:** temas escuro, escuro suave e escuro à noite; cards do painel recolhíveis; botões ↑ ↓ em páginas longas. O painel aparece na hora com a última leitura enquanto atualiza.
 - **Busca (Ctrl+K ou ⌘K):** em qualquer página do Canvas, procura matérias, tarefas e itens dos módulos de todas as matérias e abre com Enter.
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos marcados.
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova.

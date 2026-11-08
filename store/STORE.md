@@ -23,6 +23,13 @@ Dentro do Canvas, sem configurar nada:
 - **Próximos 7 dias:** no painel, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que já foi entregue e o que está atrasado;
 - **Marcar como feito:** um ✓ em cada tarefa da semana; ela fica cinza, sai dos lembretes e conta no progresso da semana (a marca fica só no seu computador, o Canvas não muda);
 - **Busca (Ctrl+K ou ⌘K):** em qualquer página do Canvas, acha matérias, tarefas e itens dos módulos de todas as matérias e abre com Enter;
+- **Notas novas:** aviso quando sai nota e um card com as últimas notas;
+- **Resumo da semana:** segunda às 8h, quantas entregas e provas vêm aí;
+- **Caixa de entrada:** as mensagens não lidas do Canvas no painel;
+- **Simular notas** e **anotações** na página de cada matéria;
+- **Exportar .ics** para Google Agenda, Outlook ou celular;
+- **Foco:** timer de 25/5 minutos no botão da extensão;
+- **Temas** escuro, escuro suave e escuro à noite; cards recolhíveis; botões ↑ ↓ em páginas longas;
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos contados;
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova;
 - **Tema escuro** (ou igual ao sistema);
