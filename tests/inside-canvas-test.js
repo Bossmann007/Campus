@@ -46,7 +46,7 @@ const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listene
   action: { setBadgeText: async o => { local.badge = o.text; }, setTitle: async () => {}, setBadgeBackgroundColor: async () => {} },
   downloads: { onChanged: { addListener: f => { listeners.changed = f; } }, download: async o => { if (/boom/.test(o.filename)) throw new Error("Invalid filename"); swSaved.push(o); return nextId++; } } };
 const imported = [];   // importScripts("prefs.js") shares the worker's global scope: the test puts prefs.js in front instead
-const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload };")(chromeSW, f => imported.push(f));
+const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
 for (const bad of [{ url: "https://evil.example/a", filename: "PUCPR/a.pdf" }, { url: "https://pucpr.instructure.com/x", filename: "Documents/a.pdf" },
@@ -59,8 +59,9 @@ const items = [{ id: 1, url: "https://pucpr.instructure.com/files/1/download", f
   { id: 3, url: "https://evil.example/x", filename: "PUCPR/BD/c.pdf" }, { id: 4, url: "https://pucpr.instructure.com/files/4/download", filename: "PUCPR/BD/d.pdf" }];
 // content.js on a mocked Canvas
 function fakeEl(tag) {
-  const e = { tag, kids: [], style: {}, dataset: {}, className: "", textContent: "", listeners: {}, parent: null,
+  const e = { tag, tagName: String(tag).toUpperCase(), kids: [], style: {}, dataset: {}, className: "", textContent: "", listeners: {}, parent: null,
     append(...c) { c.forEach(x => { x.parent = this; }); this.kids.push(...c); }, appendChild(c) { this.append(c); return c; },
+    click() { this.clicked = true; },
     replaceChildren(...c) { this.kids.forEach(k => { k.parent = null; }); this.kids = []; this.append(...c); },
     prepend(c) { c.parent = this; this.kids.unshift(c); }, insertBefore(c, ref) { c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); },
     remove() { if (this.parent) this.parent.kids.splice(this.parent.kids.indexOf(this), 1); this.parent = null; this.removed = true; },
@@ -88,13 +89,14 @@ async function runContent(pathname, files, preStore, opts = {}) {
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
-  const doc = { createElement: fakeEl, body, scripts: opts.scripts, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null, querySelector: () => null,
+  const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null, querySelector: () => null,
     querySelectorAll: sel => sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
   const cid = opts.courseId || 71306, fetches = [];
   const fetch = async url => {
     fetches.push(url);
+    if (opts.slow && url !== "/api/v1/users/self") await new Promise(r => setTimeout(r, opts.slow));
     if (opts.denied) return { ok: false, status: 401, text: async () => "", headers: { get: () => null } };
     if (url === "/api/v1/users/self") return page({ id: opts.selfId || 5 });
     if (url.startsWith("/api/v1/courses?") && opts.failCourses) return { ok: false, status: 500, text: async () => "", headers: { get: () => null } };
@@ -105,6 +107,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if ((opts.more || []).some(c => url.startsWith("/api/v1/courses/" + c.id + "/assignments"))) return page([]);
     if (url.startsWith("/api/v1/announcements")) return page([{ context_code: "course_" + cid, title: "Prova adiada", posted_at: new Date().toISOString(), read_state: "unread", html_url: "https://pucpr.instructure.com/courses/71306/discussion_topics/1" },
       { context_code: "course_" + cid, title: "Bem-vindos", posted_at: "2026-08-01T12:00:00Z", read_state: "read", html_url: "https://evil.example/x" }]);
+    if (url.includes("/api/v1/conversations?")) return opts.inboxFails ? { ok: false, status: 403, text: async () => "", headers: { get: () => null } }
+      : Object.assign(page(opts.inbox || []), { headers: { get: h => h === "Link" ? '<https://pucpr.instructure.com/api/v1/conversations?scope=unread&page=2>; rel="next"' : null } });
     if (url.startsWith("/api/v1/planner/items?")) return plannerFails ? { ok: false, status: 500, text: async () => "", headers: { get: () => null } } : page(plannerItems || PLANNER);
     if (url.startsWith("/api/v1/courses/71306/files?")) return files ? page(files) : { ok: false, status: 401, text: async () => "", headers: { get: () => null } };
     if (opts.modules && url.startsWith("/api/v1/courses/71306/modules?")) return page(opts.modules);
@@ -115,10 +119,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const env = { window: { addEventListener: (t, f) => { winListeners[t] = f; } },
     location: { pathname, search: "", hash: opts.hash || "", href: "https://pucpr.instructure.com" + pathname, origin: "https://pucpr.instructure.com", hostname: "pucpr.instructure.com", assign(u) { this.assigned = u; } } };
   env.window.top = env.window;
+  if (opts.tall) Object.assign(env.window, { innerHeight: 800, scrollTo(o) { this.scrolled = o; } });
   const history = { replaceState: (a, b, url) => { env.location.hash = ""; } };
   const src = opts.src || read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
   new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
-    class { observe() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
+    class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
   await new Promise(r => setTimeout(r, 30));
   return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches };
 }
@@ -371,22 +376,164 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // Canvas calls per dashboard load (1 course). Before: /users/self on every page + /courses twice = 6 cold, 1 warm, 6 after 10 min.
   // Now the user is always confirmed (the id in the page, else /users/self); /courses once; one tab reads at a time.
   const cold = await runContent("/", null);
-  assert.deepStrictEqual(cold.fetches.map(u => u.split("?")[0]), ["/api/v1/users/self", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/announcements", "/api/v1/planner/items"], "cold: 5 calls, /courses once");
+  assert.deepStrictEqual(cold.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 6 calls, /courses once");
   const warm = await runContent("/", null, cold.store);
   assert.deepStrictEqual(warm.fetches, ["/api/v1/users/self"], "warm, no user id in the page: only the user is confirmed (1 call)");
   const warmEnv = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"5"}' }] });
   assert.strictEqual(warmEnv.fetches.length, 0, "warm with the user id in the page: no call");
   const st10 = Object.assign({}, cold.store, { cache: Object.assign({}, cold.store.cache, { at: Date.now() - 11 * 60 * 1000 }) });
   const later = await runContent("/", null, st10);
-  assert.deepStrictEqual(later.fetches.map(u => u.split("?")[0]), ["/api/v1/users/self", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/announcements", "/api/v1/planner/items"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (5 calls)");
+  assert.deepStrictEqual(later.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (6 calls)");
   const pageEnv = [{ textContent: 'ENV = {"current_user_id":"5"}' }];
   const laterEnv = await runContent("/", null, st10, { scripts: pageEnv });
-  assert.strictEqual(laterEnv.fetches.length, 4, "reading older than 10 min with the user id in the page: 4 calls");
+  assert.strictEqual(laterEnv.fetches.length, 5, "reading older than 10 min with the user id in the page: 5 calls");
+  // an older reading shows at once; the new one replaces it when Canvas answers (one panel, never two)
+  const oldFirst = await runContent("/", null, st10, { scripts: pageEnv, slow: 80 });
+  const dashes = () => all(oldFirst.anchor).filter(e => e.id === "cp-dash");
+  assert.strictEqual(dashes().length, 1, "the panel is drawn from the older reading before Canvas answers");
+  assert.strictEqual(oldFirst.store.cache.at, st10.cache.at, "(Canvas has not answered yet)");
+  await new Promise(r => setTimeout(r, 400));
+  assert(oldFirst.store.cache.at > st10.cache.at && dashes().length === 1 && dashes()[0] !== undefined, "new reading saved and drawn in place of the old panel");
+  const lockedSlow = await runContent("/", null, {}, { slow: 40 });
+  assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 0, "no reading at all: waits for Canvas");
+  await new Promise(r => setTimeout(r, 250));
+  assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 1, "and draws once it lands");
+  // new grades: compared with the last reading of the same user; saved for the dashboard and handed to the service worker
+  const oldData = JSON.parse(JSON.stringify(st10.cache)); oldData.data.courses[0].assignments.find(x => /RA2/.test(x.name)).score = null;
+  const ngr = await runContent("/", null, Object.assign({}, st10, { cache: oldData }), { scripts: pageEnv });
+  await new Promise(r => setTimeout(r, 60));
+  const gmsg1 = ngr.sent.find(m => m.type === "grades");
+  assert(gmsg1 && gmsg1.items.length === 1 && /RA2/.test(gmsg1.items[0].name) && gmsg1.items[0].score === 3 && gmsg1.items[0].course === "Arquitetura de Banco de Dados", "one new grade found and sent");
+  assert.strictEqual(ngr.store.recent[5].length, 1, "kept for this user");
+  const ngBox = ngr.anchor.kids.find(k => k.id === "cp-dash");
+  assert.match(text(ngBox), /Notas novas \| 1 nova/); assert.match(text(ngBox), /Avaliação somativa RA2 22\/10 \| Arquitetura de Banco de Dados · hoje \| 3 \|  de 3/);
+  const firstRead = await runContent("/", null, {}, { scripts: pageEnv });
+  assert(!firstRead.sent.some(m => m.type === "grades") && !firstRead.store.recent, "the first reading only sets the baseline");
+  const otherUser = await runContent("/", null, Object.assign({}, st10, { cache: Object.assign({}, oldData, { user: 9 }) }), { scripts: pageEnv });
+  await new Promise(r => setTimeout(r, 60));
+  assert(!otherUser.sent.some(m => m.type === "grades"), "another user's reading is not a baseline");
+  const quietG = await runContent("/", null, Object.assign({}, st10, { cache: oldData, prefs: { newgrades: false } }), { scripts: pageEnv });
+  await new Promise(r => setTimeout(r, 60));
+  assert(!quietG.sent.some(m => m.type === "grades") && quietG.store.recent && !/Notas novas/.test(text(quietG.anchor)), "switched off: no notification, no card (still recorded)");
+  local.prefs = { newgrades: true }; notes.length = 0;
+  await ask({ type: "grades", items: [{ name: "RA2", course: "BD", score: 8.5, points: 10, url: "https://pucpr.instructure.com/courses/71306/assignments/2" }] }, CANVAS_TAB);
+  assert.deepStrictEqual([notes[0].title, notes[0].message], ["Nota nova: BD", "RA2: 8,5 de 10"], "notification text");
+  await ask({ type: "grades", items: [1, 2, 3, 4].map(i => ({ name: "T" + i, course: "C" + i, score: i, points: 10, url: "https://evil.example/" })) }, CANVAS_TAB);
+  assert.strictEqual(notes.length, 2, "more than 3: one notification"); assert.strictEqual(notes[1].title, "4 notas novas");
+  assert.strictEqual(local.shown[notes[1].id], "https://pucpr.instructure.com/grades", "its click opens the grades, never an outside link");
+  await ask({ type: "grades", items: [{ k: "71306:RA2", name: "RA2", course: "BD", score: 8.5, points: 10 }] }, CANVAS_TAB);
+  await ask({ type: "grades", items: [{ k: "71306:RA2", name: "RA2", course: "BD", score: 8.5, points: 10 }] }, CANVAS_TAB);
+  assert.strictEqual(notes.length, 3, "the same grade from two tabs: one notification");
+  local.prefs = { newgrades: false }; await ask({ type: "grades", items: [{ name: "X", score: 1, points: 1 }] }, CANVAS_TAB);
+  assert.strictEqual(notes.length, 3, "switched off in the popup: nothing shown"); ok();
+  // Monday summary: next Monday 08:00, from the list the page sent
+  const nm = new Date(sw.nextMonday8(new Date(2026, 10, 8, 12)));   // a Sunday
+  assert.deepStrictEqual([nm.getDay(), nm.getHours(), nm.getDate()], [1, 8, 9], "Sunday noon: the next day at 08:00");
+  assert.strictEqual(new Date(sw.nextMonday8(new Date(2026, 10, 9, 9))).getDate(), 16, "Monday 09:00: next week");
+  assert.strictEqual(new Date(sw.nextMonday8(new Date(2026, 10, 9, 7))).getDate(), 9, "Monday 07:00: today");
+  local.prefs = {}; notes.length = 0;
+  await ask({ type: "remind", items: [{ key: "a", title: "Entrega: Lista", course: "BD", date: isoIn(1) }, { key: "b", title: "Prova: RA2", course: "BD", date: isoIn(2) }, { key: "c", title: "Entrega: Longe", date: isoIn(9) }], alarms: false }, CANVAS_TAB);
+  assert(!Object.keys(alarms).some(k => k.startsWith("r|")), "alarms: false sets no reminder");
+  await sw.summary({ scheduledTime: Date.now() });
+  const wd = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(isoIn(2) + "T12:00:00").getDay()];
+  assert.deepStrictEqual([notes[0].title, notes[0].message], ["Sua semana: 1 entrega e 1 prova", "RA2 (" + wd + ")"], "summary text, only the next 7 days");
+  await sw.summary({ scheduledTime: Date.now() - 13 * 36e5 }); assert.strictEqual(notes.length, 1, "a summary half a day late is dropped");
+  local.prefs = { summary: false }; await sw.summary({ scheduledTime: Date.now() }); assert.strictEqual(notes.length, 1, "summary off");
+  local.prefs = {};
+
+  // cards fold to their title (kept); ↑ ↓ on long pages
+  const fp = await runContent("/", null, {}, { tall: 4000 });
+  const weekSec = () => all(fp.anchor).find(e => /card week/.test(e.className)), wh = () => weekSec().kids.find(e => e.tag === "h3");
+  assert(wh().role === "button" && wh()["aria-expanded"] === "true", "the week title folds it");
+  await wh().listeners.click({ target: all(wh()).find(e => e.textContent === "↓ .ics") });
+  assert(!/folded/.test(weekSec().className), "a button in the title does not fold");
+  await wh().listeners.click({ target: wh() });
+  assert(/ folded$/.test(weekSec().className) && fp.store.fold.week === true && wh()["aria-expanded"] === "false", "folded and kept");
+  const fp2 = await runContent("/", null, { fold: { week: true } });
+  assert(/ folded$/.test(all(fp2.anchor).find(e => /card week/.test(e.className)).className), "stays folded on the next page");
+  const sc = fp.body.kids.find(k => k.id === "cp-scroll");
+  assert(sc && sc.style.display === "block", "long page: ↑ ↓ shown");
+  all(sc).find(e => e["aria-label"] === "Ir para o fim").listeners.click(); assert.deepStrictEqual(fp.env.window.scrolled, { top: 4000, behavior: "smooth" });
+  const shortPage = await runContent("/", null, {}, { tall: 1000 });
+  assert.strictEqual(shortPage.body.kids.find(k => k.id === "cp-scroll").style.display, "none", "short page: hidden");
+  const noScroll = await runContent("/", null, { prefs: { scroll: false } }, { tall: 4000 });
+  assert(!noScroll.body.kids.some(k => k.id === "cp-scroll"), "switched off: none"); ok();
+
+  // Simular notas on the course page: the ring and the needs follow the typed grades; nothing is saved
+  const simP = await runContent("/courses/71306", []), sp = simP.anchor.kids.find(k => k.id === "qf-panel");
+  const headTxt = () => text(all(sp).find(e => /^card cring/.test(e.className)));
+  const keys0 = JSON.stringify(simP.store), before = headTxt(), sbtn = all(sp).find(e => e.textContent === "Simular notas");
+  assert(sbtn && !all(sp).some(e => e.className === "simi"), "a Simular button, no inputs yet");
+  sbtn.listeners.click();
+  const ins = all(sp).filter(e => e.className === "simi");
+  assert(ins.length > 0 && ins.every(i => i.placeholder && /^Simular a nota de /.test(i["aria-label"])), "one input per item without a grade, the need as placeholder");
+  ins.forEach(i => { i.value = "abc"; i.listeners.input(); });
+  assert.strictEqual(headTxt().replace(" (simulação)", ""), before, "an invalid grade changes nothing");
+  ins.forEach(i => { i.value = String(i["aria-label"].match(/de ([\d,]+)\)$/)[1]); i.listeners.input(); });
+  assert(/\(simulação\)/.test(headTxt()) && /10 garantidos de 10|garantida com essas notas/.test(headTxt()), "full marks everywhere: the head says so: " + headTxt());
+  assert(/simulating/.test(all(sp).find(e => /^card cring/.test(e.className)).className), "the head is marked as a simulation");
+  sbtn.listeners.click();
+  assert.strictEqual(headTxt(), before, "leaving puts the real numbers back"); assert(!all(sp).some(e => e.className === "simi"), "inputs gone");
+  assert.strictEqual(JSON.stringify(simP.store), keys0, "nothing saved"); ok();
+
+  // logging out also clears the reminders, the week list and the icon; a course panel in use is not swapped by a newer reading
+  const lo2 = await runContent("/logout", null, cold.store);
+  assert(lo2.sent.some(m => m.type === "remind" && m.items.length === 0 && m.alarms === false) && lo2.sent.some(m => m.type === "next" && m.date === null), "logout: service worker state dropped");
+  const busy2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
+  const p0 = busy2.anchor.kids.find(k => k.id === "qf-panel");
+  all(p0).find(e => e.textContent === "Simular notas").listeners.click();
+  await new Promise(r => setTimeout(r, 350));
+  assert(busy2.store.cache.at > st10.cache.at && busy2.anchor.kids.find(k => k.id === "qf-panel") === p0, "simulating: the panel stays while the new reading is saved");
+  const idle2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
+  const q0 = idle2.anchor.kids.find(k => k.id === "qf-panel"); await new Promise(r => setTimeout(r, 350));
+  assert(idle2.anchor.kids.find(k => k.id === "qf-panel") !== q0 && idle2.anchor.kids.filter(k => k.id === "qf-panel").length === 1, "idle: redrawn once with the new reading"); ok();
+
+  // Anotações: one note per course and user, saved as you type, shown open when there is one
+  const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } });
+  const nbx = np.anchor.kids.find(k => k.id === "qf-panel"), pad = all(nbx).find(e => /^card notes/.test(e.className)), ta = all(pad).find(e => e.tag === "textarea");
+  assert(pad.hidden && !ta.value, "closed and empty: another user's note is not mine");
+  all(nbx).find(e => e.textContent === "Anotações").listeners.click(); assert(!pad.hidden, "opens");
+  ta.value = "RA3 cai JOIN"; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
+  assert.deepStrictEqual(np.store.notes, { 9: { 71306: "do outro" }, 5: { 71306: "RA3 cai JOIN" } }, "saved per user and course");
+  const np2 = await runContent("/courses/71306", [], { notes: np.store.notes }); await new Promise(r => setTimeout(r, 10));
+  const pad2 = all(np2.anchor).find(e => /^card notes/.test(e.className));
+  assert(!pad2.hidden && all(pad2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, open");
+  ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
+  assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed"); ok();
+
+  // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
+  const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
+  const ibx = all(ib.anchor).find(e => /card news inbox/.test(e.className));
+  assert(ibx && /Caixa de entrada \| 1 não lida/.test(text(ibx)) && /Dúvida RA3 \| Prof\. Ana, Aluno/.test(text(ibx)), "subject and who (not the student themself)");
+  assert.strictEqual(ib.fetches.filter(u => u.includes("/api/v1/conversations")).length, 1, "one page of messages only, even with more pages");
+  assert(!/segredo/.test(JSON.stringify(ib.store.cache)), "the message text is never read into the cache");
+  assert.strictEqual(all(ibx).find(e => e.textContent === "Dúvida RA3").href, "https://pucpr.instructure.com/conversations");
+  const ibf = await runContent("/", null, {}, { inboxFails: true });
+  assert(ibf.store.cache && ibf.store.cache.inbox === null && /Próximos 7 dias/.test(text(ibf.anchor)), "inbox refused: the rest still drawn");
+  const ibo = await runContent("/", null, { prefs: { inbox: false } }, { inbox: [{ subject: "x", participants: [] }] });
+  assert(!all(ibo.anchor).some(e => /inbox/.test(e.className)), "switched off: no card"); ok();
+
+  // Foco: the alarm the popup sets ends with a notification
+  local.focus = { kind: "foco", end: Date.now() }; notes.length = 0;
+  await listeners.alarm({ name: "focus|foco", scheduledTime: Date.now() }); await new Promise(r => setTimeout(r, 5));
+  assert(notes[0] && /hora da pausa/.test(notes[0].title) && local.focus === undefined, "study block over: break notice, timer cleared");
+  await listeners.alarm({ name: "focus|pausa", scheduledTime: Date.now() }); await new Promise(r => setTimeout(r, 5));
+  assert.strictEqual(notes[1].title, "Pausa acabou"); ok();
+
+  // .ics: the deadlines and exams from today on
+  const icsPage = await runContent("/", null);
+  const icsBtn = all(icsPage.anchor).find(e => e.textContent === "↓ .ics");
+  let blob = null; const realCreate = URL.createObjectURL; URL.createObjectURL = b => { blob = b; return "blob:x"; };
+  icsBtn.listeners.click(); URL.createObjectURL = realCreate;
+  const ics = await blob.text();
+  assert(/^BEGIN:VCALENDAR\r\n/.test(ics) && /END:VCALENDAR\r\n$/.test(ics), "a calendar file");
+  assert(/SUMMARY:Lista 3 · Arquitetura de Banco de Dados\r\n/.test(ics) && /DTSTART:\d{8}T\d{6}Z/.test(ics) && /URL:https:\/\/pucpr.instructure.com\/courses\/71306\/assignments\/1/.test(ics), "timed deadline with its link");
+  assert(!/Relatório/.test(ics), "past work left out"); assert(/UID:assignment:1@caderno-plus/.test(ics)); ok();
   const locked = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 5000 }), { scripts: pageEnv });
   assert.strictEqual(locked.fetches.length, 0, "another tab is reading: this one uses the last reading");
   assert(all(locked.anchor).some(e => /kpi/.test(e.className)), "and still draws it");
   const freed = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 2 * 60 * 1000 }));
-  assert.strictEqual(freed.fetches.length, 5, "a lock left by a closed tab expires after a minute"); assert.strictEqual(freed.store.refreshing, undefined, "lock released");
+  assert.strictEqual(freed.fetches.length, 6, "a lock left by a closed tab expires after a minute"); assert.strictEqual(freed.store.refreshing, undefined, "lock released");
   // SSO or cookie switch: no user id in the page, a fresh reading of A, but the session is B → nothing of A is drawn
   const toB = await runContent("/", null, Object.assign({}, cold.store, { who: { id: 5, at: Date.now() } }), { selfId: 8, failCourses: true });
   assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert.strictEqual(toB.anchor.kids.length, 0, "nothing of A drawn"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");
@@ -395,7 +542,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const fromPage = await runContent("/", null, {}, { scripts: [{ textContent: 'ENV = {"current_user_id":"5","x":1}' }] });
   assert(!fromPage.fetches.includes("/api/v1/users/self") && fromPage.store.cache.user === 5, "user id printed in the page: no /users/self");
   const switched = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"8"}' }] });
-  assert(switched.store.cache.user === 8 && switched.fetches.length === 4, "another user in the page: the reading is not reused");
+  assert(switched.store.cache.user === 8 && switched.fetches.length === 5, "another user in the page: the reading is not reused");
   for (const pth of ["/login/canvas", "/logout", "/users/sign_out"]) {
     const lo = await runContent(pth, null, cold.store);
     assert.strictEqual(lo.store.who, undefined, pth + ": cached user forgotten"); assert.strictEqual(lo.store.cache, undefined, pth + ": last reading removed, not only marked old");
@@ -421,9 +568,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(out.anchor.kids.length, 0, "and nothing drawn"); ok();
 
   // every module off: nothing on the page, and the reminders cleared
-  const off = await runContent("/", null, { prefs: { week: false, news: false, grades: false, remind: false } });
+  const off = await runContent("/", null, { prefs: { week: false, news: false, grades: false, remind: false, summary: false } });
   assert.strictEqual(off.anchor.kids.length, 0, "no dashboard panel"); assert.strictEqual(text(off.header), "", "no card pill");
-  assert.deepStrictEqual(off.sent.find(m => m.type === "remind").items, [], "reminders off: the list sent is empty");
+  assert.deepStrictEqual(off.sent.find(m => m.type === "remind").items, [], "reminders and summary off: the list sent is empty");
+  const sumOnly = await runContent("/", null, { prefs: { remind: false } });
+  const sm = sumOnly.sent.find(m => m.type === "remind");
+  assert(sm.items.length > 0 && sm.alarms === false, "reminders off, summary on: the list goes for the summary, no alarms");
   const nofiles = await runContent("/courses/71306", [], { prefs: { files: false } });
   assert(!all(nofiles.anchor).some(e => e.textContent === "Baixar arquivos da matéria"), "files off: no download button");
   assert.match(text(nofiles.anchor), /garantidos de 10/, "grades still shown");
@@ -433,16 +583,20 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!noPlan.sent.some(m => m.type === "remind"), "planner down: the reminders already set are kept"); assert.match(text(noPlan.anchor), /Prova adiada/, "announcements still shown"); ok();
 
   // theme.js: class on <html> from the setting, live when the popup changes it
-  const theme = (pref, systemDark) => {
+  const theme = (pref, systemDark, hour) => {
     const cls = new Set(), listen = {}, doc = { createElement: () => ({}), head: { appendChild() {} }, documentElement: { classList: { toggle: (c, on) => on ? cls.add(c) : cls.delete(c) } } };
     const chrome = { storage: { local: { get: async () => ({ prefs: { theme: pref } }) }, onChanged: { addListener: f => { listen.change = f; } } } };
-    new Function("document", "chrome", "matchMedia", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }));
-    return { cls, listen };
+    const ticks = [], RealDate = Date, D = hour == null ? Date : class extends RealDate { getHours() { return hour; } };
+    new Function("document", "chrome", "matchMedia", "setInterval", "Date", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }), f => ticks.push(f), D);
+    return { cls, listen, ticks };
   };
   const th = theme("dark", false); await new Promise(r => setTimeout(r, 5));
   assert(th.cls.has("cp-dark"), "dark theme"); th.listen.change({ prefs: { newValue: { theme: "off" } } }, "local"); assert(!th.cls.has("cp-dark"), "turned off live");
   const auto = theme("auto", true), light = theme(undefined, true); await new Promise(r => setTimeout(r, 5));
-  assert(auto.cls.has("cp-dark") && !light.cls.has("cp-dark"), "auto follows the system; default is the Canvas light theme"); ok();
+  assert(auto.cls.has("cp-dark") && !light.cls.has("cp-dark"), "auto follows the system; default is the Canvas light theme");
+  const thDim = theme("dim", false), thLate = theme("night", false, 22), thDay = theme("night", true, 13); await new Promise(r => setTimeout(r, 5));
+  assert(thDim.cls.has("cp-dark") && thDim.cls.has("cp-dim"), "dim: dark, softer"); assert(thLate.cls.has("cp-dark") && !thLate.cls.has("cp-dim"), "night at 22h: dark");
+  assert(!thDay.cls.has("cp-dark"), "night at 13h: light, whatever the system"); assert.strictEqual(thDay.ticks.length, 1, "checked again every few minutes"); ok();
 
   // the Caderno+ page: a left-menu item, and the calculator over Canvas on #campus
   const camp = await runContent("/", null);
@@ -480,11 +634,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!all(bmDash.anchor).some(e => e.href === "#campus") && !bmDash.menu.kids.length, "no Caderno+ page without the extension");
   const bmCourse = await runContent("/courses/71306", [], {}, { src: bm });
   assert.match(text(bmCourse.anchor), /garantidos de 10/);
-  assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no/.test(e.textContent)), "no downloads and no calculator page in the bookmarklet");
+  assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no|^Anotações/.test(e.textContent)), "no downloads, no calculator page and no notes in the bookmarklet");
   const bmOther = await runContent("/profile", null, {}, { src: bm });
   assert.strictEqual(bmOther.alerts.length, 1, "elsewhere it asks for the dashboard or a course"); ok();
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus)");
 })().catch(e => { console.error(e); process.exit(1); });

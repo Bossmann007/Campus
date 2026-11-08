@@ -34,3 +34,5 @@ footer { display:flex; justify-content:space-between; align-items:flex-end; gap:
 .row { margin:0 -12px; padding:0 12px; transition:background-color .15s; } .row:hover { background:color-mix(in srgb, var(--soft) 60%, transparent); }
 .list { overflow:hidden; }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; } button:hover:not(:disabled), button:active:not(:disabled) { transform:none; } }
+.acts.two { grid-template-columns:1fr 1fr; } .acts.two #fstop { grid-column:1 / -1; } [hidden] { display:none !important; }
+#focus { font-variant-numeric:tabular-nums; }

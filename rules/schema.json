@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Bossmann007/quanto-falta-pucpr/blob/main/rules/schema.json",
+  "$id": "https://github.com/Bossmann007/Campus/blob/main/rules/schema.json",
   "title": "Regras de uma turma (Caderno+ · Quanto falta)",
   "description": "Um arquivo = uma turma num semestre: rules/<semestre>/<turma>.json, por exemplo rules/2026-2/cc-manha.json. O scripts/check-rules confere este formato e mais: pesos somam 10, datas dentro do semestre, ids únicos e matérias do Canvas sem repetir entre turmas.",
   "type": "object",

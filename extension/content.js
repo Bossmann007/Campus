@@ -18,9 +18,9 @@
   const addDays = n => C.localISO(new Date(Date.now() + n * 864e5));
   const days = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(today() + "T00:00:00Z")) / 864e5);
 
-  async function getAll(url) {
+  async function getAll(url, pages = Infinity) {   // pages: stop after that many (the inbox reads only the first)
     const out = [];
-    while (url) {
+    while (url && pages-- > 0) {
       const r = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
       if (!r.ok) throw new Error("o Canvas respondeu " + r.status);
       const body = JSON.parse((await r.text()).replace(/^while\(1\);/, ""));
@@ -45,22 +45,36 @@
     if (cache && cache.user !== id) await forget();
     return id;
   }
-  const forget = () => chrome.storage.local.remove(["cache", "search"]);
+  // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
+  const forget = async () => {
+    await chrome.storage.local.remove(["cache", "search"]);
+    chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
+  };
   // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
-  // time: while another tab is reading (lock under a minute old), this one uses the last reading.
-  async function load() {
+  // time: while another tab is reading (lock under a minute old), this one uses the last reading. An older reading of the same
+  // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas).
+  async function load(onFresh) {
     const user = await whoAmI();
     const { cache, refreshing } = await chrome.storage.local.get(["cache", "refreshing"]);
     const mine = cache && cache.v === VERSION && cache.user === user;
     if (mine && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
+    if (mine && onFresh) { refresh(user).then(onFresh, () => {}); return cache; }
+    return refresh(user);
+  }
+  async function refresh(user) {
     await chrome.storage.local.set({ refreshing: Date.now() });
     try {
+      const inbox = getAll("/api/v1/conversations?scope=unread&per_page=5", 1).then(list => list.slice(0, 5).map(m => ({ subject: String(m.subject || "(sem assunto)").slice(0, 140),
+        from: (Array.isArray(m.participants) ? m.participants : []).filter(x => x && x.name && x.id !== user).map(x => x.name).slice(0, 2).join(", ").slice(0, 80), at: m.last_message_at || null })), () => null);   // unread messages (subject and who), read alongside
+      const plan = getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders, read alongside the grades
       const got = {}, data = await collectCanvasGrades(got);
       if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
-      const planner = await getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders
-      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null };
+      const planner = await plan;
+      await newGrades(user, data);
+      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh });
       return fresh;
     } finally { await chrome.storage.local.remove("refreshing"); }
@@ -81,6 +95,24 @@
     await chrome.storage.local.set({ marks: Object.assign({}, all, { [user]: mine }) });
     return mine;
   }
+  // New grades: what got a score (or a different one) since the last reading of this user. The first reading only sets the
+  // baseline. Kept in "recent" per user (20 newest, 30 days) for the dashboard; the service worker shows a notification.
+  const gradeKey = (c, x) => c.id + ":" + x.name;
+  async function newGrades(user, data) {
+    const { cache: old, recent, prefs } = await chrome.storage.local.get(["cache", "recent", "prefs"]);
+    if (!old || old.user !== user || !old.data || !Array.isArray(old.data.courses)) return;
+    const before = {};
+    for (const c of old.data.courses) for (const x of c.assignments || []) before[gradeKey(c, x)] = x.score;
+    const now = Date.now(), got = [];
+    for (const c of data.courses) for (const x of c.assignments)
+      if (typeof x.score === "number" && before[gradeKey(c, x)] !== x.score && gradeKey(c, x) in before)
+        got.push({ k: gradeKey(c, x), course: shortName(c.name), courseId: c.id, name: String(x.name), score: x.score, points: x.points, url: x.url && inCanvas(x.url), at: now });
+    if (!got.length) return;
+    const all = recent && typeof recent === "object" ? recent : {}, mine = (Array.isArray(all[user]) ? all[user] : []).filter(r => r && now - r.at < 30 * 864e5 && !got.some(g => g.k === r.k));
+    await chrome.storage.local.set({ recent: Object.assign({}, all, { [user]: got.concat(mine).slice(0, 20) }) });
+    if (cpPrefs(prefs).newgrades) chrome.runtime.sendMessage({ type: "grades", items: got.slice(0, 10) }).catch(() => {});
+  }
+  const pts = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
@@ -126,11 +158,28 @@
   // What the service worker should remind: work not yet handed in and exams, in the next 14 days. Without a planner reading
   // (Canvas failed) nothing is sent, so a passing error does not wipe the reminders already set.
   function sendReminders(list, prefs, cache) {
-    if (prefs.remind && !cache.planner) return;
+    if ((prefs.remind || prefs.summary) && !cache.planner) return;
     const t = today(), end = addDays(14);
-    const items = prefs.remind ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
+    const items = prefs.remind || prefs.summary ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
       .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
-    chrome.runtime.sendMessage({ type: "remind", items }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "remind", items, alarms: prefs.remind }).catch(() => {});   // the Monday summary reads the list too
+  }
+
+  // The deadlines and exams from today on as a calendar file (.ics) for Google Agenda, Outlook or the phone.
+  function icsText(list) {
+    const esc = v => String(v).replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, " ");
+    const utc = iso => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const day = iso => iso.replace(/-/g, ""), stamp = utc(new Date().toISOString());
+    const next = iso => C.localISO(new Date(Date.parse(iso + "T12:00:00") + 864e5));
+    const ev = list.filter(x => x.date >= today() && (x.task || x.exam || x.due)).slice(0, 200).map(x => ["BEGIN:VEVENT", "UID:" + esc(x.key) + "@caderno-plus", "DTSTAMP:" + stamp,
+      ...(x.due ? ["DTSTART:" + utc(x.due), "DTEND:" + utc(x.due)] : ["DTSTART;VALUE=DATE:" + day(x.date), "DTEND;VALUE=DATE:" + day(next(x.date))]),
+      "SUMMARY:" + esc((x.exam ? "Prova: " : "") + x.title + " · " + x.course), ...(x.url ? ["URL:" + x.url] : []), "END:VEVENT"].join("\r\n"));
+    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Caderno+//PUCPR//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Caderno+ · entregas e provas", ...ev, "END:VCALENDAR"].join("\r\n") + "\r\n";
+  }
+  function saveIcs(list) {
+    const a = el("a"), url = URL.createObjectURL(new Blob([icsText(list)], { type: "text/calendar" }));
+    a.href = url; a.download = "caderno-entregas-e-provas.ics"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
   const COLORS = { ok: ["#e2f1e9", "#1f5c42"], warn: ["#fbefd6", "#744405"], bad: ["#fce4dd", "#912713"] };
@@ -142,7 +191,8 @@
   }
 
   // Dashboard: one status pill per card of the six courses. Cards render late (React), so watch the page.
-  function decorateCards(a) {
+  function decorateCards(a, again) {
+    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { if (card.cpPill) card.cpPill.remove(); delete card.dataset.qf; }
     for (const card of document.querySelectorAll(".ic-DashboardCard:not([data-qf])")) {
       const link = card.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href"));
       const c = m && a.byCanvasId[m[1]];
@@ -150,7 +200,7 @@
       if (!c) continue;
       const st = a.state(c), p = pill(a.label(st), a.tone(st));
       p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
-      (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
+      card.cpPill = p; (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
     }
   }
 
@@ -306,6 +356,7 @@
     .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
     .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
+    .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini { margin-left:10px; }
     .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
     .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
@@ -314,6 +365,12 @@
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
     .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
+    .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
+    h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
+    .folded > h3[role=button]::before { transform:rotate(-90deg); } .folded > :not(h3) { display:none !important; } .folded > h3 { margin-bottom:0; }
+    .simi { all:unset; box-sizing:border-box; width:100%; max-width:130px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
+    .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
+    .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -337,6 +394,18 @@
   const link = (text, url) => { const x = el(url ? "a" : "span", "n", text); if (url) x.href = url; x.title = text; return x; };
   const mid = (title, url, sub) => { const m = el("span", "mid"); m.append(link(title, url), el("div", "c", sub)); return m; };
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  // A dashboard card folds to its title with a click on it (kept per card in chrome.storage.local "fold").
+  let folds = {};
+  function foldable(sec, h, key) {
+    const set = on => { sec.className = sec.className.replace(/ folded$/, "") + (on ? " folded" : ""); h.setAttribute("aria-expanded", String(!on)); };
+    h.tabIndex = 0; h.setAttribute("role", "button"); h.title = "Clique para recolher ou abrir";
+    const flip = async e => {
+      if (e && e.target && e.target !== h && e.target.tagName === "BUTTON") return;
+      folds = Object.assign({}, folds, { [key]: !folds[key] }); set(folds[key]); await chrome.storage.local.set({ fold: folds });
+    };
+    h.addEventListener("click", flip); h.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } });
+    set(!!folds[key]);
+  }
   const ago = iso => { const d = -days(iso); return d <= 0 ? "hoje" : d === 1 ? "ontem" : d < 7 ? "há " + d + " dias" : dmy(iso); };
   const needTone = u => u.req.impossible ? "bad" : u.req.f <= 1e-9 ? "ok" : "warn";
 
@@ -377,6 +446,9 @@
       pr.append(r, el("span", null, got + " de " + work.length + " feitas"));
       pr.setAttribute("aria-label", got + " de " + work.length + " feitas nesta semana"); h.appendChild(pr);
     }
+    foldable(sec, h, "week");
+    const ics = el("button", "mini", "↓ .ics"); ics.type = "button"; ics.title = "Exportar entregas e provas para a sua agenda (Google, Outlook, celular)";
+    ics.addEventListener("click", () => saveIcs(list)); h.appendChild(ics);
     sec.appendChild(h);
     if (overdue.length) {   // ticked overdue work stays here greyed (so it can be unticked) until it leaves the planner window
       const row = el("div", "late"); row.appendChild(el("span", "pill " + (late.length ? "bad" : "ok"), "Atrasadas"));
@@ -500,9 +572,9 @@
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
-  function dashPanel(a, cache, prefs, marks) {
+  function dashPanel(a, cache, prefs, marks, rec) {
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
-    if (!grades && !why && !week && !news) return;
+    if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length)) return;
     const box = panelHost("cp-dash");
     if (!box) return;
     const grid = el("div", "grid");
@@ -519,6 +591,25 @@
       const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
     }
+    const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < 30 * 864e5).slice(0, 5) : [];
+    if (recent.length) {   // the latest grades, newest first; "nova" for the last 3 days
+      const sec = el("section", "card news grades-new"), h = el("h3", null, "Notas novas"), fresh = recent.filter(r => Date.now() - r.at < 3 * 864e5).length;
+      if (fresh) h.appendChild(el("span", "pill ok", fresh + (fresh === 1 ? " nova" : " novas")));
+      const ul = el("ul");
+      for (const r of recent) {
+        const li = el("li", "row"), sc = el("span", "sc", pts(r.score)); sc.appendChild(el("small", null, " de " + pts(r.points)));
+        li.append(Date.now() - r.at < 3 * 864e5 ? el("span", "dot", "nova") : el("span"), mid(r.name, r.url || null, r.course + " · " + ago(C.localISO(new Date(r.at)))), sc);
+        ul.appendChild(li);
+      }
+      sec.append(h, ul); foldable(sec, h, "grades-new"); grid.appendChild(sec);
+    }
+    if (prefs.inbox && Array.isArray(cache.inbox) && cache.inbox.length) {   // the unread Canvas messages, a click opens the inbox
+      const sec = el("section", "card news inbox"), h = el("h3", null, "Caixa de entrada"), n = cache.inbox.length;
+      h.appendChild(el("span", "pill nt", (n >= 5 ? "5+" : n) + (n === 1 ? " não lida" : " não lidas"))); sec.appendChild(h);
+      const ul = el("ul");
+      for (const m of cache.inbox) { const li = el("li", "row unread"); li.append(el("span", "dot", "não lida"), mid(m.subject, location.origin + "/conversations", m.from), el("span", "d", m.at ? ago(C.localISO(new Date(m.at))) : "")); ul.appendChild(li); }
+      sec.appendChild(ul); foldable(sec, h, "inbox"); grid.appendChild(sec);
+    }
     if (news) {
       const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
       const sec = el("section", "card news"), h = el("h3", null, "Avisos");
@@ -532,7 +623,7 @@
         ul.appendChild(li);
       }
       sec.appendChild(all.length ? ul : el("div", "muted", a.term ? "Nenhum aviso nos últimos 60 dias." : "Nenhuma matéria de " + TERM + " no seu Canvas."));
-      grid.appendChild(sec);
+      foldable(sec, h, "news"); grid.appendChild(sec);
     }
   }
 
@@ -546,24 +637,46 @@
     const top = el("div", "hd"); top.append(mark(), wordmark());
     if (c) top.appendChild(el("span", "brand", "meta " + fmt(T, 0) + " · lido do Canvas " + ago(C.localISO(new Date(cache.at)))));
     box.appendChild(top);
+    // Simular: type a grade in the items without one and see the ring, the need and the other items change (nothing is saved).
+    const sim = {}; let simOn = false, paint = () => {};
     if (c) {
-      const st = a.state(c), nx = C.nextItem(st), head = el("div", "card cring"), mid = el("div", "mid");
-      mid.append(el("div", "t", earnedText(st) + " garantidos de 10"),
-        el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida pelas notas lançadas" : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
-      head.append(ring(st, true), mid, needBig(st)); box.appendChild(head);
+      const headBox = el("div"), st0 = a.state(c), nx = C.nextItem(st0);
+      const headCard = st => {
+        const head = el("div", "card cring" + (simOn ? " simulating" : "")), mid = el("div", "mid");
+        mid.append(el("div", "t", earnedText(st) + " garantidos de 10" + (simOn ? " (simulação)" : "")),
+          el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida" + (simOn ? " com essas notas" : " pelas notas lançadas") : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
+        head.append(ring(st, true), mid, needBig(st)); return head;
+      };
+      box.appendChild(headBox);
       const tbl = el("div", "card items"), th = el("div", "ir ih"); th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota"));
       tbl.appendChild(th);
-      const total = C.weightSum(c), d2 = it => it.inMax >= 5 ? 1 : 2;
+      const total = C.weightSum(c), d2 = it => it.inMax >= 5 ? 1 : 2, open = [];
       for (const it of c.items) {
         const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.grades[k]), name = el("span", "n", it.name);
-        if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
+        if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st0.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
         let g;
         if (Number.isNaN(p)) g = el("span", "g e", "nota inválida");
         else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.grades[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
-        else if (st.late.includes(it)) g = el("span", "g e", "falta a nota");
-        else g = el("span", "g e", st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it }));
+        else { g = el("span", "g e"); open.push({ it, k, g }); }
         row.append(name, el("span", "w", Math.round(it.max / total * 100) + "%"), g); tbl.appendChild(row);
       }
+      const hint = it => st => st.late.includes(it) && !(C.key(c, it) in sim) ? "falta a nota" : st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it });
+      paint = () => {
+        const st = C.courseState(c, Object.assign({}, a.grades, sim), today(), T);
+        headBox.replaceChildren(headCard(st));
+        for (const o of open) {
+          const txt = (o.k in sim) ? "" : hint(o.it)(st);
+          if (!simOn) { o.g.replaceChildren(); o.g.textContent = txt; o.mounted = false; continue; }
+          if (!o.input) {
+            o.input = el("input", "simi"); o.input.type = "text"; o.input.inputMode = "decimal"; o.input.setAttribute("aria-label", "Simular a nota de " + o.it.name + " (de " + fmt(o.it.inMax, d2(o.it)) + ")");
+            o.input.addEventListener("input", () => { const v = String(o.input.value || "").trim(), pp = v && C.itemPoints(o.it, v);
+              if (typeof pp === "number" && !Number.isNaN(pp)) sim[o.k] = v; else delete sim[o.k]; paint(); });
+          }
+          if (!o.mounted) { o.g.textContent = ""; o.g.replaceChildren(o.input); o.mounted = true; }
+          o.input.placeholder = txt || "e se?";
+        }
+      };
+      paint();
       box.appendChild(tbl);
       box.appendChild(el("div", "muted src", source([c])));
     }
@@ -573,8 +686,36 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
+    if (c && c.items.some(it => C.itemPoints(it, a.grades[C.key(c, it)]) === null)) {
+      const sb = el("button", null, "Simular notas"), note = el("span", "muted", "");
+      sb.addEventListener("click", () => {
+        simOn = !simOn; if (!simOn) for (const k of Object.keys(sim)) delete sim[k];
+        sb.textContent = simOn ? "Sair da simulação" : "Simular notas"; note.textContent = simOn ? "Digite notas nas avaliações sem nota · nada é salvo" : "";
+        paint();
+      });
+      acts.append(sb, note);
+    }
     if (c && APP) { const open = el("button", null, "Abrir no Caderno+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
-    acts.appendChild(status); box.appendChild(acts);
+    // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
+    const nb = el("button", null, "Anotações"), pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
+    ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
+    pad.append(ta, saved); pad.hidden = true;
+    let tm = 0;
+    const store = async () => {
+      const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
+      const v = String(ta.value || "").slice(0, 5000); if (v) mine[courseId] = v; else delete mine[courseId];
+      await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
+    };
+    let typed = 0;
+    ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
+    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || Date.now() - typed < 30000;
+    chrome.storage.local.get("notes").then(({ notes }) => {
+      const v = notes && notes[cache.user] && notes[cache.user][courseId];
+      if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
+    });
+    nb.addEventListener("click", () => { pad.hidden = !pad.hidden; if (!pad.hidden && ta.focus) ta.focus(); });
+    if (APP) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
+    acts.appendChild(status); box.append(acts); if (APP) box.appendChild(pad);
   }
 
   async function courseFiles(id) {
@@ -697,13 +838,41 @@
   const SIGN = /^\/(login|logout)(\/|$)|^\/users\/sign_out(\/|$)/;
   const signedOut = () => forget();   // the calculator page reads the cache too: nothing of the previous student may stay
 
+  // ↑ and ↓ on long pages (more than 2.5 screens): to the top or the end in one click.
+  function scrollButtons() {
+    const de = document.documentElement;
+    if (document.getElementById("cp-scroll") || !de || typeof window.innerHeight !== "number" || !window.scrollTo) return;
+    const host = el("div", "cp-host"); host.id = "cp-scroll";
+    host.style.cssText = "position:fixed;right:18px;bottom:76px;z-index:9998;margin:0;display:none";
+    const root = host.attachShadow({ mode: "open" }), style = el("style");
+    style.textContent = `button { display:block; width:34px; height:34px; margin-top:6px; border-radius:50%; border:1px solid #ECE4D3; background:#FBF7EF; color:#1D2433; font:600 15px/1 -apple-system,BlinkMacSystemFont,sans-serif;
+      cursor:pointer; box-shadow:0 6px 16px -8px rgba(29,36,51,.5); opacity:.85; } button:hover { opacity:1; } button:focus-visible { outline:2px solid #E2482B; outline-offset:2px; }`;
+    const go = (txt, label, top) => { const b = el("button", null, txt); b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
+      b.addEventListener("click", () => window.scrollTo({ top: top(), behavior: "smooth" })); return b; };
+    root.append(style, go("↑", "Voltar ao topo", () => 0), go("↓", "Ir para o fim", () => de.scrollHeight));
+    let busy = false;
+    const check = () => { busy = false; host.style.display = de.scrollHeight > window.innerHeight * 2.5 ? "block" : "none"; };
+    window.addEventListener("scroll", () => { if (!busy) { busy = true; setTimeout(check, 200); } }, { passive: true });
+    document.body.appendChild(host); check();
+  }
+
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
     navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
+    if (prefs.scroll) scrollButtons();
     let cache;
-    try { cache = await load(); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
+    const paintAll = (c, again) => (queue = queue.then(() => draw(c, prefs, again)).catch(() => {}));
+    try { cache = await load(fresh => { if (fresh.at !== cache.at) paintAll(fresh, true); }); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    await paintAll(cache, false);
+  }
+  // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
+  let cardWatch = null;
+  async function draw(cache, prefs, again) {
     const a = analyse(cache), marks = await myMarks(cache.user);
+    let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
+    if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
     sendReminders(agenda(a, cache, marks), prefs, cache);
     if (prefs.search) {   // the bookmarklet can run again on the same page: one listener, opening the latest reading
@@ -714,13 +883,19 @@
       }, true);
     }
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
-    if (m) coursePanel(m[1], a, cache, prefs);
+    if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
-      dashPanel(a, cache, prefs, marks);
+      const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
+      folds = fold && typeof fold === "object" ? fold : {};
+      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null);
       if (!prefs.grades || !a.rules) return;
-      decorateCards(a);
+      decorateCards(a, again);
+      // the cards render late (React): watch the page for 20 seconds, then stop
+      if (cardWatch) cardWatch.disconnect();
       let t = 0;
-      new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); }).observe(document.body, { childList: true, subtree: true });
+      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); });
+      watch.observe(document.body, { childList: true, subtree: true });
+      setTimeout(() => watch.disconnect(), 20000);
     }
   }
   run();
