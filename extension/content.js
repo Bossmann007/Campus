@@ -131,6 +131,53 @@
     else { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(last); if (m) { const y = new Date().getFullYear(), iso = y + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0"); date = iso < addDays(-1) ? (y + 1) + iso.slice(4) : iso; } }
     return { title: (date ? words.slice(0, -1) : words).join(" "), date };
   }
+  // "Desde a sua última visita": new assignments and announcements (from the reading) and new files and modules (one GET
+  // each per course, at most once an hour), compared with a snapshot per Canvas user. The first look only takes the
+  // snapshot. Changes pile up (7 days, 40 at most) until the student marks them as seen.
+  let myChanges = { seenAt: 0, items: [] };
+  async function loadChanges(user) { const { changes } = await chrome.storage.local.get("changes"); const c = changes && changes[user]; myChanges = c && Array.isArray(c.items) ? c : { seenAt: Date.now(), items: [] }; return myChanges; }
+  async function saveChanges(user, c) { const { changes } = await chrome.storage.local.get("changes"); myChanges = c; await chrome.storage.local.set({ changes: Object.assign({}, changes, { [user]: c }) }); }
+  async function whatChanged(cache) {
+    const user = cache.user, { snap } = await chrome.storage.local.get("snap"), old = snap && snap[user], hourOld = !old || Date.now() - (old.netAt || 0) > 60 * 60 * 1000;
+    const now = { at: Date.now(), netAt: hourOld ? Date.now() : old.netAt, asg: {}, ann: [], files: {}, mods: {} };
+    for (const c of cache.data.courses) now.asg[c.id] = c.assignments.map(x => x.name);
+    now.ann = (cache.data.announcements || []).map(x => x.url || x.title);
+    for (const c of cache.data.courses) {
+      if (!hourOld) { now.files[c.id] = old.files[c.id]; now.mods[c.id] = old.mods[c.id]; continue; }
+      try { now.files[c.id] = (await getAll("/api/v1/courses/" + c.id + "/files?sort=created_at&order=desc&per_page=15", 1)).map(f => [f.id, String(f.display_name || "arquivo").slice(0, 120)]); } catch (e) { now.files[c.id] = old && old.files[c.id]; }
+      try { now.mods[c.id] = (await getAll("/api/v1/courses/" + c.id + "/modules?per_page=50", 1)).map(m => [m.id, String(m.name || "módulo").slice(0, 120)]); } catch (e) { now.mods[c.id] = old && old.mods[c.id]; }
+    }
+    await chrome.storage.local.set({ snap: Object.assign({}, snap, { [user]: now }) });
+    if (!old) return false;
+    const items = [], t = Date.now(), byName = {};
+    for (const c of cache.data.courses) {
+      const nm = shortName(c.name), was = old.asg[c.id];
+      byName[c.id] = nm;
+      if (Array.isArray(was)) for (const x of c.assignments) if (!was.includes(x.name)) items.push({ k: "t:" + c.id + ":" + x.name, kind: "tarefa", text: x.name, course: nm, url: x.url && inCanvas(x.url), at: t });
+      const of = old.files[c.id], nf = now.files[c.id];
+      if (Array.isArray(of) && Array.isArray(nf)) for (const [id, name] of nf) if (!of.some(f => f[0] === id)) items.push({ k: "f:" + id, kind: "arquivo", text: name, course: nm, url: location.origin + "/courses/" + c.id + "/files/" + id, at: t });
+      const om = old.mods[c.id], nmods = now.mods[c.id];
+      if (Array.isArray(om) && Array.isArray(nmods)) for (const [id, name] of nmods) if (!om.some(m => m[0] === id)) items.push({ k: "m:" + id, kind: "módulo", text: name, course: nm, url: location.origin + "/courses/" + c.id + "/modules#module_" + id, at: t });
+    }
+    for (const a of cache.data.announcements || []) if (!old.ann.includes(a.url || a.title)) items.push({ k: "a:" + (a.url || a.title), kind: "aviso", text: String(a.title || ""), course: shortName(a.course), url: a.url && inCanvas(a.url), at: t });
+    if (!items.length) return false;
+    const cur = await loadChanges(user), keep = cur.items.filter(x => t - x.at < 7 * 864e5 && !items.some(n => n.k === x.k));
+    await saveChanges(user, { seenAt: cur.seenAt, items: items.concat(keep).slice(0, 40) });
+    return true;
+  }
+  function changesCard(cache, rec, redraw) {
+    const since = myChanges.seenAt || 0, grades = (Array.isArray(rec) ? rec : []).filter(r => r && r.at > since).length, items = myChanges.items;
+    if (!items.length && !grades) return null;
+    const sec = el("section", "card news changes"), h = el("h3", null, "Desde a sua última visita"), seen = el("button", "mini", "Visto ✓");
+    seen.type = "button"; seen.title = "Limpar esta lista";
+    seen.addEventListener("click", async () => { await saveChanges(cache.user, { seenAt: Date.now(), items: [] }); redraw(); });
+    const n = items.length + grades; h.appendChild(el("span", "pill ok", n + (n === 1 ? " novidade" : " novidades"))); h.appendChild(seen); sec.appendChild(h);
+    const ul = el("ul");
+    if (grades) { const li = el("li", "row"); li.append(el("span", "pill nt", "nota"), mid(grades + (grades === 1 ? " nota nova" : " notas novas"), location.origin + "/grades", "veja em Notas novas"), el("span")); ul.appendChild(li); }
+    for (const x of items.slice(0, 8)) { const li = el("li", "row"); li.append(el("span", "pill nt", x.kind), mid(x.text, x.url || null, x.course), el("span", "d", ago(C.localISO(new Date(x.at))))); ul.appendChild(li); }
+    if (items.length > 8) ul.appendChild(el("li", "muted", "+" + (items.length - 8) + " outras"));
+    sec.appendChild(ul); return sec;
+  }
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
@@ -421,6 +468,7 @@
     .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
     .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
     h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
@@ -706,6 +754,7 @@
       const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
     }
+    if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
     if (prefs.tasks) grid.appendChild(tasksCard(cache, marks, () => onMode && onMode(mode)));
     const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < (clean ? 3 : 30) * 864e5).slice(0, 5) : [];
     if (recent.length) {   // the latest grades, newest first; "nova" for the last 3 days
@@ -993,7 +1042,7 @@
   let cardWatch = null;
   async function draw(cache, prefs, again) {
     const a = analyse(cache), marks = await myMarks(cache.user);
-    await loadTasks(cache.user);
+    await loadTasks(cache.user); await loadChanges(cache.user);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
@@ -1013,12 +1062,13 @@
       const onMode = async k => {   // switch from the panel (or a change of tasks): saved, the panel redrawn at once with fresh ticks and tasks
         const { prefs: saved } = await chrome.storage.local.get("prefs");
         if (cpPrefs(saved).mode !== k) { const next = Object.assign({}, saved, { mode: k }); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); }
-        const m2 = await myMarks(cache.user); await loadTasks(cache.user);
+        const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
         const old = document.getElementById("cp-dash"); if (old) old.remove();
         dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
         sendReminders(agenda(a, cache, m2), prefs, cache);
       };
       window.cpRedraw = () => onMode(prefs.mode);
+      if (prefs.changes) whatChanged(cache).then(got => { if (got) onMode(prefs.mode); }, () => {});   // in the background: the panel never waits for it
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       const { colors } = await chrome.storage.local.get("colors");
       const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };
