@@ -361,6 +361,9 @@
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
     h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
     .folded > h3[role=button]::before { transform:rotate(-90deg); } .folded > :not(h3) { display:none !important; } .folded > h3 { margin-bottom:0; }
+    .simi { all:unset; box-sizing:border-box; width:100%; max-width:130px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
+    .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
+    .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -620,24 +623,46 @@
     const top = el("div", "hd"); top.append(mark(), wordmark());
     if (c) top.appendChild(el("span", "brand", "meta " + fmt(T, 0) + " · lido do Canvas " + ago(C.localISO(new Date(cache.at)))));
     box.appendChild(top);
+    // Simular: type a grade in the items without one and see the ring, the need and the other items change (nothing is saved).
+    const sim = {}; let simOn = false, paint = () => {};
     if (c) {
-      const st = a.state(c), nx = C.nextItem(st), head = el("div", "card cring"), mid = el("div", "mid");
-      mid.append(el("div", "t", earnedText(st) + " garantidos de 10"),
-        el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida pelas notas lançadas" : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
-      head.append(ring(st, true), mid, needBig(st)); box.appendChild(head);
+      const headBox = el("div"), st0 = a.state(c), nx = C.nextItem(st0);
+      const headCard = st => {
+        const head = el("div", "card cring" + (simOn ? " simulating" : "")), mid = el("div", "mid");
+        mid.append(el("div", "t", earnedText(st) + " garantidos de 10" + (simOn ? " (simulação)" : "")),
+          el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida" + (simOn ? " com essas notas" : " pelas notas lançadas") : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
+        head.append(ring(st, true), mid, needBig(st)); return head;
+      };
+      box.appendChild(headBox);
       const tbl = el("div", "card items"), th = el("div", "ir ih"); th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota"));
       tbl.appendChild(th);
-      const total = C.weightSum(c), d2 = it => it.inMax >= 5 ? 1 : 2;
+      const total = C.weightSum(c), d2 = it => it.inMax >= 5 ? 1 : 2, open = [];
       for (const it of c.items) {
         const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.grades[k]), name = el("span", "n", it.name);
-        if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
+        if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st0.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
         let g;
         if (Number.isNaN(p)) g = el("span", "g e", "nota inválida");
         else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.grades[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
-        else if (st.late.includes(it)) g = el("span", "g e", "falta a nota");
-        else g = el("span", "g e", st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it }));
+        else { g = el("span", "g e"); open.push({ it, k, g }); }
         row.append(name, el("span", "w", Math.round(it.max / total * 100) + "%"), g); tbl.appendChild(row);
       }
+      const hint = it => st => st.late.includes(it) && !(C.key(c, it) in sim) ? "falta a nota" : st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it });
+      paint = () => {
+        const st = C.courseState(c, Object.assign({}, a.grades, sim), today(), T);
+        headBox.replaceChildren(headCard(st));
+        for (const o of open) {
+          const txt = (o.k in sim) ? "" : hint(o.it)(st);
+          if (!simOn) { o.g.replaceChildren(); o.g.textContent = txt; o.mounted = false; continue; }
+          if (!o.input) {
+            o.input = el("input", "simi"); o.input.type = "text"; o.input.inputMode = "decimal"; o.input.setAttribute("aria-label", "Simular a nota de " + o.it.name + " (de " + fmt(o.it.inMax, d2(o.it)) + ")");
+            o.input.addEventListener("input", () => { const v = String(o.input.value || "").trim(), pp = v && C.itemPoints(o.it, v);
+              if (typeof pp === "number" && !Number.isNaN(pp)) sim[o.k] = v; else delete sim[o.k]; paint(); });
+          }
+          if (!o.mounted) { o.g.textContent = ""; o.g.replaceChildren(o.input); o.mounted = true; }
+          o.input.placeholder = txt || "e se?";
+        }
+      };
+      paint();
       box.appendChild(tbl);
       box.appendChild(el("div", "muted src", source([c])));
     }
@@ -647,8 +672,34 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
+    if (c && c.items.some(it => C.itemPoints(it, a.grades[C.key(c, it)]) === null)) {
+      const sb = el("button", null, "Simular notas"), note = el("span", "muted", "");
+      sb.addEventListener("click", () => {
+        simOn = !simOn; if (!simOn) for (const k of Object.keys(sim)) delete sim[k];
+        sb.textContent = simOn ? "Sair da simulação" : "Simular notas"; note.textContent = simOn ? "Digite notas nas avaliações sem nota · nada é salvo" : "";
+        paint();
+      });
+      acts.append(sb, note);
+    }
     if (c && APP) { const open = el("button", null, "Abrir no Caderno+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
-    acts.appendChild(status); box.appendChild(acts);
+    // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
+    const nb = el("button", null, "Anotações"), pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
+    ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
+    pad.append(ta, saved); pad.hidden = true;
+    let tm = 0;
+    const store = async () => {
+      const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
+      const v = String(ta.value || "").slice(0, 5000); if (v) mine[courseId] = v; else delete mine[courseId];
+      await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
+    };
+    ta.addEventListener("input", () => { saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
+    chrome.storage.local.get("notes").then(({ notes }) => {
+      const v = notes && notes[cache.user] && notes[cache.user][courseId];
+      if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
+    });
+    nb.addEventListener("click", () => { pad.hidden = !pad.hidden; if (!pad.hidden && ta.focus) ta.focus(); });
+    acts.appendChild(nb);
+    acts.appendChild(status); box.append(acts, pad);
   }
 
   async function courseFiles(id) {

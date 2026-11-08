@@ -454,6 +454,36 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const noScroll = await runContent("/", null, { prefs: { scroll: false } }, { tall: 4000 });
   assert(!noScroll.body.kids.some(k => k.id === "cp-scroll"), "switched off: none"); ok();
 
+  // Simular notas on the course page: the ring and the needs follow the typed grades; nothing is saved
+  const simP = await runContent("/courses/71306", []), sp = simP.anchor.kids.find(k => k.id === "qf-panel");
+  const headTxt = () => text(all(sp).find(e => /^card cring/.test(e.className)));
+  const keys0 = JSON.stringify(simP.store), before = headTxt(), sbtn = all(sp).find(e => e.textContent === "Simular notas");
+  assert(sbtn && !all(sp).some(e => e.className === "simi"), "a Simular button, no inputs yet");
+  sbtn.listeners.click();
+  const ins = all(sp).filter(e => e.className === "simi");
+  assert(ins.length > 0 && ins.every(i => i.placeholder && /^Simular a nota de /.test(i["aria-label"])), "one input per item without a grade, the need as placeholder");
+  ins.forEach(i => { i.value = "abc"; i.listeners.input(); });
+  assert.strictEqual(headTxt().replace(" (simulação)", ""), before, "an invalid grade changes nothing");
+  ins.forEach(i => { i.value = String(i["aria-label"].match(/de ([\d,]+)\)$/)[1]); i.listeners.input(); });
+  assert(/\(simulação\)/.test(headTxt()) && /10 garantidos de 10|garantida com essas notas/.test(headTxt()), "full marks everywhere: the head says so: " + headTxt());
+  assert(/simulating/.test(all(sp).find(e => /^card cring/.test(e.className)).className), "the head is marked as a simulation");
+  sbtn.listeners.click();
+  assert.strictEqual(headTxt(), before, "leaving puts the real numbers back"); assert(!all(sp).some(e => e.className === "simi"), "inputs gone");
+  assert.strictEqual(JSON.stringify(simP.store), keys0, "nothing saved"); ok();
+
+  // Anotações: one note per course and user, saved as you type, shown open when there is one
+  const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } });
+  const nbx = np.anchor.kids.find(k => k.id === "qf-panel"), pad = all(nbx).find(e => /^card notes/.test(e.className)), ta = all(pad).find(e => e.tag === "textarea");
+  assert(pad.hidden && !ta.value, "closed and empty: another user's note is not mine");
+  all(nbx).find(e => e.textContent === "Anotações").listeners.click(); assert(!pad.hidden, "opens");
+  ta.value = "RA3 cai JOIN"; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
+  assert.deepStrictEqual(np.store.notes, { 9: { 71306: "do outro" }, 5: { 71306: "RA3 cai JOIN" } }, "saved per user and course");
+  const np2 = await runContent("/courses/71306", [], { notes: np.store.notes }); await new Promise(r => setTimeout(r, 10));
+  const pad2 = all(np2.anchor).find(e => /^card notes/.test(e.className));
+  assert(!pad2.hidden && all(pad2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, open");
+  ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
+  assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed"); ok();
+
   // .ics: the deadlines and exams from today on
   const icsPage = await runContent("/", null);
   const icsBtn = all(icsPage.anchor).find(e => e.textContent === "↓ .ics");
@@ -574,5 +604,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes)");
 })().catch(e => { console.error(e); process.exit(1); });
