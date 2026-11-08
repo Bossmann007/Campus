@@ -271,57 +271,27 @@
   }
 
   // Dashboard: one status pill per card of the six courses. Cards render late (React), so watch the page.
-  // Course cards (every course, not only ours): the status pill (our subjects), the next deadline, the color chosen for the
-  // course (kept here, never written to Canvas) and an optional gradient. ctx: { prefs, list, colors, setColor }.
-  const SWATCHES = ["#E2482B", "#1D2433", "#2F7D5B", "#1E5FA8", "#7C5CDB", "#C2185B", "#A8650F", "#00897B"];
-  const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16), f = c => Math.max(0, Math.min(255, Math.round(c + (k > 0 ? (255 - c) * k : c * k)))); return "rgb(" + f(n >> 16) + "," + f((n >> 8) & 255) + "," + f(n & 255) + ")"; };
-  // A balanced grid: 2 cards side by side in the middle, 4 as 2+2, 5 or 6 as 3+3, more in rows of 4 (page CSS reads --cp-cols)
-  const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;
+  // Course cards: the status pill on our subjects (inside Canvas's card content, under its title) and courses the student took
+  // off the dashboard (popup). Canvas's own card menu (⋮, color, nickname) stays untouched. ctx: { prefs, hidden }.
+  const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
   function decorateCards(a, again, ctx) {
     const prefs = ctx.prefs;
-    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); card.cpPalette = null; delete card.dataset.qf; }
+    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); delete card.dataset.qf; }
     for (const card of document.querySelectorAll(".ic-DashboardCard:not([data-qf])")) {
       const link = card.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href"));
       card.dataset.qf = "1"; card.cpAdded = [];
       if (!m) continue;
-      const id = m[1], c = a.byCanvasId[id], head = card.querySelector(".ic-DashboardCard__header_content") || card, add = x => { card.cpAdded.push(x); head.appendChild(x); return x; };
-      card.style.display = ctx.hidden.includes(id) ? "none" : "";   // courses the student took off the dashboard
-      if (ctx.hidden.includes(id)) continue;
-      if (c && prefs.grades && a.rules) {
-        const st = a.state(c), p = add(pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)));
-        p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta " + fmt(T, T % 1 ? 1 : 0) + ")";
-      }
-      const nx = prefs.cardNext && ctx.list.find(x => String(x.cid) === id && x.task && !fin(x) && x.date >= today());
-      if (nx) { const d = add(el("span", null, "Próx.: " + nx.title + " · " + dayLabel(nx.date) + (nx.due ? " " + hhmm(nx.due) : ""))); d.title = nx.title;
-        d.style.cssText = "display:block;margin-top:4px;font:500 11.5px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#5F6675;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"; }
-      const hero = card.querySelector(".ic-DashboardCard__header_hero"), color = ctx.colors[id];
-      if (hero && (color || prefs.gradient || hero.cpBase !== undefined)) {
-        if (hero.cpBase === undefined) hero.cpBase = hero.style.backgroundColor || "";   // Canvas's own color, back when the course color is cleared
-        hero.style.backgroundColor = color || hero.cpBase;
-        hero.style.backgroundImage = prefs.gradient && /^#[0-9a-f]{6}$/i.test(color || "") ? "linear-gradient(115deg," + color + " 0%," + shade(color, .35) + " 100%)" : prefs.gradient ? "linear-gradient(115deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.35) 100%)" : "";
-      }
-      // a small palette on the card: pick a color for this course, or back to Canvas's
-      const pick = add(el("button", null, "●")); pick.type = "button"; pick.title = "Cor desta matéria (só no Caderno+)"; pick.setAttribute("aria-label", "Escolher a cor desta matéria");
-      pick.style.cssText = "position:absolute;top:8px;right:8px;z-index:2;width:22px;height:22px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:rgba(29,36,51,.35);color:#fff;font:12px/20px sans-serif;cursor:pointer";
-      pick.addEventListener("click", e => {
-        e.preventDefault(); e.stopPropagation();
-        const open = card.cpPalette; if (open) { open.remove(); card.cpPalette = null; return; }
-        const pal = el("div"); pal.style.cssText = "position:absolute;top:34px;right:8px;z-index:3;display:grid;grid-template-columns:repeat(5,20px);gap:6px;padding:8px;border-radius:10px;background:#fff;box-shadow:0 10px 24px -10px rgba(29,36,51,.5)";
-        for (const sw of SWATCHES.concat([""])) {
-          const b = el("button"); b.type = "button"; b.setAttribute("aria-label", sw ? "Cor " + sw : "Cor do Canvas"); b.title = sw || "Cor do Canvas";
-          b.style.cssText = "width:20px;height:20px;padding:0;border-radius:50%;cursor:pointer;border:1px solid #ECE4D3;background:" + (sw || "repeating-linear-gradient(45deg,#fff 0 3px,#ddd 3px 6px)");
-          b.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); ctx.setColor(id, sw); });
-          pal.appendChild(b);
-        }
-        card.cpPalette = pal; card.cpAdded.push(pal); head.appendChild(pal);
-      });
-      const hideB = add(el("button", null, "×")); hideB.type = "button"; hideB.title = "Tirar esta matéria do painel (dá para mostrar de novo no Caderno+)"; hideB.setAttribute("aria-label", "Tirar esta matéria do painel");
-      hideB.style.cssText = pick.style.cssText.replace("right:8px", "right:36px");
-      hideB.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); ctx.setHidden(ctx.hidden.concat([id])); });
+      const id = m[1], c = a.byCanvasId[id];
+      card.style.display = ctx.hidden.includes(id) ? "none" : "";
+      if (ctx.hidden.includes(id) || !c || !prefs.grades || !a.rules) continue;
+      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0);
+      card.cpAdded.push(p); head.appendChild(p);
     }
     const shown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length, root = document.documentElement;
     if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(colsFor(shown)));
   }
+
 
   const CSS = `
     :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
@@ -463,7 +433,7 @@
     .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
-    .meta { display:inline-flex; align-items:center; gap:4px; margin-left:10px; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
+    .meta { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
     .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
     .calnav { display:inline-flex; align-items:center; gap:6px; margin-left:14px; } .calnav button { padding:3px 10px; } .calt { min-width:150px; text-align:center; font:600 16px/1 var(--serif); text-transform:capitalize; }
     .cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; padding:0; overflow:hidden; background:var(--line); }
@@ -499,7 +469,7 @@
   const widgetDash = () => widgets != null ? widgets : (widgets = [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));   // ENV flag in the page
   function placeDash() {
     const host = document.getElementById("cp-dash"), q = sel => document.querySelector ? document.querySelector(sel) : null;
-    const cols = q('[data-testid="widget-columns"]') || q("#DashboardCard_Container");   // new widget dashboard, or the classic one with course cards
+    const cols = q("#DashboardCard_Container");   // the classic dashboard: right above its cards (outside its React root); the widget dashboard keeps ours at the top of #content
     if (!host || !cols || !cols.parentNode || host.nextSibling === cols) return;
     cols.parentNode.insertBefore(host, cols);
   }
@@ -791,20 +761,6 @@
       if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
     }
     hd.appendChild(seg);
-    const oldSw = widgetDash() && document.querySelector ? document.querySelector('[data-testid="switch-to-old-dashboard-button"]') : null;
-    if (oldSw) { const b = el("button", "find natv", "Painel com cards"); b.type = "button"; b.title = "Voltar ao painel antigo do Canvas, com os cards das matérias (o Caderno+ entra junto)"; b.addEventListener("click", () => oldSw.click()); hd.appendChild(b); }
-    // courses outside the student's grade (extension courses, other terms): off the dashboard in one click, back in one click
-    const hc = window.cpHidden, outside = cache.ids.filter(x => !String(x.name).includes(C.TERM) && !(hc && hc.hidden.includes(String(x.id))));
-    if (hc && outside.length) { const b = el("button", "find natv", "Esconder " + outside.length + (outside.length === 1 ? " curso fora da grade" : " cursos fora da grade")); b.type = "button";
-      b.title = outside.map(x => x.name).join("\n"); b.addEventListener("click", () => hc.setHidden(hc.hidden.concat(outside.map(x => String(x.id))))); hd.appendChild(b); }
-    if (hc && hc.hidden.length) { const b = el("button", "find natv", "Mostrar " + hc.hidden.length + (hc.hidden.length === 1 ? " escondido" : " escondidos")); b.type = "button";
-      b.addEventListener("click", () => hc.setHidden([])); hd.appendChild(b); }
-    if (onMode) {   // the Canvas dashboard under ours, or ours alone (the default)
-      const nat = el("button", "find natv", prefs.native ? "Só Caderno+" : "Quadros do Canvas"); nat.type = "button";
-      nat.title = prefs.native ? "Esconder os quadros do Canvas e deixar só o Caderno+" : "Mostrar de novo os quadros do Canvas (Trabalho do curso, Avisos) abaixo do Caderno+";
-      nat.addEventListener("click", () => onMode(mode, null, !prefs.native)); hd.appendChild(nat);
-    }
-    if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
     // the meta (goal) every number is computed against
     const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
     dn.type = upb.type = "button"; dn.setAttribute("aria-label", "Meta menor"); upb.setAttribute("aria-label", "Meta maior"); meta.title = "A nota que você quer em cada matéria";
@@ -1112,7 +1068,7 @@
     prev.type = next.type = now.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
     nav.append(prev, title, next, now); hd.appendChild(nav);
     const natB = el("button", "find natv", prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"); natB.type = "button";
-    natB.addEventListener("click", async () => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { nativeCal: !prefs.nativeCal }) }); prefs = cpPrefs(Object.assign({}, prefs, { nativeCal: !prefs.nativeCal })); natB.textContent = prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"; });
+    natB.addEventListener("click", async () => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { nativeCal: !prefs.nativeCal }) }); prefs = cpPrefs(Object.assign({}, prefs, { nativeCal: !prefs.nativeCal })); natB.textContent = prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"; setTimeout(() => window.dispatchEvent && window.dispatchEvent(new Event("resize")), 60); });   // Canvas's calendar measures itself when shown
     hd.appendChild(natB);
     const grid = el("div", "card cal"), legend = el("div", "muted src", "Prazos do Canvas, provas do Plano de Ensino e as suas tarefas · clique para abrir");
     box.append(hd, grid, legend);
@@ -1241,15 +1197,8 @@
       };
       if (!window.cpPrefsListen && chrome.storage.onChanged) { window.cpPrefsListen = 1; chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs && window.cpPrefsChanged) window.cpPrefsChanged(ch.prefs.newValue); }); }
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
-      const { colors } = await chrome.storage.local.get("colors");
       const { hidden } = await chrome.storage.local.get("hidden");
-      const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {}, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
-      ctx.setHidden = async list => { ctx.hidden = [...new Set(list.map(String))]; await chrome.storage.local.set({ hidden: ctx.hidden }); decorateCards(a, true, ctx); hideGradeCards(ctx.hidden); if (window.cpRedraw) window.cpRedraw(); };
-      window.cpHidden = ctx;
-      ctx.setColor = async (id, color) => {
-        const next = Object.assign({}, ctx.colors); if (color) next[id] = color; else delete next[id];
-        ctx.colors = next; await chrome.storage.local.set({ colors: next }); decorateCards(a, true, ctx);
-      };
+      const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       gradeA = a; watchDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden);

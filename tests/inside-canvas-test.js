@@ -278,7 +278,6 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const MODS = [{ name: "Unidade 2", items: [{ type: "File", title: "Aula 7 - JOIN.pdf", html_url: "https://pucpr.instructure.com/courses/71306/modules/items/5" },
     { type: "SubHeader", title: "Leituras", html_url: "https://pucpr.instructure.com/courses/71306/modules/items/6" }, { type: "ExternalUrl", title: "Aula externa", html_url: "https://evil.example/aula" }] }];
   const sr = await runContent("/", null, {}, { modules: MODS }), key = k => sr.winListeners.keydown(Object.assign({ key: k, preventDefault() {}, stopPropagation() {} }, k === "k" ? { ctrlKey: true } : {}));
-  assert(all(sr.anchor).some(e => e.className === "find" && /^Buscar (Ctrl\+K|⌘K)$/.test(e.textContent)), "the dashboard shows the shortcut");
   key("k"); await new Promise(r => setTimeout(r, 20));
   const pal = sr.body.kids.find(k => k.id === "cp-search"), q = all(pal).find(e => e.className === "pal-q"), hits = () => all(pal).filter(e => /^pal-i/.test(e.className));
   assert(pal && pal.shadow && q, "Ctrl+K opens the search");
@@ -550,13 +549,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const WENV = [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }];
   const wdash = await runContent("/", null, {}, { scripts: WENV, widgetCols: true });
   await new Promise(r => setTimeout(r, 150));
-  const dashHost = wdash.cols.parent.kids.find(k => k.id === "cp-dash");
-  assert(dashHost && wdash.cols.parent.kids.indexOf(dashHost) === wdash.cols.parent.kids.indexOf(wdash.cols) - 1, "our panel sits right above Canvas's widgets");
+  const dashHost = wdash.anchor.kids.find(k => k.id === "cp-dash");
+  assert(dashHost && wdash.cols.parent.kids.every(k => k.id !== "cp-dash"), "at the top of #content, never inside Canvas's React widget grid");
   assert(!/Prova adiada/.test(text(dashHost)) && !/Todas as matérias/.test(text(dashHost)), "no duplicate announcements while Canvas shows its own");
-  const onlyB = all(dashHost).find(e => e.textContent === "Só Caderno+");
-  await onlyB.listeners.click(); await new Promise(r => setTimeout(r, 150));
-  const dashHost2 = wdash.cols.parent.kids.find(k => k.id === "cp-dash");
-  assert(wdash.store.prefs.native === false && /Prova adiada/.test(text(dashHost2)) && /Todas as matérias/.test(text(dashHost2)) && all(dashHost2).some(e => e.textContent === "Quadros do Canvas"), "Só Caderno+: ours carries announcements and every course, saved"); ok();
+  await wdash.env.window.cpPrefsChanged({ native: false }); await new Promise(r => setTimeout(r, 30));
+  const dashHost2 = wdash.anchor.kids.find(k => k.id === "cp-dash");
+  assert(/Prova adiada/.test(text(dashHost2)) && /Todas as matérias/.test(text(dashHost2)), "Canvas's widgets off (popup): ours carries announcements and every course"); ok();
 
   // own tasks: added in the card (or with + in Ctrl+K), in the week when they have a day, ticked and deleted; per user
   const tk = await runContent("/", null, { tasks: { 9: [{ id: "x", title: "do outro", date: null }] } });
@@ -617,18 +615,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const clHost = cl.cols.parent.kids.find(k => k.id === "cp-dash");
   assert(clHost && cl.cols.parent.kids.indexOf(clHost) === cl.cols.parent.kids.indexOf(cl.cols) - 1, "between the header and Canvas's course cards");
   assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
-  const outB = all(clHost).find(e => /^Esconder 1 curso fora da grade$/.test(e.textContent));
-  assert(outB && /Extensão/.test(outB.title), "offers to hide the extension course");
-  await outB.listeners.click(); await new Promise(r => setTimeout(r, 30));
-  assert.deepStrictEqual(cl.store.hidden, ["88"], "saved");
-  const xB = all(cl.header).find(e => e["aria-label"] === "Tirar esta matéria do painel");
-  await xB.listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 30));
-  const clHost2 = cl.cols.parent.kids.find(k => k.id === "cp-dash") || cl.anchor.kids.find(k => k.id === "cp-dash");
-  const showB = all(clHost2).find(e => /^Mostrar 2 escondidos$/.test(e.textContent));
-  assert(cl.store.hidden.length === 2 && showB, "a card's × hides it too; one button shows them again");
-  assert(cl.body.kids.find(k => k.id === "cp-hidden").textContent.includes('course-grade-card-71306'), "hidden in Canvas's Notas do curso widget too");
-  await showB.listeners.click(); await new Promise(r => setTimeout(r, 30));
-  assert.deepStrictEqual(cl.store.hidden, [], "all back"); ok();
+  assert(!all(clHost).some(e => /^Esconder|^Mostrar|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes and the meta");
+  const clHidden = await runContent("/", null, { hidden: ["71306"] }, { classic: true });
+  assert(!/\/10 · /.test(text(clHidden.header)), "a course unticked in the popup leaves the dashboard"); ok();
 
   // /calendar: the semester calendar in place of Canvas's; months of the term; other months read once from the planner
   const cal = await runContent("/calendar", null); await new Promise(r => setTimeout(r, 30));
@@ -645,22 +634,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const calOff = await runContent("/calendar", null, { prefs: { calendar: false } });
   assert(!calOff.anchor.kids.some(k => k.id === "cp-cal"), "switched off: Canvas's calendar only"); ok();
 
-  // course cards: next deadline, a color per course (kept here, never sent to Canvas), gradient
-  const cd = await runContent("/", null, { prefs: { gradient: true } });
-  assert.match(text(cd.header), /Próx\.: Lista 3 · amanhã \d\d:\d\d/, "the next deadline on the card");
-  const pick = all(cd.header).find(e => e["aria-label"] === "Escolher a cor desta matéria");
-  pick.listeners.click({ preventDefault() {}, stopPropagation() {} });
-  const swatch = all(cd.header).find(e => e["aria-label"] === "Cor #2F7D5B");
-  await swatch.listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
-  assert.deepStrictEqual(cd.store.colors, { 71306: "#2F7D5B" }, "the color is saved for this course");
-  assert(cd.header.style.backgroundColor === "#2F7D5B" && /linear-gradient\(115deg,#2F7D5B/.test(cd.header.style.backgroundImage), "painted, with the gradient");
-  assert.strictEqual(all(cd.header).filter(e => /^Próx\./.test(e.textContent)).length, 1, "redrawn, not duplicated");
-  const pick2 = all(cd.header).find(e => e["aria-label"] === "Escolher a cor desta matéria"); pick2.listeners.click({ preventDefault() {}, stopPropagation() {} });
-  await all(cd.header).find(e => e["aria-label"] === "Cor do Canvas").listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
-  assert(!cd.store.colors[71306] && cd.header.style.backgroundColor === "", "back to Canvas's color");
-  assert(!cd.fetches.some(u => /colors/.test(u)), "nothing written to the Canvas account");
-  const noNext = await runContent("/", null, { prefs: { cardNext: false } });
-  assert(!/Próx\./.test(text(noNext.header)), "switched off: no deadline on the card"); ok();
+  // course cards: our pill under Canvas's title (Canvas's own ⋮ menu untouched); courses unticked in the popup leave the dashboard
+  const cd = await runContent("/", null, { hidden: [] });
+  assert(/\d+[,\d]*\/10 · /.test(text(cd.header)) && !all(cd.header).some(e => e.tag === "button"), "a pill, and no buttons of ours on the card");
+  const cdh = await runContent("/", null, { hidden: ["71306"] });
+  assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing"); ok();
 
   // .ics: the deadlines and exams from today on
   const icsPage = await runContent("/", null);
@@ -735,15 +713,18 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const thDim = theme("dim", false), thLate = theme("night", false, 22), thDay = theme("night", true, 13); await new Promise(r => setTimeout(r, 5));
   assert(thDim.cls.has("cp-dark") && thDim.cls.has("cp-dim"), "dim: dark, softer"); assert(thLate.cls.has("cp-dark") && !thLate.cls.has("cp-dim"), "night at 22h: dark");
   assert(!thDay.cls.has("cp-dark"), "night at 13h: light, whatever the system"); assert.strictEqual(thDay.ticks.length, 1, "checked again every few minutes");
-  // looks: the whole Canvas, Caderno by default, through Canvas's own brand variables; font and left menu on top
+  // looks: the whole Canvas, Caderno by default, through Canvas's own brand variables, plus the left menu; no font changes
   const lk = theme("off", false); await new Promise(r => setTimeout(r, 5));
   const lookCss = () => lk.styles.find(x => x.id === "cp-look").textContent;
-  assert(["cp-look", "cp-look-nav", "cp-look-font"].every(c => lk.cls.has(c)) && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look, menu and font");
-  assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()) && /Fraunces/.test(lookCss()), "cards and serif titles");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true, mode: "completo", native: true }), "kept for the next first paint");
-  assert(!/widget-columns"\] \{ display:none/.test(lookCss()) && /section\[role="region"\]\[data-testid\^="widget-"\] \{ background:var\(--cp-card\)/.test(lookCss()), "the dashboard: Canvas's widgets kept, in our look");
+  assert(lk.cls.has("cp-look") && lk.cls.has("cp-look-nav") && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look and menu");
+  assert(!/font-family/.test(lookCss()) && !/Fraunces/.test(lookCss()), "no font forced on Canvas (InstUI sets its own; mixed families looked broken)");
+  assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()), "cards rounded");
+  assert(/\.ic-DashboardCard__box__container \{ text-align:center/.test(lookCss()) && !/\.ic-DashboardCard \{ display:flex/.test(lookCss()) && !/__header_hero, \.ic-DashboardCard__header_image \{ height/.test(lookCss()), "Canvas's own card layout kept, rows only centered (no forced sizes)");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false }), "kept for the next first paint");
+  assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
+  assert(/:is\(#my_courses_table, \.course-list-table/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
-  lk.listen.change({ prefs: { newValue: { native: false } } }, "local"); assert(/cp-has-panel \[data-testid="widget-columns"\] \{ display:none/.test(lookCss()), "Só Caderno+: Canvas's widgets hidden");
+  lk.listen.change({ prefs: { newValue: { native: false } } }, "local"); assert(/cp-has-panel \[data-testid="widget-columns"\] \{ display:none/.test(lookCss()), "Canvas's widgets off: hidden");
   const dk = theme("dark", false); await new Promise(r => setTimeout(r, 5));
   assert(/--cp-paper:#FFFFFF; --cp-card:#F3F3F3/.test(dk.styles.find(x => x.id === "cp-look").textContent), "dark: neutral paper under the inversion (no mud)");
   lk.listen.change({ prefs: { newValue: { mode: "limpo" } } }, "local");
@@ -753,14 +734,14 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!quizPage.cls.has("cp-dash-page"), "a quiz page keeps its side column (timer, questions)");
   lk.listen.change({ prefs: { newValue: { mode: "foco" } } }, "local");
   assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && /cp-dash-page\.cp-has-panel :is\(#DashboardCard_Container/.test(lookCss()), "foco: the cards go too, only once our panel is drawn");
-  lk.listen.change({ prefs: { newValue: { cardStyle: "lista", cardImg: false } } }, "local");
-  assert(/grid-template-columns:72px 1fr/.test(lookCss()) && /__header_image \{ background-image:none/.test(lookCss()), "cards as a list, without pictures");
-  lk.listen.change({ prefs: { newValue: { look: "original", nav: "original", font: "original" } } }, "local");
-  assert(!lk.cls.has("cp-look") && !lk.cls.has("cp-look-nav") && !lk.cls.has("cp-look-font") && !/--ic-brand|font-family|cp-look-nav/.test(lookCss()), "Canvas original: no colors, fonts or menu changed, live");
-  lk.listen.change({ prefs: { newValue: { look: "original", nav: "verde", font: "sistema" } } }, "local");
-  assert(!lk.cls.has("cp-look") && lk.cls.has("cp-look-nav") && /#1F5C42/.test(lookCss()) && /-apple-system/.test(lookCss()) && !/Fraunces/.test(lookCss()), "menu color and font work without a look");
+  lk.listen.change({ prefs: { newValue: { cardImg: false } } }, "local");
+  assert(/__header_image \{ background-image:none/.test(lookCss()), "cards without pictures");
+  lk.listen.change({ prefs: { newValue: { look: "original", nav: "original" } } }, "local");
+  assert(!lk.cls.has("cp-look") && !lk.cls.has("cp-look-nav") && !/--ic-brand|cp-look-nav/.test(lookCss()), "Canvas original: no colors or menu changed, live");
+  lk.listen.change({ prefs: { newValue: { look: "original", nav: "verde" } } }, "local");
+  assert(!lk.cls.has("cp-look") && lk.cls.has("cp-look-nav") && /#1F5C42/.test(lookCss()), "menu color works without a look");
   lk.listen.change({ prefs: { newValue: { look: "pastel" } } }, "local"); assert(/#7C5CDB/.test(lookCss()), "pastel");
-  const firstPaint = theme("off", false, undefined, { look: "original", nav: "original", font: "original" });
+  const firstPaint = theme("off", false, undefined, { look: "original", nav: "original" });
   assert(!firstPaint.cls.has("cp-look"), "the first paint already uses the last choice (before prefs arrive)"); ok();
 
   // no separate page: no menu item, no #campus overlay; the meta lives on the dashboard and is saved

@@ -15,12 +15,6 @@
     contraste: ["#FFFFFF", "#FFFFFF", "#000000", "#1F1F1F", "#000000", "#0040C1", "#0033A0", "#000000"]
   };
   const NAV = { tinta: "#1D2433", coral: "#B8361C", verde: "#1F5C42", azul: "#1E3A6E", roxo: "#3B3363" };
-  const FONTS = {
-    sistema: ['-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif', null],
-    caderno: ['-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif', '"Fraunces","Iowan Old Style","New York",Georgia,serif'],
-    serifa: ['"Iowan Old Style","New York",Georgia,"Times New Roman",serif', '"Iowan Old Style","New York",Georgia,serif']
-  };
-  const font = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL ? chrome.runtime.getURL("fonts/fraunces-latin-500-normal.woff2") : "";
   const css = (look, nav, f, cards, dark) => {
     // dark modes invert the page: a cream paper would turn to mud, so under them every look paints on neutral white
     const L = LOOKS[look] && dark ? ["#FFFFFF", "#F3F3F3"].concat(LOOKS[look].slice(2, 4), ["#E0E0E0"], LOOKS[look].slice(5)) : LOOKS[look], out = [];
@@ -31,14 +25,15 @@
     const W = ":root.cp-dash-page";
     if (!cards.native || cards.mode === "foco") out.push(`${W}.cp-has-panel [data-testid="widget-columns"] { display:none !important; }`);
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${W} [data-testid="switch-to-old-dashboard-button"] { display:none !important; }`);
+    out.push(`${W}.cp-has-panel [data-testid="widget-container-course-work-combined-widget"] { display:none !important; }`);   // our 7 days show the same work
     // /calendar: ours in place of Canvas's (its calendar, mini month and calendar list), unless the student keeps Canvas's
     if (!cards.nativeCal) out.push(`:root.cp-cal-page.cp-has-cal #content > :not(#cp-cal), :root.cp-cal-page.cp-has-cal #right-side-wrapper { display:none !important; }`);
     // Cursos and Grupos (Canvas tables): our cards' look
-    if (L) out.push(`:root.cp-look .ic-Table { background:var(--cp-card) !important; border:1px solid var(--cp-line) !important; border-radius:14px !important; border-collapse:separate !important; border-spacing:0 !important; overflow:hidden; }
-:root.cp-look .ic-Table th { background:var(--cp-paper) !important; color:var(--cp-muted) !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.05em; }
-:root.cp-look .ic-Table :is(th, td) { padding:12px 16px !important; border-color:var(--cp-line) !important; }
-:root.cp-look .ic-Table tbody tr:hover td { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }
-:root.cp-look .ic-Table td a { font-weight:600; }`);
+    const TB = ":is(#my_courses_table, .course-list-table, #current_groups_table, #previous_groups_table)";   // only the Cursos and Grupos lists (the grades table uses th per row)
+    if (L) out.push(`:root.cp-look ${TB} { background:var(--cp-card) !important; border:1px solid var(--cp-line) !important; border-radius:14px !important; border-collapse:separate !important; border-spacing:0 !important; }
+:root.cp-look ${TB} thead th { background:var(--cp-paper) !important; color:var(--cp-muted) !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.05em; }
+:root.cp-look ${TB} :is(th, td) { padding:12px 16px !important; border-color:var(--cp-line) !important; }
+:root.cp-look ${TB} tbody tr:hover td { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }`);
     // the classic dashboard: our panel sits between its header and the course cards; its side column (to do, coming up:
     // our week shows them) goes away while our panel is there
     out.push(`${W}.cp-has-panel #right-side-wrapper { display:none !important; } ${W}.cp-has-panel #DashboardCard_Container { margin-top:6px; }`);
@@ -48,19 +43,16 @@
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${D} :is(#right-side-wrapper, #right-side, #footer, .recent_activity, #dashboard-activity, .ic-DashboardCard__action-container) { display:none !important; }
 ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; margin-right:auto !important; }`);
     if (cards.mode === "foco") out.push(`${D}.cp-has-panel :is(#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, #cp-scroll) { display:none !important; }`);
-    if (cards.cardStyle !== "lista") out.push(`.ic-DashboardCard__box { display:flex !important; flex-wrap:wrap; justify-content:center; align-items:stretch; gap:20px; padding:4px 0 24px; max-width:calc(var(--cp-cols, 3) * 300px + (var(--cp-cols, 3) - 1) * 20px); margin:0 auto !important; }
-.ic-DashboardCard__box .ic-DashboardCard { flex:0 0 calc((100% - (var(--cp-cols, 3) - 1) * 20px) / var(--cp-cols, 3)); max-width:300px; width:auto !important; margin:0 !important; }
-.ic-DashboardCard { display:flex !important; flex-direction:column; align-self:stretch; } .ic-DashboardCard__header { flex:1; }
-.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:132px; }`);
-    if (cards.cardStyle === "compacto") out.push(`.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:64px !important; } .ic-DashboardCard { min-height:0 !important; } .ic-DashboardCard__action-container { display:none !important; }`);
-    if (cards.cardStyle === "lista") out.push(`.ic-DashboardCard__box { display:grid !important; grid-template-columns:1fr; gap:8px; } .ic-DashboardCard { width:auto !important; margin:0 !important; display:grid !important; grid-template-columns:72px 1fr; align-items:stretch; }
-.ic-DashboardCard__header { display:contents; } .ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:auto !important; min-height:64px; grid-row:span 2; } .ic-DashboardCard__action-container { justify-content:flex-start; }`);
+    // Canvas's own card layout (262px cards in .ic-DashboardCard__box__container, canvas-lms dashboard_card.scss) is kept;
+    // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
+    out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; }
+:root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 286px + 24px); margin-left:auto !important; margin-right:auto !important; }`);
     if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; } .ic-DashboardCard__header_hero { opacity:1 !important; }`);
     if (L) {
       const [paper, card, ink, muted, line, accent, link, menu] = L;
       out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent};
   --ic-brand-primary:${accent} !important; --ic-link-color:${link} !important; --ic-brand-font-color-dark:${ink} !important;
-  --ic-brand-button--primary-bgd:${ink} !important; --ic-brand-button--primary-text:${paper} !important;
+  --ic-brand-button--primary-bgd:${accent} !important; --ic-brand-button--primary-text:#FFFFFF !important;
   --ic-brand-button--secondary-bgd:${card} !important; --ic-brand-button--secondary-text:${ink} !important; --cp-menu:${menu}; }
 :root.cp-look body, :root.cp-look #application, :root.cp-look #wrapper, :root.cp-look #main, :root.cp-look .ic-Layout-wrapper,
 :root.cp-look .ic-Layout-contentMain, :root.cp-look #content-wrapper, :root.cp-look #right-side-wrapper, :root.cp-look #right-side { background-color:var(--cp-paper) !important; color:var(--cp-ink); }
@@ -69,20 +61,6 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look :is(.Button, .btn, button.ui-button) { border-radius:10px; }
 :root.cp-look :is(.ic-Dashboard-header__layout, .ic-app-nav-toggle-and-crumbs, .page-header) { border-color:var(--cp-line) !important; }
 :root.cp-look #section-tabs a.active, :root.cp-look #section-tabs a:hover { border-left-color:var(--cp-accent) !important; color:var(--cp-ink) !important; }`);
-      out.push(`:root.cp-look section[role="region"][data-testid^="widget-"] { background:var(--cp-card) !important; border:1px solid var(--cp-line) !important; border-radius:14px !important; box-shadow:0 1px 2px rgba(29,36,51,.06) !important; }
-:root.cp-look [data-testid^="statistics-card-"] { background:var(--cp-paper) !important; border-radius:10px !important; border:1px solid var(--cp-line) !important; }
-:root.cp-look [data-testid="dashboard-tabs"] [role="tab"][aria-selected="true"] { color:var(--cp-ink) !important; box-shadow:inset 0 -3px 0 var(--cp-accent) !important; }
-:root.cp-look [data-testid="dashboard-tabs"] [role="tab"] { color:var(--cp-muted) !important; }
-:root.cp-look :is([data-testid="customize-dashboard-button"], [data-testid="switch-to-old-dashboard-button"]) { border-radius:10px !important; }
-:root.cp-look [data-testid="dashboard-tab-content"], :root.cp-look #dashboard { background:transparent !important; }`);
-      out.push(`:root.cp-look [data-testid^="course-grade-card-"] { border-radius:14px !important; overflow:hidden !important; border:1px solid var(--cp-line) !important; background:var(--cp-card) !important; box-shadow:0 1px 2px rgba(29,36,51,.06) !important; transition:transform .18s, box-shadow .18s; }
-:root.cp-look [data-testid^="course-grade-card-"]:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45) !important; }
-:root.cp-look [data-testid^="course-grade-card-"] [data-testid$="-name"] { font-weight:600 !important; color:var(--cp-ink) !important; }
-:root.cp-look [data-testid^="course-grade-card-"] :is([data-testid$="-code"], [data-testid$="-term"], [data-testid$="-last-updated"]) { color:var(--cp-muted) !important; font-size:12px !important; }
-:root.cp-look [data-testid^="announcement-item-"] { padding:10px 4px !important; border-bottom:1px solid var(--cp-line) !important; }
-:root.cp-look [data-testid^="announcement-item-"]:last-child { border-bottom:0 !important; }
-:root.cp-look [data-testid^="announcement-item-"]:has([aria-pressed="false"]) a { font-weight:650 !important; }
-:root.cp-look [data-testid^="course-name-"] { color:var(--cp-accent) !important; font-weight:600 !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.04em; }`);
       if (look === "contraste") out.push(`:root.cp-look a { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
@@ -90,12 +68,6 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look-nav .ic-app-header { background:${menu} !important; }
 :root.cp-look-nav .ic-app-header .ic-app-header__menu-list-item.ic-app-header__menu-list-item--active .ic-app-header__menu-list-link { background:${L ? L[5] : "rgba(255,255,255,.18)"} !important; color:#fff !important; }
 :root.cp-look-nav .ic-app-header .ic-app-header__menu-list-link:hover { background-color:rgba(255,255,255,.14) !important; }`);
-    const F = FONTS[f];
-    if (F) {
-      if (F[1] && F[1].startsWith('"Fraunces"') && font) out.push(`@font-face { font-family:"Fraunces"; font-weight:400 700; font-display:swap; src:url(${font}) format("woff2"); }`);
-      out.push(`:root.cp-look-font body, :root.cp-look-font :is(input, button, select, textarea) { font-family:${F[0]} !important; }`);
-      if (F[1]) out.push(`:root.cp-look-font :is(h1, h2, [data-testid="dashboard-heading"], section[role="region"][data-testid^="widget-"] h2, .ic-Dashboard-header__title, .page-title, .ic-DashboardCard__header-title, .ic-Action-header__Heading) { font-family:${F[1]} !important; letter-spacing:-.01em; }`);
-    }
     return out.join("\n");
   };
   if (typeof location !== "undefined" && /^\/(dashboard)?\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-dash-page", true);
@@ -105,7 +77,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
   style.textContent = `html.cp-dark { background:#fff !important; filter:${BACK} contrast(.9); }
 html.cp-dark.cp-dim { filter:${BACK} contrast(.78) brightness(1.08); }
 html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) { filter:${BACK}; }
-html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) :is(img, video, picture, canvas, [style*="background-image"]) { filter:none; }`;
+html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) :is(img, video, picture, canvas, [style*="background-image"], .ic-DashboardCard__header_hero) { filter:none; }`;
   (document.head || document.documentElement).append(style, look);
   const dark = matchMedia("(prefers-color-scheme: dark)");
   let p = cpPrefs(null);
@@ -116,13 +88,13 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .
   const apply = () => {
     const t = p.theme, on = t === "dark" || t === "dim" || (t === "auto" && dark.matches) || (t === "night" && night()), cl = document.documentElement.classList;
     cl.toggle("cp-dark", on); cl.toggle("cp-dim", on && t === "dim");
-    look.textContent = css(p.look, p.nav, p.font, p, on);
+    look.textContent = css(p.look, p.nav, null, p, on);
     cl.toggle("cp-mode-limpo", p.mode === "limpo"); cl.toggle("cp-mode-foco", p.mode === "foco");
-    cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look])); cl.toggle("cp-look-font", !!FONTS[p.font]);
+    cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look]));
   };
   const take = prefs => {
     p = cpPrefs(prefs); apply();
-    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, font: p.font, cardStyle: p.cardStyle, cardImg: p.cardImg, mode: p.mode, native: p.native })); } catch (e) { /* no storage */ }
+    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal })); } catch (e) { /* no storage */ }
   };
   apply();
   setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);

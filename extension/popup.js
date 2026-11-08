@@ -99,3 +99,21 @@ $("f25").addEventListener("click", () => startFocus("foco", 25));
 $("f5").addEventListener("click", () => startFocus("pausa", 5));
 $("fstop").addEventListener("click", async () => { for (const k of ["foco", "pausa"]) await chrome.alarms.clear("focus|" + k); await chrome.storage.local.remove("focus"); showFocus(); });
 showFocus(); setInterval(showFocus, 1000);
+
+// Matérias no painel: every course of the last reading; unticked ones leave the dashboard (chrome.storage.local "hidden").
+(async () => {
+  const { cache, hidden } = await chrome.storage.local.get(["cache", "hidden"]), box = $("courses"), off = new Set(Array.isArray(hidden) ? hidden.map(String) : []);
+  const ids = cache && Array.isArray(cache.ids) ? cache.ids : [];
+  if (!ids.length) { $("coursesHint").textContent = "Abra o Canvas uma vez para escolher as matérias do painel."; return; }
+  for (const x of ids) {
+    const row = document.createElement("label"), name = document.createElement("span"), box2 = document.createElement("input");
+    row.className = "row"; name.textContent = String(x.name).split(" (")[0].split(" - ")[0]; name.title = x.name;
+    box2.type = "checkbox"; box2.setAttribute("role", "switch"); box2.checked = !off.has(String(x.id));
+    box2.addEventListener("change", async () => {
+      const { hidden: h } = await chrome.storage.local.get("hidden"), set = new Set(Array.isArray(h) ? h.map(String) : []);
+      if (box2.checked) set.delete(String(x.id)); else set.add(String(x.id));
+      await chrome.storage.local.set({ hidden: [...set] });
+    });
+    row.append(name, box2); box.appendChild(row);
+  }
+})();
