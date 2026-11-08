@@ -1,17 +1,19 @@
-// Extension: collectCanvasGrades against a mocked Canvas, and the popup's base64url hand-off decoded the way index.html decodes it.
+// Extension: manifest and permissions, collectCanvasGrades against a mocked Canvas, the generated calculator page, the site's download links.
 const assert = require("assert"), fs = require("fs"), path = require("path");
 const dir = path.join(__dirname, "..", "extension");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.strictEqual(manifest.manifest_version, 3);
-assert.deepStrictEqual(manifest.permissions, ["activeTab", "scripting", "storage", "downloads", "alarms"], "no broad permissions");
+assert.deepStrictEqual(manifest.permissions, ["storage", "downloads", "alarms", "notifications"], "no broad permissions");
 assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*"], "host access only to the PUCPR Canvas");
-assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"]], "page script only on the PUCPR Canvas");
+assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"], ["https://pucpr.instructure.com/*"]], "page scripts only on the PUCPR Canvas");
+assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_idle"], "theme before the page paints, the rest after it loads");
+assert.strictEqual([].concat(...manifest.content_scripts.map(c => c.js)).filter(f => f === "prefs.js").length, 1, "prefs.js once: the scripts share one scope, a second copy would redeclare its consts");
 const pack = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
-for (const f of [...manifest.content_scripts[0].js, manifest.background.service_worker, "popup.js", "popup.html", "popup.css"]) {
+for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.background.service_worker, "popup.js", "popup.html", "popup.css", "app.html", "app-ui.js", "app-boot.js"]) {
   assert(fs.existsSync(path.join(dir, f)), "file " + f); assert(new RegExp("\\b" + f.replace(".", "\\.") + "\\b").test(pack), "packaged: " + f); }
 for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(dir, f)), "icon " + f);
 const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
-assert(["activeTab", "scripting", "storage", "downloads", "alarms", "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
+assert(["storage", "downloads", "alarms", "notifications", "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
 global.location = { href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };
@@ -24,48 +26,21 @@ global.fetch = async url => {
   throw new Error("unexpected " + url);
 };
 const collect = new Function(fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();
-const popupSrc = fs.readFileSync(path.join(dir, "popup.js"), "utf8");
-const b64url = new Function(popupSrc.match(/function b64url[\s\S]*?\n\}/)[0] + "\nreturn b64url;")();   // Node's own btoa, like the browser
-const page2 = fs.readFileSync(path.join(__dirname, "..", "app.html"), "utf8");
-const decodeLines = page2.match(/const b = atob\(location\.hash[^\n]*\n[^\n]*TextDecoder[^\n]*/);
-assert(decodeLines, "index.html hash decode found");
-const decodeHash = hash => { const location = { hash }, ta = {}; eval(decodeLines[0]); return ta.value; };   // runs index.html's own lines
+const app = fs.readFileSync(path.join(dir, "app.html"), "utf8");
+assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(app) && !/\son\w+=/.test(app), "calculator page in the extension: no inline script or handler (MV3)");
+assert(/default-src 'none'; script-src 'self';/.test(app) && !/script-src[^;"]*unsafe-inline/.test(app), "calculator page: scripts from the package only, network blocked");
+assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.html"], matches: ["https://pucpr.instructure.com/*"] }], "only the calculator page can be framed, only by the PUCPR Canvas");
 (async () => {
   const out = await collect();
   assert.deepStrictEqual(out, { v: 1, courses: [{ name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
     { name: "Avaliação somativa -  Prova", points: 10, score: 7, due: null, missing: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, score: null, due: "2026-11-11T02:59:59Z", missing: true, submitted: false, online: false, stats: null }] }],
     announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1" }] });
-  // Bookmarklet on the app page: its collector is the extension's file, verbatim, and its panel hands off like the popup.
-  const lit = page2.match(/const COLLECT_SRC = ('(?:[^'\\]|\\.)*');/);
-  assert(lit, "bookmarklet collector found in app.html");
-  assert.strictEqual(eval(lit[1]), fs.readFileSync(path.join(dir, "collect.js"), "utf8"), "bookmarklet collector is identical to extension/collect.js");
-  const panelSrc = page2.match(/function bookmarkletPanel[\s\S]*?\n  \}\n/)[0];
-  const made = [];
-  const fakeEl = () => { const e = { kids: [], style: {}, setAttribute() {}, appendChild(c) { this.kids.push(c); }, append(...c) { this.kids.push(...c); }, remove() {} }; made.push(e); return e; };
-  const sandbox = new Function("location", "document", "TextEncoder", "btoa", "alert", "navigator", panelSrc + "\nreturn bookmarkletPanel;");
-  const panel = sandbox({ hostname: "pucpr.instructure.com" }, { createElement: fakeEl, body: { appendChild() {} } }, TextEncoder, btoa, () => { throw new Error("alert"); }, {});
-  panel(collect, "https://falta-quanto.vercel.app/app"); await new Promise(r => setTimeout(r, 20));
-  const open = made.find(e => typeof e.href === "string");
-  assert(open && open.href.startsWith("https://falta-quanto.vercel.app/app#canvas="), "bookmarklet offers the app link");
-  const sent = JSON.parse(decodeHash(open.href.slice(open.href.indexOf("#"))));
-  assert.strictEqual(sent.ext, "bookmarklet"); assert.strictEqual(sent.courses.length, 1); assert.strictEqual(sent.announcements.length, 1);
-  assert.strictEqual(open.target, "_blank"); assert.strictEqual(open.rel, "noopener");
-  // The javascript: URL itself, built the way the page builds it, must be valid code.
-  const hrefSrc = page2.match(/const bookmarkletHref = [^\n]*/)[0];
-  const href = new Function("COLLECT_SRC", "bookmarkletPanel", "location", hrefSrc + "\nreturn bookmarkletHref();")(eval(lit[1]), sandbox({}, {}, TextEncoder, btoa, () => {}, {}), { origin: "https://falta-quanto.vercel.app" });
-  const scheme = href.slice(0, href.indexOf(":"));   // a bookmarklet is a javascript: URL by design; this asserts it, it does not filter input
-  assert.strictEqual(scheme, "javascript"); new Function(decodeURIComponent(href.slice(scheme.length + 1)));   // throws on a syntax error
-  assert(decodeURIComponent(href).includes('"https://falta-quanto.vercel.app/app"'), "bookmarklet opens the app");
-  const big = JSON.stringify({ v: 1, courses: Array.from({ length: 8 }, (_, i) => ({ name: "Matéria " + i + " ção", assignments: Array.from({ length: 60 }, (_, j) => ({ name: "Avaliação " + j + " é", points: 10, score: j, due: "2026-11-11T02:59:59Z", missing: false })) })) });
-  const enc = b64url(big);
-  assert(/^[A-Za-z0-9_-]+$/.test(enc), "url-safe");
-  const dec = decodeHash("#canvas=" + enc);
-  assert.strictEqual(dec, big, "hand-off round trip (" + big.length + " chars)");
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
   assert.deepStrictEqual(await collect(), { error: "o Canvas respondeu 401" });
-  assert(page2.includes('href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
+  const landing = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert(landing.includes('href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
   assert(/cp "\$out" dist\/quanto-falta-extension\.zip/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "package script writes the stable name");
-  console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, url-safe hand-off decoded by index.html's own code, " + big.length + " chars, off-origin and 401 returned as errors; bookmarklet uses the same collector and hand-off");
+  console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, calculator page without inline scripts, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });

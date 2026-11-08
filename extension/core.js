@@ -210,7 +210,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "0.7.0";
+  const EXT_LATEST = "1.0.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -224,8 +224,8 @@ const NotasCore = (() => {
   }
   function fromBackup(text) {
     let d;
-    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Quanto falta"); }
-    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Quanto falta");
+    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Campus+"); }
+    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Campus+");
     const grades = {}, missing = [], notes = [];
     if (d.semester !== SEMESTER) notes.push({ key:"", reason:"backup de outro semestre (" + String(d.semester) + "): confira antes de aplicar" });
     for (const k of Object.keys(d.grades)) {
@@ -238,5 +238,39 @@ const NotasCore = (() => {
     }
     return { grades, missing, notes, meta: typeof d.meta === "string" ? d.meta : null };
   }
-  return { COURSES, SEED, CANVAS, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks };
+  const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
+  // Shared by the calculator page and the panels inside Canvas (extension/content.js), so both show the same numbers.
+  const fractionTone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
+  const statusTone = st => st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : fractionTone(st.fraction);
+  const nextItem = st => st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0] || null;
+  // Ring: share of 10 already earned, and the share still possible (capped so both fit in one turn).
+  const ringParts = st => { const e = Math.min(10, st.earned); return { earned: e / 10, future: Math.min(10 - e, st.futureMax) / 10 }; };
+  // What a course still needs on 0-10 in each remaining item: of10 null when it cannot reach the goal; approx when
+  // old items have no grade yet (counted as if they were like the rest).
+  function courseNeed(st) {
+    if (st.status === "garantido") return { of10: 0, approx: false, impossible: false, tone: "ok" };
+    if (st.status === "nao-da" || st.fraction == null || st.fraction > 1 + EPS) return { of10: null, approx: false, impossible: true, tone: "bad" };
+    if (st.status === "depende-atrasadas") { const f = st.fractionIfLate;
+      return f == null || f > 1 + EPS ? { of10: null, approx: true, impossible: true, tone: "bad" } : { of10: f * 10, approx: true, impossible: false, tone: "warn" }; }
+    return { of10: st.fraction * 10, approx: false, impossible: false, tone: fractionTone(st.fraction) };
+  }
+  // The upcoming assessments that still count (course not yet guaranteed), soonest first.
+  const stillCounts = (courses, grades, today, target) => upcoming(courses, grades, today, target).filter(u => u.st.status !== "garantido");
+  // The semester overview: mean of the points earned, the tightest course still reachable, and every item as a tracker
+  // block (ok graded, late past without a grade, next still to come), in date order.
+  function semester(courses, grades, today, target) {
+    const states = {}; for (const c of courses) states[c.id] = courseState(c, grades, today, target);
+    const mean = courses.reduce((s, c) => s + Math.min(10, states[c.id].earned), 0) / courses.length;
+    const tight = courses.filter(c => states[c.id].status === "precisa").sort((a, b) => states[b.id].fraction - states[a.id].fraction)[0] || null;
+    const counts = {}; for (const c of courses) counts[states[c.id].status] = (counts[states[c.id].status] || 0) + 1;
+    const items = [];
+    for (const c of courses) for (const it of c.items) {
+      const p = itemPoints(it, grades[key(c, it)]), graded = p !== null && !Number.isNaN(p);
+      items.push({ course: c, item: it, s: graded ? "ok" : it.date < today ? "late" : "next" });
+    }
+    items.sort((a, b) => a.item.date.localeCompare(b.item.date));
+    return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok").length, late: items.filter(x => x.s === "late").length };
+  }
+  return { COURSES, SEED, CANVAS, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+           SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();
