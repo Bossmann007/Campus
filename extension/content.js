@@ -1252,6 +1252,36 @@
     foldable(sec, h, "ask"); return sec;
   }
 
+  // The course menu (#section-tabs, server-rendered): items the professor enabled can be hidden one by one, per course
+  // (chrome.storage.local "navHide": { <course id>: [<tab class>] }). "Editar menu" shows every item with an eye to toggle.
+  const tabKey = a => [...(a.classList || [])].find(c => c !== "active") || (a.className || "").split(" ").find(c => c && c !== "active") || "";
+  async function courseNav(courseId) {
+    const nav = document.getElementById("section-tabs");
+    if (!nav || document.getElementById("cp-navedit")) return;
+    const { navHide } = await chrome.storage.local.get("navHide"), all = navHide && typeof navHide === "object" ? navHide : {};
+    let hidden = Array.isArray(all[courseId]) ? all[courseId].filter(k => /^[a-z0-9_-]{1,60}$/.test(k)) : [], editing = false;
+    let st = document.getElementById("cp-navhide"); if (!st) { st = el("style"); st.id = "cp-navhide"; (document.head || document.body).appendChild(st); }
+    const links = [...nav.querySelectorAll("li > a")];
+    const paint = () => {
+      st.textContent = (editing ? hidden.map(k => '#section-tabs li > a.' + k + ' { opacity:.4; text-decoration:line-through; }') : hidden.map(k => '#section-tabs li:has(> a.' + k + ') { display:none !important; }')).join("\n")
+        + '\n#section-tabs .cp-eye { margin-left:auto; flex:none; width:22px; height:22px; padding:0; border:0; border-radius:6px; cursor:pointer; background:currentColor; opacity:.65; -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><circle cx=\'8\' cy=\'8\' r=\'2\'/></svg>") no-repeat center / 16px; mask:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><circle cx=\'8\' cy=\'8\' r=\'2\'/></svg>") no-repeat center / 16px; }'
+        + '\n#section-tabs .cp-eye.off { -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><path d=\'M2.5 13.5l11-11\'/></svg>"); mask-image:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><path d=\'M2.5 13.5l11-11\'/></svg>"); opacity:.45; } #section-tabs .cp-eye:hover { opacity:1; }';
+      for (const a of links) { let b = a.parentNode.querySelector(".cp-eye"); const k = tabKey(a);
+        if (!editing || !k || k === "home") { if (b) b.remove(); continue; }
+        if (!b) { b = el("button", "cp-eye"); b.type = "button"; b.addEventListener("click", async e => { e.preventDefault(); e.stopPropagation();
+          hidden = hidden.includes(k) ? hidden.filter(x => x !== k) : hidden.concat([k]);
+          const { navHide: cur } = await chrome.storage.local.get("navHide"); await chrome.storage.local.set({ navHide: Object.assign({}, cur, { [courseId]: hidden }) }); paint(); });
+          a.style.display = "flex"; a.appendChild(b); }
+        const off = hidden.includes(k); b.className = "cp-eye" + (off ? " off" : ""); b.title = off ? "Mostrar no menu" : "Esconder do menu"; b.setAttribute("aria-label", (off ? "Mostrar " : "Esconder ") + a.textContent.trim());
+      }
+      edit.textContent = editing ? "Pronto" : "Editar menu" + (hidden.length ? " (" + hidden.length + " escondido" + (hidden.length > 1 ? "s" : "") + ")" : "");
+    };
+    const li = el("li", "section"), edit = el("button"); li.id = "cp-navedit"; edit.type = "button";
+    edit.style.cssText = "margin:10px 0 0 10px;padding:5px 10px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.7;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
+    edit.addEventListener("click", () => { editing = !editing; paint(); });
+    li.appendChild(edit); nav.appendChild(li); paint();
+  }
+
   // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
   // deadlines (the planner, read a month at a time when outside the last reading), our exams and the student's own tasks.
   // "Calendário do Canvas" brings the original back (prefs.nativeCal).
@@ -1378,6 +1408,8 @@
       watchTray(a, getOff);
       if (/^\/courses\/?$/.test(location.pathname)) coursesPage(a, getOff, setOff);
     }
+    const anyCourse = /^\/courses\/(\d+)(\/|$)/.exec(location.pathname);
+    if (anyCourse) courseNav(anyCourse[1]);
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {

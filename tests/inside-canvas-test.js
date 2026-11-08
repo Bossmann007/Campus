@@ -86,6 +86,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const byId = { content: anchor, menu };
   if (opts.classic) byId.DashboardCard_Container = { id: "DashboardCard_Container" };
   if (opts.tray) byId["nav-tray-portal"] = opts.tray;
+  if (opts.nav) { byId["section-tabs"] = opts.nav; opts.nav.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; }; }
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
@@ -643,6 +644,19 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(/\/10 · /.test(text(r1)) && /Tirar do painel/.test(text(r2)) && !/\/10/.test(text(r2)), "pill on ours, the button on every course");
   await all(r2).find(e => e.textContent === "Tirar do painel").listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(cpage.store.hidden.includes("88") && /Mostrar no painel/.test(text(r2)), "taken off the dashboard from the course list");
+  // the course menu: items hidden one by one per course, edited with an eye per item
+  const mkTab = cls => { const li = fakeEl("li"), a = fakeEl("a"); a.className = cls; a.classList = cls.split(" "); a.textContent = cls; li.append(a);
+    Object.defineProperty(a, "parentNode", { get() { return this.parent; } }); li.querySelector = () => all(li).find(e => /cp-eye/.test(e.className)) || null; return { li, a }; };
+  const tabs3 = ["home active", "announcements", "context_external_tool_9"].map(mkTab), navEl = fakeEl("ul"); tabs3.forEach(t => navEl.append(t.li)); navEl.querySelectorAll = () => tabs3.map(t => t.a);
+  const cn = await runContent("/courses/71306/modules", null, { navHide: { 71306: ["context_external_tool_9", "bad;}"] } }, { nav: navEl }); await new Promise(r => setTimeout(r, 30));
+  const hideCss = cn.body.kids.find(k => k.id === "cp-navhide").textContent;
+  assert(/li:has\(> a\.context_external_tool_9\) \{ display:none/.test(hideCss) && !/bad/.test(hideCss), "a hidden tab is hidden (odd keys ignored)");
+  const editB = all(navEl).find(e => e.tag === "button" && /^Editar menu \(1 escondido\)$/.test(e.textContent));
+  editB.listeners.click(); const eyes = all(navEl).filter(e => /cp-eye/.test(e.className));
+  assert(eyes.length === 2 && /off/.test(eyes[1].className) && !all(tabs3[0].li).some(e => /cp-eye/.test(e.className)), "editing: an eye per item (not on Página inicial), the hidden one marked");
+  await eyes[0].listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(cn.store.navHide[71306].sort(), ["announcements", "context_external_tool_9"], "hidden per course, saved");
+
   // the classic dashboard header: a greeting with the first name, the date and what is coming (the title stays for screen readers)
   const lay = fakeEl("div"), flex = fakeEl("div"), titleItem = fakeEl("span"); titleItem.append(fakeEl("span")); flex.append(titleItem, fakeEl("span")); lay.append(flex);
   lay.firstElementChild = flex; flex.firstElementChild = titleItem; titleItem.prepend = function (c) { c.parent = this; this.kids.unshift(c); };
@@ -772,6 +786,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   lk.listen.change({ prefs: { newValue: {} } }, "local");
   assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
   assert(/#right-side \.button-sidebar-wide \{ display:flex/.test(lookCss()) && /ToDoSidebarItem, \.to-do-list > li, \.group_list > li, \.event/.test(lookCss()) && /context-course_"\] #right-side :is\(\.ToDoSidebarItem__Title \+ span/.test(lookCss()), "the course page's right column: buttons and items as cards, the repeated course name hidden");
+  assert(/#section-tabs a\.announcements::before \{ -webkit-mask-image:url\("data:image\/svg\+xml/.test(lookCss()) && /a\[class\*="context_external_tool"\]::before/.test(lookCss()), "an icon per course menu item (tools too)");
   assert(/:is\(#my_courses_table, #past_enrollments_table/.test(lookCss()) && /#nav-tray-portal li \{/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
   lk.listen.change({ prefs: { newValue: { native: false } } }, "local"); assert(/cp-has-panel \[data-testid="widget-columns"\] \{ display:none/.test(lookCss()), "Canvas's widgets off: hidden");
