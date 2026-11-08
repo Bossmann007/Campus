@@ -991,7 +991,7 @@
       const b = el("button", null, label); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab"); b.addEventListener("click", () => show(k, true)); bar.appendChild(b); btns[k] = b;
       panes[k] = el("div", "cpane"); panes[k].setAttribute("role", "tabpanel"); panes[k].hidden = k !== "geral";   // no flash of every tab before the kept one is read
     }
-    panes.geral.append(...overview(courseId, c, a, cache));
+    panes.geral.append(...overview(courseId, c, a, cache, prefs));
     if (c) panes.notas.append(...parts.notas, simActs);
     panes.materiais.appendChild(acts);
     panes.avisos.appendChild(courseNews(cache, courseId));
@@ -1010,14 +1010,20 @@
     return typeof col === "string" && /^#[0-9a-f]{3,8}$/i.test(col) ? col : null;
   }
   // Visão geral: what comes next in this course, its latest announcement and the shortcuts to Canvas's own pages.
-  function overview(courseId, c, a, cache) {
-    const out = [], t = today(), next = agenda(a, cache, {}).filter(x => (String(x.cid) === courseId || (c && x.ours === c)) && !fin(x) && (x.date >= t || x.late)).slice(0, 5);
-    const sec = el("section", "card news"), h = el("h3", null, "A seguir nesta matéria"); sec.appendChild(h);
-    if (next.length) { const ul = el("ul"); for (const x of next) { const li = el("li", "row");
-      li.append(el("span", "d" + (x.late && x.date < t ? " lt" : ""), x.late && x.date < t ? dmy(x.date) : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.exam ? (x.exam.req ? need(x.exam) : "prova") : x.task ? "entrega" : "evento"),
-        el("span", "pill " + (x.late && x.date < t ? "bad" : x.exam ? "warn" : "nt"), x.late && x.date < t ? "atrasada" : x.exam ? "prova" : "a entregar")); ul.appendChild(li); } sec.appendChild(ul); }
-    else sec.appendChild(el("div", "muted", "Nada pendente nesta matéria nos próximos dias."));
-    out.push(sec);
+  function overview(courseId, c, a, cache, prefs) {
+    // the same day-by-day timeline as the dashboard, with this course only; what comes after the 7 days below it
+    const out = [], t = today(), mine = agenda(a, cache, {}).filter(x => String(x.cid) === courseId || (c && x.ours === c));
+    const week = weekView(mine, Object.assign({}, prefs, { grades: !!c }), null), h3 = week.querySelector ? week.querySelector("h3") : null;
+    if (h3 && h3.firstChild) h3.firstChild.textContent = "Esta matéria nos próximos 7 dias";
+    out.push(week);
+    const later = mine.filter(x => !fin(x) && x.date > addDays(6)).slice(0, 6);
+    if (later.length) {
+      const sec = el("section", "card news"), row = el("div", "late");
+      sec.appendChild(el("h3", null, "Depois"));
+      for (const x of later) { const ch = el(x.url ? "a" : "span", "ev " + (x.exam ? "ex" : x.task ? "wa" : "in")); if (x.url) ch.href = x.url;
+        ch.appendChild(el("span", "t", (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title + " · " + dmy(x.date))); row.appendChild(ch); }
+      sec.appendChild(row); out.push(sec);
+    }
     const last = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
     if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
       li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
@@ -1254,6 +1260,10 @@
 
   // The course menu (#section-tabs, server-rendered): items the professor enabled can be hidden one by one, per course
   // (chrome.storage.local "navHide": { <course id>: [<tab class>] }). "Editar menu" shows every item with an eye to toggle.
+  // the eye button (show / hide) used by the course menu and the modules editors
+  const EYE = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z'/><circle cx='8' cy='8' r='2'/></svg>")`, EYE_OFF = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z'/><path d='M2.5 13.5l11-11'/></svg>")`;
+  const eyeCss = pfx => `${pfx} .cp-eye { margin-left:auto; flex:none; width:22px; height:22px; padding:0; border:0; border-radius:6px; cursor:pointer; background:currentColor; opacity:.65; -webkit-mask:${EYE} no-repeat center / 16px; mask:${EYE} no-repeat center / 16px; }
+${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opacity:.45; } ${pfx} .cp-eye:hover { opacity:1; }`;
   const tabKey = a => [...(a.classList || [])].find(c => c !== "active") || (a.className || "").split(" ").find(c => c && c !== "active") || "";
   async function courseNav(courseId) {
     const nav = document.getElementById("section-tabs");
@@ -1264,8 +1274,7 @@
     const links = [...nav.querySelectorAll("li > a")];
     const paint = () => {
       st.textContent = (editing ? hidden.map(k => '#section-tabs li > a.' + k + ' { opacity:.4; text-decoration:line-through; }') : hidden.map(k => '#section-tabs li:has(> a.' + k + ') { display:none !important; }')).join("\n")
-        + '\n#section-tabs .cp-eye { margin-left:auto; flex:none; width:22px; height:22px; padding:0; border:0; border-radius:6px; cursor:pointer; background:currentColor; opacity:.65; -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><circle cx=\'8\' cy=\'8\' r=\'2\'/></svg>") no-repeat center / 16px; mask:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><circle cx=\'8\' cy=\'8\' r=\'2\'/></svg>") no-repeat center / 16px; }'
-        + '\n#section-tabs .cp-eye.off { -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><path d=\'M2.5 13.5l11-11\'/></svg>"); mask-image:url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'black\' stroke-width=\'1.4\' stroke-linecap=\'round\'><path d=\'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\'/><path d=\'M2.5 13.5l11-11\'/></svg>"); opacity:.45; } #section-tabs .cp-eye:hover { opacity:1; }';
+        + '\n' + eyeCss("#section-tabs");
       for (const a of links) { let b = a.parentNode.querySelector(".cp-eye"); const k = tabKey(a);
         if (!editing || !k || k === "home") { if (b) b.remove(); continue; }
         if (!b) { b = el("button", "cp-eye"); b.type = "button"; b.addEventListener("click", async e => { e.preventDefault(); e.stopPropagation();
@@ -1276,10 +1285,56 @@
       }
       edit.textContent = editing ? "Pronto" : "Editar menu" + (hidden.length ? " (" + hidden.length + " escondido" + (hidden.length > 1 ? "s" : "") + ")" : "");
     };
+    // the arrow: fold the course menu away (Canvas's own course-menu-expanded body class, so its layout follows) and back
+    const { navFold } = await chrome.storage.local.get("navFold");
+    const tab = el("button"), fold = el("button"); tab.type = fold.type = "button"; tab.id = "cp-navopen";
+    fold.textContent = "‹"; fold.title = "Esconder o menu da matéria"; fold.setAttribute("aria-label", fold.title);
+    fold.style.cssText = "float:right;margin:-2px 4px 4px 0;width:26px;height:26px;border-radius:8px;border:1px solid currentColor;background:none;color:inherit;opacity:.6;cursor:pointer;font:600 15px/1 -apple-system,sans-serif";
+    tab.textContent = "›"; tab.title = "Mostrar o menu da matéria"; tab.setAttribute("aria-label", tab.title);
+    tab.style.cssText = "position:fixed;top:120px;left:var(--cp-navleft,84px);z-index:999;width:22px;height:44px;border:0;border-radius:0 10px 10px 0;background:var(--ic-brand-primary,#E2482B);color:#fff;cursor:pointer;font:600 16px/1 -apple-system,sans-serif;box-shadow:2px 2px 10px -4px rgba(0,0,0,.4)";
+    const header = document.querySelector ? document.querySelector(".ic-app-header") : null;
+    if (header && header.getBoundingClientRect && document.documentElement.style) document.documentElement.style.setProperty("--cp-navleft", Math.round(header.getBoundingClientRect().right) + "px");
+    const setFold = async on => { if (document.body.classList) document.body.classList.toggle("course-menu-expanded", !on); tab.style.display = on ? "block" : "none"; await chrome.storage.local.set({ navFold: on }); };
+    fold.addEventListener("click", () => setFold(true)); tab.addEventListener("click", () => setFold(false));
+    if (nav.parentNode) nav.parentNode.insertBefore(fold, nav); document.body.appendChild(tab);
+    tab.style.display = "none"; if (navFold === true) setFold(true);
     const li = el("li", "section"), edit = el("button"); li.id = "cp-navedit"; edit.type = "button";
     edit.style.cssText = "margin:10px 0 0 10px;padding:5px 10px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.7;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
     edit.addEventListener("click", () => { editing = !editing; paint(); });
     li.appendChild(edit); nav.appendChild(li); paint();
+  }
+
+  // Modules (#context_modules, canvas-lms context_modules/_context_module_next and _module_item_next: div#context_module_<id>,
+  // li#context_module_item_<id>): whole modules or single items hidden one by one, per course ("modHide"), edited with eyes.
+  async function courseModules(courseId) {
+    const root = document.getElementById("context_modules");
+    if (!root || document.getElementById("cp-modedit")) return;
+    const { modHide } = await chrome.storage.local.get("modHide"), all = modHide && typeof modHide === "object" ? modHide : {};
+    let hidden = Array.isArray(all[courseId]) ? all[courseId].filter(k => /^context_module(_item)?_\d{1,20}$/.test(k)) : [], editing = false;
+    let st = document.getElementById("cp-modhide"); if (!st) { st = el("style"); st.id = "cp-modhide"; (document.head || document.body).appendChild(st); }
+    const bar = el("div"), edit = el("button"), hint = el("span"); bar.id = "cp-modedit"; edit.type = "button";
+    bar.style.cssText = "display:flex;align-items:center;gap:10px;margin:0 0 12px";
+    edit.style.cssText = "padding:6px 12px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.75;font:500 12.5px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
+    hint.style.cssText = "font:12px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;opacity:.65";
+    const save = async () => { const { modHide: cur } = await chrome.storage.local.get("modHide"); await chrome.storage.local.set({ modHide: Object.assign({}, cur, { [courseId]: hidden }) }); };
+    const paint = () => {
+      st.textContent = hidden.map(k => "#" + k + (editing ? " { opacity:.45; }" : " { display:none !important; }")).join("\n") + "\n" + eyeCss("#context_modules")
+        + "\n#context_modules .ig-header .cp-eye, #context_modules .ig-row .cp-eye { margin-left:8px; align-self:center; }";
+      const targets = [...root.querySelectorAll(".context_module")].map(m => [m, m.querySelector(".ig-header")]).concat([...root.querySelectorAll("li.context_module_item")].map(i => [i, i.querySelector(".ig-row")]));
+      for (const [node, host] of targets) {
+        const k = node.id; if (!host || !/^context_module(_item)?_\d+$/.test(k || "")) continue;
+        let b = host.querySelector(":scope > .cp-eye");
+        if (!editing) { if (b) b.remove(); continue; }
+        if (!b) { b = el("button", "cp-eye"); b.type = "button"; b.addEventListener("click", async e => { e.preventDefault(); e.stopPropagation();
+          hidden = hidden.includes(k) ? hidden.filter(x => x !== k) : hidden.concat([k]); await save(); paint(); }); host.appendChild(b); }
+        const off = hidden.includes(k), what = node.classList && node.classList.contains("context_module") ? "o módulo" : "o item";
+        b.className = "cp-eye" + (off ? " off" : ""); b.title = (off ? "Mostrar " : "Esconder ") + what; b.setAttribute("aria-label", b.title);
+      }
+      edit.textContent = editing ? "Pronto" : "Editar módulos" + (hidden.length ? " (" + hidden.length + " escondido" + (hidden.length > 1 ? "s" : "") + ")" : "");
+      hint.textContent = editing ? "Clique no olho para esconder um módulo inteiro ou um item." : "";
+    };
+    edit.addEventListener("click", () => { editing = !editing; paint(); });
+    bar.append(edit, hint); root.parentNode.insertBefore(bar, root); paint();
   }
 
   // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
@@ -1409,7 +1464,7 @@
       if (/^\/courses\/?$/.test(location.pathname)) coursesPage(a, getOff, setOff);
     }
     const anyCourse = /^\/courses\/(\d+)(\/|$)/.exec(location.pathname);
-    if (anyCourse) courseNav(anyCourse[1]);
+    if (anyCourse) { courseNav(anyCourse[1]); courseModules(anyCourse[1]); }
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {

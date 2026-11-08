@@ -86,6 +86,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const byId = { content: anchor, menu };
   if (opts.classic) byId.DashboardCard_Container = { id: "DashboardCard_Container" };
   if (opts.tray) byId["nav-tray-portal"] = opts.tray;
+  if (opts.mods) byId.context_modules = opts.mods;
   if (opts.nav) { byId["section-tabs"] = opts.nav; opts.nav.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; }; }
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
@@ -508,7 +509,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].indexOf(label)];
   assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
   assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
-  assert(/A seguir nesta matéria/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
+  assert(/Próximos 7 dias|Esta matéria nos próximos 7 dias/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
   assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
   await tabB("Anotações").listeners.click(); await new Promise(r => setTimeout(r, 5));
   const ta = all(paneOf("Anotações")).find(e => e.tag === "textarea");
@@ -656,6 +657,29 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(eyes.length === 2 && /off/.test(eyes[1].className) && !all(tabs3[0].li).some(e => /cp-eye/.test(e.className)), "editing: an eye per item (not on Página inicial), the hidden one marked");
   await eyes[0].listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
   assert.deepStrictEqual(cn.store.navHide[71306].sort(), ["announcements", "context_external_tool_9"], "hidden per course, saved");
+  const openTab = cn.body.kids.find(k => k.id === "cp-navopen");
+  assert(openTab && openTab.style.display === "none", "the menu shows by default; the reopen tab waits");
+  const cn2 = await runContent("/courses/71306", null, { navFold: true }, { nav: (() => { const n = fakeEl("ul"); n.querySelectorAll = () => []; return n; })() }); await new Promise(r => setTimeout(r, 30));
+  assert(cn2.body.kids.find(k => k.id === "cp-navopen").style.display === "block", "folded last time: folded, with the › tab to bring it back");
+
+  // modules: whole modules or single items hidden one by one per course
+  const wrap = fakeEl("div"), modsEl = fakeEl("div"); wrap.append(modsEl);
+  Object.defineProperty(modsEl, "parentNode", { get() { return this.parent; } });
+  const mod = fakeEl("div"), modHead = fakeEl("div"), item = fakeEl("li"), row = fakeEl("div");
+  mod.id = "context_module_7"; mod.classList = { contains: c => c === "context_module" }; item.id = "context_module_item_70"; item.classList = { contains: () => false };
+  mod.append(modHead); item.append(row); modsEl.append(mod, item);
+  mod.querySelector = () => modHead; item.querySelector = () => row;
+  modHead.querySelector = () => all(modHead).find(e => /cp-eye/.test(e.className)) || null; row.querySelector = () => all(row).find(e => /cp-eye/.test(e.className)) || null;
+  modsEl.querySelectorAll = sel => sel === ".context_module" ? [mod] : [item];
+  const mh = await runContent("/courses/71306/modules", null, { modHide: { 71306: ["context_module_item_70", "x;}"] } }, { mods: modsEl }); await new Promise(r => setTimeout(r, 30));
+  const modCss = mh.body.kids.find(k => k.id === "cp-modhide").textContent;
+  assert(/#context_module_item_70 \{ display:none/.test(modCss) && !/#x;/.test(modCss), "a hidden item is hidden (odd keys ignored)");
+  const mEdit = all(wrap).find(e => e.tag === "button" && /^Editar módulos \(1 escondido\)$/.test(e.textContent));
+  mEdit.listeners.click();
+  const modEye = all(modHead).find(e => /cp-eye/.test(e.className)), itemEye = all(row).find(e => /cp-eye/.test(e.className));
+  assert(modEye && itemEye && /off/.test(itemEye.className) && modEye.title === "Esconder o módulo", "editing: an eye on the module and on the item");
+  await modEye.listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(mh.store.modHide[71306].sort(), ["context_module_7", "context_module_item_70"], "a whole module hidden too, saved per course");
 
   // the classic dashboard header: a greeting with the first name, the date and what is coming (the title stays for screen readers)
   const lay = fakeEl("div"), flex = fakeEl("div"), titleItem = fakeEl("span"); titleItem.append(fakeEl("span")); flex.append(titleItem, fakeEl("span")); lay.append(flex);
