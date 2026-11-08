@@ -30,35 +30,40 @@
       <label class="row"><span>Imagens nos cards</span><input type="checkbox" role="switch" data-pref="cardImg"></label>
     </div>
   </section>
-  <section aria-labelledby="h-painel">
-    <h2 id="h-painel">Painel inicial</h2>
-    <div class="list">
-      <label class="row"><span>Quadros do Canvas <small>Avisos e Notas do curso junto do Caderno+</small></span><input type="checkbox" role="switch" data-pref="native"></label>
-    </div>
-    <p class="fine" id="coursesHint">Matérias no painel (desmarque as que não são da sua grade):</p>
-    <div class="list" id="courses"></div>
-  </section>
   <section aria-labelledby="h-canvas">
     <h2 id="h-canvas">No Canvas</h2>
-    <div class="list">
-      <label class="row"><span>Semana: entregas e provas</span><input type="checkbox" role="switch" data-pref="week"></label>
-      <label class="row"><span>O que mudou <small>arquivos, módulos, tarefas e avisos novos</small></span><input type="checkbox" role="switch" data-pref="changes"></label>
-      <label class="row"><span>Calendário do semestre <small>no lugar do calendário do Canvas</small></span><input type="checkbox" role="switch" data-pref="calendar"></label>
-      <label class="row"><span>Minhas tarefas <small>no painel e no Ctrl+K com +</small></span><input type="checkbox" role="switch" data-pref="tasks"></label>
-      <label class="row"><span>Avisos de todas as matérias</span><input type="checkbox" role="switch" data-pref="news"></label>
-      <label class="row"><span>Mensagens não lidas</span><input type="checkbox" role="switch" data-pref="inbox"></label>
-      <label class="row"><span>Lembretes <small>1 dia e 1 hora antes</small></span><input type="checkbox" role="switch" data-pref="remind"></label>
-      <label class="row"><span>Resumo da semana <small>segunda, 8h</small></span><input type="checkbox" role="switch" data-pref="summary"></label>
-      <label class="row"><span>Aviso de nota nova</span><input type="checkbox" role="switch" data-pref="newgrades"></label>
-      <label class="row"><span>Quanto falta nas matérias</span><input type="checkbox" role="switch" data-pref="grades"></label>
-      <label class="row"><span>Busca rápida <small>Ctrl+K ou ⌘K</small></span><input type="checkbox" role="switch" data-pref="search"></label>
-      <label class="row"><span>Botões ↑ ↓ em páginas longas</span><input type="checkbox" role="switch" data-pref="scroll"></label>
-      <label class="row"><span>Baixar arquivos da matéria</span><input type="checkbox" role="switch" data-pref="files"></label>
-    </div>
+    <details class="grp" open><summary>Painel inicial</summary>
+      <div class="list">
+        <label class="row"><span>Semana: entregas e provas</span><input type="checkbox" role="switch" data-pref="week"></label>
+        <label class="row"><span>Quanto falta nas matérias</span><input type="checkbox" role="switch" data-pref="grades"></label>
+        <label class="row"><span>Avisos e Pergunte ao professor</span><input type="checkbox" role="switch" data-pref="news"></label>
+        <label class="row"><span>O que mudou <small>arquivos, módulos e avisos novos</small></span><input type="checkbox" role="switch" data-pref="changes"></label>
+        <label class="row"><span>Minhas tarefas <small>também com + na busca</small></span><input type="checkbox" role="switch" data-pref="tasks"></label>
+        <label class="row"><span>Mensagens não lidas</span><input type="checkbox" role="switch" data-pref="inbox"></label>
+        <label class="row"><span>Quadros do Canvas <small>Avisos e Notas do curso do Canvas</small></span><input type="checkbox" role="switch" data-pref="native"></label>
+      </div>
+      <p class="fine" id="coursesHint">Matérias no painel (desmarque as que não são da sua grade):</p>
+      <div class="list" id="courses"></div>
+    </details>
+    <details class="grp"><summary>Avisos no computador</summary>
+      <div class="list">
+        <label class="row"><span>Lembretes <small>1 dia e 1 hora antes</small></span><input type="checkbox" role="switch" data-pref="remind"></label>
+        <label class="row"><span>Resumo da semana <small>segunda, 8h</small></span><input type="checkbox" role="switch" data-pref="summary"></label>
+        <label class="row"><span>Aviso de nota nova</span><input type="checkbox" role="switch" data-pref="newgrades"></label>
+      </div>
+    </details>
+    <details class="grp"><summary>Ferramentas</summary>
+      <div class="list">
+        <label class="row"><span>Calendário do semestre <small>no lugar do calendário do Canvas</small></span><input type="checkbox" role="switch" data-pref="calendar"></label>
+        <label class="row"><span>Busca rápida <small>Ctrl+K ou ⌘K</small></span><input type="checkbox" role="switch" data-pref="search"></label>
+        <label class="row"><span>Baixar arquivos da matéria</span><input type="checkbox" role="switch" data-pref="files"></label>
+        <label class="row"><span>Botões ↑ ↓ em páginas longas</span><input type="checkbox" role="switch" data-pref="scroll"></label>
+      </div>
+    </details>
     <p class="fine">A aparência muda na hora; o resto, ao recarregar o Canvas. A cor de cada matéria se escolhe no menu ⋮ do próprio card.</p>
   </section>
   <section aria-labelledby="h-foco">
-    <h2 id="h-foco">Foco</h2>
+    <h2 id="h-foco">Pomodoro</h2>
     <p id="focus" role="timer" aria-live="polite">Estude 25 minutos, descanse 5. Avisa quando acabar.</p>
     <div class="acts two">
       <button id="f25" type="button">Foco 25 min</button>
@@ -72,9 +77,13 @@
     <div class="acts two">
       <button id="canvas" class="primary" type="button">Abrir o Canvas</button>
       <button id="refresh" type="button">Atualizar agora</button>
-      <button id="export" type="button">Exportar backup</button>
-      <button id="import" type="button">Importar backup</button>
     </div>
+    <details class="grp"><summary>Backup</summary>
+      <div class="acts two">
+        <button id="export" type="button">Exportar backup</button>
+        <button id="import" type="button">Importar backup</button>
+      </div>
+    </details>
     <input id="importFile" type="file" accept="application/json,.json" hidden>
     <p class="fine">O backup leva suas notas lançadas, tarefas, marcas de feito, anotações, cores e preferências. <a id="feedback" href="https://github.com/Bossmann007/Campus/issues" target="_blank" rel="noopener noreferrer">Sugestões e problemas</a> (página pública: não ponha notas nem dados pessoais).</p>
   </section>

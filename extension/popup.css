@@ -44,3 +44,7 @@ footer { display:flex; justify-content:space-between; align-items:flex-end; gap:
 .modes { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:4px 0 10px; }
 .modes button { display:grid; gap:1px; padding:8px 6px; text-align:left; } .modes small { font-size:10.5px; color:var(--muted); font-weight:400; }
 .modes button[aria-checked="true"] { border-color:var(--coral); box-shadow:0 0 0 1px var(--coral) inset; }
+.grp { margin:6px 0; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+.grp > summary { cursor:pointer; padding:8px 12px; font-size:12.5px; font-weight:600; list-style:none; display:flex; justify-content:space-between; align-items:center; }
+.grp > summary::-webkit-details-marker { display:none; } .grp > summary::after { content:"▸"; color:var(--muted); transition:transform .15s; } .grp[open] > summary::after { transform:rotate(90deg); }
+.grp > .list, .grp > .fine, .grp > .acts { margin:0 12px 10px; } .grp .row { margin:0; padding:0; }

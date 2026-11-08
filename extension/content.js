@@ -233,7 +233,7 @@
     return out.sort((x, y) => (x.due || x.date + "T12:00:00").localeCompare(y.due || y.date + "T12:00:00"));
   }
   const fin = x => x.done || x.mine;   // handed in, or ticked as done here
-  const need = u => u.req.impossible ? "não dá" : u.req.f <= 1e-9 ? "já garantido" : "precisa " + up(u.req.raw, u.item.inMax >= 5 ? 1 : 2) + (u.item.inMax === 10 ? "" : " de " + fmt(u.item.inMax, u.item.inMax >= 5 ? 1 : 2));
+  const need = u => u.req.impossible ? "nem com 10" : u.req.f <= 1e-9 ? "já garantido" : "precisa " + up(u.req.raw, u.item.inMax >= 5 ? 1 : 2) + (u.item.inMax === 10 ? "" : " de " + fmt(u.item.inMax, u.item.inMax >= 5 ? 1 : 2));
 
   // What the service worker should remind: work not yet handed in and exams, in the next 14 days. Without a planner reading
   // (Canvas failed) nothing is sent, so a passing error does not wipe the reminders already set.
@@ -283,7 +283,7 @@
     const t = today(), soon = list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= addDays(6)), todays = soon.filter(x => x.date === t && !x.exam).length, exam = soon.find(x => x.exam);
     const d = new Date(), date = WD_FULL[d.getDay()] + ", " + d.getDate() + " de " + MONTHS[d.getMonth()];
     const bits = [date, todays ? todays + (todays === 1 ? " entrega hoje" : " entregas hoje") : soon.length ? soon.length + (soon.length === 1 ? " coisa nesta semana" : " coisas nesta semana") : "semana livre"];
-    if (exam) bits.push("prova " + dayLabel(exam.date) + ": " + exam.title.replace(/^Prova( do)?:? ?/i, "") + " · " + exam.course);
+    if (exam) bits.push("prova " + dayLabel(exam.date) + " (" + exam.course.split(" ")[0] + ")");
     const g = el("div", "cp-greet"), big = el("div", null, hi + (name ? ", " + name : "") + "!"), sub = el("div", null, bits.join(" · "));
     g.style.cssText = "line-height:1.2"; big.style.cssText = "font-size:30px;font-weight:650;letter-spacing:-.02em";
     sub.style.cssText = "margin-top:6px;font-size:14px;opacity:.72"; g.append(big, sub); item.prepend(g);
@@ -395,7 +395,7 @@
     .rules { position:absolute; left:0; right:0; top:24px; bottom:0; border-top:1px solid var(--line); }
     .rules > span { border-left:1px solid var(--line); } .rules > span:last-of-type { border-right:1px solid var(--line); }
     .rules > span.today { background:color-mix(in srgb, var(--coral) 5%, transparent); }
-    .band { position:absolute; top:0; bottom:0; background:repeating-linear-gradient(135deg, var(--band1) 0 6px, var(--band2) 6px 12px); }
+    .band { position:absolute; top:0; bottom:0; background:var(--band2); border-left:2px solid var(--band1); border-right:2px solid var(--band1); }
     .band b { position:absolute; left:7px; bottom:5px; font:700 10px/1 var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--coral); white-space:nowrap; }
     .now { position:absolute; top:-3px; bottom:0; width:2px; margin-left:-1px; background:var(--coral); border-radius:2px; }
     .now::before { content:""; position:absolute; top:-3px; left:-3px; width:8px; height:8px; border-radius:50%; background:var(--coral); }
@@ -410,7 +410,7 @@
     .col .ev.more { padding:4px 7px; text-align:center; background:var(--soft); color:var(--fg); border-color:var(--line); }
     .ev:hover, .ev:focus-visible { z-index:4; transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); text-decoration:none; } .ev:active { transform:scale(.98); } .ev:focus-visible { outline:2px solid var(--ring); border-radius:7px; }
     .ev.ok { background:#E2F1E9; color:#1F5C42; border-color:#BFE0CC; } .ev.wa { background:#FBEFD6; color:#744405; border-color:#F0D9A8; }
-    .ev.ex { background:var(--coral); color:#fff; } .ev.in { background:var(--fg); color:var(--bg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
+    .ev.ex { background:var(--coral); color:#fff; } .ev.in { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:3px solid var(--fg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
     .tip { position:absolute; left:0; bottom:calc(100% + 7px); z-index:5; display:grid; gap:1px; width:max-content; max-width:260px; padding:7px 10px; border-radius:8px;
       background:var(--fg); color:var(--bg); font:500 12px/1.4 var(--sans); white-space:normal; text-align:left; box-shadow:0 10px 24px -10px rgba(29,36,51,.5);
       opacity:0; visibility:hidden; transform:translateY(3px); pointer-events:none; transition:opacity .12s, transform .12s, visibility 0s .12s; }
@@ -460,7 +460,7 @@
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
     .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
     .av img { width:100%; height:100%; object-fit:cover; display:block; }
-    .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
+    .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .news .row > .d:first-child { min-width:96px; } .d.lt { color:var(--bad); font-weight:600; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
     .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
     .ask-b { margin-left:0 !important; color:var(--coral) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
@@ -471,7 +471,7 @@
     .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:12px; background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
     .ctabs button { border:0; background:none; padding:6px 14px; border-radius:9px; font-size:13px; color:var(--muted); white-space:nowrap; } .ctabs button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .ctabs button[aria-selected="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
-    .cpane[hidden] { display:none; } .cpane > * + * { margin-top:10px; } .qlinks { display:flex; flex-wrap:wrap; gap:6px; } .qlinks .mini { margin:0; padding:5px 12px; font-size:12.5px; color:var(--fg); }
+    .cpane[hidden] { display:none; } .cpane > * + * { margin-top:10px; } .qlinks { display:flex; flex-wrap:wrap; align-items:center; gap:6px; } .qlinks .mini { margin:0; padding:5px 12px; font-size:12.5px; color:var(--fg); }
     .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:11.5px; font-weight:650; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
     .mi { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:6px 4px; border-top:1px solid var(--line); }
@@ -613,7 +613,7 @@
     ics.addEventListener("click", () => saveIcs(list)); h.appendChild(ics);
     sec.appendChild(h);
     if (overdue.length) {   // ticked overdue work stays here greyed (so it can be unticked) until it leaves the planner window
-      const row = el("div", "late"); row.appendChild(el("span", "pill " + (late.length ? "bad" : "ok"), "Atrasadas"));
+      const row = el("div", "late");   // the title's pill already counts them
       overdue.slice(0, 6).forEach(x => { const w = el("div", "evw"), ck = check(x); w.appendChild(chip(x, x.title + " · " + dmy(x.date))); if (ck) w.appendChild(ck); row.appendChild(w); });
       if (overdue.length > 6) row.appendChild(el("span", "muted", "+" + (overdue.length - 6)));
       sec.appendChild(row);
@@ -681,14 +681,14 @@
   function ring(st, big) {
     const r = el("span", "ring" + (big ? " big" : "")), rp = C.ringParts(st), tn = C.statusTone(st), e = rp.earned * 100, f = (rp.earned + rp.future) * 100;
     r.style.background = "conic-gradient(var(--" + tn + ") 0 " + e + "%, var(--" + tn + "-s) " + e + "% " + f + "%, var(--track) " + f + "% 100%)";
-    const goal = el("i"); goal.style.transform = "rotate(" + Math.min(T, 9.9) * 36 + "deg)";   // the goal mark on the ring
+    const goal = el("i"); goal.style.transform = "rotate(" + Math.min(T, 9.9) * 36 + "deg)"; r.title = "o tracinho é a sua meta (" + fmt(T, T % 1 ? 1 : 0) + ")";   // the goal mark on the ring
     r.append(goal, el("b", null, earnedText(st))); r.setAttribute("aria-hidden", "true");
     return r;
   }
   // Big needed grade on 0-10 and its caption, as the calculator's hero card shows it.
   function needBig(st) {
     const nd = C.courseNeed(st), box = el("div", "big");
-    const v = st.status === "garantido" ? "✓" : nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
+    const v = st.status === "garantido" ? "✓" : nd.impossible ? "nem com 10" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
     const cap = st.status === "garantido" ? "garantido" : st.status === "depende-atrasadas" ? "faltam notas antigas" : nd.impossible ? "nem com nota cheia" : "precisa, em 10";
     box.append(el("b", "v t-" + (st.status === "depende-atrasadas" ? "warn" : nd.tone), v), el("span", null, cap));
     if (st.status === "garantido") box.title = C.GARANTIDO_TIP;
@@ -705,9 +705,12 @@
     const kpi = (k, v, cls, sub) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (sub) d.appendChild(sub); kpis.appendChild(d); return d; };
     const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
     fill.style.width = Math.min(100, sem.mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal);
-    kpi("Média atual", fmt(Math.floor(sem.mean * 10) / 10, 1), null, meter).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
+    kpi("Garantido até agora", fmt(Math.floor(sem.mean * 10) / 10, 1), null, meter).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
     const cnt = s => sem.counts[s] || 0;
-    if (sem.tight) kpi("Quanto falta", up(sem.states[sem.tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[sem.tight.id] + ", a mais apertada"));
+    // the tightest subject, but not the one the "Próxima avaliação" card already shows (no 9,0 twice)
+    const heroId = list.length ? list[0].course.id : null, open2 = a.mine.filter(c => c.id !== heroId && sem.states[c.id].status === "precisa").sort((x, y) => sem.states[y.id].fraction - sem.states[x.id].fraction)[0];
+    const tight = sem.tight && sem.tight.id !== heroId ? sem.tight : open2 || sem.tight;
+    if (tight) kpi(tight === sem.tight ? "Quanto falta" : "Depois dessa", up(sem.states[tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[tight.id] + (tight === sem.tight ? ", a mais apertada" : ", a próxima mais apertada")));
     else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
     else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
     else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
@@ -746,7 +749,7 @@
     const ul = el("ul");
     for (const x of now) {
       const li = el("li", "row");
-      li.append(el("span", "d", x.late ? "atrasada" : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.course),
+      li.append(el("span", "d" + (x.late ? " lt" : ""), x.late ? dmy(x.date) : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.course),
         x.exam ? el("span", "pill " + needTone(x.exam), need(x.exam)) : el("span", "pill " + (x.late ? "bad" : "warn"), x.late ? "atrasada" : "a entregar"));
       ul.appendChild(li);
     }
@@ -814,7 +817,6 @@
       draw();
     }
     if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
-    if (prefs.tasks) grid.appendChild(tasksCard(cache, marks, () => onMode && onMode(mode)));
     if (!prefs.native && widgetDash() && !clean) {   // with Canvas's widgets hidden, every course stays one click away (extension courses too)
       const sec = el("section", "card news courses"), h = el("h3", null, "Todas as matérias"), ul = el("ul");
       for (const x of cache.ids) { const li = el("li", "row"); li.append(el("span"), mid(shortName(x.name), location.origin + "/courses/" + x.id, String(x.name).slice(0, 120)), el("span")); ul.appendChild(li); }
@@ -855,6 +857,7 @@
       sec.appendChild(all.length ? ul : el("div", "muted", a.term ? "Nenhum aviso nos últimos 60 dias." : "Nenhuma matéria de " + TERM + " no seu Canvas."));
       foldable(sec, h, "news"); grid.appendChild(sec);
     }
+    if (prefs.tasks) grid.appendChild(tasksCard(cache, marks, () => onMode && onMode(mode)));
     if (prefs.news && mode !== "foco") {   // next to the announcements: the teachers, to ask them something (loaded in the background)
       const holder = el("div"); grid.appendChild(holder);
       teachersOf(cache).then(list => { grid.insertBefore(askCard(list), holder); holder.remove(); }, () => holder.remove());
@@ -972,9 +975,14 @@
     acts.appendChild(status);
     // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
     const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
-    const bar = el("div", "ctabs"), panes = {}, btns = {}; bar.setAttribute("role", "tablist");
+    const bar = el("div", "ctabs"), panes = {}, btns = {}; bar.setAttribute("role", "tablist"); bar.setAttribute("aria-label", "Seções da matéria");
+    bar.addEventListener("keydown", e => {
+      const keys = tabs.map(([k]) => k), cur = keys.findIndex(k => btns[k].getAttribute ? btns[k].getAttribute("aria-selected") === "true" : btns[k]["aria-selected"] === "true");
+      const nx = e.key === "ArrowRight" ? cur + 1 : e.key === "ArrowLeft" ? cur - 1 : e.key === "Home" ? 0 : e.key === "End" ? keys.length - 1 : null;
+      if (nx === null) return; e.preventDefault(); const k = keys[(nx + keys.length) % keys.length]; show(k, true); if (btns[k].focus) btns[k].focus();
+    });
     const show = async (k, byClick) => {
-      for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); }
+      for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); btns[key].tabIndex = key === k ? 0 : -1; }
       if (k === "materiais" && !panes.materiais.cpLoaded) { panes.materiais.cpLoaded = 1; materials(courseId, panes.materiais); }
       if (k === "anot" && byClick && ta.focus) ta.focus();   // only when the student opens it (never on page load)
       await chrome.storage.local.set({ ctab: k });
@@ -1006,7 +1014,7 @@
     const out = [], t = today(), next = agenda(a, cache, {}).filter(x => (String(x.cid) === courseId || (c && x.ours === c)) && !fin(x) && (x.date >= t || x.late)).slice(0, 5);
     const sec = el("section", "card news"), h = el("h3", null, "A seguir nesta matéria"); sec.appendChild(h);
     if (next.length) { const ul = el("ul"); for (const x of next) { const li = el("li", "row");
-      li.append(el("span", "d", x.late && x.date < t ? "atrasada" : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.exam ? (x.exam.req ? need(x.exam) : "prova") : x.task ? "entrega" : "evento"),
+      li.append(el("span", "d" + (x.late && x.date < t ? " lt" : ""), x.late && x.date < t ? dmy(x.date) : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.exam ? (x.exam.req ? need(x.exam) : "prova") : x.task ? "entrega" : "evento"),
         el("span", "pill " + (x.late && x.date < t ? "bad" : x.exam ? "warn" : "nt"), x.late && x.date < t ? "atrasada" : x.exam ? "prova" : "a entregar")); ul.appendChild(li); } sec.appendChild(ul); }
     else sec.appendChild(el("div", "muted", "Nada pendente nesta matéria nos próximos dias."));
     out.push(sec);
@@ -1014,8 +1022,8 @@
     if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
       li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
       s2.append(el("h3", null, "Último aviso"), li); out.push(s2); }
-    const links = el("div", "qlinks");
-    for (const [label, path] of [["Módulos", "/modules"], ["Tarefas", "/assignments"], ["Arquivos", "/files"], ["Notas do Canvas", "/grades"], ["Avisos", "/announcements"]]) { const l = el("a", "mini", label); l.href = "/courses/" + courseId + path; links.appendChild(l); }
+    const links = el("div", "qlinks"); links.appendChild(el("span", "muted", "Abrir no Canvas:"));
+    for (const [label, path] of [["Módulos", "/modules"], ["Tarefas", "/assignments"], ["Arquivos", "/files"], ["Notas", "/grades"]]) { const l = el("a", "mini", label); l.href = "/courses/" + courseId + path; links.appendChild(l); }
     out.push(links);
     return out;
   }
@@ -1240,6 +1248,7 @@
       li.append(avatar(t.avatar, t.name, 36), mid(t.name, null, t.courseName), go); ul.appendChild(li);
     }
     sec.appendChild(list.length ? ul : el("div", "muted", "Não consegui ler os professores das matérias agora."));
+    if (!("ask" in folds)) folds = Object.assign({}, folds, { ask: true });   // folded until the student opens it (the course page has the teacher too)
     foldable(sec, h, "ask"); return sec;
   }
 

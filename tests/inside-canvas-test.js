@@ -222,7 +222,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.match(text(lista), /^ \| Lista 3 \| \d\d:\d\d \|/, "chip: title, then the time"); assert.match(text(lista), /Amanhã, \d\d:\d\d · a entregar/, "tooltip: day, time and status");
   assert.strictEqual(lista.href, "https://pucpr.instructure.com/courses/71306/assignments/1");
   const late = all(wk).find(e => e.className === "late" && e.tag === "div");
-  assert(late && /Atrasadas/.test(text(late)) && /Relatório · \d\d\/\d\d/.test(text(late)), "missing deadline of the last days in the overdue row");
+  assert(late && /Relatório · \d\d\/\d\d/.test(text(late)), "missing deadline of the last days in the overdue row");
   assert(!inGrid(/Relatório/), "overdue work stays out of the grid");
   const quiz = inGrid(/^Quiz feito /);
   assert(quiz && /^ev ok/.test(quiz.className) && /✓ entregue/.test(text(quiz)) && / · Inglês · .* · entregue$/.test(quiz["aria-label"]), "handed-in work marked, other courses by their short name");
@@ -310,7 +310,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const exams = await runContent("/", null, {}, { Date: fakeDate("2026-11-08T12:00:00-03:00"), more: MORE });
   const eb = exams.anchor.kids.find(k => k.id === "cp-dash"), ex = all(eb).filter(e => /^ev ex/.test(e.className) && colOf(e).className === "col");
   assert(ex.length >= 2, "our exams of the week are coral chips in the grid");
-  assert(ex.every(e => /^(precisa [\d,]+( de [\d,]+)?|já garantido|não dá)$/.test(all(e).find(k => k.className === "s").textContent)), "exam chips say what each needs");
+  assert(ex.every(e => /^(precisa [\d,]+( de [\d,]+)?|já garantido|nem com 10)$/.test(all(e).find(k => k.className === "s").textContent)), "exam chips say what each needs");
   const band = all(eb).find(e => e.className === "band");
   assert(band && band.kids[0].textContent === "semana de provas" && band.style.left === (1 / 7 * 100) + "%", "exam days close together become one band");
   assert(!all(eb).some(e => e.className === "late" && e.tag === "div"), "no overdue row when nothing is late");
@@ -544,10 +544,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // modes on the dashboard panel: limpo drops the KPI row and read announcements; foco is one "Agora" list; switch in the header
   const mFull = await runContent("/", null);
   const mClean = await runContent("/", null, { prefs: { mode: "limpo" } });
-  assert(/Média atual/.test(text(mFull.anchor)) && !/Média atual/.test(text(mClean.anchor)) && /Próximos 7 dias/.test(text(mClean.anchor)), "limpo: no KPI row, the week stays");
+  assert(/Garantido até agora/.test(text(mFull.anchor)) && !/Garantido até agora/.test(text(mClean.anchor)) && /Próximos 7 dias/.test(text(mClean.anchor)), "limpo: no KPI row, the week stays");
   assert(/Prova adiada/.test(text(mClean.anchor)) && !/Bem-vindos/.test(text(mClean.anchor)), "limpo: only unread announcements");
   const mFocus = await runContent("/", null, { prefs: { mode: "foco" } }), ft = all(mFocus.anchor).filter(e => e.tag !== "style").map(e => e.textContent).join(" | ");
-  assert(/Agora \| 2 coisas/.test(ft) && /atrasada[ |]+Relatório/.test(ft) && /Lista 3/.test(ft) && !/Próximos 7 dias|Avisos|Média atual|Quiz feito/.test(ft), "foco: only what to do now: " + ft.slice(0, 200));
+  assert(/Agora \| 2 coisas/.test(ft) && /\d\d\/\d\d[ |]+Relatório/.test(ft) && /Lista 3/.test(ft) && !/Próximos 7 dias|Avisos|Garantido até agora|Quiz feito/.test(ft), "foco: only what to do now: " + ft.slice(0, 200));
   const segB = all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Foco");
   assert(segB && all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Completo")["aria-checked"] === "true", "the header switch shows the mode");
   await segB.listeners.click(); await new Promise(r => setTimeout(r, 10));
@@ -813,7 +813,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!bmDash.menu.kids.length, "no menu item in the bookmarklet");
   const bmCourse = await runContent("/courses/71306", [], {}, { src: bm });
   assert.match(text(bmCourse.anchor), /garantidos de 10/);
-  assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no|^Anotações/.test(e.textContent)), "no downloads, no calculator page and no notes in the bookmarklet");
+  assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no Caderno|^Anotações/.test(e.textContent)), "no downloads, no calculator page and no notes in the bookmarklet");
   const bmOther = await runContent("/profile", null, {}, { src: bm });
   assert.strictEqual(bmOther.alerts.length, 1, "elsewhere it asks for the dashboard or a course"); ok();
 
