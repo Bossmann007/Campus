@@ -42,7 +42,7 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.ht
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
   assert.deepStrictEqual(await collect(), { error: "o Canvas respondeu 401" });
   const landing = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-  assert(landing.includes('href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
+  assert(landing.includes('href="https://github.com/Bossmann007/Campus/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
   assert(/cp "\$out" dist\/quanto-falta-extension\.zip/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "package script writes the stable name");
   // popup: "Atualizar agora" marks the last reading as old, so the next Canvas page reads everything again
   const els = {}, store = { cache: { at: Date.now(), user: 5, data: { courses: [] } }, refreshing: Date.now() };

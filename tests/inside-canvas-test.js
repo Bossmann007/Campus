@@ -107,7 +107,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if ((opts.more || []).some(c => url.startsWith("/api/v1/courses/" + c.id + "/assignments"))) return page([]);
     if (url.startsWith("/api/v1/announcements")) return page([{ context_code: "course_" + cid, title: "Prova adiada", posted_at: new Date().toISOString(), read_state: "unread", html_url: "https://pucpr.instructure.com/courses/71306/discussion_topics/1" },
       { context_code: "course_" + cid, title: "Bem-vindos", posted_at: "2026-08-01T12:00:00Z", read_state: "read", html_url: "https://evil.example/x" }]);
-    if (url.startsWith("/api/v1/conversations?")) return opts.inboxFails ? { ok: false, status: 403, text: async () => "", headers: { get: () => null } } : page(opts.inbox || []);
+    if (url.includes("/api/v1/conversations?")) return opts.inboxFails ? { ok: false, status: 403, text: async () => "", headers: { get: () => null } }
+      : Object.assign(page(opts.inbox || []), { headers: { get: h => h === "Link" ? '<https://pucpr.instructure.com/api/v1/conversations?scope=unread&page=2>; rel="next"' : null } });
     if (url.startsWith("/api/v1/planner/items?")) return plannerFails ? { ok: false, status: 500, text: async () => "", headers: { get: () => null } } : page(plannerItems || PLANNER);
     if (url.startsWith("/api/v1/courses/71306/files?")) return files ? page(files) : { ok: false, status: 401, text: async () => "", headers: { get: () => null } };
     if (opts.modules && url.startsWith("/api/v1/courses/71306/modules?")) return page(opts.modules);
@@ -501,9 +502,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed"); ok();
 
   // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
-  const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ name: "Prof. Ana" }, { name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
+  const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
   const ibx = all(ib.anchor).find(e => /card news inbox/.test(e.className));
-  assert(ibx && /Caixa de entrada \| 1 não lida/.test(text(ibx)) && /Dúvida RA3 \| Prof\. Ana, Aluno/.test(text(ibx)), "subject and who");
+  assert(ibx && /Caixa de entrada \| 1 não lida/.test(text(ibx)) && /Dúvida RA3 \| Prof\. Ana, Aluno/.test(text(ibx)), "subject and who (not the student themself)");
+  assert.strictEqual(ib.fetches.filter(u => u.includes("/api/v1/conversations")).length, 1, "one page of messages only, even with more pages");
   assert(!/segredo/.test(JSON.stringify(ib.store.cache)), "the message text is never read into the cache");
   assert.strictEqual(all(ibx).find(e => e.textContent === "Dúvida RA3").href, "https://pucpr.instructure.com/conversations");
   const ibf = await runContent("/", null, {}, { inboxFails: true });
@@ -632,7 +634,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!all(bmDash.anchor).some(e => e.href === "#campus") && !bmDash.menu.kids.length, "no Caderno+ page without the extension");
   const bmCourse = await runContent("/courses/71306", [], {}, { src: bm });
   assert.match(text(bmCourse.anchor), /garantidos de 10/);
-  assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no/.test(e.textContent)), "no downloads and no calculator page in the bookmarklet");
+  assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no|^Anotações/.test(e.textContent)), "no downloads, no calculator page and no notes in the bookmarklet");
   const bmOther = await runContent("/profile", null, {}, { src: bm });
   assert.strictEqual(bmOther.alerts.length, 1, "elsewhere it asks for the dashboard or a course"); ok();
 

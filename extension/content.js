@@ -18,9 +18,9 @@
   const addDays = n => C.localISO(new Date(Date.now() + n * 864e5));
   const days = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(today() + "T00:00:00Z")) / 864e5);
 
-  async function getAll(url) {
+  async function getAll(url, pages = Infinity) {   // pages: stop after that many (the inbox reads only the first)
     const out = [];
-    while (url) {
+    while (url && pages-- > 0) {
       const r = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
       if (!r.ok) throw new Error("o Canvas respondeu " + r.status);
       const body = JSON.parse((await r.text()).replace(/^while\(1\);/, ""));
@@ -66,8 +66,8 @@
   async function refresh(user) {
     await chrome.storage.local.set({ refreshing: Date.now() });
     try {
-      const inbox = getAll("/api/v1/conversations?scope=unread&per_page=5").then(list => list.slice(0, 5).map(m => ({ subject: String(m.subject || "(sem assunto)").slice(0, 140),
-        from: (Array.isArray(m.participants) ? m.participants : []).map(x => x && x.name).filter(Boolean).slice(0, 2).join(", ").slice(0, 80), at: m.last_message_at || null })), () => null);   // unread messages (subject and who), read alongside
+      const inbox = getAll("/api/v1/conversations?scope=unread&per_page=5", 1).then(list => list.slice(0, 5).map(m => ({ subject: String(m.subject || "(sem assunto)").slice(0, 140),
+        from: (Array.isArray(m.participants) ? m.participants : []).filter(x => x && x.name && x.id !== user).map(x => x.name).slice(0, 2).join(", ").slice(0, 80), at: m.last_message_at || null })), () => null);   // unread messages (subject and who), read alongside
       const plan = getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders, read alongside the grades
       const got = {}, data = await collectCanvasGrades(got);
       if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
@@ -714,8 +714,8 @@
       if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
     });
     nb.addEventListener("click", () => { pad.hidden = !pad.hidden; if (!pad.hidden && ta.focus) ta.focus(); });
-    acts.appendChild(nb);
-    acts.appendChild(status); box.append(acts, pad);
+    if (APP) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
+    acts.appendChild(status); box.append(acts); if (APP) box.appendChild(pad);
   }
 
   async function courseFiles(id) {

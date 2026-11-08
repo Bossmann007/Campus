@@ -178,7 +178,7 @@
     $("fbsend").addEventListener("click", () => {
       const t = $("fbtext").value.trim(); if (!t) { $("fbtext").focus(); return; }
       const q = new URLSearchParams({ template:"feedback.yml", title:"Feedback: " + t.split(/\s+/).slice(0, 8).join(" ").slice(0, 70), mensagem:t.slice(0, 1200), origem:"site, " + today });
-      window.open("https://github.com/Bossmann007/quanto-falta-pucpr/issues/new?" + q, "_blank", "noopener,noreferrer");
+      window.open("https://github.com/Bossmann007/Campus/issues/new?" + q, "_blank", "noopener,noreferrer");
       fb.close(); $("fbtext").value = "";
     });
     exportICS = () => {

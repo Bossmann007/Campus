@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Falha de segurança
-    url: https://github.com/Bossmann007/quanto-falta-pucpr/security/advisories/new
+    url: https://github.com/Bossmann007/Campus/security/advisories/new
     about: Reporte em particular, nunca numa issue pública.
