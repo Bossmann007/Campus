@@ -104,7 +104,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     throw new Error("unexpected " + url);
   };
   const env = { window: { addEventListener: (t, f) => { winListeners[t] = f; } },
-    location: { pathname, search: "", hash: opts.hash || "", href: "https://pucpr.instructure.com" + pathname, origin: "https://pucpr.instructure.com", hostname: "pucpr.instructure.com" } };
+    location: { pathname, search: "", hash: opts.hash || "", href: "https://pucpr.instructure.com" + pathname, origin: "https://pucpr.instructure.com", hostname: "pucpr.instructure.com", assign(u) { this.assigned = u; } } };
   env.window.top = env.window;
   const history = { replaceState: (a, b, url) => { env.location.hash = ""; } };
   const src = opts.src || read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
@@ -252,6 +252,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const tiles = all(gb).filter(e => e.className === "card tile");
   assert.deepStrictEqual(tiles.map(t => t.href), C.COURSES.map(c => "#campus=" + c.id), "a tile per subject, each opening Campus+ on it");
   assert(tiles.every((t, i) => text(t).includes(C.SHORT[C.COURSES[i].id])), "tiles named like the calculator");
+  const cvOf = id => { const m = C.CANVAS[id] && C.CANVAS[id].match, h = m ? gd.store.cache.ids.filter(x => x.name.startsWith(m)) : []; return h.length === 1 ? String(h[0].id) : null; };
+  const tIdx = C.COURSES.findIndex(c => cvOf(c.id));
+  assert(tIdx >= 0, "fixture has a subject matched to a Canvas course");
+  gd.env.location.hash = tiles[tIdx].href; gd.winListeners.hashchange();
+  await all(gd.body.kids.find(k => k.id === "cp-app")).find(e => e.textContent === "Fechar").listeners.click();
+  assert.strictEqual(gd.env.location.assigned, "/courses/" + cvOf(C.COURSES[tIdx].id), "Fechar on a subject opened from the dashboard goes to its Canvas course");
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
@@ -305,6 +311,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   direct.env.location.hash = "#" + direct.env.location.hash; direct.winListeners.hashchange();
   const subj = all(direct.body.kids.find(k => k.id === "cp-app")).find(e => e.tag === "iframe");
   assert(subj && /app\.html\?m=[a-z0-9]+$/.test(subj.src), "#campus=<id> opens the calculator on that subject: " + (subj && subj.src));
+  await all(direct.body.kids.find(k => k.id === "cp-app")).find(e => e.textContent === "Fechar").listeners.click();
+  assert(!direct.env.location.assigned && direct.env.location.hash === "" && !direct.body.kids.some(k => k.id === "cp-app"), "Fechar on the course page stays on it");
   direct.env.location.hash = "#campus=../x"; direct.winListeners.hashchange();
   assert(!direct.body.kids.some(k => k.id === "cp-app"), "an odd subject id does not open anything"); ok();
 

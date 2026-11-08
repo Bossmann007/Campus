@@ -45,11 +45,12 @@
     await chrome.storage.local.set({ cache: fresh });
     return fresh;
   }
+  const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   function analyse(cache) {
     const grades = C.fromCanvas(cache.data).grades, t = today(), byCanvasId = {};
     for (const c of C.COURSES) {
       const match = C.CANVAS[c.id] && C.CANVAS[c.id].match, hits = match ? cache.ids.filter(x => x.name.startsWith(match)) : [];
-      if (hits.length === 1) byCanvasId[hits[0].id] = c;
+      if (hits.length === 1) { byCanvasId[hits[0].id] = c; courseOf[c.id] = String(hits[0].id); }
     }
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
@@ -129,7 +130,12 @@
     close.addEventListener("click", closeCampus);
     box.cpFrame = frame; box.append(frame, close); document.body.appendChild(box);
   }
-  function closeCampus() { history.replaceState(null, "", location.pathname + location.search); campusPage(); }
+  // Fechar on a subject opened from the dashboard goes to that subject's Canvas course; otherwise it stays on the page.
+  function closeCampus() {
+    const m = /^#campus=([a-z0-9]{1,20})$/.exec(location.hash), cv = m && courseOf[m[1]], home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
+    if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
+    history.replaceState(null, "", location.pathname + location.search); campusPage();
+  }
   // "Campus+" in the Canvas left menu, after Painel.
   function navItem() {
     const menu = document.getElementById("menu");
