@@ -271,6 +271,24 @@
   }
 
   // Dashboard: one status pill per card of the six courses. Cards render late (React), so watch the page.
+  // The classic dashboard header (canvas-lms DashboardHeader.jsx: .ic-Dashboard-header__layout > Flex > [title item, actions]):
+  // a greeting with the student's first name (ENV.current_user in the page), the date and what is coming, in place of
+  // "Painel de controle" (still there for screen readers, CSS hides it visually).
+  const firstName = () => { for (const sc of (document.scripts || [])) { const m = /"current_user":\{[^}]*?"display_name":"([^"]+)"/.exec(sc.textContent || ""); if (m) return m[1].split(/\s+/)[0]; } return ""; };
+  const WD_FULL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  function greet(list) {
+    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null, item = layout && layout.firstElementChild && layout.firstElementChild.firstElementChild;
+    if (!item || item.querySelector(".cp-greet")) return;
+    const h = new Date().getHours(), hi = h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite", name = firstName();
+    const t = today(), soon = list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= addDays(6)), todays = soon.filter(x => x.date === t && !x.exam).length, exam = soon.find(x => x.exam);
+    const d = new Date(), date = WD_FULL[d.getDay()] + ", " + d.getDate() + " de " + MONTHS[d.getMonth()];
+    const bits = [date, todays ? todays + (todays === 1 ? " entrega hoje" : " entregas hoje") : soon.length ? soon.length + (soon.length === 1 ? " coisa nesta semana" : " coisas nesta semana") : "semana livre"];
+    if (exam) bits.push("prova " + dayLabel(exam.date) + ": " + exam.title.replace(/^Prova( do)?:? ?/i, "") + " · " + exam.course);
+    const g = el("div", "cp-greet"), big = el("div", null, hi + (name ? ", " + name : "") + "!"), sub = el("div", null, bits.join(" · "));
+    g.style.cssText = "line-height:1.2"; big.style.cssText = "font-size:30px;font-weight:650;letter-spacing:-.02em";
+    sub.style.cssText = "margin-top:6px;font-size:14px;opacity:.72"; g.append(big, sub); item.prepend(g);
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-greet-on");
+  }
   // Course cards: the status pill on our subjects (inside Canvas's card content, under its title) and courses the student took
   // off the dashboard (popup). Canvas's own card menu (⋮, color, nickname) stays untouched. ctx: { prefs, hidden }.
   const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
@@ -1296,12 +1314,12 @@
       const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       gradeA = a; watchDash(); enhanceGradeCards();
-      decorateCards(a, again, ctx); hideGradeCards(ctx.hidden);
+      decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
-      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a, false, ctx), 250); });
+      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { decorateCards(a, false, ctx); greet(agenda(a, cache, marks)); }, 250); });
       watch.observe(document.body, { childList: true, subtree: true });
       setTimeout(() => watch.disconnect(), 20000);
     }

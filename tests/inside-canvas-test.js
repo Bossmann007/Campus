@@ -97,7 +97,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); };
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
-    querySelector: sel => (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
+    querySelector: sel => sel === ".ic-Dashboard-header__layout" ? (opts.header || null) : (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
     querySelectorAll: sel => sel === "#my_courses_table tbody tr" ? (opts.rows || []) : sel === '[data-testid^="course-grade-card-"]' ? (opts.gradeCard ? [gcard] : []) : sel === "[data-cp-grade]" ? all(gcard).filter(e => e["data-cp-grade"]) : sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
@@ -635,6 +635,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(/\/10 · /.test(text(r1)) && /Tirar do painel/.test(text(r2)) && !/\/10/.test(text(r2)), "pill on ours, the button on every course");
   await all(r2).find(e => e.textContent === "Tirar do painel").listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(cpage.store.hidden.includes("88") && /Mostrar no painel/.test(text(r2)), "taken off the dashboard from the course list");
+  // the classic dashboard header: a greeting with the first name, the date and what is coming (the title stays for screen readers)
+  const lay = fakeEl("div"), flex = fakeEl("div"), titleItem = fakeEl("span"); titleItem.append(fakeEl("span")); flex.append(titleItem, fakeEl("span")); lay.append(flex);
+  lay.firstElementChild = flex; flex.firstElementChild = titleItem; titleItem.prepend = function (c) { c.parent = this; this.kids.unshift(c); };
+  titleItem.querySelector = sel => all(titleItem).find(e => e.className === "cp-greet") || null;
+  const greetRun = await runContent("/", null, {}, { header: lay, scripts: [{ textContent: 'ENV = {"current_user_id":"5","current_user":{"id":"5","display_name":"Enzo Bossmann"}}' }] });
+  const greetEl = titleItem.kids[0];
+  assert(greetEl && greetEl.className === "cp-greet" && /^(Bom dia|Boa tarde|Boa noite), Enzo!$/.test(greetEl.kids[0].textContent) && /de (janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro) · /.test(greetEl.kids[1].textContent), "greeting: " + (greetEl && text(greetEl)));
   const clHidden = await runContent("/", null, { hidden: ["71306"] }, { classic: true });
   assert(!/\/10 · /.test(text(clHidden.header)), "a course unticked in the popup leaves the dashboard"); ok();
 

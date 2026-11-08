@@ -42,6 +42,10 @@
 :root .ic-app-header:is(:hover, :focus-within) { transform:none; transition-delay:0s; box-shadow:8px 0 30px -12px rgba(0,0,0,.45); }
 :root .ic-app-header:is(:hover, :focus-within)::after { opacity:0; }
 :root .ic-Layout-wrapper { margin-left:10px !important; } }`);
+    // the classic dashboard header: our greeting in place of the title (kept for screen readers), calmer buttons
+    out.push(`:root.cp-greet-on .cp-greet ~ * { position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.ic-Dashboard-header__layout { padding:10px 0 6px; } .ic-Dashboard-header__actions :is(button, a) { border-radius:999px !important; }
+.ic-Dashboard-header__actions [data-testid="switch-to-new-dashboard-button"] { font-size:13px !important; padding:0 14px !important; }`);
     // the left-menu trays (Cursos, Grupos, Histórico, Ajuda) in #nav-tray-portal: paper, items as small cards
     if (L) out.push(`:root.cp-look #nav-tray-portal [role="dialog"], :root.cp-look #nav-tray-portal [role="dialog"] > div { background:var(--cp-paper) !important; }
 :root.cp-look #nav-tray-portal h2 { color:var(--cp-ink) !important; letter-spacing:-.01em; }
