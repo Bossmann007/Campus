@@ -583,12 +583,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!noPlan.sent.some(m => m.type === "remind"), "planner down: the reminders already set are kept"); assert.match(text(noPlan.anchor), /Prova adiada/, "announcements still shown"); ok();
 
   // theme.js: class on <html> from the setting, live when the popup changes it
-  const theme = (pref, systemDark, hour) => {
-    const cls = new Set(), listen = {}, doc = { createElement: () => ({}), head: { appendChild() {} }, documentElement: { classList: { toggle: (c, on) => on ? cls.add(c) : cls.delete(c) } } };
-    const chrome = { storage: { local: { get: async () => ({ prefs: { theme: pref } }) }, onChanged: { addListener: f => { listen.change = f; } } } };
-    const ticks = [], RealDate = Date, D = hour == null ? Date : class extends RealDate { getHours() { return hour; } };
-    new Function("document", "chrome", "matchMedia", "setInterval", "Date", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }), f => ticks.push(f), D);
-    return { cls, listen, ticks };
+  const theme = (pref, systemDark, hour, last, more) => {
+    const cls = new Set(), listen = {}, doc = { createElement: () => ({}), head: { appendChild() {}, append() {} }, documentElement: { classList: { toggle: (c, on) => on ? cls.add(c) : cls.delete(c) } } };
+    const chrome = { storage: { local: { get: async () => ({ prefs: Object.assign({ theme: pref }, more) }) }, onChanged: { addListener: f => { listen.change = f; } } } };
+    const ticks = [], RealDate = Date, D = hour == null ? Date : class extends RealDate { getHours() { return hour; } }, styles = [], ls = {};
+    doc.createElement = () => { const st = {}; styles.push(st); return st; };
+    const storage = { getItem: k => ls[k] == null ? null : ls[k], setItem: (k, v) => { ls[k] = String(v); } };
+    if (last) ls["cp-look"] = JSON.stringify(last);
+    new Function("document", "chrome", "matchMedia", "setInterval", "Date", "localStorage", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }), f => ticks.push(f), D, storage);
+    return { cls, listen, ticks, styles, ls };
   };
   const th = theme("dark", false); await new Promise(r => setTimeout(r, 5));
   assert(th.cls.has("cp-dark"), "dark theme"); th.listen.change({ prefs: { newValue: { theme: "off" } } }, "local"); assert(!th.cls.has("cp-dark"), "turned off live");
@@ -596,7 +599,20 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(auto.cls.has("cp-dark") && !light.cls.has("cp-dark"), "auto follows the system; default is the Canvas light theme");
   const thDim = theme("dim", false), thLate = theme("night", false, 22), thDay = theme("night", true, 13); await new Promise(r => setTimeout(r, 5));
   assert(thDim.cls.has("cp-dark") && thDim.cls.has("cp-dim"), "dim: dark, softer"); assert(thLate.cls.has("cp-dark") && !thLate.cls.has("cp-dim"), "night at 22h: dark");
-  assert(!thDay.cls.has("cp-dark"), "night at 13h: light, whatever the system"); assert.strictEqual(thDay.ticks.length, 1, "checked again every few minutes"); ok();
+  assert(!thDay.cls.has("cp-dark"), "night at 13h: light, whatever the system"); assert.strictEqual(thDay.ticks.length, 1, "checked again every few minutes");
+  // looks: the whole Canvas, Caderno by default, through Canvas's own brand variables; font and left menu on top
+  const lk = theme("off", false); await new Promise(r => setTimeout(r, 5));
+  const lookCss = () => lk.styles.find(x => x.id === "cp-look").textContent;
+  assert(["cp-look", "cp-look-nav", "cp-look-font"].every(c => lk.cls.has(c)) && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look, menu and font");
+  assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()) && /Fraunces/.test(lookCss()), "cards and serif titles");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno" }), "kept for the next first paint");
+  lk.listen.change({ prefs: { newValue: { look: "original", nav: "original", font: "original" } } }, "local");
+  assert(!lk.cls.has("cp-look") && !lk.cls.has("cp-look-nav") && !lk.cls.has("cp-look-font") && lookCss() === "", "Canvas original: nothing changed, live");
+  lk.listen.change({ prefs: { newValue: { look: "original", nav: "verde", font: "sistema" } } }, "local");
+  assert(!lk.cls.has("cp-look") && lk.cls.has("cp-look-nav") && /#1F5C42/.test(lookCss()) && /-apple-system/.test(lookCss()) && !/Fraunces/.test(lookCss()), "menu color and font work without a look");
+  lk.listen.change({ prefs: { newValue: { look: "pastel" } } }, "local"); assert(/#7C5CDB/.test(lookCss()), "pastel");
+  const firstPaint = theme("off", false, undefined, { look: "original", nav: "original", font: "original" });
+  assert(!firstPaint.cls.has("cp-look"), "the first paint already uses the last choice (before prefs arrive)"); ok();
 
   // the Caderno+ page: a left-menu item, and the calculator over Canvas on #campus
   const camp = await runContent("/", null);

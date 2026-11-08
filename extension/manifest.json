@@ -65,6 +65,14 @@
       "matches": [
         "https://pucpr.instructure.com/*"
       ]
+    },
+    {
+      "resources": [
+        "fonts/*.woff2"
+      ],
+      "matches": [
+        "https://pucpr.instructure.com/*"
+      ]
     }
   ]
 }

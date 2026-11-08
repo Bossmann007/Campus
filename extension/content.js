@@ -244,8 +244,9 @@
   }
 
   const CSS = `
-    :host { all: initial; display:block; margin:0 0 18px; --fg:#1D2433; --muted:#5F6675; --line:#ECE4D3; --bg:#fff; --soft:#FBF7EF; --ring:#E2482B; --coral:#E2482B; --tile:#1D2433; --tile-c:#FBF7EF; --band1:#FFE6DF; --band2:#FFF5F1;
-      --paper:#FBF7EF; --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
+    :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
+      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:#FFE6DF; --band2:#FFF5F1;
+      --paper:var(--cp-paper,#FBF7EF); --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
     :host-context(html.cp-dark) { --fg:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --bg:#1B2130; --soft:#222938; --ring:#F0603F; --coral:#F0603F; --tile:#F3EDE1; --tile-c:#1D2433; --band1:#3B2220; --band2:#2A2129;

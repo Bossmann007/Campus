@@ -8,6 +8,13 @@ chrome.storage.local.get("prefs").then(({ prefs }) => {
   const save = () => chrome.storage.local.set({ prefs: p });
   $("theme").value = p.theme;
   $("theme").addEventListener("change", () => { p = Object.assign({}, p, { theme: $("theme").value }); save(); });
+  for (const sel of document.querySelectorAll("[data-sel]")) {
+    sel.value = p[sel.dataset.sel];
+    sel.addEventListener("change", () => { p = Object.assign({}, p, { [sel.dataset.sel]: sel.value }); save(); });
+  }
+  const looks = [...document.querySelectorAll("[data-look]")], mark = () => looks.forEach(b => b.setAttribute("aria-checked", String(b.dataset.look === p.look)));
+  for (const b of looks) b.addEventListener("click", () => { p = Object.assign({}, p, { look: b.dataset.look }); save(); mark(); });
+  mark();
   for (const box of document.querySelectorAll("[data-pref]")) {
     box.checked = p[box.dataset.pref];
     box.addEventListener("change", () => { p = Object.assign({}, p, { [box.dataset.pref]: box.checked }); save(); });

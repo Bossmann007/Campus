@@ -30,7 +30,7 @@ const collect = new Function(fs.readFileSync(path.join(dir, "core.js"), "utf8") 
 const app = fs.readFileSync(path.join(dir, "app.html"), "utf8");
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(app) && !/\son\w+=/.test(app), "calculator page in the extension: no inline script or handler (MV3)");
 assert(/default-src 'none'; script-src 'self';/.test(app) && !/script-src[^;"]*unsafe-inline/.test(app), "calculator page: scripts from the package only, network blocked");
-assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.html"], matches: ["https://pucpr.instructure.com/*"] }], "only the calculator page can be framed, only by the PUCPR Canvas");
+assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.html"], matches: ["https://pucpr.instructure.com/*"] }, { resources: ["fonts/*.woff2"], matches: ["https://pucpr.instructure.com/*"] }], "only the calculator page and the fonts, only to the PUCPR Canvas");
 (async () => {
   const seen = {}, out = await collect(seen);
   assert.deepStrictEqual(seen.courses, [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }], "the course list is handed back, so the caller does not fetch it again");
