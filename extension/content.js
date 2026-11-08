@@ -302,8 +302,6 @@
     :host-context(html.cp-dark) { --fg:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --bg:#1B2130; --soft:#222938; --ring:#F0603F; --coral:#F0603F; --tile:#F3EDE1; --tile-c:#1D2433; --band1:#3B2220; --band2:#2A2129;
       --paper:#141925; --track:#2A3242; --ok:#6CC59A; --warn:#E6B15C; --bad:#FF876C; --ok-s:#24493A; --warn-s:#4A3B22; --bad-s:#5A2E29; --lift:0 8px 20px -12px rgba(0,0,0,.6); }
     .box { position:relative; container:cp / inline-size; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
-    .box.inw { border:0; background:none; box-shadow:none; padding:0; } .box.inw > .hd { margin:0 0 12px; padding:6px 2px; border-bottom:0; }
-    .box.inw .card { border-radius:14px; box-shadow:0 1px 2px rgba(29,36,51,.06); }
     .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
     .box > .card, .box > .kpis, .box > .tiles { margin-bottom:10px; }
@@ -462,9 +460,9 @@
     style.textContent = CSS; root.append(style, box); anchor.prepend(host);
     return box;
   }
-  // Canvas's widget dashboard (React, mounted in #content): our panel goes inside it, under the greeting and the tabs and
-  // above its widgets ([data-testid="widget-columns"], stable hooks from canvas-lms). React may redraw that area (tab
-  // switches): a watcher puts the panel back. Without the widget dashboard it stays at the top of #content.
+  // Placement: on the classic dashboard, right above its course cards (#DashboardCard_Container, outside its React root);
+  // on the widget dashboard, at the top of #content (never inside its React grid). The watcher re-applies the Notas do curso
+  // badges when React redraws that widget.
   let dashWatch = null, widgets = null;
   const widgetDash = () => widgets != null ? widgets : (widgets = [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));   // ENV flag in the page
   function placeDash() {
@@ -750,8 +748,7 @@
     if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
-    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");
-    if (prefs.native && widgetDash()) box.className += " inw";   // inside Canvas's dashboard: no frame, our cards sit like its widgets   // Foco hides Canvas's cards only when ours are there
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
     const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
@@ -1195,7 +1192,12 @@
         prefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
         onMode(p2.mode);
       };
-      if (!window.cpPrefsListen && chrome.storage.onChanged) { window.cpPrefsListen = 1; chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs && window.cpPrefsChanged) window.cpPrefsChanged(ch.prefs.newValue); }); }
+      window.cpHiddenChanged = list => { ctx.hidden = (Array.isArray(list) ? list : []).map(String); decorateCards(a, true, ctx); hideGradeCards(ctx.hidden); };   // unticked in the popup: off at once
+      if (!window.cpPrefsListen && chrome.storage.onChanged) { window.cpPrefsListen = 1; chrome.storage.onChanged.addListener((ch, area) => {
+        if (area !== "local") return;
+        if (ch.prefs && window.cpPrefsChanged) window.cpPrefsChanged(ch.prefs.newValue);
+        if (ch.hidden && window.cpHiddenChanged) window.cpHiddenChanged(ch.hidden.newValue);
+      }); }
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
       const { hidden } = await chrome.storage.local.get("hidden");
       const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };

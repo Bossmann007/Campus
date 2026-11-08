@@ -15,7 +15,7 @@
     contraste: ["#FFFFFF", "#FFFFFF", "#000000", "#1F1F1F", "#000000", "#0040C1", "#0033A0", "#000000"]
   };
   const NAV = { tinta: "#1D2433", coral: "#B8361C", verde: "#1F5C42", azul: "#1E3A6E", roxo: "#3B3363" };
-  const css = (look, nav, f, cards, dark) => {
+  const css = (look, nav, cards, dark) => {
     // dark modes invert the page: a cream paper would turn to mud, so under them every look paints on neutral white
     const L = LOOKS[look] && dark ? ["#FFFFFF", "#F3F3F3"].concat(LOOKS[look].slice(2, 4), ["#E0E0E0"], LOOKS[look].slice(5)) : LOOKS[look], out = [];
     // the dashboard: the Caderno+ panel takes the place of Canvas's (its widget dashboard is React with generated classes);
@@ -25,7 +25,7 @@
     const W = ":root.cp-dash-page";
     if (!cards.native || cards.mode === "foco") out.push(`${W}.cp-has-panel [data-testid="widget-columns"] { display:none !important; }`);
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${W} [data-testid="switch-to-old-dashboard-button"] { display:none !important; }`);
-    out.push(`${W}.cp-has-panel [data-testid="widget-container-course-work-combined-widget"] { display:none !important; }`);   // our 7 days show the same work
+    if (cards.week && cards.mode !== "foco") out.push(`${W}.cp-has-panel [data-testid="widget-container-course-work-combined-widget"] { display:none !important; }`);   // our 7 days show the same work
     // /calendar: ours in place of Canvas's (its calendar, mini month and calendar list), unless the student keeps Canvas's
     if (!cards.nativeCal) out.push(`:root.cp-cal-page.cp-has-cal #content > :not(#cp-cal), :root.cp-cal-page.cp-has-cal #right-side-wrapper { display:none !important; }`);
     // Cursos and Grupos (Canvas tables): our cards' look
@@ -45,8 +45,8 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     if (cards.mode === "foco") out.push(`${D}.cp-has-panel :is(#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, #cp-scroll) { display:none !important; }`);
     // Canvas's own card layout (262px cards in .ic-DashboardCard__box__container, canvas-lms dashboard_card.scss) is kept;
     // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
-    out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; }
-:root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 286px + 24px); margin-left:auto !important; margin-right:auto !important; }`);
+    out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:116px; }
+:root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 298px - 24px); margin-left:auto !important; margin-right:auto !important; }`);
     if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; } .ic-DashboardCard__header_hero { opacity:1 !important; }`);
     if (L) {
       const [paper, card, ink, muted, line, accent, link, menu] = L;
@@ -57,6 +57,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look body, :root.cp-look #application, :root.cp-look #wrapper, :root.cp-look #main, :root.cp-look .ic-Layout-wrapper,
 :root.cp-look .ic-Layout-contentMain, :root.cp-look #content-wrapper, :root.cp-look #right-side-wrapper, :root.cp-look #right-side { background-color:var(--cp-paper) !important; color:var(--cp-ink); }
 :root.cp-look .ic-DashboardCard { border-radius:14px; overflow:hidden; border:1px solid var(--cp-line); background:var(--cp-card); box-shadow:0 1px 2px rgba(29,36,51,.06); transition:transform .18s, box-shadow .18s; }
+:root.cp-look .ic-DashboardCard__header_content { background:var(--cp-card) !important; }
 :root.cp-look .ic-DashboardCard:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45); }
 :root.cp-look :is(.Button, .btn, button.ui-button) { border-radius:10px; }
 :root.cp-look :is(.ic-Dashboard-header__layout, .ic-app-nav-toggle-and-crumbs, .page-header) { border-color:var(--cp-line) !important; }
@@ -88,7 +89,7 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .
   const apply = () => {
     const t = p.theme, on = t === "dark" || t === "dim" || (t === "auto" && dark.matches) || (t === "night" && night()), cl = document.documentElement.classList;
     cl.toggle("cp-dark", on); cl.toggle("cp-dim", on && t === "dim");
-    look.textContent = css(p.look, p.nav, null, p, on);
+    look.textContent = css(p.look, p.nav, p, on);
     cl.toggle("cp-mode-limpo", p.mode === "limpo"); cl.toggle("cp-mode-foco", p.mode === "foco");
     cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look]));
   };

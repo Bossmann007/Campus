@@ -638,7 +638,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const cd = await runContent("/", null, { hidden: [] });
   assert(/\d+[,\d]*\/10 · /.test(text(cd.header)) && !all(cd.header).some(e => e.tag === "button"), "a pill, and no buttons of ours on the card");
   const cdh = await runContent("/", null, { hidden: ["71306"] });
-  assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing"); ok();
+  assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing");
+  cd.env.window.cpHiddenChanged(["71306"]); assert(!/\/10 · /.test(text(cd.header)), "unticked in the popup: off at once, no reload"); ok();
 
   // .ics: the deadlines and exams from today on
   const icsPage = await runContent("/", null);

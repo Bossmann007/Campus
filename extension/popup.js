@@ -36,7 +36,7 @@ $("refresh").addEventListener("click", async () => {
   $("status").textContent = "Atualiza ao abrir ou recarregar uma página do Canvas.";
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
-const KEEP = ["hand", "marks", "tasks", "notes", "colors", "prefs", "fold"];
+const KEEP = ["hand", "marks", "tasks", "notes", "hidden", "prefs", "fold"];
 $("export").addEventListener("click", async () => {
   const got = await chrome.storage.local.get(KEEP), body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = "caderno-plus-backup.json"; a.click();
@@ -55,7 +55,7 @@ $("importFile").addEventListener("change", async () => {
     tasks: u => Array.isArray(u) ? u.filter(t => t && str(t.id, 40) && str(t.title, 140) && (t.date === null || iso(t.date))).slice(0, 100).map(t => ({ id: t.id, title: t.title, date: t.date })) : [] };
   const cur = await chrome.storage.local.get(KEEP), out = {};
   for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, per[k](v)])));
-  if (obj(d.colors)) out.colors = Object.assign({}, cur.colors, keepIf(d.colors, v => /^#[0-9a-f]{6}$/i.test(v)));
+  if (Array.isArray(d.hidden)) out.hidden = d.hidden.map(String).filter(x => /^\d{1,20}$/.test(x)).slice(0, 200);
   if (obj(d.prefs)) out.prefs = cpPrefs(Object.assign({}, cur.prefs, d.prefs));
   if (obj(d.fold)) out.fold = keepIf(d.fold, v => typeof v === "boolean");
   await chrome.storage.local.set(out); $("status").textContent = "Backup aplicado (" + Object.keys(out).length + " partes). Recarregue o Canvas.";

@@ -61,10 +61,10 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert.strictEqual(store.prefs.mode, "foco", "a popup change writes only its own key: the panel's mode survives");
   global.location.hash = "#tab";   // the import runs in a tab (a file dialog closes the popup)
   store.tasks = { 9: [{ id: "a", title: "do outro", date: null }] };
-  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09" }, { id: "u", title: 3 }] }, colors: { 1: "#2F7D5B", 2: "red;}" }, prefs: { look: "menta" } }) }];
+  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09" }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
   assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
-  assert.deepStrictEqual(store.colors, { 1: "#2F7D5B" }, "only hex colors"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
+  assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
   assert(/id="refresh"/.test(html), "popup has the Atualizar agora button");
   await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.cache.at, 0, "reading marked old"); assert.strictEqual(store.refreshing, undefined, "no read lock left"); assert.match(pel("status").textContent, /Atualiza/, "says what happens next");
