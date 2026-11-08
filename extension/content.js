@@ -439,7 +439,7 @@
     .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
     .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
-    .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini { margin-left:10px; }
+    .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini, .mini + .mini { margin-left:8px; } a.mini { border:1px solid var(--line); border-radius:9px; text-decoration:none; }
     .seg { display:inline-flex; margin-left:12px; padding:2px; border-radius:999px; background:var(--track); }
     .seg button { padding:3px 10px; border:0; border-radius:999px; background:none; font-size:12px; color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
@@ -465,6 +465,13 @@
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
     .meta { display:inline-flex; align-items:center; gap:4px; margin-left:10px; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
     .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
+    .calnav { display:inline-flex; align-items:center; gap:6px; margin-left:14px; } .calnav button { padding:3px 10px; } .calt { min-width:150px; text-align:center; font:600 16px/1 var(--serif); text-transform:capitalize; }
+    .cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; padding:0; overflow:hidden; background:var(--line); }
+    .cwd { padding:8px 10px; background:var(--soft); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .cday { min-height:118px; padding:6px; background:var(--bg); display:flex; flex-direction:column; gap:4px; min-width:0; } .cday.off { background:var(--soft); } .cday.we { background:color-mix(in srgb, var(--soft) 55%, var(--bg)); }
+    .cday .cn { font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
+    .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -596,6 +603,7 @@
       pr.setAttribute("aria-label", got + " de " + work.length + " feitas nesta semana"); h.appendChild(pr);
     }
     foldable(sec, h, "week");
+    const sem = el("a", "mini", "Semestre →"); sem.href = "/calendar"; sem.title = "O calendário do semestre inteiro"; h.appendChild(sem);
     const ics = el("button", "mini", "↓ .ics"); ics.type = "button"; ics.title = "Exportar entregas e provas para a sua agenda (Google, Outlook, celular)";
     ics.addEventListener("click", () => saveIcs(list)); h.appendChild(ics);
     sec.appendChild(h);
@@ -1086,6 +1094,74 @@
   }
   const inCanvasOnly = list => list.filter(x => inCanvas(x.u));
 
+  // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
+  // deadlines (the planner, read a month at a time when outside the last reading), our exams and the student's own tasks.
+  // "Calendário do Canvas" brings the original back (prefs.nativeCal).
+  const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  function calendarPage(a, cache, prefs, marks) {
+    const box = panelHost("cp-cal");
+    if (!box) return;
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-cal");
+    const months = [], first = C.TERM_END.slice(0, 4) === today().slice(0, 4) ? today().slice(0, 4) : String(Number(C.TERM_END.slice(0, 4)) - 1);
+    for (let d = new Date(Number(first), 7, 1); C.localISO(d) <= C.TERM_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(C.localISO(d).slice(0, 7));
+    let cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : months[0];
+    const extra = {}, base = agenda(a, cache, marks);
+    const ruleItems = (a.rules ? a.mine : []).flatMap(c => c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, course: C.SHORT[c.id] || c.name, date: it.date, exam: it.exam, task: !it.exam, url: courseOf[c.id] ? location.origin + "/courses/" + courseOf[c.id] : null, rule: true })));
+    const hd = el("div", "hd"); hd.append(mark(), wordmark());
+    const nav = el("span", "calnav"), prev = el("button", null, "‹"), next = el("button", null, "›"), now = el("button", null, "Hoje"), title = el("b", "calt");
+    prev.type = next.type = now.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
+    nav.append(prev, title, next, now); hd.appendChild(nav);
+    const natB = el("button", "find natv", prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"); natB.type = "button";
+    natB.addEventListener("click", async () => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { nativeCal: !prefs.nativeCal }) }); prefs = cpPrefs(Object.assign({}, prefs, { nativeCal: !prefs.nativeCal })); natB.textContent = prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"; });
+    hd.appendChild(natB);
+    const grid = el("div", "card cal"), legend = el("div", "muted src", "Prazos do Canvas, provas do Plano de Ensino e as suas tarefas · clique para abrir");
+    box.append(hd, grid, legend);
+    const itemsOf = ym => {
+      const seen = new Set(), out = [];
+      for (const x of base.concat(extra[ym] || [], ruleItems)) {
+        if (!x.date || x.date.slice(0, 7) !== ym) continue;
+        const k = (x.rule ? x.course + x.date : x.key);
+        if (x.rule && base.some(y => y.exam && y.date === x.date && y.ours && (C.SHORT[y.ours.id] || "") === x.course)) continue;
+        if (seen.has(k)) continue; seen.add(k); out.push(x);
+      }
+      return out.sort((p, q) => (p.due || p.date).localeCompare(q.due || q.date));
+    };
+    const draw = () => {
+      const [y, m] = cur.split("-").map(Number), start = new Date(y, m - 1, 1), pad = start.getDay(), days = new Date(y, m, 0).getDate(), items = itemsOf(cur);
+      title.textContent = MONTHS[m - 1] + " " + y; prev.disabled = cur === months[0]; next.disabled = cur === months[months.length - 1];
+      grid.replaceChildren();
+      for (const w of WD) grid.appendChild(el("span", "cwd", w));
+      for (let i = 0; i < pad; i++) grid.appendChild(el("span", "cday off"));
+      for (let d = 1; d <= days; d++) {
+        const iso = cur + "-" + String(d).padStart(2, "0"), cell = el("div", "cday" + (iso === today() ? " today" : "") + (new Date(iso + "T12:00:00").getDay() % 6 === 0 ? " we" : ""));
+        cell.appendChild(el("span", "cn", String(d)));
+        const its = items.filter(x => x.date === iso);
+        for (const x of its.slice(0, 3)) {
+          const c = el(x.url ? "a" : "span", "ev " + (fin(x) ? "ok dn" : x.exam ? "ex" : x.own ? "in" : x.late ? "bd" : "wa"));
+          if (x.url) c.href = x.url;
+          c.title = (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title + " · " + x.course + (x.due ? " · " + hhmm(x.due) : "");
+          c.appendChild(el("span", "t", (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title)); cell.appendChild(c);
+        }
+        if (its.length > 3) { const more = el("span", "ev more", "+" + (its.length - 3)); more.title = its.slice(3).map(x => x.title).join("\n"); cell.appendChild(more); }
+        grid.appendChild(cell);
+      }
+      for (let i = (pad + days) % 7; i && i < 7; i++) grid.appendChild(el("span", "cday off"));   // the rest of the last week
+    };
+    const load = async ym => {   // a month outside the last reading: its planner items, read once
+      if (extra[ym] || (base.some(x => x.date && x.date.slice(0, 7) === ym) && ym === today().slice(0, 7))) return;
+      const [y, m] = ym.split("-").map(Number), last = new Date(y, m, 0).getDate();
+      try {
+        const got = await getAll("/api/v1/planner/items?start_date=" + ym + "-01&end_date=" + ym + "-" + String(last).padStart(2, "0") + "&per_page=100");
+        extra[ym] = agenda(a, Object.assign({}, cache, { planner: got }), marks).filter(x => !x.exam);
+      } catch (e) { extra[ym] = []; }
+      if (ym === cur) draw();
+    };
+    prev.addEventListener("click", () => { const i = months.indexOf(cur); if (i > 0) { cur = months[i - 1]; draw(); load(cur); } });
+    next.addEventListener("click", () => { const i = months.indexOf(cur); if (i < months.length - 1) { cur = months[i + 1]; draw(); load(cur); } });
+    now.addEventListener("click", () => { cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : cur; draw(); });
+    draw(); load(cur);
+  }
+
   // Canvas login and logout pages (the content script runs on every pucpr.instructure.com page): the next student may be
   // someone else, so the user and the last reading are forgotten.
   const SIGN = /^\/(login|logout)(\/|$)|^\/users\/sign_out(\/|$)/;
@@ -1136,6 +1212,7 @@
         if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); }
       }, true);
     }
+    if (/^\/calendar\/?$/.test(location.pathname) && prefs.calendar) calendarPage(a, cache, prefs, marks);
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {

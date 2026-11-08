@@ -31,6 +31,14 @@
     const W = ":root.cp-dash-page";
     if (!cards.native || cards.mode === "foco") out.push(`${W}.cp-has-panel [data-testid="widget-columns"] { display:none !important; }`);
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${W} [data-testid="switch-to-old-dashboard-button"] { display:none !important; }`);
+    // /calendar: ours in place of Canvas's (its calendar, mini month and calendar list), unless the student keeps Canvas's
+    if (!cards.nativeCal) out.push(`:root.cp-cal-page.cp-has-cal #content > :not(#cp-cal), :root.cp-cal-page.cp-has-cal #right-side-wrapper { display:none !important; }`);
+    // Cursos and Grupos (Canvas tables): our cards' look
+    if (L) out.push(`:root.cp-look .ic-Table { background:var(--cp-card) !important; border:1px solid var(--cp-line) !important; border-radius:14px !important; border-collapse:separate !important; border-spacing:0 !important; overflow:hidden; }
+:root.cp-look .ic-Table th { background:var(--cp-paper) !important; color:var(--cp-muted) !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.05em; }
+:root.cp-look .ic-Table :is(th, td) { padding:12px 16px !important; border-color:var(--cp-line) !important; }
+:root.cp-look .ic-Table tbody tr:hover td { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }
+:root.cp-look .ic-Table td a { font-weight:600; }`);
     // the classic dashboard: our panel sits between its header and the course cards; its side column (to do, coming up:
     // our week shows them) goes away while our panel is there
     out.push(`${W}.cp-has-panel #right-side-wrapper { display:none !important; } ${W}.cp-has-panel #DashboardCard_Container { margin-top:6px; }`);
@@ -91,6 +99,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     return out.join("\n");
   };
   if (typeof location !== "undefined" && /^\/(dashboard)?\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-dash-page", true);
+  if (typeof location !== "undefined" && /^\/calendar\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-cal-page", true);
   const style = document.createElement("style"), look = document.createElement("style");
   style.id = "cp-theme"; look.id = "cp-look";
   style.textContent = `html.cp-dark { background:#fff !important; filter:${BACK} contrast(.9); }

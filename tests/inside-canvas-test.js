@@ -630,6 +630,21 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await showB.listeners.click(); await new Promise(r => setTimeout(r, 30));
   assert.deepStrictEqual(cl.store.hidden, [], "all back"); ok();
 
+  // /calendar: the semester calendar in place of Canvas's; months of the term; other months read once from the planner
+  const cal = await runContent("/calendar", null); await new Promise(r => setTimeout(r, 30));
+  const calBox = cal.anchor.kids.find(k => k.id === "cp-cal"), ym = isoIn(0).slice(0, 7);
+  const MN = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  assert(calBox && all(calBox).find(e => e.className === "calt").textContent === MN[Number(ym.slice(5)) - 1] + " " + ym.slice(0, 4), "opens on this month");
+  const cells = all(calBox).filter(e => /^cday/.test(e.className) && !/off/.test(e.className));
+  assert.strictEqual(cells.length, new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)), 0).getDate(), "one cell per day");
+  if (isoIn(1).slice(0, 7) === ym) assert(all(calBox).some(e => /^ev /.test(e.className) && /Lista 3/.test(e.title || "")), "Canvas deadlines in their day");
+  const nextB = all(calBox).find(e => e["aria-label"] === "Próximo mês");
+  const planBefore = cal.fetches.filter(u => u.startsWith("/api/v1/planner")).length;
+  if (!nextB.disabled) { nextB.listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert(cal.fetches.filter(u => u.startsWith("/api/v1/planner")).length === planBefore + 1 && cal.fetches.some(u => /planner\/items\?start_date=\d{4}-\d\d-01&end_date=/.test(u)), "the next month read once from the planner"); }
+  const calOff = await runContent("/calendar", null, { prefs: { calendar: false } });
+  assert(!calOff.anchor.kids.some(k => k.id === "cp-cal"), "switched off: Canvas's calendar only"); ok();
+
   // course cards: next deadline, a color per course (kept here, never sent to Canvas), gradient
   const cd = await runContent("/", null, { prefs: { gradient: true } });
   assert.match(text(cd.header), /Próx\.: Lista 3 · amanhã \d\d:\d\d/, "the next deadline on the card");
@@ -774,5 +789,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed, course grades widget)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed, course grades widget, calendar)");
 })().catch(e => { console.error(e); process.exit(1); });
