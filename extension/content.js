@@ -1150,6 +1150,15 @@
         sendReminders(agenda(a, cache, m2), prefs, cache);
       };
       window.cpRedraw = () => onMode(prefs.mode);
+      // the popup changes the mode, the meta or the native dashboard: the panel follows at once (one listener per page)
+      window.cpPrefsChanged = async next => {
+        const p2 = cpPrefs(next);
+        if (p2.mode === prefs.mode && p2.meta === prefs.meta && p2.native === prefs.native) return;
+        const metaN = Math.min(10, Math.max(5, Number(String(p2.meta).replace(",", ".")) || 7));
+        prefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
+        onMode(p2.mode);
+      };
+      if (!window.cpPrefsListen && chrome.storage.onChanged) { window.cpPrefsListen = 1; chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs && window.cpPrefsChanged) window.cpPrefsChanged(ch.prefs.newValue); }); }
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
       const { colors } = await chrome.storage.local.get("colors");
       const { hidden } = await chrome.storage.local.get("hidden");

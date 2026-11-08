@@ -542,6 +542,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(segB && all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Completo")["aria-checked"] === "true", "the header switch shows the mode");
   await segB.listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(mFull.store.prefs.mode === "foco" && /Agora/.test(text(mFull.anchor)) && all(mFull.anchor).filter(e => e.id === "cp-dash").length === 1, "switched from the panel: saved and redrawn once");
+  // the popup changes the mode: the panel follows at once (no reload, no fight with the header switch)
+  const sync = await runContent("/", null); await sync.env.window.cpPrefsChanged({ mode: "foco" }); await new Promise(r => setTimeout(r, 15));
+  assert(/Agora/.test(text(sync.anchor)) && all(sync.anchor).filter(e => e.id === "cp-dash").length === 1, "the panel redraws in the popup's mode");
+
   // Canvas's widget dashboard: ours goes inside it, above its widgets; its Avisos widget replaces ours; "Só Caderno+" hides its widgets
   const WENV = [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }];
   const wdash = await runContent("/", null, {}, { scripts: WENV, widgetCols: true });

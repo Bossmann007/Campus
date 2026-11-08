@@ -3,26 +3,25 @@
 const $ = id => document.getElementById(id);
 $("ver").textContent = "v" + chrome.runtime.getManifest().version;
 
-chrome.storage.local.get("prefs").then(({ prefs }) => {
-  let p = cpPrefs(prefs);
-  const save = () => chrome.storage.local.set({ prefs: p });
+// Each change writes only its own key over the latest prefs (the Canvas panel changes mode, meta and the native dashboard
+// too), and the popup follows changes made elsewhere: neither side undoes the other.
+const setPref = async (k, v) => { const { prefs } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, prefs, { [k]: v }) }); };
+const looks = [...document.querySelectorAll("[data-look]")], modes = [...document.querySelectorAll("[data-mode]")];
+function showPrefs(prefs) {
+  const p = cpPrefs(prefs);
   $("theme").value = p.theme;
-  $("theme").addEventListener("change", () => { p = Object.assign({}, p, { theme: $("theme").value }); save(); });
-  for (const sel of document.querySelectorAll("[data-sel]")) {
-    sel.value = p[sel.dataset.sel];
-    sel.addEventListener("change", () => { p = Object.assign({}, p, { [sel.dataset.sel]: sel.value }); save(); });
-  }
-  const looks = [...document.querySelectorAll("[data-look]")], mark = () => looks.forEach(b => b.setAttribute("aria-checked", String(b.dataset.look === p.look)));
-  for (const b of looks) b.addEventListener("click", () => { p = Object.assign({}, p, { look: b.dataset.look }); save(); mark(); });
-  mark();
-  const modes = [...document.querySelectorAll("[data-mode]")], markMode = () => modes.forEach(b => b.setAttribute("aria-checked", String(b.dataset.mode === p.mode)));
-  for (const b of modes) b.addEventListener("click", () => { p = Object.assign({}, p, { mode: b.dataset.mode }); save(); markMode(); });
-  markMode();
-  for (const box of document.querySelectorAll("[data-pref]")) {
-    box.checked = p[box.dataset.pref];
-    box.addEventListener("change", () => { p = Object.assign({}, p, { [box.dataset.pref]: box.checked }); save(); });
-  }
-});
+  for (const sel of document.querySelectorAll("[data-sel]")) sel.value = p[sel.dataset.sel];
+  looks.forEach(b => b.setAttribute("aria-checked", String(b.dataset.look === p.look)));
+  modes.forEach(b => b.setAttribute("aria-checked", String(b.dataset.mode === p.mode)));
+  for (const box of document.querySelectorAll("[data-pref]")) box.checked = p[box.dataset.pref];
+}
+$("theme").addEventListener("change", () => setPref("theme", $("theme").value));
+for (const sel of document.querySelectorAll("[data-sel]")) sel.addEventListener("change", () => setPref(sel.dataset.sel, sel.value));
+for (const b of looks) b.addEventListener("click", () => setPref("look", b.dataset.look));
+for (const b of modes) b.addEventListener("click", () => setPref("mode", b.dataset.mode));
+for (const box of document.querySelectorAll("[data-pref]")) box.addEventListener("change", () => setPref(box.dataset.pref, box.checked));
+chrome.storage.local.get("prefs").then(({ prefs }) => showPrefs(prefs));
+if (chrome.storage.onChanged) chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs) showPrefs(ch.prefs.newValue); });
 
 chrome.storage.local.get("cache").then(({ cache }) => {
   if (!cache || !cache.data || !cache.at) return;

@@ -56,6 +56,9 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   await new Promise(r => setTimeout(r, 10));
   assert.deepStrictEqual(store.hand, { 5: { "imp:pbl08": "7", "abd:s3": "1,1" } }, "old Caderno+ page grades move into the Canvas panels (grades already there win, odd keys dropped)");
   assert(store.migrated === 1 && store.prefs.meta === "8", "once, with the old meta");
+  store.prefs = Object.assign({}, store.prefs, { mode: "foco" });   // changed by the Canvas panel while the popup is open
+  await pel("theme").listeners.change(); await new Promise(r => setTimeout(r, 5));
+  assert.strictEqual(store.prefs.mode, "foco", "a popup change writes only its own key: the panel's mode survives");
   global.location.hash = "#tab";   // the import runs in a tab (a file dialog closes the popup)
   store.tasks = { 9: [{ id: "a", title: "do outro", date: null }] };
   pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09" }, { id: "u", title: 3 }] }, colors: { 1: "#2F7D5B", 2: "red;}" }, prefs: { look: "menta" } }) }];
