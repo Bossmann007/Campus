@@ -65,6 +65,23 @@
 :root.cp-look [data-testid="conversationListItem-Item"] { border-bottom:1px solid var(--cp-line) !important; transition:background-color .15s; }
 :root.cp-look [data-testid="conversationListItem-Item"]:hover { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }
 :root.cp-look [data-testid="last-message-content"] { color:var(--cp-muted) !important; }`);
+    // The course page's right column (canvas-lms courses/_course_show_secondary, the planner ToDoSidebar, _group_list,
+    // _recent_feedback): buttons as cards, quiet section titles, items as small cards; the course name on every item hidden
+    // on course pages (they are all this course).
+    const RS = ":root.cp-look #right-side";
+    if (L) out.push(`${RS} .course-options { display:grid; gap:8px; margin-bottom:6px; }
+${RS} .button-sidebar-wide { display:flex !important; align-items:center; gap:10px; width:100% !important; box-sizing:border-box; margin:0 !important; padding:10px 14px !important; border-radius:12px !important;
+  border:1px solid var(--cp-line) !important; background:var(--cp-card) !important; color:var(--cp-ink) !important; font-weight:600 !important; text-align:left !important; box-shadow:none !important; text-decoration:none !important; }
+${RS} .button-sidebar-wide:hover { border-color:var(--cp-accent) !important; color:var(--cp-accent) !important; }
+${RS} .button-sidebar-wide [class^="icon-"] { color:var(--cp-accent); }
+${RS} :is(h2, h3, .todo-list-header) { font-size:11.5px !important; font-weight:700 !important; letter-spacing:.07em !important; text-transform:uppercase !important; color:var(--cp-muted) !important; border:0 !important; margin:22px 0 8px !important; padding:0 !important; }
+${RS} :is(.ToDoSidebarItem, .to-do-list > li, .group_list > li, .event) { padding:10px 12px !important; margin:0 0 8px !important; border:1px solid var(--cp-line) !important; border-radius:12px !important; background:var(--cp-card) !important; list-style:none; }
+${RS} :is(.ToDoSidebarItem__Title a, .todo-details__title, .event-details__title, .group_list a) { font-weight:600 !important; color:var(--cp-ink) !important; text-decoration:none !important; }
+${RS} :is(.ToDoSidebarItem__Title a, .event-details__title, .group_list a):hover { color:var(--cp-accent) !important; }
+${RS} :is(.ToDoSidebarItem__Icon, .recent_feedback_icon) { color:var(--cp-accent) !important; }
+${RS} :is(ul, ol) { padding-left:0 !important; margin-left:0 !important; } ${RS} li { list-style:none !important; }
+${RS} .event-details > * { margin-top:2px; } ${RS} .event-details :is(b, strong) { color:var(--cp-ink); }
+:root.cp-look body[class*="context-course_"] #right-side :is(.ToDoSidebarItem__Title + span, .todo-details__context, .event-details__context) { display:none !important; }`);
     // Cursos page (/courses) and Grupos page: headers and spacing in our look (the tables are styled above)
     if (L) out.push(`:root.cp-look :is(.ic-Action-header, .page_header_container) { border-bottom:1px solid var(--cp-line) !important; padding-bottom:10px; margin-bottom:16px; }
 :root.cp-look :is(#my_courses_table, #past_enrollments_table, #future_enrollments_table, #my_groups_table) { margin:6px 0 26px !important; }
@@ -103,7 +120,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look .context_module > .ig-header { background:var(--cp-paper) !important; border:0 !important; border-bottom:1px solid var(--cp-line) !important; padding:10px 14px !important; font-weight:600; }
 :root.cp-look .context_module .ig-row { border-color:var(--cp-line) !important; transition:background-color .15s; }
 :root.cp-look .context_module_item:hover .ig-row { background:color-mix(in srgb, var(--cp-accent) 5%, transparent) !important; }
-:root.cp-look #course_show_secondary :is(.btn, .Button, a.button-sidebar-wide) { border-radius:10px !important; }`);
+`);
       if (look === "contraste") out.push(`:root.cp-look a { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
