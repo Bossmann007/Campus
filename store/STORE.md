@@ -22,6 +22,7 @@ Dentro do Canvas, sem configurar nada:
 
 - **Próximos 7 dias:** no painel, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que já foi entregue e o que está atrasado;
 - **Marcar como feito:** um ✓ em cada tarefa da semana; ela fica cinza, sai dos lembretes e conta no progresso da semana (a marca fica só no seu computador, o Canvas não muda);
+- **Página de cada matéria:** cabeçalho com a cor da matéria e o professor, e abas Visão geral, Notas (com simulador), Materiais, Avisos e Anotações;
 - **Calendário do semestre:** no lugar do calendário do Canvas, mês a mês, com prazos, provas e as suas tarefas;
 - **Pergunte ao professor:** os avisos com a foto de quem escreveu e cada professor a um clique (a mensagem abre pronta na caixa de entrada do Canvas);
 - **Busca (Ctrl+K ou ⌘K):** em qualquer página do Canvas, acha matérias, tarefas e itens dos módulos de todas as matérias e abre com Enter;

@@ -155,7 +155,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     { id: 2, display_name: "virus.exe", url: "/files/2/download", size: 5 }, { id: 3, display_name: "Gabarito.pdf", url: "/files/3/download", locked_for_user: true, size: 5 }]);
   const host = course.anchor.kids[0];
   assert(host && host.id === "qf-panel" && host.shadow, "course panel in a shadow root");
-  assert.match(text(host), /Caderno \| \+/, "the wordmark");
+  assert.match(text(host), /Arquitetura de Banco de Dados/, "the course hero names the course");
   const abd = C.COURSES.find(c => c.id === "abd"), st42 = C.courseState(abd, C.fromCanvas(course.store.cache.data).grades, isoIn(0), 7);
   assert.match(text(host), new RegExp((st42.earned >= 10 ? "10" : f1(Math.floor(st42.earned * 10) / 10)) + " garantidos de 10"), "ring card: points earned, from the core");
   const irows = all(host).filter(e => e.className === "ir");
@@ -501,18 +501,26 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const q0 = idle2.anchor.kids.find(k => k.id === "qf-panel"); await new Promise(r => setTimeout(r, 350));
   assert(idle2.anchor.kids.find(k => k.id === "qf-panel") !== q0 && idle2.anchor.kids.filter(k => k.id === "qf-panel").length === 1, "idle: redrawn once with the new reading"); ok();
 
-  // Anotações: one note per course and user, saved as you type, shown open when there is one
-  const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } });
-  const nbx = np.anchor.kids.find(k => k.id === "qf-panel"), pad = all(nbx).find(e => /^card notes/.test(e.className)), ta = all(pad).find(e => e.tag === "textarea");
-  assert(pad.hidden && !ta.value, "closed and empty: another user's note is not mine");
-  all(nbx).find(e => e.textContent === "Anotações").listeners.click(); assert(!pad.hidden, "opens");
+  // the course page: hero, tabs (Visão geral first), Anotações per course and user, the last tab kept
+  const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } }); await new Promise(r => setTimeout(r, 20));
+  const nbx = np.anchor.kids.find(k => k.id === "qf-panel"), tabB = label => all(nbx).find(e => e.role === "tab" && e.textContent.startsWith(label));
+  const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].indexOf(label)];
+  assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
+  assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
+  assert(/A seguir nesta matéria/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
+  assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
+  await tabB("Anotações").listeners.click(); await new Promise(r => setTimeout(r, 5));
+  const ta = all(paneOf("Anotações")).find(e => e.tag === "textarea");
+  assert(!paneOf("Anotações").hidden && !ta.value && np.store.ctab === "anot", "Anotações open, empty for this user (another user's note is not mine), the tab kept");
   ta.value = "RA3 cai JOIN"; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes, { 9: { 71306: "do outro" }, 5: { 71306: "RA3 cai JOIN" } }, "saved per user and course");
-  const np2 = await runContent("/courses/71306", [], { notes: np.store.notes }); await new Promise(r => setTimeout(r, 10));
-  const pad2 = all(np2.anchor).find(e => /^card notes/.test(e.className));
-  assert(!pad2.hidden && all(pad2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, open");
+  const np2 = await runContent("/courses/71306", [], { notes: np.store.notes, ctab: "anot" }); await new Promise(r => setTimeout(r, 20));
+  const box2 = np2.anchor.kids.find(k => k.id === "qf-panel"), pane2 = all(box2).filter(e => e.role === "tabpanel")[4];
+  assert(!pane2.hidden && all(pane2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, on the same tab");
   ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
-  assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed"); ok();
+  assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed");
+  await tabB("Materiais").listeners.click(); await new Promise(r => setTimeout(r, 20));
+  assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened"); ok();
 
   // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
   const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });

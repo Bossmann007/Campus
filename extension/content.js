@@ -464,6 +464,17 @@
     .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
     .ask-b { margin-left:0 !important; color:var(--coral) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
+    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); overflow:hidden; }
+    .band-c { position:absolute; left:0; right:0; top:0; height:5px; background:var(--coral); } .htxt { flex:1; min-width:0; }
+    .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 21px/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hs { margin-top:3px; color:var(--muted); font-size:12.5px; } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
+    .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:12px; background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
+    .ctabs button { border:0; background:none; padding:6px 14px; border-radius:9px; font-size:13px; color:var(--muted); white-space:nowrap; } .ctabs button:hover:not(:disabled) { transform:none; background:var(--bg); }
+    .ctabs button[aria-selected="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
+    .cpane[hidden] { display:none; } .cpane > * + * { margin-top:10px; } .qlinks { display:flex; flex-wrap:wrap; gap:6px; } .qlinks .mini { margin:0; padding:5px 12px; font-size:12.5px; color:var(--fg); }
+    .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
+    .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:11.5px; font-weight:650; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+    .mi { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:6px 4px; border-top:1px solid var(--line); }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -857,11 +868,18 @@
     if (!c && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
-    const top = el("div", "hd"); top.append(mark(), wordmark());
-    if (c) top.appendChild(el("span", "brand", "meta " + fmt(T, 0) + " · lido do Canvas " + ago(C.localISO(new Date(cache.at)))));
-    box.appendChild(top);
+    // the course hero: its Canvas color, its name, the teacher (photo, Perguntar) and when Canvas was read
+    const hero = el("div", "hero"), band = el("div", "band-c"), title = el("div", "ht"), heroSub = el("div", "hs"), teach = el("div", "hteach");
+    title.append(mark(), el("b", null, shortName(cv ? cv.name : document.title)));
+    heroSub.textContent = (c ? "meta " + fmt(T, T % 1 ? 1 : 0) + " · " : "") + "lido do Canvas " + ago(C.localISO(new Date(cache.at)));
+    const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
+    courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
+    teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;
+      const go = el("a", "mini ask-b", "Perguntar"); go.href = location.origin + "/conversations?user_id=" + encodeURIComponent(t.id) + "&user_name=" + encodeURIComponent(t.name) + "&context_id=course_" + encodeURIComponent(t.course);
+      go.title = "Abrir uma mensagem para " + t.name + " na caixa de entrada do Canvas"; teach.append(avatar(t.avatar, t.name, 34), mid(t.name, null, "professor(a)"), go); }, () => {});
     // Simular: type a grade in the items without one and see the ring, the need and the other items change (nothing is saved).
     const sim = {}; let simOn = false, paint = () => {};
+    const parts = { notas: [] }, simActs = el("div", "acts");
     if (c) {
       const headBox = el("div"), st0 = a.state(c), nx = C.nextItem(st0);
       const headCard = st => {
@@ -906,8 +924,7 @@
         }
       };
       paint();
-      box.appendChild(tbl);
-      box.appendChild(el("div", "muted src", source([c])));
+      parts.notas.push(tbl, el("div", "muted src", source([c])));
     }
     const acts = el("div", "acts"), status = el("span", "muted");
     if (prefs.files) {
@@ -933,12 +950,12 @@
         simOn = false; for (const k of Object.keys(sim)) delete sim[k]; sb.textContent = "Simular ou lançar notas"; note.hidden = save.hidden = true; status.textContent = "Notas guardadas neste computador";
         paint();
       });
-      acts.append(sb, note, save);
+      simActs.append(sb, note, save);
     }
     // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
     const nb = el("button", null, "Anotações"), pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
     ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
-    pad.append(ta, saved); pad.hidden = true;
+    pad.append(ta, saved);
     let tm = 0;
     const store = async () => {
       const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
@@ -950,13 +967,87 @@
     const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || Date.now() - typed < 30000;
     chrome.storage.local.get("notes").then(({ notes }) => {
       const v = notes && notes[cache.user] && notes[cache.user][courseId];
-      if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
+      if (typeof v === "string" && v) { ta.value = v; nb.textContent = "Anotações ✓"; }
     });
-    nb.addEventListener("click", () => { pad.hidden = !pad.hidden; if (!pad.hidden && ta.focus) ta.focus(); });
-    if (EXT) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
-    acts.appendChild(status); box.append(acts); if (EXT) box.appendChild(pad);
+    acts.appendChild(status);
+    // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
+    const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
+    const bar = el("div", "ctabs"), panes = {}, btns = {}; bar.setAttribute("role", "tablist");
+    const show = async k => {
+      for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); }
+      if (k === "materiais" && !panes.materiais.cpLoaded) { panes.materiais.cpLoaded = 1; materials(courseId, panes.materiais); }
+      if (k === "anot" && ta.focus) ta.focus();
+      await chrome.storage.local.set({ ctab: k });
+    };
+    for (const [k, label] of tabs) {
+      const b = el("button", null, label + (k === "anot" && nb.textContent.includes("✓") ? " ✓" : "")); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab"); b.addEventListener("click", () => show(k)); bar.appendChild(b); btns[k] = b;
+      panes[k] = el("div", "cpane"); panes[k].setAttribute("role", "tabpanel");
+    }
+    panes.geral.append(...overview(courseId, c, a, cache));
+    if (c) panes.notas.append(...parts.notas, simActs);
+    panes.materiais.appendChild(acts);
+    panes.avisos.appendChild(courseNews(cache, courseId));
+    if (EXT) panes.anot.appendChild(pad);
+    box.append(bar, ...tabs.map(([k]) => panes[k]));
+    chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
   }
 
+  // The course's color in Canvas (the user's custom colors, GET /users/self/colors), read once a day per user.
+  async function courseColor(cache, id) {
+    const { ccolors } = await chrome.storage.local.get("ccolors");
+    let map = ccolors && ccolors.user === cache.user && Date.now() - ccolors.at < 864e5 ? ccolors.map : null;
+    if (!map) { try { const r = await getAll("/api/v1/users/self/colors", 1); map = r && r.custom_colors && typeof r.custom_colors === "object" ? r.custom_colors : {}; } catch (e) { map = {}; }
+      await chrome.storage.local.set({ ccolors: { user: cache.user, at: Date.now(), map } }); }
+    const col = map["course_" + id];
+    return typeof col === "string" && /^#[0-9a-f]{3,8}$/i.test(col) ? col : null;
+  }
+  // Visão geral: what comes next in this course, its latest announcement and the shortcuts to Canvas's own pages.
+  function overview(courseId, c, a, cache) {
+    const out = [], t = today(), next = agenda(a, cache, {}).filter(x => (String(x.cid) === courseId || (c && x.ours === c)) && !fin(x) && (x.date >= t || x.late)).slice(0, 5);
+    const sec = el("section", "card news"), h = el("h3", null, "A seguir nesta matéria"); sec.appendChild(h);
+    if (next.length) { const ul = el("ul"); for (const x of next) { const li = el("li", "row");
+      li.append(el("span", "d", x.late && x.date < t ? "atrasada" : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.exam ? (x.exam.req ? need(x.exam) : "prova") : x.task ? "entrega" : "evento"),
+        el("span", "pill " + (x.late && x.date < t ? "bad" : x.exam ? "warn" : "nt"), x.late && x.date < t ? "atrasada" : x.exam ? "prova" : "a entregar")); ul.appendChild(li); } sec.appendChild(ul); }
+    else sec.appendChild(el("div", "muted", "Nada pendente nesta matéria nos próximos dias."));
+    out.push(sec);
+    const last = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
+    if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
+      li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
+      s2.append(el("h3", null, "Último aviso"), li); out.push(s2); }
+    const links = el("div", "qlinks");
+    for (const [label, path] of [["Módulos", "/modules"], ["Tarefas", "/assignments"], ["Arquivos", "/files"], ["Notas do Canvas", "/grades"], ["Avisos", "/announcements"]]) { const l = el("a", "mini", label); l.href = "/courses/" + courseId + path; links.appendChild(l); }
+    out.push(links);
+    return out;
+  }
+  // Materiais: every module and its items (one GET when the tab opens), with a filter box; the files download stays above.
+  async function materials(courseId, pane) {
+    const box = el("section", "card news mats"), q = el("input", "mq"), list = el("div"); q.type = "text"; q.placeholder = "Filtrar materiais (ex.: slides, lista 4)"; q.setAttribute("aria-label", "Filtrar materiais");
+    box.append(el("h3", null, "Módulos"), q, list); pane.appendChild(box); list.appendChild(el("div", "muted", "Lendo os módulos…"));
+    let mods = [];
+    try { mods = await getAll("/api/v1/courses/" + courseId + "/modules?include[]=items&per_page=100"); } catch (e) { list.replaceChildren(el("div", "muted", "Esta matéria não mostra os módulos.")); return; }
+    const draw = () => {
+      const w = fold(q.value || "").trim(); let shown = 0; list.replaceChildren();
+      for (const m of mods) {
+        const items = (m.items || []).filter(it => it && it.title && it.type !== "SubHeader" && (!w || fold(it.title + " " + m.name).includes(w)));
+        if (!items.length) continue;
+        const g = el("div", "mod"); g.appendChild(el("div", "mh", String(m.name || "Módulo")));
+        for (const it of items) { const r = el("div", "mi"); r.append(el("span", "pal-k", KIND[it.type] || "item"), link(String(it.title), it.html_url && inCanvas(it.html_url))); g.appendChild(r); }
+        list.appendChild(g); shown++;
+      }
+      if (!shown) list.appendChild(el("div", "muted", w ? "Nada com esse nome." : "Sem módulos publicados."));
+    };
+    q.addEventListener("input", draw); draw();
+  }
+  // Avisos: every announcement of this course (last 60 days), with the author's photo.
+  function courseNews(cache, courseId) {
+    const sec = el("section", "card news"), all = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)));
+    sec.appendChild(el("h3", null, "Avisos da matéria"));
+    if (!all.length) { sec.appendChild(el("div", "muted", "Nenhum aviso nos últimos 60 dias.")); return sec; }
+    const ul = el("ul");
+    for (const x of all) { const li = el("li", "row" + (x.unread ? " unread" : "")), who = el("span", "who"); who.appendChild(avatar(x.avatar, x.author || "", 32)); if (x.unread) who.appendChild(el("span", "dot", "não lido"));
+      li.append(who, mid(x.title, x.url && inCanvas(x.url), x.author || ""), el("span", "d", x.at ? ago(C.localISO(new Date(x.at))) : "")); ul.appendChild(li); }
+    sec.appendChild(ul); return sec;
+  }
   async function courseFiles(id) {
     try { return await getAll("/api/v1/courses/" + id + "/files?sort=created_at&order=desc&per_page=100"); }
     catch (e) {   // Files tab hidden by the professor: the files linked in modules

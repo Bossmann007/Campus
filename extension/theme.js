@@ -95,7 +95,14 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look .ic-DashboardCard:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45); }
 :root.cp-look :is(.Button, .btn, button.ui-button) { border-radius:10px; }
 :root.cp-look :is(.ic-Dashboard-header__layout, .ic-app-nav-toggle-and-crumbs, .page-header) { border-color:var(--cp-line) !important; }
-:root.cp-look #section-tabs a.active, :root.cp-look #section-tabs a:hover { border-left-color:var(--cp-accent) !important; color:var(--cp-ink) !important; }`);
+:root.cp-look #section-tabs li a { border-left:0 !important; border-radius:10px !important; padding:7px 12px !important; margin:1px 0 !important; color:var(--cp-ink) !important; transition:background-color .15s; }
+:root.cp-look #section-tabs li a:hover { background:color-mix(in srgb, var(--cp-accent) 8%, transparent) !important; text-decoration:none !important; }
+:root.cp-look #section-tabs li a.active { background:color-mix(in srgb, var(--cp-accent) 15%, transparent) !important; font-weight:650 !important; }
+:root.cp-look .context_module { border:1px solid var(--cp-line) !important; border-radius:14px !important; overflow:hidden; background:var(--cp-card) !important; margin-bottom:14px !important; box-shadow:0 1px 2px rgba(29,36,51,.05); }
+:root.cp-look .context_module > .ig-header { background:var(--cp-paper) !important; border:0 !important; border-bottom:1px solid var(--cp-line) !important; }
+:root.cp-look .context_module .ig-row { border-color:var(--cp-line) !important; transition:background-color .15s; }
+:root.cp-look .context_module_item:hover .ig-row { background:color-mix(in srgb, var(--cp-accent) 5%, transparent) !important; }
+:root.cp-look #course_show_secondary :is(.btn, .Button, a.button-sidebar-wide) { border-radius:10px !important; }`);
       if (look === "contraste") out.push(`:root.cp-look a { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
