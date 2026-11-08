@@ -16,15 +16,9 @@ Obrigado por querer ajudar! Tudo é HTML, CSS e JavaScript puro: não há build 
 
 ## Adicionar uma turma
 
-O Quanto falta calcula as notas das turmas que têm um arquivo de regras em `rules/<semestre>/`. A sua turma pode entrar sem mexer no código.
+O Quanto falta calcula as notas das turmas que têm um arquivo de regras em `rules/<semestre>/` (formato em [`rules/schema.json`](rules/schema.json)). Por enquanto, turma nova entra pelas mãos de um mantenedor, como um arquivo desses conferido pelo `./scripts/verify`. Um jeito de o próprio aluno montar as regras dentro da extensão está planejado (SPEC.md, fase 9), mas ainda não existe.
 
-**Jeito fácil (sem programar):**
-
-1. Instale a extensão e abra o Canvas uma vez.
-2. No botão do Campus+ na barra do navegador (ou no painel do Canvas), clique em **Copiar rascunho da minha turma**. Ele leva só nomes, pontos e datas das avaliações, nenhuma nota.
-3. Abra a issue [Adicionar minha turma](https://github.com/Bossmann007/quanto-falta-pucpr/issues/new?template=nova-turma.yml), cole o rascunho e o trecho do Plano de Ensino com os pesos.
-
-**Jeito direto (pull request):**
+Para montar o arquivo:
 
 1. Copie `rules/2026-2/cc-manha.json` para `rules/<semestre>/<sua-turma>.json` (nome com letras minúsculas, números e hífen, ex.: `si-noite.json`).
 2. Preencha `turma` e, para cada matéria: `id` (letras minúsculas e números, único no semestre: comece com uma sigla da turma, ex. `sinbd`), `name` (como começa no Canvas), `short`, `canvasIds` (o número em `pucpr.instructure.com/courses/<número>`), `formula`, `src` e as avaliações em `items`. Cada `max` é quanto a avaliação vale na nota final; a soma da matéria dá 10. Toda avaliação tem a fonte do peso (`wSrc`) e da data (`dateSrc`).
@@ -39,7 +33,7 @@ Os ids das turmas que já existem não mudam: as notas salvas e os backups usam 
 ## Mudanças mais úteis
 
 - **Peso ou data errados:** abra uma issue com o trecho do Plano de Ensino ou o aviso do professor. Cada avaliação em `rules/` tem a fonte do peso (`wSrc`) e da data (`dateSrc`).
-- **Outra turma ou matéria:** veja [Adicionar uma turma](#adicionar-uma-turma).
+- **Outra turma ou matéria:** veja [Adicionar uma turma](#adicionar-uma-turma). Mande só nomes de avaliações, pesos e datas, nunca notas.
 - **Bugs e melhorias de tela:** descreva o que esperava e o que aconteceu, com o navegador.
 
 ## Regras

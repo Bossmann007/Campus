@@ -226,7 +226,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "1.0.2";
+  const EXT_LATEST = "1.0.3";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -275,22 +275,6 @@ const NotasCore = (() => {
     const turmas = new Set(cs.map(c => subjectOf({ id:c.id }, true)).filter(Boolean).map(c => PACK_OF[c.id]));
     return turmas.size ? COURSES.filter(c => turmas.has(PACK_OF[c.id])) : COURSES;
   }
-  // Draft of a rule pack for a turma without rules, from the Canvas reading: per course of the term not paired to any turma,
-  // its Canvas id and name, and per assignment its name, points, due date and assignment group (name, weight). Built from a
-  // whitelist: no score, submission, statistics, announcement or user id ever goes in. The student pastes it in an issue.
-  function draftPack(data) {
-    const cs = data && Array.isArray(data.courses) ? data.courses.filter(c => c && str(c.name) !== null && Array.isArray(c.assignments) && !subjectOf({ id:c.id }, true)) : [];
-    return { _rascunho:"Rascunho do Campus+: só nomes, pontos e datas das avaliações do Canvas, nenhuma nota. Complete com o Plano de Ensino (pesos em items, max somando 10) e apague os campos _rascunho, assignments, canvasName e groupWeights.",
-      term:TERM, termEnd:"AAAA-MM-DD (último dia do semestre)", turma:"PREENCHA: curso, turno",
-      subjects:cs.map(c => {
-        const groups = Array.isArray(c.groups) ? c.groups.filter(g => g && typeof g === "object") : [], g = id => groups.find(x => x.id === id) || null;
-        return { id:"", name:c.name.split(" (")[0].split(" - ")[0], short:"", canvasIds:cidOf(c.id) ? [cidOf(c.id)] : [], canvasName:c.name, groupWeights:c.groupWeights === true,
-          formula:"PREENCHA: a fórmula da nota final do Plano de Ensino", src:"PREENCHA: Plano de Ensino (página ou linha)", items:[], canvas:{ items:{} },
-          assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points),
-            due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)),
-            group:g(a.group) && str(g(a.group).name), groupWeight:g(a.group) ? num(g(a.group).weight) : null })) };
-      }) };
-  }
   // Shared by the calculator page and the panels inside Canvas (extension/content.js), so both show the same numbers.
   const fractionTone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
   const statusTone = st => st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : fractionTone(st.fraction);
@@ -323,6 +307,6 @@ const NotasCore = (() => {
     items.sort((a, b) => a.item.date.localeCompare(b.item.date));
     return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok").length, late: items.filter(x => x.s === "late").length };
   }
-  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, turmaOf, coursesFor, draftPack, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, turmaOf, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();

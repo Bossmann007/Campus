@@ -257,15 +257,18 @@ async function runContent(pathname, files, preStore, opts = {}) {
     sem.tight ? up1(sem.states[sem.tight.id].fraction * 10) : cnt("depende-atrasadas") ? "?" : cnt("nao-da") ? "—" : "0", sem.done + " de " + sem.items.length], "KPI numbers are the core's");
   assert.strictEqual(all(gb).filter(e => e.parent && e.parent.className === "trk").length, sem.items.length, "one tracker block per item");
   const nextCard = all(gb).find(e => /upnext/.test(e.className));
-  if (nx) assert(nextCard && nextCard.href === "#campus=" + nx.course.id && text(nextCard).includes(nx.item.name), "next card: the soonest assessment that still counts, opens its subject");
+  if (nx) assert(nextCard && nextCard.href === "#campus=" + nx.course.id + "@" + cvOf(nx.course.id) && text(nextCard).includes(nx.item.name), "next card: the soonest assessment that still counts, opens its subject");
   else assert(!nextCard, "nothing left that counts: no next card");
   const tiles = all(gb).filter(e => e.className === "card tile");
-  assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "#campus=" + c.id), "a tile per enrolled subject, each opening Campus+ on it");
+  assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "#campus=" + c.id + "@" + cvOf(c.id)), "a tile per enrolled subject, each opening Campus+ on it and naming its Canvas course");
   assert(tiles.every((t, i) => text(t).includes(C.SHORT[mine[i].id])), "tiles named like the calculator");
   assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · Ciência da Computação, manhã · não oficial, confira no Canvas"), "dashboard grades: source line");
   gd.env.location.hash = tiles[0].href; gd.winListeners.hashchange();
   await all(gd.body.kids.find(k => k.id === "cp-app")).find(e => e.textContent === "Fechar").listeners.click();
   assert.strictEqual(gd.env.location.assigned, "/courses/" + cvOf(mine[0].id), "Fechar on a subject opened from the dashboard goes to its Canvas course");
+  const direct0 = await runContent("/", null, { cache: { v: C.EXT_LATEST, user: 5, at: Date.now(), data: { v: 1, courses: [], announcements: [] }, ids: [], planner: null } }, { hash: "#campus=abd@71306" });
+  await all(direct0.body.kids.find(k => k.id === "cp-app")).find(e => e.textContent === "Fechar").listeners.click();
+  assert.strictEqual(direct0.env.location.assigned, "/courses/71306", "the course id in the link is enough: Fechar goes there without any panel data");
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
@@ -279,18 +282,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(ob && !all(ob).some(e => /kpi|tile|upnext/.test(e.className)), "other turma: no grade parts");
   assert(all(ob).some(e => e.className === "muted why" && e.textContent === "O Quanto falta ainda não tem as regras da sua turma."), "other turma: the muted line");
   assert.match(text(ob), /Próximos 7 dias/); assert.match(text(ob), /Prova adiada/, "week and announcements still shown");
-  // and a button that copies a draft of the turma's rules: names, points and dates, never the grades read from Canvas
-  const dbtn = all(ob).find(e => e.tag === "button" && e.textContent === "Copiar rascunho da minha turma");
-  assert(dbtn && all(ob).some(e => e.textContent === "Leva só nomes, pontos e datas das avaliações — nenhuma nota."), "other turma: the draft button and what it carries");
-  const nav0 = Object.getOwnPropertyDescriptor(globalThis, "navigator"), clip = [];
-  Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async t => { clip.push(t); } } }, configurable: true });
-  try { await dbtn.listeners.click(); } finally { if (nav0) Object.defineProperty(globalThis, "navigator", nav0); else delete globalThis.navigator; }
-  const dj = JSON.parse(clip[0]);
-  assert.deepStrictEqual(dj.subjects.map(x => [x.canvasIds, x.name, x.assignments.length]), [[[42], "Arquitetura de Banco de Dados", 4]], "the course of the other turma, with its assignments");
-  assert(!/score|"user"|Prova adiada/.test(clip[0]) && dj.subjects[0].assignments.every(x => Object.keys(x).join() === "name,points,due,group,groupWeight"), "no grades, user or announcements in the draft");
-  assert.match(text(ob), /Copiado/, "says it was copied");
-  const mineDash = (await runContent("/", null, {})).anchor.kids.find(k => k.id === "cp-dash");
-  assert(!all(mineDash).some(e => e.textContent === "Copiar rascunho da minha turma"), "our turma: no draft button");
+  assert(!all(ob).some(e => e.tag === "button" && /rascunho/i.test(e.textContent)) && !/rascunho/i.test(text(ob)), "other turma: just the note, no draft button");
   assert.strictEqual(text(ot.header), "", "no pill on the dashboard cards");
   assert(!ot.sent.find(m => m.type === "remind").items.some(i => i.key.startsWith("qf:")), "no Plano exams in the reminders");
   assert(ot.sent.find(m => m.type === "remind").items.some(i => i.key === "assignment:1"), "real Canvas tasks still reminded");

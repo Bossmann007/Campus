@@ -137,7 +137,7 @@
   // The Campus+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
   // #campus=<subject id> (course page button) opens it on that subject.
   function campusPage() {
-    const cur = document.getElementById("cp-app"), m = /^#campus(?:=([a-z0-9]{1,20}))?$/.exec(location.hash);
+    const cur = document.getElementById("cp-app"), m = /^#campus(?:=([a-z0-9]{1,20})(?:@\d{1,12})?)?$/.exec(location.hash);
     if (!m || !APP) { if (cur) cur.remove(); return; }
     const src = APP + (m[1] ? "?m=" + m[1] : "");
     if (cur) { if (cur.cpFrame && cur.cpFrame.src !== src) cur.cpFrame.src = src; return; }
@@ -152,7 +152,7 @@
   }
   // Fechar on a subject opened from the dashboard goes to that subject's Canvas course; otherwise it stays on the page.
   function closeCampus() {
-    const m = /^#campus=([a-z0-9]{1,20})$/.exec(location.hash), cv = m && courseOf[m[1]], home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
+    const m = /^#campus=([a-z0-9]{1,20})(?:@(\d{1,12}))?$/.exec(location.hash), cv = m && (courseOf[m[1]] || m[2]), home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
     if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
     history.replaceState(null, "", location.pathname + location.search); campusPage();
   }
@@ -383,7 +383,7 @@
 
   // The calculator's own components, drawn from the shared core (same numbers as the Campus+ page): ring, next card,
   // KPI row and subject tiles. Links open Campus+ on a subject (#campus=<id>); in the bookmarklet they are plain text.
-  const toCampus = (tag, cls, id) => { const x = el(APP ? "a" : tag, cls); if (APP) x.href = "#campus" + (id ? "=" + id : ""); return x; };
+  const toCampus = (tag, cls, id) => { const x = el(APP ? "a" : tag, cls); if (APP) x.href = "#campus" + (id ? "=" + id + (courseOf[id] ? "@" + courseOf[id] : "") : ""); return x; };   // @<Canvas course id>: Fechar goes there
   const earnedText = st => st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1);
   function ring(st, big) {
     const r = el("span", "ring" + (big ? " big" : "")), rp = C.ringParts(st), tn = C.statusTone(st), e = rp.earned * 100, f = (rp.earned + rp.future) * 100;
@@ -439,18 +439,6 @@
   // Instead of the grade parts: why they are not there (term over, or another turma); null when there is nothing to say.
   const noRules = a => a.expired ? C.EXPIRED_NOTE
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
-  // Another turma: a button that copies a draft of its rules (course ids and names; assessment names, points, dates and
-  // groups; never grades) to paste in the "Adicionar minha turma" issue. The clipboard write needs the click (user gesture).
-  function draftBox(cache) {
-    const box = el("div", "acts draft"), btn = el("button", null, "Copiar rascunho da minha turma"), note = el("span", "muted", "Leva só nomes, pontos e datas das avaliações — nenhuma nota.");
-    btn.type = "button";
-    btn.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(JSON.stringify(C.draftPack(cache.data), null, 1)); note.textContent = "Copiado. Cole na issue \u201cAdicionar minha turma\u201d (botão do Campus+ na barra do navegador, ou o GitHub do projeto)."; }
-      catch (e) { note.textContent = "Não consegui copiar aqui: use o botão do Campus+ na barra do navegador."; }
-    });
-    box.append(btn, note);
-    return box;
-  }
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
   function dashPanel(a, cache, prefs) {
@@ -463,7 +451,7 @@
     if (APP) { const brand = el("a", "brand", "Abrir Campus+ →"); brand.href = "#campus"; hd.appendChild(brand); }
     box.append(hd);
     if (grades) box.append(...gradesView(a));
-    else if (why) { box.append(el("div", "muted why", why)); if (!a.expired) box.append(draftBox(cache)); }
+    else if (why) box.append(el("div", "muted why", why));
     box.appendChild(grid);
     if (week) grid.appendChild(weekView(agenda(a, cache), prefs));
     if (news) {
