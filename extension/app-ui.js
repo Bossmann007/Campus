@@ -2,7 +2,7 @@
 (() => {
   const C = NotasCore, LS = "notas-pucpr-2026-2";
   const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
-  const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
+  const SHORT = C.SHORT;
   let saved;
   try { saved = JSON.parse(localStorage.getItem(LS)); } catch (e) { saved = null; }
   if (!saved || typeof saved !== "object" || !saved.grades || typeof saved.grades !== "object" || Array.isArray(saved.grades))
@@ -35,7 +35,7 @@
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function cell(label, cls, text) { const d = el("div", cls, text); if (label) d.dataset.label = label; return d; }
   const badge = (cls, text) => el("span", "badge " + cls, text);
-  const tone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
+  const tone = C.fractionTone;
 
   function reqText(req, it, st) {
     if (!req) return "—";
@@ -242,7 +242,7 @@
       const nFresh = c.items.filter(it => saved.fresh.includes(C.key(c, it))).length;
       const [g, f, m] = $("bar-" + c.id).children;
       g.style.width = Math.min(100, st.earned * 10) + "%";
-      g.style.background = "var(--" + (st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction)) + ")";
+      g.style.background = "var(--" + C.statusTone(st) + ")";
       f.style.left = Math.min(100, st.earned * 10) + "%"; f.style.width = st.futureMax * 10 + "%";
       m.style.left = Math.min(99.5, T * 10) + "%";
 
@@ -454,7 +454,7 @@
   function renderFocus(T) {
     const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
     const any = Object.keys(saved.grades).some(k => String(saved.grades[k]).trim() !== "");
-    const all = C.upcoming(C.COURSES, saved.grades, today, T), list = all.filter(u => u.st.status !== "garantido");
+    const list = C.stillCounts(C.COURSES, saved.grades, today, T);
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     document.body.classList.toggle("fresh", !any);
     if (!any) { con.side({}, false); if (!con.busy) con.idle("Ainda sem notas. Importe do Canvas ou lance uma nota: cada passo aparece aqui.", []); }
@@ -471,11 +471,9 @@
     const u = list[0], d = days(u.item.date), when = d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias";
     const left = el("div"), need = el("div", "need");
     left.append(el("div", "t", u.item.name), el("div", "s", (SHORT[u.course.id] || u.course.name) + " · " + dmy(u.item.date) + ", " + when));
-    const st = u.st, dep = st.status === "depende-atrasadas";
-    const v = st.status === "nao-da" || u.req.impossible ? "não dá" : dep ? (st.fractionIfLate == null || st.fractionIfLate > 1 + 1e-9 ? "não dá" : "≈ " + up(st.fractionIfLate * 10, 1)) : up(u.req.of10, 1);
-    const tn = v === "não dá" ? "bad" : dep ? "warn" : tone(u.req.f);
-    const vv = el("div", "v num", v); vv.style.color = "var(--" + tn + ")";
-    need.append(vv, el("div", "u", v === "não dá" ? "nem com nota cheia" : "precisa, em 10" + (dep ? " (faltam notas antigas)" : "")));
+    const nd = C.courseNeed(u.st), v = nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
+    const vv = el("div", "v num", v); vv.style.color = "var(--" + nd.tone + ")";
+    need.append(vv, el("div", "u", nd.impossible ? "nem com nota cheia" : "precisa, em 10" + (nd.approx ? " (faltam notas antigas)" : "")));
     box.append(el("div", "k", "Próxima avaliação que conta"), left, need);
     const rest = list.slice(1, 3);
     if (rest.length) { const t = el("div", "then", "Depois: ");
@@ -488,26 +486,18 @@
   function renderKpis(states, T) {
     const box = $("kpis"); box.textContent = "";
     const card = (k, v, sub, cls) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v num" + (cls ? " " + cls : ""), v), el("div", "s", sub)); box.appendChild(d); return d; };
-    const sts = C.COURSES.map(c => states[c.id]), mean = sts.reduce((s, st) => s + Math.min(10, st.earned), 0) / sts.length;
-    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + sts.length + " matérias · meta " + fmt(T, 1));
+    const sem = C.semester(C.COURSES, saved.grades, today, T), mean = sem.mean, tight = sem.tight, count = s => sem.counts[s] || 0;
+    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + C.COURSES.length + " matérias · meta " + fmt(T, 1));
     const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
     fill.style.width = Math.min(100, mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); avg.insertBefore(meter, avg.lastChild);
-    const tight = C.COURSES.filter(c => states[c.id].status === "precisa").sort((a, b) => states[b.id].fraction - states[a.id].fraction)[0];
-    const count = s => C.COURSES.filter(c => states[c.id].status === s).length;
     if (tight) card("Quanto falta", up(states[tight.id].fraction * 10, 1), "em 10 em cada item que falta, em " + SHORT[tight.id] + " (a mais apertada)", "need");
     else if (count("depende-atrasadas")) card("Quanto falta", "?", "lance as notas que já saíram para calcular", "need");
     else if (count("nao-da")) card("Quanto falta", "—", count("nao-da") + (count("nao-da") === 1 ? " matéria vai" : " matérias vão") + " para a recuperação", "need");
     else card("Quanto falta", "0", "tudo garantido, pela meta " + fmt(T, 1), "need ok");
-    const items = [];
-    for (const c of C.COURSES) for (const it of c.items) {
-      const p = C.itemPoints(it, saved.grades[C.key(c, it)]), graded = p !== null && !Number.isNaN(p);
-      items.push({ c, it, s: graded ? "ok" : it.date < today ? "late" : "next" });
-    }
-    items.sort((a, b) => a.it.date.localeCompare(b.it.date));
-    const done = items.filter(x => x.s === "ok").length, late = items.filter(x => x.s === "late").length;
+    const items = sem.items, done = sem.done, late = sem.late;
     const kp = card("Entregues", done + " de " + items.length, late ? late + (late === 1 ? " passou da data sem nota" : " passaram da data sem nota") : "notas lançadas no semestre");
     const trk = el("div", "trk"); trk.setAttribute("role", "img"); trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
-    for (const x of items) { const b = el("i", x.s); b.dataset.tip = SHORT[x.c.id] + " · " + x.it.name + " · " + dmy(x.it.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
+    for (const x of items) { const b = el("i", x.s); b.dataset.tip = SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
     kp.insertBefore(trk, kp.lastChild);
   }
 
@@ -519,14 +509,13 @@
       c.setAttribute("class", cls); c.setAttribute("cx", 32); c.setAttribute("cy", 32); c.setAttribute("r", R);
       c.setAttribute("stroke-dasharray", Math.max(0, len) + " " + L); c.setAttribute("stroke-dashoffset", -from); return c; };
     for (const c of C.COURSES) {
-      const st = states[c.id], e = Math.min(10, st.earned) / 10 * L, f = Math.min(10 - Math.min(10, st.earned), st.futureMax) / 10 * L;
-      const cls = st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction);
+      const st = states[c.id], rp = C.ringParts(st), e = rp.earned * L, f = rp.future * L, cls = C.statusTone(st);
       const t = el("a", "tile"); t.href = "#card-" + c.id;
       const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
       const er = arc("er", 0, e), fu = arc("fu", e, f); er.style.stroke = "var(--" + cls + ")"; fu.style.stroke = "color-mix(in srgb, var(--" + cls + ") 22%, transparent)";
       svg.append(arc("tr", 0, L), fu); if (e > 0.5) svg.appendChild(er); svg.appendChild(arc("mk", Math.min(T, 9.9) / 10 * L, 2));
       ring.append(svg, el("b", null, st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1)));
-      const txt = el("span"), nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
+      const txt = el("span"), nx = C.nextItem(st);
       txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
       t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
     }

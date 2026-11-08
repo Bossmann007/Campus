@@ -4,6 +4,7 @@ const assert = require("assert"), fs = require("fs"), path = require("path");
 const root = path.join(__dirname, ".."), dir = path.join(root, "extension");
 const read = f => fs.readFileSync(path.join(dir, f), "utf8");
 let n = 0; const ok = s => { n++; };
+const f1 = x => x.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), up1 = x => f1(Math.ceil(x * 10 - 1e-9) / 10);
 
 // core.js is a copy of app.html's core block
 const core = fs.readFileSync(path.join(root, "app.html"), "utf8").match(/<script id="core">([\s\S]*?)<\/script>/)[1].replace(/^\n+|\n+$/g, "");
@@ -131,7 +132,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
     { id: 2, display_name: "virus.exe", url: "/files/2/download", size: 5 }, { id: 3, display_name: "Gabarito.pdf", url: "/files/3/download", locked_for_user: true, size: 5 }]);
   const host = course.anchor.kids[0];
   assert(host && host.id === "qf-panel" && host.shadow, "course panel in a shadow root");
-  assert.match(text(host), /Campus\+/); assert.match(text(host), /quanto falta/); assert.match(text(host), /RA2 · TDE|RA3/, "next assessments of this course listed");
+  assert.match(text(host), /Campus\+/);
+  const abd = C.COURSES.find(c => c.id === "abd"), st42 = C.courseState(abd, C.fromCanvas(course.store.cache.data).grades, isoIn(0), 7);
+  assert.match(text(host), new RegExp((st42.earned >= 10 ? "10" : f1(Math.floor(st42.earned * 10) / 10)) + " garantidos de 10"), "ring card: points earned, from the core");
+  const irows = all(host).filter(e => e.className === "ir");
+  assert.deepStrictEqual(irows.map(r => r.kids[0].textContent), abd.items.map(it => it.name), "one row per assessment, in order");
+  assert(Math.abs(irows.reduce((t, r) => t + parseInt(r.kids[1].textContent, 10), 0) - 100) <= abd.items.length, "weights add up to 100%");
+  const pj1 = irows[abd.items.findIndex(it => it.id === "pj1")];
+  assert(pj1.kids[2].className === "g" && /^1,00/.test(pj1.kids[2].textContent), "a graded item shows its grade");
+  irows.filter((r, i) => st42.future.includes(abd.items[i])).forEach(r => assert(/^g e$/.test(r.kids[2].className) && /^(precisa [\d,]+|já garantido|não dá|—)/.test(r.kids[2].textContent), "an open item shows what it needs"));
   const btn = all(host).find(e => e.textContent === "Baixar arquivos da matéria");
   await btn.listeners.click(); await new Promise(r => setTimeout(r, 20));
   assert.match(text(host), /1 arquivo, 1 novo/, "blocked and locked files left out");
@@ -189,7 +198,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(cols.indexOf(lista.parent), 1, "only in its own day (tomorrow is the second column)");
   assert.match(text(lista), /^ \| Lista 3 \| \d\d:\d\d \|/, "chip: title, then the time"); assert.match(text(lista), /Amanhã, \d\d:\d\d · a entregar/, "tooltip: day, time and status");
   assert.strictEqual(lista.href, "https://pucpr.instructure.com/courses/42/assignments/1");
-  const late = all(wk).find(e => e.className === "late");
+  const late = all(wk).find(e => e.className === "late" && e.tag === "div");
   assert(late && /Atrasadas/.test(text(late)) && /Relatório · \d\d\/\d\d/.test(text(late)), "missing deadline of the last days in the overdue row");
   assert(!inGrid(/Relatório/), "overdue work stays out of the grid");
   const quiz = inGrid(/^Quiz feito /);
@@ -225,10 +234,31 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(ex.every(e => /^(precisa [\d,]+( de [\d,]+)?|já garantido|não dá)$/.test(all(e).find(k => k.className === "s").textContent)), "exam chips say what each needs");
   const band = all(eb).find(e => e.className === "band");
   assert(band && band.kids[0].textContent === "semana de provas" && band.style.left === (1 / 7 * 100) + "%", "exam days close together become one band");
-  assert(!all(eb).some(e => e.className === "late"), "no overdue row when nothing is late");
+  assert(!all(eb).some(e => e.className === "late" && e.tag === "div"), "no overdue row when nothing is late");
   const empty = await runContent("/", null, {}, { Date: fakeDate("2030-03-10T12:00:00-03:00") }); plannerItems = null;
   const emb = empty.anchor.kids.find(k => k.id === "cp-dash");
   assert.match(text(emb), /Nada nos próximos 7 dias/, "empty week: a friendly line"); assert(!all(emb).some(e => /^tl/.test(e.className)), "and no empty grid"); ok();
+
+  // dashboard grades: the next assessment that counts, the KPI row and the tiles, all from the shared core
+  const gd = await runContent("/", null), gb = gd.anchor.kids.find(k => k.id === "cp-dash"), gr = C.fromCanvas(gd.store.cache.data).grades;
+  const sem = C.semester(C.COURSES, gr, isoIn(0), 7), nx = C.stillCounts(C.COURSES, gr, isoIn(0), 7)[0];
+  const kp = all(gb).filter(e => e.className === "card kpi"), cnt = k => sem.counts[k] || 0;
+  assert.deepStrictEqual(kp.map(k => k.kids[1].textContent), [f1(Math.floor(sem.mean * 10) / 10),
+    sem.tight ? up1(sem.states[sem.tight.id].fraction * 10) : cnt("depende-atrasadas") ? "?" : cnt("nao-da") ? "—" : "0", sem.done + " de " + sem.items.length], "KPI numbers are the core's");
+  assert.strictEqual(all(gb).filter(e => e.parent && e.parent.className === "trk").length, sem.items.length, "one tracker block per item");
+  const nextCard = all(gb).find(e => /upnext/.test(e.className));
+  if (nx) assert(nextCard && nextCard.href === "#campus=" + nx.course.id && text(nextCard).includes(nx.item.name), "next card: the soonest assessment that still counts, opens its subject");
+  else assert(!nextCard, "nothing left that counts: no next card");
+  const tiles = all(gb).filter(e => e.className === "card tile");
+  assert.deepStrictEqual(tiles.map(t => t.href), C.COURSES.map(c => "#campus=" + c.id), "a tile per subject, each opening Campus+ on it");
+  assert(tiles.every((t, i) => text(t).includes(C.SHORT[C.COURSES[i].id])), "tiles named like the calculator");
+  const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
+  assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
+  const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
+  assert(og && all(og).some(e => /kpi/.test(e.className)) && !/Próximos 7 dias|Avisos/.test(text(og).replace(/<style[\s\S]*/, "")), "week and news off: the grade parts alone");
+  const empty0 = { v: C.EXT_LATEST, user: 5, at: Date.now(), data: { v: 1, courses: [], announcements: [] }, ids: [], planner: null };
+  const noData = await runContent("/", null, { cache: empty0 }), nd = noData.anchor.kids.find(k => k.id === "cp-dash");
+  assert(nd && !all(nd).some(e => /kpi|tile|upnext/.test(e.className)), "no grade read from Canvas: no grade parts"); ok();
 
   // every module off: nothing on the page, and the reminders cleared
   const off = await runContent("/", null, { prefs: { week: false, news: false, grades: false, remind: false } });
@@ -236,7 +266,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.deepStrictEqual(off.sent.find(m => m.type === "remind").items, [], "reminders off: the list sent is empty");
   const nofiles = await runContent("/courses/42", [], { prefs: { files: false } });
   assert(!all(nofiles.anchor).some(e => e.textContent === "Baixar arquivos da matéria"), "files off: no download button");
-  assert.match(text(nofiles.anchor), /quanto falta/, "grades still shown");
+  assert.match(text(nofiles.anchor), /garantidos de 10/, "grades still shown");
   plannerFails = true;
   const noPlan = await runContent("/", null); plannerFails = false;
   assert.doesNotMatch(text(noPlan.anchor), /Próximos 7 dias/, "planner down: no week");
@@ -267,7 +297,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!camp.body.kids.some(k => k.id === "cp-app") && camp.env.location.hash === "", "Fechar closes it and clears the address");
   const direct = await runContent("/courses/42", [], {}, { hash: "#campus" });
   assert(direct.body.kids.some(k => k.id === "cp-app"), "a link straight to #campus opens it");
-  const openBtn = all(direct.anchor).find(e => e.textContent === "Abrir no Campus+");
+  const openBtn = all(direct.anchor).find(e => e.textContent === "Abrir no Campus+ →");
   assert(openBtn, "course panel opens the Campus+ page");
   direct.env.location.hash = ""; direct.winListeners.hashchange();
   await openBtn.listeners.click();
@@ -287,12 +317,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.match(text(bmDash.anchor), /Próximos 7 dias/); assert.match(text(bmDash.anchor), /Prova adiada/);
   assert(!all(bmDash.anchor).some(e => e.href === "#campus") && !bmDash.menu.kids.length, "no Campus+ page without the extension");
   const bmCourse = await runContent("/courses/42", [], {}, { src: bm });
-  assert.match(text(bmCourse.anchor), /quanto falta/);
+  assert.match(text(bmCourse.anchor), /garantidos de 10/);
   assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no/.test(e.textContent)), "no downloads and no calculator page in the bookmarklet");
   const bmOther = await runContent("/profile", null, {}, { src: bm });
   assert.strictEqual(bmOther.alerts.length, 1, "elsewhere it asks for the dashboard or a course"); ok();
 
   const none = await runContent("/courses/42/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, exams and empty week, modules off, theme, Campus+ page, bookmarklet)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Campus+ page, bookmarklet)");
 })().catch(e => { console.error(e); process.exit(1); });
