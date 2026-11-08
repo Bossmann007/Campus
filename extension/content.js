@@ -275,6 +275,8 @@
   // course (kept here, never written to Canvas) and an optional gradient. ctx: { prefs, list, colors, setColor }.
   const SWATCHES = ["#E2482B", "#1D2433", "#2F7D5B", "#1E5FA8", "#7C5CDB", "#C2185B", "#A8650F", "#00897B"];
   const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16), f = c => Math.max(0, Math.min(255, Math.round(c + (k > 0 ? (255 - c) * k : c * k)))); return "rgb(" + f(n >> 16) + "," + f((n >> 8) & 255) + "," + f(n & 255) + ")"; };
+  // A balanced grid: 2 cards side by side in the middle, 4 as 2+2, 5 or 6 as 3+3, more in rows of 4 (page CSS reads --cp-cols)
+  const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;
   function decorateCards(a, again, ctx) {
     const prefs = ctx.prefs;
     if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); card.cpPalette = null; delete card.dataset.qf; }
@@ -317,6 +319,8 @@
       hideB.style.cssText = pick.style.cssText.replace("right:8px", "right:36px");
       hideB.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); ctx.setHidden(ctx.hidden.concat([id])); });
     }
+    const shown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length, root = document.documentElement;
+    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(colsFor(shown)));
   }
 
   const CSS = `

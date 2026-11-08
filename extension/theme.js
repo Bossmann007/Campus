@@ -40,6 +40,10 @@
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${D} :is(#right-side-wrapper, #right-side, #footer, .recent_activity, #dashboard-activity, .ic-DashboardCard__action-container) { display:none !important; }
 ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; margin-right:auto !important; }`);
     if (cards.mode === "foco") out.push(`${D}.cp-has-panel :is(#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, #cp-scroll) { display:none !important; }`);
+    if (cards.cardStyle !== "lista") out.push(`.ic-DashboardCard__box { display:flex !important; flex-wrap:wrap; justify-content:center; align-items:stretch; gap:20px; padding:4px 0 24px; max-width:calc(var(--cp-cols, 3) * 300px + (var(--cp-cols, 3) - 1) * 20px); margin:0 auto !important; }
+.ic-DashboardCard__box .ic-DashboardCard { flex:0 0 calc((100% - (var(--cp-cols, 3) - 1) * 20px) / var(--cp-cols, 3)); max-width:300px; width:auto !important; margin:0 !important; }
+.ic-DashboardCard { display:flex !important; flex-direction:column; align-self:stretch; } .ic-DashboardCard__header { flex:1; }
+.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:132px; }`);
     if (cards.cardStyle === "compacto") out.push(`.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:64px !important; } .ic-DashboardCard { min-height:0 !important; } .ic-DashboardCard__action-container { display:none !important; }`);
     if (cards.cardStyle === "lista") out.push(`.ic-DashboardCard__box { display:grid !important; grid-template-columns:1fr; gap:8px; } .ic-DashboardCard { width:auto !important; margin:0 !important; display:grid !important; grid-template-columns:72px 1fr; align-items:stretch; }
 .ic-DashboardCard__header { display:contents; } .ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:auto !important; min-height:64px; grid-row:span 2; } .ic-DashboardCard__action-container { justify-content:flex-start; }`);
