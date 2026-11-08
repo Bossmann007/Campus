@@ -6,3 +6,9 @@ dist/
 __pycache__/
 .env
 !.env.example
+
+# pages saved from Canvas (personal data) never go in: only the site pages are tracked
+/*.html
+!/index.html
+!/app.html
+!/privacidade.html
