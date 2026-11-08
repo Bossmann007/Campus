@@ -1,0 +1,24 @@
+#!/bin/sh
+# Copy app.html into the extension: <script id="core"> -> extension/core.js (the in-Canvas panels compute with it), and the
+# whole calculator -> extension/app.html + app-ui.js (the Campus+ page opened inside Canvas). MV3 pages cannot run inline
+# scripts, so the two blocks become files and the CSP allows 'self' instead of 'unsafe-inline'; network stays blocked.
+set -eu
+cd "$(dirname "$0")/.."
+python3 - <<'PY'
+import re
+src = open("app.html", encoding="utf-8").read()
+head = "// Generated from app.html by scripts/sync-ext-core; do not edit by hand.\n"
+blocks = {}
+for name in ("core", "ui"):
+    m = re.search(r'<script id="%s">([\s\S]*?)</script>' % name, src)
+    blocks[name] = m
+open("extension/core.js", "w", encoding="utf-8").write(head.replace("app.html", 'app.html <script id="core">') + blocks["core"].group(1).strip("\n") + "\n")
+open("extension/app-ui.js", "w", encoding="utf-8").write(head.replace("app.html", 'app.html <script id="ui">') + blocks["ui"].group(1).strip("\n") + "\n")
+page = src.replace(blocks["ui"].group(0), '<script src="app-boot.js"></script>').replace(blocks["core"].group(0), '<script src="core.js"></script>')
+csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]*)">', page).group(1)
+page = page.replace(csp, csp.replace("script-src 'unsafe-inline'", "script-src 'self'"))
+page = page.replace('<html lang="pt-BR">', '<html lang="pt-BR" class="in-ext">', 1).replace('href="/"', 'href="#"')
+assert "<script>" not in page and "'unsafe-inline'; style" not in page.split("script-src")[1][:20]
+open("extension/app.html", "w", encoding="utf-8").write("<!-- Generated from app.html by scripts/sync-ext-core; do not edit by hand. -->\n" + page)
+PY
+echo "extension/core.js, app.html and app-ui.js updated"

@@ -178,15 +178,29 @@ assert(C.fromBackup(JSON.stringify({ app: "quanto-falta", v: 1, semester: "2027-
 ok("invalid backups are rejected; unknown, non-text and unparsable entries are skipped and listed");
 assert.deepStrictEqual(C.SEED, {}); const publicText = html.replace(/<dialog id="fb"[\s\S]*?<\/dialog>/, "").replace(/title="Mandar um feedback para o Enzo"/, "");   // the feedback button names its recipient on purpose
 assert(!/Enzo|~\//.test(publicText), "no personal data in the page outside the feedback dialog"); ok("public page has no seed grades or personal notes");
-// landing page: no personal data, forwards old extension links (#canvas=) to the app, and links the real download and video
+// landing page: no personal data, the real download, video and bookmarklet; the calculator is no longer on the site
 const landing = fs.readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
 assert(!/Enzo|~\//.test(landing), "no personal data on the landing page");
-assert(/if \(location\.hash\.startsWith\("#canvas="\)\) location\.replace\("\/app" \+ location\.hash\)/.test(landing), "old #canvas= links reach the app");
+assert(!/href="\/app/.test(landing) && landing.includes('id="bm"'), "no links to the old /app; the bookmarklet is offered");
 assert(landing.includes('releases/latest/download/quanto-falta-extension.zip') && landing.includes('src="/media/demo.mp4"'), "download link and demo video");
 assert(fs.existsSync(require("path").join(__dirname, "..", "media", "demo.mp4")), "demo video is in the repo");
-ok("landing page is clean, forwards extension links and has the video");
+ok("landing page is clean, has the download, the video and the bookmarklet");
+{ // grades from the old /app (same origin) come back as a backup file the calculator imports
+  const src = landing.match(/\/\/ Grades saved by the old calculator[\s\S]*?\n\}\)\(\);/)[0];
+  const els = { antigas: { hidden: true }, oldbackup: { addEventListener: (t, f) => { els.oldbackup.click = f; } } }; let body = null;
+  const doc = { getElementById: id => els[id], createElement: () => ({ click() {}, remove() {} }), body: { appendChild() {} } };
+  const store = { "notas-pucpr-2026-2": JSON.stringify({ meta: "6", grades: { "abd:pj1": "0.8", "etica:s1": "", "x:y:z": "1" } }) };
+  new Function("localStorage", "document", "Blob", "URL", src)({ getItem: k => store[k] || null }, doc, class { constructor(p) { body = p[0]; } }, { createObjectURL: () => "blob:x" });
+  assert.strictEqual(els.antigas.hidden, false, "box shown when old grades exist"); els.oldbackup.click();
+  const back = C.fromBackup(body); assert.deepStrictEqual(back.grades, { "abd:pj1": "0.8" }); assert.strictEqual(back.meta, "6");
+  els.antigas.hidden = true; delete store["notas-pucpr-2026-2"];
+  new Function("localStorage", "document", "Blob", "URL", src)({ getItem: k => store[k] || null }, doc, Blob, URL);
+  assert.strictEqual(els.antigas.hidden, true, "hidden for new visitors");
+}
+ok("old /app grades can be downloaded as a backup from the landing page");
 const vj = JSON.parse(fs.readFileSync(require("path").join(__dirname, "..", "vercel.json"), "utf8"));
-assert(vj.rewrites.some(r => r.source === "/calendario" && r.destination === "/app"), "/calendario serves the app");
-assert(/const urlCal = \(\) => \/\\\/calendario/.test(html) && html.includes('id="viewsw"'), "the app switches to the calendar view on /calendario and has the switch");
-ok("/calendario is the app in calendar view");
+assert.deepStrictEqual(vj.redirects.map(r => [r.source, r.destination]), [["/app", "/"], ["/calendario", "/"]], "old calculator addresses go to the landing page");
+assert(!/^!app\.html$/m.test(fs.readFileSync(require("path").join(__dirname, "..", ".vercelignore"), "utf8")), "app.html is not deployed: it lives in the extension");
+assert(/const urlCal = \(\) =>/.test(html) && html.includes('id="viewsw"'), "the calculator switches to the calendar view");
+ok("the site serves no calculator; old addresses redirect");
 console.log("all " + n + " checks passed");

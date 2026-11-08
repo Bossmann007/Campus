@@ -1,19 +1,51 @@
 {
   "manifest_version": 3,
-  "name": "Quanto falta · PUCPR",
-  "version": "0.6.0",
-  "description": "Lê as suas notas no Canvas da PUCPR e mostra quanto falta para passar em cada matéria.",
+  "name": "Campus+ · PUCPR",
+  "version": "1.0.0",
+  "description": "O Canvas da PUCPR melhorado: semana com entregas e provas, avisos juntos, lembretes, tema escuro, quanto falta em cada matéria e download dos arquivos.",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Quanto falta",
+    "default_title": "Campus+",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
     }
   },
   "permissions": [
-    "activeTab",
-    "scripting"
+    "storage",
+    "downloads",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://pucpr.instructure.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pucpr.instructure.com/*"
+      ],
+      "js": [
+        "prefs.js",
+        "theme.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://pucpr.instructure.com/*"
+      ],
+      "js": [
+        "collect.js",
+        "core.js",
+        "files.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
@@ -24,5 +56,15 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "homepage_url": "https://falta-quanto.vercel.app/"
+  "homepage_url": "https://falta-quanto.vercel.app/",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "app.html"
+      ],
+      "matches": [
+        "https://pucpr.instructure.com/*"
+      ]
+    }
+  ]
 }

@@ -1,11 +1,36 @@
-:root { color-scheme:light dark; --bg:#fff; --txt:#0a0a0b; --muted:#71717a; --line:#e7e7ea; --ok:#15803d; --bad:#b91c1c; }
-@media (prefers-color-scheme:dark) { :root { --bg:#111113; --txt:#fafafa; --muted:#a1a1aa; --line:#2e2e33; --ok:#4ade80; --bad:#f87171; } }
-body { margin:0; width:300px; padding:16px; background:var(--bg); color:var(--txt); font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-header { display:flex; align-items:center; gap:8px; font-weight:650; margin-bottom:10px; }
-.logo { flex-shrink:0; }
-#status { margin:0 0 12px; } #status.ok { color:var(--ok); } #status.bad { color:var(--bad); }
-.acts { display:grid; gap:8px; }
-button { font:inherit; font-weight:500; padding:9px 14px; border-radius:999px; border:1px solid var(--line); background:var(--bg); color:var(--txt); cursor:pointer; }
-button.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); }
+/* Campus+ identity "Caderno": paper and ink, coral accent, Fraunces (fonts/OFL.txt) for the wordmark and headings. */
+@font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
+:root { color-scheme:light dark; --bg:#FBF7EF; --card:#fff; --txt:#1D2433; --muted:#5F6675; --line:#ECE4D3; --soft:#F4EEE3; --off:#DCD1BC; --knob:#fff; --coral:#E2482B;
+  --ok:#2F7D5B; --bad:#C2361F; --tile:#1D2433; --tile-c:#FBF7EF; --serif:"Fraunces","Iowan Old Style","New York",Georgia,serif; }
+@media (prefers-color-scheme:dark) { :root { --bg:#141925; --card:#1B2130; --txt:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --soft:#222938; --off:#394256; --knob:#F3EDE1; --coral:#F0603F;
+  --ok:#6CC59A; --bad:#FF876C; --tile:#F3EDE1; --tile-c:#1D2433; } }
+body { margin:0; width:300px; padding:14px 16px; background:var(--bg); color:var(--txt); font:13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-variant-numeric:tabular-nums; }
+header { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+.logo { flex-shrink:0; } .logo .lt { fill:var(--tile); } .logo .lc { fill:var(--tile-c); } .logo .lp { fill:none; stroke:var(--coral); stroke-width:2.4; stroke-linecap:round; }
+.wm { font:500 19px/1 var(--serif); letter-spacing:-.02em; } .wm i { font-style:normal; color:var(--coral); }
+.tag { margin-left:auto; font-size:11px; color:var(--muted); }
+section { padding:12px 0; border-top:1px solid var(--line); }
+h2 { margin:0 0 6px; font-size:10.5px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.list { display:grid; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:2px 12px; }
+.row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:34px; cursor:pointer; }
+.row + .row { border-top:1px solid var(--line); }
+.row small { display:block; color:var(--muted); font-size:11.5px; }
+.row input[type=checkbox] { appearance:none; flex:none; position:relative; width:30px; height:18px; margin:0; border-radius:999px; background:var(--off); cursor:pointer; transition:background .18s; }
+.row input[type=checkbox]::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:var(--knob); box-shadow:0 1px 2px rgba(0,0,0,.2); transition:transform .2s cubic-bezier(.23,1,.32,1); }
+.row input[type=checkbox]:checked { background:var(--coral); }
+.row input[type=checkbox]:checked::after { transform:translateX(12px); background:#fff; }
+.row:active input[type=checkbox]::after { width:17px; } .row:active input[type=checkbox]:checked::after { transform:translateX(9px); }
+select { font:inherit; font-size:12.5px; padding:3px 6px; border-radius:7px; border:1px solid var(--line); background:var(--bg); color:var(--txt); cursor:pointer; }
+:is(button, select, input):focus-visible { outline:2px solid var(--coral); outline-offset:2px; }
+#status { margin:0 0 10px; } #status.ok { color:var(--ok); } #status.bad { color:var(--bad); }
+.acts { display:grid; gap:6px; }
+button { font:inherit; font-weight:550; padding:8px 12px; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--txt); cursor:pointer; transition:background-color .15s, box-shadow .15s, transform .15s cubic-bezier(.23,1,.32,1); }
+button:hover:not(:disabled) { background:var(--soft); transform:translateY(-1px); } button:active:not(:disabled) { transform:scale(.97); }
+button.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); } button.primary:hover:not(:disabled) { background:var(--txt); box-shadow:0 2px 0 var(--coral); }
 button:disabled { opacity:.5; cursor:default; }
-.fine { color:var(--muted); font-size:12px; margin:12px 0 0; }
+.fine { color:var(--muted); font-size:12px; margin:6px 0 0; }
+footer { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:11.5px; }
+#ver { flex:none; }
+.row { margin:0 -12px; padding:0 12px; transition:background-color .15s; } .row:hover { background:color-mix(in srgb, var(--soft) 60%, transparent); }
+.list { overflow:hidden; }
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; } button:hover:not(:disabled), button:active:not(:disabled) { transform:none; } }
