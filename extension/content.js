@@ -152,7 +152,7 @@
   }
   // Fechar on a subject opened from the dashboard goes to that subject's Canvas course; otherwise it stays on the page.
   function closeCampus() {
-    const m = /^#campus=([a-z0-9]{1,20})(?:@(\d{1,12}))?$/.exec(location.hash), cv = m && (m[2] || courseOf[m[1]]), home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
+    const m = /^#campus=([a-z0-9]{1,20})(?:@(\d{1,12}))?$/.exec(location.hash), cv = m && (courseOf[m[1]] || m[2]), home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
     if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
     history.replaceState(null, "", location.pathname + location.search); campusPage();
   }
