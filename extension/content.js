@@ -486,13 +486,43 @@
     if (!host || !cols || !cols.parentNode || host.nextSibling === cols) return;
     cols.parentNode.insertBefore(host, cols);
   }
+  // Its "Notas do curso" widget shows Canvas's current score (only what is graded, without the Plano de Ensino weights, so
+  // 92% halfway through the term). On our subjects the card keeps its picture and gets our numbers instead: points
+  // guaranteed of 10, the share of the term secured and what is still needed. Canvas's figure is hidden by a stylesheet
+  // of ours (not React's), and the badge comes back if React redraws the card.
+  let gradeA = null;
+  function enhanceGradeCards() {
+    const a = gradeA;
+    if (!a || !document.querySelectorAll) return;
+    const hide = [];
+    for (const card of document.querySelectorAll('[data-testid^="course-grade-card-"]')) {
+      const id = (card.getAttribute("data-testid") || "").slice("course-grade-card-".length), c = a.byCanvasId[id];
+      if (!c || !a.has) continue;
+      hide.push('[data-testid="course-' + id + '-grade"]');
+      if (card.querySelector('[data-cp-grade]')) continue;
+      const st = a.state(c), name = card.querySelector('[data-testid="course-' + id + '-name"]'), b = el("div");
+      b.setAttribute("data-cp-grade", "1"); b.title = "Caderno+: pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0) + ". O Canvas mostra só a média do que já foi lançado.";
+      const tn = C.statusTone(st), col = { ok: "#2F7D5B", warn: "#A8650F", bad: "#C2361F" }[tn] || "#A8650F", pct = Math.round(Math.min(10, st.earned) * 10);
+      b.style.cssText = "display:flex;align-items:center;gap:10px;margin:8px 0 2px;font:500 12.5px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#5F6675";
+      const big = el("b", null, earnedText(st)); big.style.cssText = "font:600 22px/1 'Iowan Old Style','New York',Georgia,serif;color:" + col;
+      const of = el("span", null, "de 10"), txt = el("span", null, pct + "% garantido"), lab = el("b", null, a.label(st));
+      lab.style.cssText = "display:block;font-weight:600;color:" + col;
+      const bar = el("i"); bar.style.cssText = "display:block;height:5px;margin-top:4px;border-radius:9px;background:linear-gradient(90deg," + col + " " + pct + "%,#EEE9DE " + pct + "%)";
+      const right = el("span"); right.style.cssText = "flex:1;min-width:0"; right.append(lab, txt, bar);
+      b.append(big, of, right);
+      if (name && name.parentNode) name.parentNode.insertBefore(b, name.nextSibling); else card.appendChild(b);
+    }
+    let st = document.getElementById("cp-grades");
+    if (!st) { st = el("style"); st.id = "cp-grades"; (document.head || document.body).appendChild(st); }
+    st.textContent = hide.length ? hide.join(",") + " { display:none !important; }" : "";
+  }
   function watchDash() {
     const root = document.getElementById("content");
     if (!root || dashWatch || typeof MutationObserver === "undefined") return;
     let t = 0;
-    dashWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(placeDash, 120); });
+    dashWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); }, 120); });
     dashWatch.observe(root, { childList: true, subtree: true });
-    placeDash();
+    placeDash(); enhanceGradeCards();
   }
   const link = (text, url) => { const x = el(url ? "a" : "span", "n", text); if (url) x.href = url; x.title = text; return x; };
   const mid = (title, url, sub) => { const m = el("span", "mid"); m.append(link(title, url), el("div", "c", sub)); return m; };
@@ -751,7 +781,8 @@
     meta.append(el("span", null, "Meta"), dn, mv, upb); hd.appendChild(meta);
     box.append(hd);
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
-    if (grades) { const g = gradesView(a); box.append(...(clean ? g.filter(x => !/kpis|src/.test(x.className)) : g)); }
+    // inside Canvas's dashboard its "Notas do curso" cards carry our numbers: no subject tiles of ours there
+    if (grades) { const inside = prefs.native && widgetDash(), g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
     else if (why) box.append(el("div", "muted why", why));
     box.appendChild(grid);
     if (week) {
@@ -1092,7 +1123,7 @@
         if (was.mode !== k || (meta != null && Number(was.meta) !== meta) || (native != null && was.native !== native)) {
           const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next);
         }
-        if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); }
+        if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); gradeA = a; for (const b of (document.querySelectorAll ? document.querySelectorAll("[data-cp-grade]") : [])) b.remove(); enhanceGradeCards(); }
         const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
         const old = document.getElementById("cp-dash"); if (old) old.remove();
         dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode); placeDash();
@@ -1101,7 +1132,7 @@
       window.cpRedraw = () => onMode(prefs.mode);
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // not while the student types in the panel   // in the background: the panel never waits for it
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
-      watchDash();
+      gradeA = a; watchDash(); enhanceGradeCards();
       const { colors } = await chrome.storage.local.get("colors");
       const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };
       ctx.setColor = async (id, color) => {

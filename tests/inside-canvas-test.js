@@ -87,12 +87,16 @@ async function runContent(pathname, files, preStore, opts = {}) {
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
+  const gcard = fakeEl("div"), gname = fakeEl("span"), ggrade = fakeEl("span"); gname.textContent = "Arquitetura de Banco de Dados"; ggrade.textContent = "92%";
+  gcard.append(gname, ggrade); gcard.getAttribute = k => k === "data-testid" ? "course-grade-card-" + (opts.courseId || 71306) : null;
+  Object.defineProperty(gname, "parentNode", { get() { return this.parent; } }); Object.defineProperty(gname, "nextSibling", { get() { return this.parent.kids[this.parent.kids.indexOf(this) + 1] || null; } });
+  gcard.querySelector = sel => sel === "[data-cp-grade]" ? all(gcard).find(e => e["data-cp-grade"]) || null : /-name"\]$/.test(sel) ? gname : null;
   const tabContent = fakeEl("div"), cols = fakeEl("div"); if (opts.widgetCols) { tabContent.append(cols); anchor.append(tabContent); }
   tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); };
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
     querySelector: sel => opts.widgetCols && sel === '[data-testid="widget-columns"]' ? cols : null,
-    querySelectorAll: sel => sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
+    querySelectorAll: sel => sel === '[data-testid^="course-grade-card-"]' ? (opts.gradeCard ? [gcard] : []) : sel === "[data-cp-grade]" ? all(gcard).filter(e => e["data-cp-grade"]) : sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
   const cid = opts.courseId || 71306, fetches = [];
@@ -127,7 +131,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
     class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
   await new Promise(r => setTimeout(r, 30));
-  return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols };
+  return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols, gcard };
 }
 (async () => {
   assert.strictEqual(await ask({ type: "download", items }, { id: "me", origin: "https://evil.example" }), "no reply", "messages from other origins are ignored");
@@ -594,6 +598,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const noCh = await runContent("/", null, { snap: oldSnap, prefs: { changes: false } }); await new Promise(r => setTimeout(r, 40));
   assert(!all(noCh.anchor).some(e => /changes/.test(e.className)) && !noCh.fetches.some(u => /\/(files|modules)\?/.test(u)), "switched off: no card, no extra reads"); ok();
 
+  // "Notas do curso" (Canvas's widget): the card keeps its picture; on our subjects Canvas's figure is hidden and ours shown
+  const gw = await runContent("/", null, {}, { gradeCard: true }); await new Promise(r => setTimeout(r, 20));
+  const badge = all(gw.gcard).find(e => e["data-cp-grade"]);
+  assert(badge && /(precisa|garantido|faltam|recuperação)[^|]* \| \d+% garantido/.test(text(badge)) && /[\d,]+ \| de 10/.test(text(badge)), "our numbers on the card: " + (badge && text(badge)));
+  assert(gw.gcard.kids.indexOf(badge) === 1, "right under the course name");
+  assert.strictEqual(gw.body.kids.find(k => k.id === "cp-grades").textContent, '[data-testid="course-71306-grade"] { display:none !important; }', "Canvas's percentage hidden for that course only");
+  const gw2 = await runContent("/", null, {}, { gradeCard: true, courseId: 77, courseName: "Inglês - 2026 / 2º Sem" }); await new Promise(r => setTimeout(r, 20));
+  assert(!all(gw2.gcard).some(e => e["data-cp-grade"]) && gw2.body.kids.find(k => k.id === "cp-grades").textContent === "", "a course without our rules keeps Canvas's figure"); ok();
+
   // course cards: next deadline, a color per course (kept here, never sent to Canvas), gradient
   const cd = await runContent("/", null, { prefs: { gradient: true } });
   assert.match(text(cd.header), /Próx\.: Lista 3 · amanhã \d\d:\d\d/, "the next deadline on the card");
@@ -738,5 +751,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed, course grades widget)");
 })().catch(e => { console.error(e); process.exit(1); });

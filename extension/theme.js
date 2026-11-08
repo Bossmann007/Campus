@@ -60,6 +60,14 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look [data-testid="dashboard-tabs"] [role="tab"] { color:var(--cp-muted) !important; }
 :root.cp-look :is([data-testid="customize-dashboard-button"], [data-testid="switch-to-old-dashboard-button"]) { border-radius:10px !important; }
 :root.cp-look [data-testid="dashboard-tab-content"], :root.cp-look #dashboard { background:transparent !important; }`);
+      out.push(`:root.cp-look [data-testid^="course-grade-card-"] { border-radius:14px !important; overflow:hidden !important; border:1px solid var(--cp-line) !important; background:var(--cp-card) !important; box-shadow:0 1px 2px rgba(29,36,51,.06) !important; transition:transform .18s, box-shadow .18s; }
+:root.cp-look [data-testid^="course-grade-card-"]:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45) !important; }
+:root.cp-look [data-testid^="course-grade-card-"] [data-testid$="-name"] { font-weight:600 !important; color:var(--cp-ink) !important; }
+:root.cp-look [data-testid^="course-grade-card-"] :is([data-testid$="-code"], [data-testid$="-term"], [data-testid$="-last-updated"]) { color:var(--cp-muted) !important; font-size:12px !important; }
+:root.cp-look [data-testid^="announcement-item-"] { padding:10px 4px !important; border-bottom:1px solid var(--cp-line) !important; }
+:root.cp-look [data-testid^="announcement-item-"]:last-child { border-bottom:0 !important; }
+:root.cp-look [data-testid^="announcement-item-"]:has([aria-pressed="false"]) a { font-weight:650 !important; }
+:root.cp-look [data-testid^="course-name-"] { color:var(--cp-accent) !important; font-weight:600 !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.04em; }`);
       if (look === "contraste") out.push(`:root.cp-look a { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
