@@ -43,6 +43,15 @@
 :root.cp-look #nav-tray-portal a { color:var(--cp-ink) !important; font-weight:600 !important; text-decoration:none !important; }
 :root.cp-look #nav-tray-portal a:hover { color:var(--cp-accent) !important; }
 :root.cp-look #nav-tray-portal li a { display:-webkit-box !important; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }`);
+    // Histórico recente tray: the item's icon in an accent chip, its course line quiet
+    if (L) out.push(`:root.cp-look #nav-tray-portal li i[class^="icon-"] { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:8px; color:var(--cp-accent) !important; background:color-mix(in srgb, var(--cp-accent) 12%, transparent); }
+:root.cp-look #nav-tray-portal [id^="history_list_"] { color:var(--cp-muted) !important; margin-top:2px; }
+:root.cp-look #nav-tray-portal .time_ago_date { color:var(--cp-muted) !important; }`);
+    // Caixa de entrada (/conversations; canvas-lms ui/features/inbox data-testids): toolbar on paper, conversations as calm rows
+    if (L) out.push(`:root.cp-look [data-testid="tool-bar"] { background:var(--cp-paper) !important; border-bottom:1px solid var(--cp-line) !important; }
+:root.cp-look [data-testid="conversationListItem-Item"] { border-bottom:1px solid var(--cp-line) !important; transition:background-color .15s; }
+:root.cp-look [data-testid="conversationListItem-Item"]:hover { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }
+:root.cp-look [data-testid="last-message-content"] { color:var(--cp-muted) !important; }`);
     // Cursos page (/courses) and Grupos page: headers and spacing in our look (the tables are styled above)
     if (L) out.push(`:root.cp-look :is(.ic-Action-header, .page_header_container) { border-bottom:1px solid var(--cp-line) !important; padding-bottom:10px; margin-bottom:16px; }
 :root.cp-look :is(#my_courses_table, #past_enrollments_table, #future_enrollments_table, #my_groups_table) { margin:6px 0 26px !important; }

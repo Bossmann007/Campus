@@ -115,6 +115,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if ((opts.more || []).some(c => url.startsWith("/api/v1/courses/" + c.id + "/assignments"))) return page([]);
     if (url.startsWith("/api/v1/announcements")) return page([{ context_code: "course_" + cid, title: "Prova adiada", posted_at: new Date().toISOString(), read_state: "unread", html_url: "https://pucpr.instructure.com/courses/71306/discussion_topics/1" },
       { context_code: "course_" + cid, title: "Bem-vindos", posted_at: "2026-08-01T12:00:00Z", read_state: "read", html_url: "https://evil.example/x" }]);
+    if (url.startsWith("/api/v1/courses/" + cid + "/users?enrollment_type[]=teacher")) return page([{ id: 7, name: "Prof. Ana Lima", avatar_url: "https://pucpr.instructure.com/images/thumbnails/7/ana.png" }]);
     if (url.includes("/api/v1/conversations?")) return opts.inboxFails ? { ok: false, status: 403, text: async () => "", headers: { get: () => null } }
       : Object.assign(page(opts.inbox || []), { headers: { get: h => h === "Link" ? '<https://pucpr.instructure.com/api/v1/conversations?scope=unread&page=2>; rel="next"' : null } });
     if (url.startsWith("/api/v1/planner/items?")) return plannerFails ? { ok: false, status: 500, text: async () => "", headers: { get: () => null } } : page(plannerItems || PLANNER);
@@ -376,7 +377,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   // Canvas calls per dashboard load (1 course). Before: /users/self on every page + /courses twice = 6 cold, 1 warm, 6 after 10 min.
   // Now the user is always confirmed (the id in the page, else /users/self); /courses once; one tab reads at a time.
-  const reads = r => r.fetches.filter(u => !/\/(files|modules)\?/.test(u));   // "what changed" reads files and modules at most once an hour (its own test)
+  const reads = r => r.fetches.filter(u => !/\/(files|modules)\?|\/users\?enrollment_type/.test(u));   // what changed (hourly) and the teachers (daily) have their own tests   // "what changed" reads files and modules at most once an hour (its own test)
   const cold = await runContent("/", null);
   assert.deepStrictEqual(reads(cold).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 6 calls, /courses once");
   const warm = await runContent("/", null, cold.store);
@@ -652,6 +653,16 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const calOff = await runContent("/calendar", null, { prefs: { calendar: false } });
   assert(!calOff.anchor.kids.some(k => k.id === "cp-cal"), "switched off: Canvas's calendar only"); ok();
 
+  // announcements with the author's photo; "Pergunte ao professor" opens Canvas's compose addressed to the teacher
+  const askRun = await runContent("/", null); await new Promise(r => setTimeout(r, 40));
+  const askSec = all(askRun.anchor).find(e => /card news ask/.test(e.className));
+  const askB = askSec && all(askSec).find(e => e.textContent === "Perguntar");
+  assert(askB && askB.href === "https://pucpr.instructure.com/conversations?user_id=7&user_name=Prof.%20Ana%20Lima&context_id=course_71306", "a Perguntar link per teacher, to Canvas's compose: " + (askB && askB.href));
+  assert(all(askSec).some(e => e.tag === "img" && e.src === "https://pucpr.instructure.com/images/thumbnails/7/ana.png"), "with the teacher's photo");
+  assert(askRun.store.teachers && askRun.store.teachers.user === 5, "read once a day, per user");
+  const again2 = await runContent("/", null, { teachers: askRun.store.teachers, cache: askRun.store.cache }, { scripts: pageEnv }); await new Promise(r => setTimeout(r, 30));
+  assert(!again2.fetches.some(u => /users\?enrollment_type/.test(u)), "not read again the same day"); ok();
+
   // course cards: our pill under Canvas's title (Canvas's own ⋮ menu untouched); courses unticked in the popup leave the dashboard
   const cd = await runContent("/", null, { hidden: [] });
   assert(/\d+[,\d]*\/10 · /.test(text(cd.header)) && !all(cd.header).some(e => e.tag === "button"), "a pill, and no buttons of ours on the card");
@@ -789,5 +800,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed, course grades widget, calendar)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed, course grades widget, calendar, ask the teacher)");
 })().catch(e => { console.error(e); process.exit(1); });

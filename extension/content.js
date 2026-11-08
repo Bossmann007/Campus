@@ -48,7 +48,7 @@
   }
   // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
   const forget = async () => {
-    await chrome.storage.local.remove(["cache", "search"]);
+    await chrome.storage.local.remove(["cache", "search", "teachers"]);
     chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
     chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
   };
@@ -440,6 +440,12 @@
     .cday .cn { font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
     .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
+    .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
+    .av img { width:100%; height:100%; object-fit:cover; display:block; }
+    .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
+    .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
+    .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
+    .ask-b { margin-left:0 !important; color:var(--coral) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -812,12 +818,17 @@
       const ul = el("ul");
       for (const x of all.slice(0, 6)) {
         const li = el("li", "row" + (x.unread ? " unread" : ""));
-        li.append(x.unread ? el("span", "dot", "não lido") : el("span"), mid(x.title, x.url && x.url.startsWith(location.origin + "/") ? x.url : null, String(x.course || "").split(" (")[0]),
+        const who = el("span", "who"); who.appendChild(avatar(x.avatar, x.author || x.course, 32)); if (x.unread) who.appendChild(el("span", "dot", "não lido"));
+        li.append(who, mid(x.title, x.url && x.url.startsWith(location.origin + "/") ? x.url : null, (x.author ? x.author + " · " : "") + shortName(x.course)),
           el("span", "d", x.at ? ago(C.localISO(new Date(x.at))) : ""));
         ul.appendChild(li);
       }
       sec.appendChild(all.length ? ul : el("div", "muted", a.term ? "Nenhum aviso nos últimos 60 dias." : "Nenhuma matéria de " + TERM + " no seu Canvas."));
       foldable(sec, h, "news"); grid.appendChild(sec);
+    }
+    if (prefs.news && mode !== "foco") {   // next to the announcements: the teachers, to ask them something (loaded in the background)
+      const holder = el("div"); grid.appendChild(holder);
+      teachersOf(cache).then(list => { grid.insertBefore(askCard(list), holder); holder.remove(); }, () => holder.remove());
     }
   }
 
@@ -1084,6 +1095,42 @@
       b.addEventListener("click", async () => { const now = hidden(), next = now.includes(id) ? now.filter(x => x !== id) : now.concat([id]); await setHidden(next); b.textContent = next.includes(id) ? "Mostrar no painel" : "Tirar do painel"; });
       box.appendChild(b); cell.appendChild(box);
     }
+  }
+
+  // A round photo (Canvas avatar URL, https only) or the initials.
+  function avatar(url, name, size) {
+    const box = el("span", "av"); box.style.width = box.style.height = (size || 28) + "px";
+    if (url && /^https:\/\//.test(url) && !/avatar-50\.png$/.test(url)) { const img = el("img"); img.src = url; img.alt = ""; img.loading = "lazy"; box.appendChild(img); }
+    else box.textContent = String(name || "?").split(" (")[0].split(" - ")[0].split(/\s+/).filter(w => /^\p{L}/u.test(w)).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
+    return box;
+  }
+  // The teachers of the term's courses (name and photo), read once a day per Canvas user: GET /courses/:id/users for teachers.
+  async function teachersOf(cache) {
+    const { teachers } = await chrome.storage.local.get("teachers");
+    if (teachers && teachers.user === cache.user && Date.now() - teachers.at < 864e5 && Array.isArray(teachers.list)) return teachers.list;
+    const list = [];
+    for (const c of cache.data.courses) {
+      try {
+        for (const u of await getAll("/api/v1/courses/" + c.id + "/users?enrollment_type[]=teacher&include[]=avatar_url&per_page=20", 1))
+          if (u && u.id && u.name && !list.some(t => t.id === u.id && t.course === c.id)) list.push({ id: u.id, name: String(u.name).slice(0, 80), avatar: typeof u.avatar_url === "string" ? u.avatar_url : null, course: c.id, courseName: shortName(c.name) });
+      } catch (e) { /* the course hides its people */ }
+    }
+    await chrome.storage.local.set({ teachers: { user: cache.user, at: Date.now(), list } });
+    return list;
+  }
+  // "Pergunte ao professor": each teacher with photo; the button opens Canvas's own compose, addressed (the inbox reads
+  // user_id, user_name and context_id from the address). Nothing is sent by Caderno+.
+  function askCard(list) {
+    const sec = el("section", "card news ask"), h = el("h3", null, "Pergunte ao professor"), ul = el("ul", "teachers");
+    sec.appendChild(h);
+    for (const t of list.slice(0, 12)) {
+      const li = el("li", "teacher"), go = el("a", "mini ask-b", "Perguntar");
+      go.href = location.origin + "/conversations?user_id=" + encodeURIComponent(t.id) + "&user_name=" + encodeURIComponent(t.name) + "&context_id=course_" + encodeURIComponent(t.course);
+      go.title = "Abrir uma mensagem para " + t.name + " na caixa de entrada do Canvas";
+      li.append(avatar(t.avatar, t.name, 36), mid(t.name, null, t.courseName), go); ul.appendChild(li);
+    }
+    sec.appendChild(list.length ? ul : el("div", "muted", "Não consegui ler os professores das matérias agora."));
+    foldable(sec, h, "ask"); return sec;
   }
 
   // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
