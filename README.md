@@ -4,7 +4,8 @@ O Canvas da PUCPR melhorado. Feito por um aluno, para alunos. (Antes chamado Qua
 
 Campus+ é uma extensão do Chrome, Brave e Edge que roda dentro do Canvas da PUCPR (pucpr.instructure.com):
 
-- **Próximos 7 dias:** no painel do Canvas, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que foi entregue, o que atrasou e quanto você precisa em cada prova.
+- **Próximos 7 dias:** no painel do Canvas, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que foi entregue, o que atrasou e quanto você precisa em cada prova. Marque uma tarefa como feita (✓) e ela fica cinza, sai dos lembretes e conta no progresso da semana; a marca fica só no seu computador.
+- **Busca (Ctrl+K ou ⌘K):** em qualquer página do Canvas, procura matérias, tarefas e itens dos módulos de todas as matérias e abre com Enter.
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos marcados.
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova.
 - **Tema escuro** (ou igual ao sistema).
