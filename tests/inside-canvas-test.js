@@ -255,7 +255,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
-  assert(og && all(og).some(e => /kpi/.test(e.className)) && !/Próximos 7 dias|Avisos/.test(text(og).replace(/<style[\s\S]*/, "")), "week and news off: the grade parts alone");
+  assert(og && all(og).some(e => /kpi/.test(e.className)) && !all(og).some(e => e.tag !== "style" && /Próximos 7 dias|Avisos/.test(e.textContent)), "week and news off: the grade parts alone");
   const empty0 = { v: C.EXT_LATEST, user: 5, at: Date.now(), data: { v: 1, courses: [], announcements: [] }, ids: [], planner: null };
   const noData = await runContent("/", null, { cache: empty0 }), nd = noData.anchor.kids.find(k => k.id === "cp-dash");
   assert(nd && !all(nd).some(e => /kpi|tile|upnext/.test(e.className)), "no grade read from Canvas: no grade parts"); ok();
