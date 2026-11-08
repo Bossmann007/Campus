@@ -26,7 +26,11 @@
     const L = LOOKS[look] && dark ? ["#FFFFFF", "#F3F3F3"].concat(LOOKS[look].slice(2, 4), ["#E0E0E0"], LOOKS[look].slice(5)) : LOOKS[look], out = [];
     // the dashboard: the Caderno+ panel takes the place of Canvas's (its widget dashboard is React with generated classes);
     // "Painel do Canvas" in our header brings the original back
-    if (!cards.native) out.push(`:root.cp-dash-page.cp-has-panel #content > :not(.cp-host) { display:none !important; }`);
+    // Canvas's widget dashboard (data-testid hooks from canvas-lms ui/features/widget_dashboard): its widgets hidden when
+    // the student keeps only Caderno+ (or in Foco); otherwise styled like our cards
+    const W = ":root.cp-dash-page";
+    if (!cards.native || cards.mode === "foco") out.push(`${W}.cp-has-panel [data-testid="widget-columns"] { display:none !important; }`);
+    if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${W} [data-testid="switch-to-old-dashboard-button"] { display:none !important; }`);
     // Only on the dashboard (quizzes, grades and assignments keep their side column: timers, totals and submissions live there).
     // limpo: the side column, footer, activity stream and card icons go; foco: also the course cards, once our panel is drawn
     const D = ":root.cp-dash-page";
@@ -50,6 +54,12 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look :is(.Button, .btn, button.ui-button) { border-radius:10px; }
 :root.cp-look :is(.ic-Dashboard-header__layout, .ic-app-nav-toggle-and-crumbs, .page-header) { border-color:var(--cp-line) !important; }
 :root.cp-look #section-tabs a.active, :root.cp-look #section-tabs a:hover { border-left-color:var(--cp-accent) !important; color:var(--cp-ink) !important; }`);
+      out.push(`:root.cp-look section[role="region"][data-testid^="widget-"] { background:var(--cp-card) !important; border:1px solid var(--cp-line) !important; border-radius:14px !important; box-shadow:0 1px 2px rgba(29,36,51,.06) !important; }
+:root.cp-look [data-testid^="statistics-card-"] { background:var(--cp-paper) !important; border-radius:10px !important; border:1px solid var(--cp-line) !important; }
+:root.cp-look [data-testid="dashboard-tabs"] [role="tab"][aria-selected="true"] { color:var(--cp-ink) !important; box-shadow:inset 0 -3px 0 var(--cp-accent) !important; }
+:root.cp-look [data-testid="dashboard-tabs"] [role="tab"] { color:var(--cp-muted) !important; }
+:root.cp-look :is([data-testid="customize-dashboard-button"], [data-testid="switch-to-old-dashboard-button"]) { border-radius:10px !important; }
+:root.cp-look [data-testid="dashboard-tab-content"], :root.cp-look #dashboard { background:transparent !important; }`);
       if (look === "contraste") out.push(`:root.cp-look a { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
@@ -61,7 +71,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     if (F) {
       if (F[1] && F[1].startsWith('"Fraunces"') && font) out.push(`@font-face { font-family:"Fraunces"; font-weight:400 700; font-display:swap; src:url(${font}) format("woff2"); }`);
       out.push(`:root.cp-look-font body, :root.cp-look-font :is(input, button, select, textarea) { font-family:${F[0]} !important; }`);
-      if (F[1]) out.push(`:root.cp-look-font :is(h1, h2, .ic-Dashboard-header__title, .page-title, .ic-DashboardCard__header-title, .ic-Action-header__Heading) { font-family:${F[1]} !important; letter-spacing:-.01em; }`);
+      if (F[1]) out.push(`:root.cp-look-font :is(h1, h2, [data-testid="dashboard-heading"], section[role="region"][data-testid^="widget-"] h2, .ic-Dashboard-header__title, .page-title, .ic-DashboardCard__header-title, .ic-Action-header__Heading) { font-family:${F[1]} !important; letter-spacing:-.01em; }`);
     }
     return out.join("\n");
   };

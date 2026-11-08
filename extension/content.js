@@ -323,6 +323,8 @@
     :host-context(html.cp-dark) { --fg:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --bg:#1B2130; --soft:#222938; --ring:#F0603F; --coral:#F0603F; --tile:#F3EDE1; --tile-c:#1D2433; --band1:#3B2220; --band2:#2A2129;
       --paper:#141925; --track:#2A3242; --ok:#6CC59A; --warn:#E6B15C; --bad:#FF876C; --ok-s:#24493A; --warn-s:#4A3B22; --bad-s:#5A2E29; --lift:0 8px 20px -12px rgba(0,0,0,.6); }
     .box { position:relative; container:cp / inline-size; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
+    .box.inw { border:0; background:none; box-shadow:none; padding:0; } .box.inw > .hd { margin:0 0 12px; padding:6px 2px; border-bottom:0; }
+    .box.inw .card { border-radius:14px; box-shadow:0 1px 2px rgba(29,36,51,.06); }
     .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
     .box > .card, .box > .kpis, .box > .tiles { margin-bottom:10px; }
@@ -473,6 +475,24 @@
     const root = host.attachShadow({ mode: "open" }), box = el("div", "box"), style = el("style");
     style.textContent = CSS; root.append(style, box); anchor.prepend(host);
     return box;
+  }
+  // Canvas's widget dashboard (React, mounted in #content): our panel goes inside it, under the greeting and the tabs and
+  // above its widgets ([data-testid="widget-columns"], stable hooks from canvas-lms). React may redraw that area (tab
+  // switches): a watcher puts the panel back. Without the widget dashboard it stays at the top of #content.
+  let dashWatch = null, widgets = null;
+  const widgetDash = () => widgets != null ? widgets : (widgets = [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));   // ENV flag in the page
+  function placeDash() {
+    const host = document.getElementById("cp-dash"), cols = document.querySelector ? document.querySelector('[data-testid="widget-columns"]') : null;
+    if (!host || !cols || !cols.parentNode || host.nextSibling === cols) return;
+    cols.parentNode.insertBefore(host, cols);
+  }
+  function watchDash() {
+    const root = document.getElementById("content");
+    if (!root || dashWatch || typeof MutationObserver === "undefined") return;
+    let t = 0;
+    dashWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(placeDash, 120); });
+    dashWatch.observe(root, { childList: true, subtree: true });
+    placeDash();
   }
   const link = (text, url) => { const x = el(url ? "a" : "span", "n", text); if (url) x.href = url; x.title = text; return x; };
   const mid = (title, url, sub) => { const m = el("span", "mid"); m.append(link(title, url), el("div", "c", sub)); return m; };
@@ -706,7 +726,8 @@
     if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
-    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");
+    if (prefs.native && widgetDash()) box.className += " inw";   // inside Canvas's dashboard: no frame, our cards sit like its widgets   // Foco hides Canvas's cards only when ours are there
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
     const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
@@ -717,8 +738,8 @@
     }
     hd.appendChild(seg);
     if (onMode) {   // the Canvas dashboard under ours, or ours alone (the default)
-      const nat = el("button", "find natv", prefs.native ? "Esconder painel do Canvas" : "Painel do Canvas"); nat.type = "button";
-      nat.title = prefs.native ? "Deixar só o Caderno+" : "Mostrar também o painel original do Canvas abaixo";
+      const nat = el("button", "find natv", prefs.native ? "Só Caderno+" : "Quadros do Canvas"); nat.type = "button";
+      nat.title = prefs.native ? "Esconder os quadros do Canvas e deixar só o Caderno+" : "Mostrar de novo os quadros do Canvas (Trabalho do curso, Avisos) abaixo do Caderno+";
       nat.addEventListener("click", () => onMode(mode, null, !prefs.native)); hd.appendChild(nat);
     }
     if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
@@ -741,7 +762,7 @@
     }
     if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
     if (prefs.tasks) grid.appendChild(tasksCard(cache, marks, () => onMode && onMode(mode)));
-    if (!prefs.native && !clean) {   // with Canvas's dashboard hidden, every course stays one click away (extension courses too)
+    if (!prefs.native && widgetDash() && !clean) {   // with Canvas's widgets hidden, every course stays one click away (extension courses too)
       const sec = el("section", "card news courses"), h = el("h3", null, "Todas as matérias"), ul = el("ul");
       for (const x of cache.ids) { const li = el("li", "row"); li.append(el("span"), mid(shortName(x.name), location.origin + "/courses/" + x.id, String(x.name).slice(0, 120)), el("span")); ul.appendChild(li); }
       sec.append(h, ul); foldable(sec, h, "courses"); grid.appendChild(sec);
@@ -765,7 +786,7 @@
       for (const m of cache.inbox) { const li = el("li", "row unread"); li.append(el("span", "dot", "não lida"), mid(m.subject, location.origin + "/conversations", m.from), el("span", "d", m.at ? ago(C.localISO(new Date(m.at))) : "")); ul.appendChild(li); }
       sec.appendChild(ul); foldable(sec, h, "inbox"); grid.appendChild(sec);
     }
-    if (news && !(clean && !cache.data.announcements.some(x => x.unread))) {
+    if (news && !(prefs.native && widgetDash()) && !(clean && !cache.data.announcements.some(x => x.unread))) {   // inside Canvas's dashboard its own Avisos widget shows them
       const all = cache.data.announcements.slice().filter(x => !clean || x.unread).sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
       const sec = el("section", "card news"), h = el("h3", null, "Avisos");
       if (unread) h.appendChild(el("span", "pill nt", unread + (unread === 1 ? " não lido" : " não lidos")));
@@ -1074,12 +1095,13 @@
         if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); }
         const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
         const old = document.getElementById("cp-dash"); if (old) old.remove();
-        dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
+        dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode); placeDash();
         sendReminders(agenda(a, cache, m2), prefs, cache);
       };
       window.cpRedraw = () => onMode(prefs.mode);
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // not while the student types in the panel   // in the background: the panel never waits for it
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
+      watchDash();
       const { colors } = await chrome.storage.local.get("colors");
       const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };
       ctx.setColor = async (id, color) => {

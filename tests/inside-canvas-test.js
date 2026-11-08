@@ -87,7 +87,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
-  const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null, querySelector: () => null,
+  const tabContent = fakeEl("div"), cols = fakeEl("div"); if (opts.widgetCols) { tabContent.append(cols); anchor.append(tabContent); }
+  tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); };
+  Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
+  const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
+    querySelector: sel => opts.widgetCols && sel === '[data-testid="widget-columns"]' ? cols : null,
     querySelectorAll: sel => sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
@@ -123,7 +127,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
     class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
   await new Promise(r => setTimeout(r, 30));
-  return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches };
+  return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols };
 }
 (async () => {
   assert.strictEqual(await ask({ type: "download", items }, { id: "me", origin: "https://evil.example" }), "no reply", "messages from other origins are ignored");
@@ -534,11 +538,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(segB && all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Completo")["aria-checked"] === "true", "the header switch shows the mode");
   await segB.listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(mFull.store.prefs.mode === "foco" && /Agora/.test(text(mFull.anchor)) && all(mFull.anchor).filter(e => e.id === "cp-dash").length === 1, "switched from the panel: saved and redrawn once");
-  const allC = await runContent("/", null);
-  assert(/Todas as matérias/.test(text(allC.anchor)) && all(allC.anchor).some(e => e.href === "https://pucpr.instructure.com/courses/71306"), "every course one click away while Canvas's dashboard is hidden");
-  const natB = all(allC.anchor).find(e => e.textContent === "Painel do Canvas");
-  await natB.listeners.click(); await new Promise(r => setTimeout(r, 10));
-  assert(allC.store.prefs.native === true && all(allC.anchor).some(e => e.textContent === "Esconder painel do Canvas") && !/Todas as matérias/.test(text(allC.anchor)), "Painel do Canvas: the original comes back, saved"); ok();
+  // Canvas's widget dashboard: ours goes inside it, above its widgets; its Avisos widget replaces ours; "Só Caderno+" hides its widgets
+  const WENV = [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }];
+  const wdash = await runContent("/", null, {}, { scripts: WENV, widgetCols: true });
+  await new Promise(r => setTimeout(r, 150));
+  const dashHost = wdash.cols.parent.kids.find(k => k.id === "cp-dash");
+  assert(dashHost && wdash.cols.parent.kids.indexOf(dashHost) === wdash.cols.parent.kids.indexOf(wdash.cols) - 1, "our panel sits right above Canvas's widgets");
+  assert(!/Prova adiada/.test(text(dashHost)) && !/Todas as matérias/.test(text(dashHost)), "no duplicate announcements while Canvas shows its own");
+  const onlyB = all(dashHost).find(e => e.textContent === "Só Caderno+");
+  await onlyB.listeners.click(); await new Promise(r => setTimeout(r, 150));
+  const dashHost2 = wdash.cols.parent.kids.find(k => k.id === "cp-dash");
+  assert(wdash.store.prefs.native === false && /Prova adiada/.test(text(dashHost2)) && /Todas as matérias/.test(text(dashHost2)) && all(dashHost2).some(e => e.textContent === "Quadros do Canvas"), "Só Caderno+: ours carries announcements and every course, saved"); ok();
 
   // own tasks: added in the card (or with + in Ctrl+K), in the week when they have a day, ticked and deleted; per user
   const tk = await runContent("/", null, { tasks: { 9: [{ id: "x", title: "do outro", date: null }] } });
@@ -679,10 +689,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const lookCss = () => lk.styles.find(x => x.id === "cp-look").textContent;
   assert(["cp-look", "cp-look-nav", "cp-look-font"].every(c => lk.cls.has(c)) && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look, menu and font");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()) && /Fraunces/.test(lookCss()), "cards and serif titles");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true, mode: "completo", native: false }), "kept for the next first paint");
-  assert(/:root\.cp-dash-page\.cp-has-panel #content > :not\(\.cp-host\) \{ display:none/.test(lookCss()), "the dashboard: ours in place of Canvas's");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true, mode: "completo", native: true }), "kept for the next first paint");
+  assert(!/widget-columns"\] \{ display:none/.test(lookCss()) && /section\[role="region"\]\[data-testid\^="widget-"\] \{ background:var\(--cp-card\)/.test(lookCss()), "the dashboard: Canvas's widgets kept, in our look");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
-  lk.listen.change({ prefs: { newValue: { native: true } } }, "local"); assert(!/#content > :not/.test(lookCss()), "Painel do Canvas: the original stays");
+  lk.listen.change({ prefs: { newValue: { native: false } } }, "local"); assert(/cp-has-panel \[data-testid="widget-columns"\] \{ display:none/.test(lookCss()), "Só Caderno+: Canvas's widgets hidden");
   const dk = theme("dark", false); await new Promise(r => setTimeout(r, 5));
   assert(/--cp-paper:#FFFFFF; --cp-card:#F3F3F3/.test(dk.styles.find(x => x.id === "cp-look").textContent), "dark: neutral paper under the inversion (no mud)");
   lk.listen.change({ prefs: { newValue: { mode: "limpo" } } }, "local");
