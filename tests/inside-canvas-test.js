@@ -97,7 +97,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); };
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
-    querySelector: sel => (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
+    querySelector: sel => sel === ".ic-Dashboard-header__layout" ? (opts.header || null) : (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
     querySelectorAll: sel => sel === "#my_courses_table tbody tr" ? (opts.rows || []) : sel === '[data-testid^="course-grade-card-"]' ? (opts.gradeCard ? [gcard] : []) : sel === "[data-cp-grade]" ? all(gcard).filter(e => e["data-cp-grade"]) : sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
@@ -115,6 +115,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if ((opts.more || []).some(c => url.startsWith("/api/v1/courses/" + c.id + "/assignments"))) return page([]);
     if (url.startsWith("/api/v1/announcements")) return page([{ context_code: "course_" + cid, title: "Prova adiada", posted_at: new Date().toISOString(), read_state: "unread", html_url: "https://pucpr.instructure.com/courses/71306/discussion_topics/1" },
       { context_code: "course_" + cid, title: "Bem-vindos", posted_at: "2026-08-01T12:00:00Z", read_state: "read", html_url: "https://evil.example/x" }]);
+    if (url.startsWith("/api/v1/courses/" + cid + "/users?enrollment_type[]=teacher")) return page([{ id: 7, name: "Prof. Ana Lima", avatar_url: "https://pucpr.instructure.com/images/thumbnails/7/ana.png" }]);
     if (url.includes("/api/v1/conversations?")) return opts.inboxFails ? { ok: false, status: 403, text: async () => "", headers: { get: () => null } }
       : Object.assign(page(opts.inbox || []), { headers: { get: h => h === "Link" ? '<https://pucpr.instructure.com/api/v1/conversations?scope=unread&page=2>; rel="next"' : null } });
     if (url.startsWith("/api/v1/planner/items?")) return plannerFails ? { ok: false, status: 500, text: async () => "", headers: { get: () => null } } : page(plannerItems || PLANNER);
@@ -154,7 +155,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     { id: 2, display_name: "virus.exe", url: "/files/2/download", size: 5 }, { id: 3, display_name: "Gabarito.pdf", url: "/files/3/download", locked_for_user: true, size: 5 }]);
   const host = course.anchor.kids[0];
   assert(host && host.id === "qf-panel" && host.shadow, "course panel in a shadow root");
-  assert.match(text(host), /Caderno \| \+/, "the wordmark");
+  assert.match(text(host), /Arquitetura de Banco de Dados/, "the course hero names the course");
   const abd = C.COURSES.find(c => c.id === "abd"), st42 = C.courseState(abd, C.fromCanvas(course.store.cache.data).grades, isoIn(0), 7);
   assert.match(text(host), new RegExp((st42.earned >= 10 ? "10" : f1(Math.floor(st42.earned * 10) / 10)) + " garantidos de 10"), "ring card: points earned, from the core");
   const irows = all(host).filter(e => e.className === "ir");
@@ -376,7 +377,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   // Canvas calls per dashboard load (1 course). Before: /users/self on every page + /courses twice = 6 cold, 1 warm, 6 after 10 min.
   // Now the user is always confirmed (the id in the page, else /users/self); /courses once; one tab reads at a time.
-  const reads = r => r.fetches.filter(u => !/\/(files|modules)\?/.test(u));   // "what changed" reads files and modules at most once an hour (its own test)
+  const reads = r => r.fetches.filter(u => !/\/(files|modules)\?|\/users\?enrollment_type/.test(u));   // what changed (hourly) and the teachers (daily) have their own tests   // "what changed" reads files and modules at most once an hour (its own test)
   const cold = await runContent("/", null);
   assert.deepStrictEqual(reads(cold).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 6 calls, /courses once");
   const warm = await runContent("/", null, cold.store);
@@ -500,18 +501,26 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const q0 = idle2.anchor.kids.find(k => k.id === "qf-panel"); await new Promise(r => setTimeout(r, 350));
   assert(idle2.anchor.kids.find(k => k.id === "qf-panel") !== q0 && idle2.anchor.kids.filter(k => k.id === "qf-panel").length === 1, "idle: redrawn once with the new reading"); ok();
 
-  // Anotações: one note per course and user, saved as you type, shown open when there is one
-  const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } });
-  const nbx = np.anchor.kids.find(k => k.id === "qf-panel"), pad = all(nbx).find(e => /^card notes/.test(e.className)), ta = all(pad).find(e => e.tag === "textarea");
-  assert(pad.hidden && !ta.value, "closed and empty: another user's note is not mine");
-  all(nbx).find(e => e.textContent === "Anotações").listeners.click(); assert(!pad.hidden, "opens");
+  // the course page: hero, tabs (Visão geral first), Anotações per course and user, the last tab kept
+  const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } }); await new Promise(r => setTimeout(r, 20));
+  const nbx = np.anchor.kids.find(k => k.id === "qf-panel"), tabB = label => all(nbx).find(e => e.role === "tab" && e.textContent.startsWith(label));
+  const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].indexOf(label)];
+  assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
+  assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
+  assert(/A seguir nesta matéria/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
+  assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
+  await tabB("Anotações").listeners.click(); await new Promise(r => setTimeout(r, 5));
+  const ta = all(paneOf("Anotações")).find(e => e.tag === "textarea");
+  assert(!paneOf("Anotações").hidden && !ta.value && np.store.ctab === "anot", "Anotações open, empty for this user (another user's note is not mine), the tab kept");
   ta.value = "RA3 cai JOIN"; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes, { 9: { 71306: "do outro" }, 5: { 71306: "RA3 cai JOIN" } }, "saved per user and course");
-  const np2 = await runContent("/courses/71306", [], { notes: np.store.notes }); await new Promise(r => setTimeout(r, 10));
-  const pad2 = all(np2.anchor).find(e => /^card notes/.test(e.className));
-  assert(!pad2.hidden && all(pad2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, open");
+  const np2 = await runContent("/courses/71306", [], { notes: np.store.notes, ctab: "anot" }); await new Promise(r => setTimeout(r, 20));
+  const box2 = np2.anchor.kids.find(k => k.id === "qf-panel"), pane2 = all(box2).filter(e => e.role === "tabpanel")[4];
+  assert(!pane2.hidden && all(pane2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, on the same tab");
   ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
-  assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed"); ok();
+  assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed");
+  await tabB("Materiais").listeners.click(); await new Promise(r => setTimeout(r, 20));
+  assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened"); ok();
 
   // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
   const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
@@ -634,6 +643,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(/\/10 · /.test(text(r1)) && /Tirar do painel/.test(text(r2)) && !/\/10/.test(text(r2)), "pill on ours, the button on every course");
   await all(r2).find(e => e.textContent === "Tirar do painel").listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(cpage.store.hidden.includes("88") && /Mostrar no painel/.test(text(r2)), "taken off the dashboard from the course list");
+  // the classic dashboard header: a greeting with the first name, the date and what is coming (the title stays for screen readers)
+  const lay = fakeEl("div"), flex = fakeEl("div"), titleItem = fakeEl("span"); titleItem.append(fakeEl("span")); flex.append(titleItem, fakeEl("span")); lay.append(flex);
+  lay.firstElementChild = flex; flex.firstElementChild = titleItem; titleItem.prepend = function (c) { c.parent = this; this.kids.unshift(c); };
+  titleItem.querySelector = sel => all(titleItem).find(e => e.className === "cp-greet") || null;
+  const greetRun = await runContent("/", null, {}, { header: lay, scripts: [{ textContent: 'ENV = {"current_user_id":"5","current_user":{"id":"5","display_name":"Enzo Bossmann"}}' }] });
+  const greetEl = titleItem.kids[0];
+  assert(greetEl && greetEl.className === "cp-greet" && /^(Bom dia|Boa tarde|Boa noite), Enzo!$/.test(greetEl.kids[0].textContent) && /de (janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro) · /.test(greetEl.kids[1].textContent), "greeting: " + (greetEl && text(greetEl)));
   const clHidden = await runContent("/", null, { hidden: ["71306"] }, { classic: true });
   assert(!/\/10 · /.test(text(clHidden.header)), "a course unticked in the popup leaves the dashboard"); ok();
 
@@ -651,6 +667,16 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(cal.fetches.filter(u => u.startsWith("/api/v1/planner")).length === planBefore + 1 && cal.fetches.some(u => /planner\/items\?start_date=\d{4}-\d\d-01&end_date=/.test(u)), "the next month read once from the planner"); }
   const calOff = await runContent("/calendar", null, { prefs: { calendar: false } });
   assert(!calOff.anchor.kids.some(k => k.id === "cp-cal"), "switched off: Canvas's calendar only"); ok();
+
+  // announcements with the author's photo; "Pergunte ao professor" opens Canvas's compose addressed to the teacher
+  const askRun = await runContent("/", null); await new Promise(r => setTimeout(r, 40));
+  const askSec = all(askRun.anchor).find(e => /card news ask/.test(e.className));
+  const askB = askSec && all(askSec).find(e => e.textContent === "Perguntar");
+  assert(askB && askB.href === "https://pucpr.instructure.com/conversations?user_id=7&user_name=Prof.%20Ana%20Lima&context_id=course_71306", "a Perguntar link per teacher, to Canvas's compose: " + (askB && askB.href));
+  assert(all(askSec).some(e => e.tag === "img" && e.src === "https://pucpr.instructure.com/images/thumbnails/7/ana.png"), "with the teacher's photo");
+  assert(askRun.store.teachers && askRun.store.teachers.user === 5, "read once a day, per user");
+  const again2 = await runContent("/", null, { teachers: askRun.store.teachers, cache: askRun.store.cache }, { scripts: pageEnv }); await new Promise(r => setTimeout(r, 30));
+  assert(!again2.fetches.some(u => /users\?enrollment_type/.test(u)), "not read again the same day"); ok();
 
   // course cards: our pill under Canvas's title (Canvas's own ⋮ menu untouched); courses unticked in the popup leave the dashboard
   const cd = await runContent("/", null, { hidden: [] });
@@ -739,7 +765,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!/font-family/.test(lookCss()) && !/Fraunces/.test(lookCss()), "no font forced on Canvas (InstUI sets its own; mixed families looked broken)");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()), "cards rounded");
   assert(/\.ic-DashboardCard__box__container \{ text-align:center/.test(lookCss()) && !/\.ic-DashboardCard \{ display:flex/.test(lookCss()) && !/__header_hero, \.ic-DashboardCard__header_image \{ height/.test(lookCss()), "Canvas's own card layout kept, rows only centered (no forced sizes)");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false }), "kept for the next first paint");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false, navHide: false }), "kept for the next first paint");
+  assert(!/translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()), "the left menu stays by default");
+  lk.listen.change({ prefs: { newValue: { navHide: true } } }, "local");
+  assert(/\.ic-app-header \{ transform:translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()) && /\.ic-app-header:is\(:hover, :focus-within\) \{ transform:none/.test(lookCss()) && /\.ic-Layout-wrapper \{ margin-left:10px !important/.test(lookCss()) && /:has\(#nav-tray-portal \[role="dialog"\]\) \.ic-app-header \{ transform:none/.test(lookCss()), "menu hidden: a strip that opens on hover or focus, the page takes the room");
+  lk.listen.change({ prefs: { newValue: {} } }, "local");
   assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
   assert(/:is\(#my_courses_table, #past_enrollments_table/.test(lookCss()) && /#nav-tray-portal li \{/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
@@ -789,5 +819,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed, course grades widget, calendar)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed, course grades widget, calendar, ask the teacher)");
 })().catch(e => { console.error(e); process.exit(1); });

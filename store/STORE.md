@@ -22,6 +22,9 @@ Dentro do Canvas, sem configurar nada:
 
 - **Próximos 7 dias:** no painel, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que já foi entregue e o que está atrasado;
 - **Marcar como feito:** um ✓ em cada tarefa da semana; ela fica cinza, sai dos lembretes e conta no progresso da semana (a marca fica só no seu computador, o Canvas não muda);
+- **Página de cada matéria:** cabeçalho com a cor da matéria e o professor, e abas Visão geral, Notas (com simulador), Materiais, Avisos e Anotações;
+- **Calendário do semestre:** no lugar do calendário do Canvas, mês a mês, com prazos, provas e as suas tarefas;
+- **Pergunte ao professor:** os avisos com a foto de quem escreveu e cada professor a um clique (a mensagem abre pronta na caixa de entrada do Canvas);
 - **Busca (Ctrl+K ou ⌘K):** em qualquer página do Canvas, acha matérias, tarefas e itens dos módulos de todas as matérias e abre com Enter;
 - **Notas novas:** aviso quando sai nota e um card com as últimas notas;
 - **Resumo da semana:** segunda às 8h, quantas entregas e provas vêm aí;
@@ -64,5 +67,5 @@ Projeto independente e não oficial, sem vínculo com a PUCPR nem com a Instruct
 - **notifications:** mostrar os lembretes de entregas e provas, o aviso de nota nova, o resumo da semana e o fim do timer de foco, cada um com sua chave no botão da extensão; o texto é gerado no dispositivo.
 - **downloads:** salvar, a pedido do usuário, os arquivos das matérias em Downloads/PUCPR/<matéria>/<tipo>; só endereços do Canvas da PUCPR.
 - **Código remoto:** não. Todo o código está no pacote.
-- **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma, títulos de avisos, a agenda do Canvas e os títulos dos módulos são conteúdo lido do site do Canvas; das mensagens do Canvas, só as não lidas: assunto, nomes de quem participa e data, nunca o texto (marque também "Comunicações pessoais"); o número do usuário do Canvas separa os dados de cada aluno (marque "Informações de identificação pessoal"); marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
+- **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma, títulos de avisos, a agenda do Canvas e os títulos dos módulos são conteúdo lido do site do Canvas; nome e foto de quem escreveu os avisos e dos professores das matérias (o botão Perguntar só abre a caixa de entrada do Canvas); das mensagens do Canvas, só as não lidas: assunto, nomes de quem participa e data, nunca o texto (marque também "Comunicações pessoais"); o número do usuário do Canvas separa os dados de cada aluno (marque "Informações de identificação pessoal"); marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.

@@ -48,7 +48,7 @@
   }
   // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
   const forget = async () => {
-    await chrome.storage.local.remove(["cache", "search"]);
+    await chrome.storage.local.remove(["cache", "search", "teachers", "ccolors"]);
     chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
     chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
   };
@@ -271,6 +271,24 @@
   }
 
   // Dashboard: one status pill per card of the six courses. Cards render late (React), so watch the page.
+  // The classic dashboard header (canvas-lms DashboardHeader.jsx: .ic-Dashboard-header__layout > Flex > [title item, actions]):
+  // a greeting with the student's first name (ENV.current_user in the page), the date and what is coming, in place of
+  // "Painel de controle" (still there for screen readers, CSS hides it visually).
+  const firstName = () => { for (const sc of (document.scripts || [])) { const m = /"current_user":\{[^}]*?"display_name":"([^"]+)"/.exec(sc.textContent || ""); if (m) return m[1].split(/\s+/)[0]; } return ""; };
+  const WD_FULL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  function greet(list) {
+    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null, item = layout && layout.firstElementChild && layout.firstElementChild.firstElementChild;
+    if (!item || item.querySelector(".cp-greet")) return;
+    const h = new Date().getHours(), hi = h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite", name = firstName();
+    const t = today(), soon = list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= addDays(6)), todays = soon.filter(x => x.date === t && !x.exam).length, exam = soon.find(x => x.exam);
+    const d = new Date(), date = WD_FULL[d.getDay()] + ", " + d.getDate() + " de " + MONTHS[d.getMonth()];
+    const bits = [date, todays ? todays + (todays === 1 ? " entrega hoje" : " entregas hoje") : soon.length ? soon.length + (soon.length === 1 ? " coisa nesta semana" : " coisas nesta semana") : "semana livre"];
+    if (exam) bits.push("prova " + dayLabel(exam.date) + ": " + exam.title.replace(/^Prova( do)?:? ?/i, "") + " · " + exam.course);
+    const g = el("div", "cp-greet"), big = el("div", null, hi + (name ? ", " + name : "") + "!"), sub = el("div", null, bits.join(" · "));
+    g.style.cssText = "line-height:1.2"; big.style.cssText = "font-size:30px;font-weight:650;letter-spacing:-.02em";
+    sub.style.cssText = "margin-top:6px;font-size:14px;opacity:.72"; g.append(big, sub); item.prepend(g);
+    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-greet-on");
+  }
   // Course cards: the status pill on our subjects (inside Canvas's card content, under its title) and courses the student took
   // off the dashboard (popup). Canvas's own card menu (⋮, color, nickname) stays untouched. ctx: { prefs, hidden }.
   const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
@@ -424,7 +442,7 @@
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
     h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
     .folded > h3[role=button]::before { transform:rotate(-90deg); } .folded > :not(h3) { display:none !important; } .folded > h3 { margin-bottom:0; }
-    .simi { all:unset; box-sizing:border-box; width:100%; max-width:130px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
+    .simi { all:unset; box-sizing:border-box; width:100%; max-width:180px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
     .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }
@@ -440,6 +458,23 @@
     .cday .cn { font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
     .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
+    .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
+    .av img { width:100%; height:100%; object-fit:cover; display:block; }
+    .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
+    .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
+    .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
+    .ask-b { margin-left:0 !important; color:var(--coral) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
+    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); overflow:hidden; }
+    .band-c { position:absolute; left:0; right:0; top:0; height:5px; background:var(--coral); } .htxt { flex:1; min-width:0; }
+    .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 21px/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hs { margin-top:3px; color:var(--muted); font-size:12.5px; } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
+    .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:12px; background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
+    .ctabs button { border:0; background:none; padding:6px 14px; border-radius:9px; font-size:13px; color:var(--muted); white-space:nowrap; } .ctabs button:hover:not(:disabled) { transform:none; background:var(--bg); }
+    .ctabs button[aria-selected="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
+    .cpane[hidden] { display:none; } .cpane > * + * { margin-top:10px; } .qlinks { display:flex; flex-wrap:wrap; gap:6px; } .qlinks .mini { margin:0; padding:5px 12px; font-size:12.5px; color:var(--fg); }
+    .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
+    .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:11.5px; font-weight:650; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+    .mi { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:6px 4px; border-top:1px solid var(--line); }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -812,12 +847,17 @@
       const ul = el("ul");
       for (const x of all.slice(0, 6)) {
         const li = el("li", "row" + (x.unread ? " unread" : ""));
-        li.append(x.unread ? el("span", "dot", "não lido") : el("span"), mid(x.title, x.url && x.url.startsWith(location.origin + "/") ? x.url : null, String(x.course || "").split(" (")[0]),
+        const who = el("span", "who"); who.appendChild(avatar(x.avatar, x.author || x.course, 32)); if (x.unread) who.appendChild(el("span", "dot", "não lido"));
+        li.append(who, mid(x.title, x.url && x.url.startsWith(location.origin + "/") ? x.url : null, (x.author ? x.author + " · " : "") + shortName(x.course)),
           el("span", "d", x.at ? ago(C.localISO(new Date(x.at))) : ""));
         ul.appendChild(li);
       }
       sec.appendChild(all.length ? ul : el("div", "muted", a.term ? "Nenhum aviso nos últimos 60 dias." : "Nenhuma matéria de " + TERM + " no seu Canvas."));
       foldable(sec, h, "news"); grid.appendChild(sec);
+    }
+    if (prefs.news && mode !== "foco") {   // next to the announcements: the teachers, to ask them something (loaded in the background)
+      const holder = el("div"); grid.appendChild(holder);
+      teachersOf(cache).then(list => { grid.insertBefore(askCard(list), holder); holder.remove(); }, () => holder.remove());
     }
   }
 
@@ -828,11 +868,18 @@
     if (!c && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
-    const top = el("div", "hd"); top.append(mark(), wordmark());
-    if (c) top.appendChild(el("span", "brand", "meta " + fmt(T, 0) + " · lido do Canvas " + ago(C.localISO(new Date(cache.at)))));
-    box.appendChild(top);
+    // the course hero: its Canvas color, its name, the teacher (photo, Perguntar) and when Canvas was read
+    const hero = el("div", "hero"), band = el("div", "band-c"), title = el("div", "ht"), heroSub = el("div", "hs"), teach = el("div", "hteach");
+    title.append(mark(), el("b", null, shortName(cv ? cv.name : document.title)));
+    heroSub.textContent = (c ? "meta " + fmt(T, T % 1 ? 1 : 0) + " · " : "") + "lido do Canvas " + ago(C.localISO(new Date(cache.at)));
+    const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
+    courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
+    teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;
+      const go = el("a", "mini ask-b", "Perguntar"); go.href = location.origin + "/conversations?user_id=" + encodeURIComponent(t.id) + "&user_name=" + encodeURIComponent(t.name) + "&context_id=course_" + encodeURIComponent(t.course);
+      go.title = "Abrir uma mensagem para " + t.name + " na caixa de entrada do Canvas"; teach.append(avatar(t.avatar, t.name, 34), mid(t.name, null, "professor(a)"), go); }, () => {});
     // Simular: type a grade in the items without one and see the ring, the need and the other items change (nothing is saved).
     const sim = {}; let simOn = false, paint = () => {};
+    const parts = { notas: [] }, simActs = el("div", "acts");
     if (c) {
       const headBox = el("div"), st0 = a.state(c), nx = C.nextItem(st0);
       const headCard = st => {
@@ -877,8 +924,7 @@
         }
       };
       paint();
-      box.appendChild(tbl);
-      box.appendChild(el("div", "muted src", source([c])));
+      parts.notas.push(tbl, el("div", "muted src", source([c])));
     }
     const acts = el("div", "acts"), status = el("span", "muted");
     if (prefs.files) {
@@ -904,12 +950,12 @@
         simOn = false; for (const k of Object.keys(sim)) delete sim[k]; sb.textContent = "Simular ou lançar notas"; note.hidden = save.hidden = true; status.textContent = "Notas guardadas neste computador";
         paint();
       });
-      acts.append(sb, note, save);
+      simActs.append(sb, note, save);
     }
     // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
-    const nb = el("button", null, "Anotações"), pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
+    const pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
     ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
-    pad.append(ta, saved); pad.hidden = true;
+    pad.append(ta, saved);
     let tm = 0;
     const store = async () => {
       const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
@@ -921,13 +967,88 @@
     const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || Date.now() - typed < 30000;
     chrome.storage.local.get("notes").then(({ notes }) => {
       const v = notes && notes[cache.user] && notes[cache.user][courseId];
-      if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
+      if (typeof v === "string" && v) { ta.value = v; if (btns.anot) btns.anot.textContent = "Anotações ✓"; }
     });
-    nb.addEventListener("click", () => { pad.hidden = !pad.hidden; if (!pad.hidden && ta.focus) ta.focus(); });
-    if (EXT) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
-    acts.appendChild(status); box.append(acts); if (EXT) box.appendChild(pad);
+    acts.appendChild(status);
+    // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
+    const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
+    const bar = el("div", "ctabs"), panes = {}, btns = {}; bar.setAttribute("role", "tablist");
+    const show = async (k, byClick) => {
+      for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); }
+      if (k === "materiais" && !panes.materiais.cpLoaded) { panes.materiais.cpLoaded = 1; materials(courseId, panes.materiais); }
+      if (k === "anot" && byClick && ta.focus) ta.focus();   // only when the student opens it (never on page load)
+      await chrome.storage.local.set({ ctab: k });
+    };
+    for (const [k, label] of tabs) {
+      const b = el("button", null, label); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab"); b.addEventListener("click", () => show(k, true)); bar.appendChild(b); btns[k] = b;
+      panes[k] = el("div", "cpane"); panes[k].setAttribute("role", "tabpanel"); panes[k].hidden = k !== "geral";   // no flash of every tab before the kept one is read
+    }
+    panes.geral.append(...overview(courseId, c, a, cache));
+    if (c) panes.notas.append(...parts.notas, simActs);
+    panes.materiais.appendChild(acts);
+    panes.avisos.appendChild(courseNews(cache, courseId));
+    if (EXT) panes.anot.appendChild(pad);
+    box.append(bar, ...tabs.map(([k]) => panes[k]));
+    chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
   }
 
+  // The course's color in Canvas (the user's custom colors, GET /users/self/colors), read once a day per user.
+  async function courseColor(cache, id) {
+    const { ccolors } = await chrome.storage.local.get("ccolors");
+    let map = ccolors && ccolors.user === cache.user && Date.now() - ccolors.at < 864e5 ? ccolors.map : null;
+    if (!map) { try { const r = await getAll("/api/v1/users/self/colors", 1); map = r && r.custom_colors && typeof r.custom_colors === "object" ? r.custom_colors : {}; } catch (e) { map = {}; }
+      await chrome.storage.local.set({ ccolors: { user: cache.user, at: Date.now(), map } }); }
+    const col = map["course_" + id];
+    return typeof col === "string" && /^#[0-9a-f]{3,8}$/i.test(col) ? col : null;
+  }
+  // Visão geral: what comes next in this course, its latest announcement and the shortcuts to Canvas's own pages.
+  function overview(courseId, c, a, cache) {
+    const out = [], t = today(), next = agenda(a, cache, {}).filter(x => (String(x.cid) === courseId || (c && x.ours === c)) && !fin(x) && (x.date >= t || x.late)).slice(0, 5);
+    const sec = el("section", "card news"), h = el("h3", null, "A seguir nesta matéria"); sec.appendChild(h);
+    if (next.length) { const ul = el("ul"); for (const x of next) { const li = el("li", "row");
+      li.append(el("span", "d", x.late && x.date < t ? "atrasada" : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.exam ? (x.exam.req ? need(x.exam) : "prova") : x.task ? "entrega" : "evento"),
+        el("span", "pill " + (x.late && x.date < t ? "bad" : x.exam ? "warn" : "nt"), x.late && x.date < t ? "atrasada" : x.exam ? "prova" : "a entregar")); ul.appendChild(li); } sec.appendChild(ul); }
+    else sec.appendChild(el("div", "muted", "Nada pendente nesta matéria nos próximos dias."));
+    out.push(sec);
+    const last = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
+    if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
+      li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
+      s2.append(el("h3", null, "Último aviso"), li); out.push(s2); }
+    const links = el("div", "qlinks");
+    for (const [label, path] of [["Módulos", "/modules"], ["Tarefas", "/assignments"], ["Arquivos", "/files"], ["Notas do Canvas", "/grades"], ["Avisos", "/announcements"]]) { const l = el("a", "mini", label); l.href = "/courses/" + courseId + path; links.appendChild(l); }
+    out.push(links);
+    return out;
+  }
+  // Materiais: every module and its items (one GET when the tab opens), with a filter box; the files download stays above.
+  async function materials(courseId, pane) {
+    const box = el("section", "card news mats"), q = el("input", "mq"), list = el("div"); q.type = "text"; q.placeholder = "Filtrar materiais (ex.: slides, lista 4)"; q.setAttribute("aria-label", "Filtrar materiais");
+    box.append(el("h3", null, "Módulos"), q, list); pane.appendChild(box); list.appendChild(el("div", "muted", "Lendo os módulos…"));
+    let mods = [];
+    try { mods = await getAll("/api/v1/courses/" + courseId + "/modules?include[]=items&per_page=100"); } catch (e) { list.replaceChildren(el("div", "muted", "Esta matéria não mostra os módulos.")); return; }
+    for (const m of mods) if (!m.items && m.items_count) { try { m.items = await getAll("/api/v1/courses/" + courseId + "/modules/" + m.id + "/items?per_page=100"); } catch (e) { m.items = []; } }   // big modules come without their items
+    const draw = () => {
+      const w = fold(q.value || "").trim(); let shown = 0; list.replaceChildren();
+      for (const m of mods) {
+        const items = (m.items || []).filter(it => it && it.title && it.type !== "SubHeader" && (!w || fold(it.title + " " + m.name).includes(w)));
+        if (!items.length) continue;
+        const g = el("div", "mod"); g.appendChild(el("div", "mh", String(m.name || "Módulo")));
+        for (const it of items) { const r = el("div", "mi"); r.append(el("span", "pal-k", KIND[it.type] || "item"), link(String(it.title), it.html_url && inCanvas(it.html_url))); g.appendChild(r); }
+        list.appendChild(g); shown++;
+      }
+      if (!shown) list.appendChild(el("div", "muted", w ? "Nada com esse nome." : "Sem módulos publicados."));
+    };
+    q.addEventListener("input", draw); draw();
+  }
+  // Avisos: every announcement of this course (last 60 days), with the author's photo.
+  function courseNews(cache, courseId) {
+    const sec = el("section", "card news"), all = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)));
+    sec.appendChild(el("h3", null, "Avisos da matéria"));
+    if (!all.length) { sec.appendChild(el("div", "muted", "Nenhum aviso nos últimos 60 dias.")); return sec; }
+    const ul = el("ul");
+    for (const x of all) { const li = el("li", "row" + (x.unread ? " unread" : "")), who = el("span", "who"); who.appendChild(avatar(x.avatar, x.author || "", 32)); if (x.unread) who.appendChild(el("span", "dot", "não lido"));
+      li.append(who, mid(x.title, x.url && inCanvas(x.url), x.author || ""), el("span", "d", x.at ? ago(C.localISO(new Date(x.at))) : "")); ul.appendChild(li); }
+    sec.appendChild(ul); return sec;
+  }
   async function courseFiles(id) {
     try { return await getAll("/api/v1/courses/" + id + "/files?sort=created_at&order=desc&per_page=100"); }
     catch (e) {   // Files tab hidden by the professor: the files linked in modules
@@ -1084,6 +1205,42 @@
       b.addEventListener("click", async () => { const now = hidden(), next = now.includes(id) ? now.filter(x => x !== id) : now.concat([id]); await setHidden(next); b.textContent = next.includes(id) ? "Mostrar no painel" : "Tirar do painel"; });
       box.appendChild(b); cell.appendChild(box);
     }
+  }
+
+  // A round photo (Canvas avatar URL, https only) or the initials.
+  function avatar(url, name, size) {
+    const box = el("span", "av"); box.style.width = box.style.height = (size || 28) + "px";
+    if (url && /^https:\/\//.test(url) && !/avatar-50\.png$/.test(url)) { const img = el("img"); img.src = url; img.alt = ""; img.loading = "lazy"; box.appendChild(img); }
+    else box.textContent = String(name || "?").split(" (")[0].split(" - ")[0].split(/\s+/).filter(w => /^\p{L}/u.test(w)).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
+    return box;
+  }
+  // The teachers of the term's courses (name and photo), read once a day per Canvas user: GET /courses/:id/users for teachers.
+  async function teachersOf(cache) {
+    const { teachers } = await chrome.storage.local.get("teachers");
+    if (teachers && teachers.user === cache.user && Date.now() - teachers.at < 864e5 && Array.isArray(teachers.list)) return teachers.list;
+    const list = [];
+    for (const c of cache.data.courses) {
+      try {
+        for (const u of await getAll("/api/v1/courses/" + c.id + "/users?enrollment_type[]=teacher&include[]=avatar_url&per_page=20", 1))
+          if (u && u.id && u.name && !list.some(t => t.id === u.id && t.course === c.id)) list.push({ id: u.id, name: String(u.name).slice(0, 80), avatar: typeof u.avatar_url === "string" ? u.avatar_url : null, course: c.id, courseName: shortName(c.name) });
+      } catch (e) { /* the course hides its people */ }
+    }
+    await chrome.storage.local.set({ teachers: { user: cache.user, at: Date.now(), list } });
+    return list;
+  }
+  // "Pergunte ao professor": each teacher with photo; the button opens Canvas's own compose, addressed (the inbox reads
+  // user_id, user_name and context_id from the address). Nothing is sent by Caderno+.
+  function askCard(list) {
+    const sec = el("section", "card news ask"), h = el("h3", null, "Pergunte ao professor"), ul = el("ul", "teachers");
+    sec.appendChild(h);
+    for (const t of list.slice(0, 12)) {
+      const li = el("li", "teacher"), go = el("a", "mini ask-b", "Perguntar");
+      go.href = location.origin + "/conversations?user_id=" + encodeURIComponent(t.id) + "&user_name=" + encodeURIComponent(t.name) + "&context_id=course_" + encodeURIComponent(t.course);
+      go.title = "Abrir uma mensagem para " + t.name + " na caixa de entrada do Canvas";
+      li.append(avatar(t.avatar, t.name, 36), mid(t.name, null, t.courseName), go); ul.appendChild(li);
+    }
+    sec.appendChild(list.length ? ul : el("div", "muted", "Não consegui ler os professores das matérias agora."));
+    foldable(sec, h, "ask"); return sec;
   }
 
   // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
@@ -1249,12 +1406,12 @@
       const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       gradeA = a; watchDash(); enhanceGradeCards();
-      decorateCards(a, again, ctx); hideGradeCards(ctx.hidden);
+      decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
-      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a, false, ctx), 250); });
+      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { decorateCards(a, false, ctx); greet(agenda(a, cache, marks)); }, 250); });
       watch.observe(document.body, { childList: true, subtree: true });
       setTimeout(() => watch.disconnect(), 20000);
     }

@@ -34,6 +34,19 @@
 :root.cp-look ${TB} thead th { background:var(--cp-paper) !important; color:var(--cp-muted) !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.05em; }
 :root.cp-look ${TB} :is(th, td) { padding:12px 16px !important; border-color:var(--cp-line) !important; }
 :root.cp-look ${TB} tbody tr:hover td { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }`);
+    // Menu lateral escondido: Canvas's left menu (.ic-app-header, fixed; the page leaves it room on .ic-Layout-wrapper, canvas-lms
+    // _ic_app_layout.scss) slides out leaving a thin strip, and comes back while the mouse (or the keyboard focus) is on it
+    if (cards.navHide) out.push(`@media (min-width: 768px) {
+:root .ic-app-header { transform:translateX(calc(-100% + 10px)); transition:transform .22s cubic-bezier(.23,1,.32,1) .25s, box-shadow .22s; z-index:1000 !important; }
+:root .ic-app-header::after { content:""; position:absolute; top:0; right:0; bottom:0; width:10px; background:linear-gradient(90deg, transparent, rgba(255,255,255,.18)); pointer-events:none; }
+:root .ic-app-header:is(:hover, :focus-within) { transform:none; transition-delay:0s; box-shadow:8px 0 30px -12px rgba(0,0,0,.45); }
+:root .ic-app-header:is(:hover, :focus-within)::after { opacity:0; }
+:root body:not(.no-headers):not(.content-only):not(.hide-global-nav) .ic-Layout-wrapper { margin-left:10px !important; }
+:root:has(#nav-tray-portal [role="dialog"]) .ic-app-header { transform:none; } }`);   // a tray (Cursos, Histórico...) keeps the menu out
+    // the classic dashboard header: our greeting in place of the title (kept for screen readers), calmer buttons
+    out.push(`:root.cp-greet-on .cp-greet ~ * { position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+:root.cp-greet-on .ic-Dashboard-header__layout { padding:10px 0 6px; } :root.cp-greet-on .ic-Dashboard-header__actions :is(button, a) { border-radius:999px !important; }
+:root.cp-greet-on .ic-Dashboard-header__actions [data-testid="switch-to-new-dashboard-button"] { font-size:13px !important; padding:0 14px !important; }`);
     // the left-menu trays (Cursos, Grupos, Histórico, Ajuda) in #nav-tray-portal: paper, items as small cards
     if (L) out.push(`:root.cp-look #nav-tray-portal [role="dialog"], :root.cp-look #nav-tray-portal [role="dialog"] > div { background:var(--cp-paper) !important; }
 :root.cp-look #nav-tray-portal h2 { color:var(--cp-ink) !important; letter-spacing:-.01em; }
@@ -43,6 +56,15 @@
 :root.cp-look #nav-tray-portal a { color:var(--cp-ink) !important; font-weight:600 !important; text-decoration:none !important; }
 :root.cp-look #nav-tray-portal a:hover { color:var(--cp-accent) !important; }
 :root.cp-look #nav-tray-portal li a { display:-webkit-box !important; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }`);
+    // Histórico recente tray: the item's icon in an accent chip, its course line quiet
+    if (L) out.push(`:root.cp-look #nav-tray-portal li i[class^="icon-"] { display:inline-grid; place-items:center; width:28px; height:28px; border-radius:8px; color:var(--cp-accent) !important; background:color-mix(in srgb, var(--cp-accent) 12%, transparent); }
+:root.cp-look #nav-tray-portal [id^="history_list_"] { color:var(--cp-muted) !important; margin-top:2px; }
+:root.cp-look #nav-tray-portal .time_ago_date { color:var(--cp-muted) !important; }`);
+    // Caixa de entrada (/conversations; canvas-lms ui/features/inbox data-testids): toolbar on paper, conversations as calm rows
+    if (L) out.push(`:root.cp-look [data-testid="tool-bar"] { background:var(--cp-paper) !important; border-bottom:1px solid var(--cp-line) !important; }
+:root.cp-look [data-testid="conversationListItem-Item"] { border-bottom:1px solid var(--cp-line) !important; transition:background-color .15s; }
+:root.cp-look [data-testid="conversationListItem-Item"]:hover { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }
+:root.cp-look [data-testid="last-message-content"] { color:var(--cp-muted) !important; }`);
     // Cursos page (/courses) and Grupos page: headers and spacing in our look (the tables are styled above)
     if (L) out.push(`:root.cp-look :is(.ic-Action-header, .page_header_container) { border-bottom:1px solid var(--cp-line) !important; padding-bottom:10px; margin-bottom:16px; }
 :root.cp-look :is(#my_courses_table, #past_enrollments_table, #future_enrollments_table, #my_groups_table) { margin:6px 0 26px !important; }
@@ -74,7 +96,14 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look .ic-DashboardCard:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45); }
 :root.cp-look :is(.Button, .btn, button.ui-button) { border-radius:10px; }
 :root.cp-look :is(.ic-Dashboard-header__layout, .ic-app-nav-toggle-and-crumbs, .page-header) { border-color:var(--cp-line) !important; }
-:root.cp-look #section-tabs a.active, :root.cp-look #section-tabs a:hover { border-left-color:var(--cp-accent) !important; color:var(--cp-ink) !important; }`);
+:root.cp-look #section-tabs li a { border-left:0 !important; border-radius:10px !important; padding:7px 12px !important; margin:1px 0 !important; color:var(--cp-ink) !important; transition:background-color .15s; }
+:root.cp-look #section-tabs li a:hover { background:color-mix(in srgb, var(--cp-accent) 8%, transparent) !important; text-decoration:none !important; }
+:root.cp-look #section-tabs li a.active { background:color-mix(in srgb, var(--cp-accent) 15%, transparent) !important; font-weight:650 !important; }
+:root.cp-look .context_module { border:1px solid var(--cp-line) !important; border-radius:14px !important; overflow:hidden; background:var(--cp-card) !important; margin-bottom:14px !important; box-shadow:0 1px 2px rgba(29,36,51,.05); }
+:root.cp-look .context_module > .ig-header { background:var(--cp-paper) !important; border:0 !important; border-bottom:1px solid var(--cp-line) !important; }
+:root.cp-look .context_module .ig-row { border-color:var(--cp-line) !important; transition:background-color .15s; }
+:root.cp-look .context_module_item:hover .ig-row { background:color-mix(in srgb, var(--cp-accent) 5%, transparent) !important; }
+:root.cp-look #course_show_secondary :is(.btn, .Button, a.button-sidebar-wide) { border-radius:10px !important; }`);
       if (look === "contraste") out.push(`:root.cp-look a { text-decoration:underline; } :root.cp-look .ic-DashboardCard { border-width:2px; }`);
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
@@ -108,7 +137,7 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .
   };
   const take = prefs => {
     p = cpPrefs(prefs); apply();
-    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal })); } catch (e) { /* no storage */ }
+    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal, navHide: p.navHide })); } catch (e) { /* no storage */ }
   };
   apply();
   setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);

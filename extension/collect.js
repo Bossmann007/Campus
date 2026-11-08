@@ -36,7 +36,8 @@ async function collectCanvasGrades(seen) {
     const since = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10), until = new Date(Date.now() + 864e5).toISOString().slice(0, 10);   // Canvas caps the window when end_date is left out
     const an = cs.length ? await get("/api/v1/announcements?" + cs.map(c => "context_codes[]=course_" + c.id).join("&") + "&start_date=" + since + "&end_date=" + until + "&per_page=50") : [];
     const byCode = Object.fromEntries(cs.map(c => ["course_" + c.id, c]));
-    announcements = an.slice(0, 50).map(a => ({ course: byCode[a.context_code] ? byCode[a.context_code].name : "", courseId: byCode[a.context_code] ? byCode[a.context_code].id : null, title: a.title, at: a.posted_at || null, unread: a.read_state === "unread", url: a.html_url || null }));
+    announcements = an.slice(0, 50).map(a => ({ course: byCode[a.context_code] ? byCode[a.context_code].name : "", courseId: byCode[a.context_code] ? byCode[a.context_code].id : null, title: a.title, at: a.posted_at || null, unread: a.read_state === "unread", url: a.html_url || null,
+      author: a.author && typeof a.author.display_name === "string" ? a.author.display_name.slice(0, 80) : null, avatar: a.author && typeof a.author.avatar_image_url === "string" && /^https:\/\//.test(a.author.avatar_image_url) ? a.author.avatar_image_url : null }));
   } catch (e) { announcements = null; }
   return { v: 1, courses, announcements };
   } catch (e) { return { error: String(e && e.message || e) }; }

@@ -23,7 +23,7 @@ global.fetch = async url => {
   if (url.startsWith("/api/v1/courses?")) return page([{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }]);
   if (url.startsWith("/api/v1/courses/7/assignments")) return page([{ name: "Avaliação somativa -  Prova", points_possible: 10, html_url: "https://pucpr.instructure.com/courses/7/assignments/70", score_statistics: { mean: 6.5, min: 2, max: 10 }, submission: { score: 7, workflow_state: "graded" } }], "https://pucpr.instructure.com/n2");
   if (url === "https://pucpr.instructure.com/n2") return page([{ name: "TDE - TAREFA SOMATIVA - VÍDEO", points_possible: 10, due_at: "2026-11-11T02:59:59Z", submission_types: ["on_paper"], submission: { score: null, missing: true } }]);
-  if (/^\/api\/v1\/announcements\?context_codes\[\]=course_7&start_date=\d{4}-\d\d-\d\d&end_date=\d{4}-\d\d-\d\d&/.test(url)) return page([{ context_code: "course_7", title: "Prova adiada", posted_at: "2026-11-03T15:00:00Z", read_state: "unread", html_url: "https://pucpr.instructure.com/courses/7/discussion_topics/1" }]);
+  if (/^\/api\/v1\/announcements\?context_codes\[\]=course_7&start_date=\d{4}-\d\d-\d\d&end_date=\d{4}-\d\d-\d\d&/.test(url)) return page([{ context_code: "course_7", title: "Prova adiada", posted_at: "2026-11-03T15:00:00Z", read_state: "unread", html_url: "https://pucpr.instructure.com/courses/7/discussion_topics/1", author: { display_name: "Prof. Ana", avatar_image_url: "https://pucpr.instructure.com/images/thumbnails/1/ana.png" } }]);
   throw new Error("unexpected " + url);
 };
 const collect = new Function(fs.readFileSync(path.join(dir, "core.js"), "utf8") + "\n" + fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();   // the term label comes from the core
@@ -33,7 +33,7 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert.deepStrictEqual(seen.courses, [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }], "the course list is handed back, so the caller does not fetch it again");
   assert.deepStrictEqual(out, { v: 1, courses: [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
     { name: "Avaliação somativa -  Prova", points: 10, url: "https://pucpr.instructure.com/courses/7/assignments/70", score: 7, due: null, missing: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, url: null, score: null, due: "2026-11-11T02:59:59Z", missing: true, submitted: false, online: false, stats: null }] }],
-    announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", courseId: 7, title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1" }] });
+    announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", courseId: 7, title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1", author: "Prof. Ana", avatar: "https://pucpr.instructure.com/images/thumbnails/1/ana.png" }] });
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
@@ -65,6 +65,10 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
   assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
   assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
+  store.cache = Object.assign({}, store.cache, { user: 5 });
+  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "quanto-falta", grades: { "imp:pbl09": "8", "abd:s3": "0,9", "x y": "1" } }) }];
+  await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
+  assert(store.hand[5]["imp:pbl09"] === "8" && store.hand[5]["abd:s3"] === "1" && !store.hand[5]["x y"], "the site calculator's backup becomes this student's grades (ones already there win)");
   assert(/id="refresh"/.test(html), "popup has the Atualizar agora button");
   await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.cache.at, 0, "reading marked old"); assert.strictEqual(store.refreshing, undefined, "no read lock left"); assert.match(pel("status").textContent, /Atualiza/, "says what happens next");

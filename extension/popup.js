@@ -47,6 +47,13 @@ if (location.hash === "#tab") document.body.classList.add("tab");
 $("importFile").addEventListener("change", async () => {
   const f = $("importFile").files && $("importFile").files[0]; if (!f) return;
   let d; try { d = JSON.parse(await f.text()); } catch (e) { d = null; }
+  if (d && d.app === "quanto-falta" && d.grades && typeof d.grades === "object") {   // the site calculator's backup: its grades become this student's own
+    const { cache, hand = {} } = await chrome.storage.local.get(["cache", "hand"]), user = cache && cache.user;
+    if (!user) { $("status").textContent = "Abra o Canvas uma vez antes de importar esse backup."; return; }
+    const mine = Object.assign({}, hand[user]);
+    for (const [k, v] of Object.entries(d.grades)) if (/^[a-z0-9]+:[a-z0-9]+$/.test(k) && typeof v === "string" && v.length <= 12 && mine[k] == null) mine[k] = v;
+    await chrome.storage.local.set({ hand: Object.assign({}, hand, { [user]: mine }) }); $("status").textContent = "Notas do site importadas. Recarregue o Canvas."; return;
+  }
   if (!d || d.app !== "caderno-plus") { $("status").textContent = "Esse arquivo não é um backup do Caderno+."; return; }
   // merged per Canvas user (other students on this computer keep theirs); only well-formed values
   const str = (v, n) => typeof v === "string" && v.length <= n, iso = v => typeof v === "string" && /^\d{4}-\d\d-\d\d$/.test(v), obj = v => v && typeof v === "object" && !Array.isArray(v);
