@@ -25,16 +25,17 @@ global.fetch = async url => {
   if (/^\/api\/v1\/announcements\?context_codes\[\]=course_7&start_date=\d{4}-\d\d-\d\d&end_date=\d{4}-\d\d-\d\d&/.test(url)) return page([{ context_code: "course_7", title: "Prova adiada", posted_at: "2026-11-03T15:00:00Z", read_state: "unread", html_url: "https://pucpr.instructure.com/courses/7/discussion_topics/1" }]);
   throw new Error("unexpected " + url);
 };
-const collect = new Function(fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();
+const collect = new Function(fs.readFileSync(path.join(dir, "core.js"), "utf8") + "\n" + fs.readFileSync(path.join(dir, "collect.js"), "utf8") + "\nreturn collectCanvasGrades;")();   // the term label comes from the core
 const app = fs.readFileSync(path.join(dir, "app.html"), "utf8");
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(app) && !/\son\w+=/.test(app), "calculator page in the extension: no inline script or handler (MV3)");
 assert(/default-src 'none'; script-src 'self';/.test(app) && !/script-src[^;"]*unsafe-inline/.test(app), "calculator page: scripts from the package only, network blocked");
 assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.html"], matches: ["https://pucpr.instructure.com/*"] }], "only the calculator page can be framed, only by the PUCPR Canvas");
 (async () => {
-  const out = await collect();
-  assert.deepStrictEqual(out, { v: 1, courses: [{ name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
+  const seen = {}, out = await collect(seen);
+  assert.deepStrictEqual(seen.courses, [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }], "the course list is handed back, so the caller does not fetch it again");
+  assert.deepStrictEqual(out, { v: 1, courses: [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
     { name: "Avaliação somativa -  Prova", points: 10, score: 7, due: null, missing: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, score: null, due: "2026-11-11T02:59:59Z", missing: true, submitted: false, online: false, stats: null }] }],
-    announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1" }] });
+    announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", courseId: 7, title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1" }] });
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
@@ -42,5 +43,14 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["app.ht
   const landing = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   assert(landing.includes('href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip"'), "download link matches scripts/package-extension");
   assert(/cp "\$out" dist\/quanto-falta-extension\.zip/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "package script writes the stable name");
+  // popup: "Atualizar agora" marks the last reading as old, so the next Canvas page reads everything again
+  const els = {}, store = { cache: { at: Date.now(), user: 5, data: { courses: [] } }, refreshing: Date.now() };
+  const pel = id => els[id] || (els[id] = { id, value: "", textContent: "", listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
+  const pchrome = { runtime: { getManifest: () => manifest, getURL: f => f }, tabs: { create() {} },
+    storage: { local: { get: async k => ({ [k]: store[k] }), set: async o => { Object.assign(store, o); }, remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
+  new Function("document", "chrome", fs.readFileSync(path.join(dir, "prefs.js"), "utf8") + fs.readFileSync(path.join(dir, "popup.js"), "utf8"))({ getElementById: pel, querySelectorAll: () => [] }, pchrome);
+  assert(/id="refresh"/.test(html), "popup has the Atualizar agora button");
+  await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
+  assert.strictEqual(store.cache.at, 0, "reading marked old"); assert.strictEqual(store.refreshing, undefined, "no read lock left"); assert.match(pel("status").textContent, /Atualiza/, "says what happens next");
   console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, calculator page without inline scripts, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });

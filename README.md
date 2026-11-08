@@ -8,12 +8,12 @@ Campus+ é uma extensão do Chrome, Brave e Edge que roda dentro do Canvas da PU
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos marcados.
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova.
 - **Tema escuro** (ou igual ao sistema).
-- **Quanto falta:** em cada card e em cada matéria, quanto você precisa tirar nas próximas avaliações, com os pesos dos Planos de Ensino.
+- **Quanto falta:** em cada card e em cada matéria, quanto você precisa tirar nas próximas avaliações, com os pesos dos Planos de Ensino. As regras são de uma turma só (Ciência da Computação, manhã, 2026/2), reconhecida pelo número da matéria no Canvas; em outras turmas o Campus+ mostra a semana, os avisos, os lembretes das tarefas do Canvas e os arquivos, sem as notas. Depois de 31/01/2027 as regras de 2026/2 saem do ar até a versão do próximo semestre. Não é oficial: "garantido" vale pelas notas lançadas, sem frequência nem recuperação.
 - **Arquivos:** baixa os arquivos da matéria organizados em `Downloads/PUCPR/<matéria>/<tipo>/`.
 - **Ícone:** os dias até a próxima prova.
 - **Calculadora completa** (o módulo Quanto falta: meta, calendário, notas à mão, backup): no item **Campus+** do menu lateral do Canvas, já com as notas lidas; o botão "Abrir no Campus+" de cada matéria abre direto nela.
 
-Cada parte pode ser desligada no botão da extensão. Sem senha, sem token e sem servidor: tudo fica no seu navegador ([privacidade](https://falta-quanto.vercel.app/privacidade.html)).
+Cada parte pode ser desligada no botão da extensão; o botão "Atualizar agora" faz a próxima página do Canvas ler tudo de novo. Num computador compartilhado, as notas da calculadora ficam separadas por usuário do Canvas. O Feedback abre uma issue pública no GitHub: não escreva nome, RA nem notas. Sem senha, sem token e sem servidor: tudo fica no seu navegador ([privacidade](https://falta-quanto.vercel.app/privacidade.html)).
 
 **Instalar:** baixe o zip em https://falta-quanto.vercel.app, descompacte, abra `chrome://extensions`, ligue o modo do desenvolvedor e use "Carregar sem compactação" na pasta.
 
@@ -35,7 +35,10 @@ Campus+ for PUCPR 2026/2: a Chrome MV3 extension that runs on the PUCPR Canvas, 
   - `prefs.js` (settings defaults) and `theme.js` (dark theme) run at `document_start`; `collect.js`, `core.js`, `files.js`, `content.js` at `document_idle`. Both groups share one content-script scope, so no top-level name may repeat.
   - `content.js`: dashboard panel (week from `/api/v1/planner/items` plus our exams; announcements), card pills, course panel, files download, reminders list. Panels are shadow-DOM, built with `textContent` only.
   - `background.js`: downloads (Canvas URLs only, into `Downloads/PUCPR`), reminder alarms and notifications, the icon badge.
-  - `popup.*`: settings per module, the last reading time, and buttons to open the calculator or Canvas.
+  - `popup.*`: settings per module, the last reading time, buttons to open the calculator or Canvas, and "Atualizar agora" (marks the last reading old; the next Canvas page reads again).
+  - Turma and term: `CANVAS[subject].cid` in the core is the Canvas course id of the one turma the rules are for; `subjectOf` pairs by id (name prefix only for data without ids: old backups, old exports). `TERM` ("2026 / 2", the collector's filter) and `TERM_END` ("2027-01-31") are the only places the semester lives; after `TERM_END` the grade parts hide.
+  - Canvas calls per page: the user is confirmed before any reading is shown (the id in the page, `ENV.current_user_id`, else one `/users/self`); another user's reading is dropped first; login/logout pages forget the reading. The reading is cached 10 min and one tab reads at a time ("refreshing" lock, 1 min). Dashboard with one course: cold 5 calls (was 6), or 4 with the id in the page; warm 1, or 0 with the id (was 1); reading over 10 min old 5, or 4 with the id (was 6).
+  - The calculator's `localStorage` key carries the Canvas user inside the extension (`storageKey`, with a one-time move of the old unkeyed value).
   - History: since 0.7 it runs on `pucpr.instructure.com` pages (`content.js`): a status pill on each dashboard card, a panel on course pages with the next assessments and what each needs, a files download into `Downloads/PUCPR/<course>/<kind>/` (`files.js`, rules from the PUCPR bot's `canvas_files.py`), and the days to the next exam on the icon (`background.js`).
   - 1.0 renames it **Campus+**, a Canvas improvement where the grade calculator is one module: the week (Canvas planner deadlines plus our exams) and all announcements on the dashboard, reminders (`notifications`, alarms 1 day and 1 hour before), a dark theme (`theme.js`, document_start), and a settings popup to turn each part off (`prefs.js`, `chrome.storage.local` "prefs").
   - `extension/core.js` is generated from `app.html`'s core block by `scripts/sync-ext-core`; `tests/inside-canvas-test.js` fails when it is stale.

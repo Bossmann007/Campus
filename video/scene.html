@@ -50,27 +50,27 @@ const iso = n => { const d = new Date(Date.now() + n * 864e5); return d.getFullY
 const atd = (n, h, m) => new Date(iso(n) + "T" + String(h).padStart(2, "0") + ":" + String(m || 0).padStart(2, "0") + ":00").toISOString();
 const store = { prefs: { theme: "off", remind: false } };
 window.chrome = { runtime: { getManifest: () => ({ version: "1.0.0" }), getURL: f => "/extapp/" + f, sendMessage: async () => ({ ok: true }) },
-  storage: { local: { get: async k => ({ [k]: store[k] }), set: async o => { Object.assign(store, o); }, remove: async k => { delete store[k]; } }, onChanged: { addListener() {} } } };
+  storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => { Object.assign(store, o); }, remove: async k => { [].concat(k).forEach(x => delete store[x]); } }, onChanged: { addListener() {} } } };
 const N = { imp: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem", abd: "Arquitetura de Banco de Dados (Turma 2º B) - 2026 / 2º Sem", rpnd: "Resolução de Problemas de Natureza Discreta - 2026 / 2º Sem",
   web: "Programação WEB (Turma B) - 2026 / 2º Sem", etica: "Ética - 2026 / 2º Sem", cscf: "Conectividade em Sistemas Ciberfísicos - 2026 / 2º Sem" };
-const ID = { imp: 11, abd: 12, rpnd: 13, web: 14, etica: 15, cscf: 16 };
+const ID = { imp: 72009, abd: 71306, rpnd: 72005, web: 71310, etica: 72006, cscf: 72011 };   // Canvas course ids of the turma the rules are for (NotasCore.CANVAS cid)
 const G = (name, pts, score, extra) => Object.assign({ name, points_possible: pts, submission: score == null ? { score: null } : { score, workflow_state: "graded" } }, extra || {});
-const AS = { 11: [G("TDE 1", 10, 9), G("TDE 2", 10, 8), G("PBL01", 10, 9), G("PBL02", 10, 8.5), G("PBL03", 10, 9), G("PBL04", 10, 10), G("PBL05", 10, 7), G("Prova do RA1", 10, 6.5), G("PBL06", 10, 9), G("PBL07", 10, 8), G("PBL08", 10, null), G("PBL09", 10, null), G("PBL10", 10, null)],
-  12: [G("PjBL - Parte 1", 1, 1), G("Avaliação somativa RA1", 1.25, 1), G("PjBL - Parte 2", 2, 1.8), G("Avaliação somativa RA2", 3, 2.2), G("Pjbl Parte 3", 1, null)],
-  13: [G("AS 01", 0.5, 0.5), G("AS 02", 0.5, 0.4), G("AS 03", 1, 1), G("AS 04", 1, 0.8), G("AS 05", 7, 5.5), G("AS 06", 1.5, 1.2), G("AS 07", 1.5, null)],
-  14: [G("Avaliação Somativa RA1 - GRUPO B e GRUPO A", 10, 7), G("Entrega TDE", 10, null, { submission: { score: null, missing: true } })],
-  15: [G("Aula 4 - TAREFA SOMATIVA", 10, 9), G("Aula 7 - TAREFA SOMATIVA", 10, 8), G("Avaliação somativa -  Prova", 10, 7), G("TDE - TAREFA SOMATIVA - VÍDEO", 3, null)],
-  16: [G("AS01 - NOTAS", 0, 5), G("Projeto CSCF", 10, null)] };
+const AS = { 72009: [G("TDE 1", 10, 9), G("TDE 2", 10, 8), G("PBL01", 10, 9), G("PBL02", 10, 8.5), G("PBL03", 10, 9), G("PBL04", 10, 10), G("PBL05", 10, 7), G("Prova do RA1", 10, 6.5), G("PBL06", 10, 9), G("PBL07", 10, 8), G("PBL08", 10, null), G("PBL09", 10, null), G("PBL10", 10, null)],
+  71306: [G("PjBL - Parte 1", 1, 1), G("Avaliação somativa RA1", 1.25, 1), G("PjBL - Parte 2", 2, 1.8), G("Avaliação somativa RA2", 3, 2.2), G("Pjbl Parte 3", 1, null)],
+  72005: [G("AS 01", 0.5, 0.5), G("AS 02", 0.5, 0.4), G("AS 03", 1, 1), G("AS 04", 1, 0.8), G("AS 05", 7, 5.5), G("AS 06", 1.5, 1.2), G("AS 07", 1.5, null)],
+  71310: [G("Avaliação Somativa RA1 - GRUPO B e GRUPO A", 10, 7), G("Entrega TDE", 10, null, { submission: { score: null, missing: true } })],
+  72006: [G("Aula 4 - TAREFA SOMATIVA", 10, 9), G("Aula 7 - TAREFA SOMATIVA", 10, 8), G("Avaliação somativa -  Prova", 10, 7), G("TDE - TAREFA SOMATIVA - VÍDEO", 3, null)],
+  72011: [G("AS01 - NOTAS", 0, 5), G("Projeto CSCF", 10, null)] };
 const P = (id, t, day, h, m, course, extra) => Object.assign({ plannable_type: "assignment", plannable_id: id, plannable: { title: t }, plannable_date: atd(day, h, m), context_name: N[course], course_id: ID[course],
   html_url: "/courses/" + ID[course] + "/assignments/" + id, submissions: {} }, extra || {});
 const PLAN = [P(1, "Relatório de redes", -2, 23, 59, "cscf", { submissions: { missing: true } }), P(2, "Lista 6: ponteiros e structs", -1, 18, 0, "imp", { submissions: { missing: true } }),
   P(3, "Quiz 7", 0, 12, 0, "etica", { submissions: { submitted: true } }), P(4, "Lista 4: subconsultas", 0, 23, 59, "abd"), P(5, "PBL08 arquivos binários", 1, 23, 59, "imp"),
   P(6, "Fórum: dilemas éticos", 1, 20, 0, "etica"), P(7, "Entrega PjBL - Parte 3", 2, 23, 59, "abd"), P(8, "Monitoria de WEB", 3, 19, 0, "web", { plannable_type: "calendar_event", submissions: false }),
   P(9, "Formulário PHP + MySQL", 4, 23, 59, "web"), P(10, "Questionário AS07", 4, 21, 0, "rpnd", { submissions: { graded: true } }), P(11, "Leitura cap. 5", 6, 8, 0, "etica")];
-const ANN = [{ context_code: "course_12", title: "RA3: sala alterada para o bloco 8", posted_at: atd(0, 9), read_state: "unread", html_url: location.origin + "/courses/12/discussion_topics/1" },
-  { context_code: "course_14", title: "Material da aula 12 publicado", posted_at: atd(-1, 15), read_state: "unread", html_url: location.origin + "/courses/14/discussion_topics/2" },
-  { context_code: "course_11", title: "Grupos do PBL atualizados", posted_at: atd(-3, 10), read_state: "read", html_url: location.origin + "/courses/11/discussion_topics/3" },
-  { context_code: "course_15", title: "Leitura recomendada para sexta", posted_at: atd(-5, 10), read_state: "read", html_url: location.origin + "/courses/15/discussion_topics/4" }];
+const ANN = [{ context_code: "course_71306", title: "RA3: sala alterada para o bloco 8", posted_at: atd(0, 9), read_state: "unread", html_url: location.origin + "/courses/71306/discussion_topics/1" },
+  { context_code: "course_71310", title: "Material da aula 12 publicado", posted_at: atd(-1, 15), read_state: "unread", html_url: location.origin + "/courses/71310/discussion_topics/2" },
+  { context_code: "course_72009", title: "Grupos do PBL atualizados", posted_at: atd(-3, 10), read_state: "read", html_url: location.origin + "/courses/72009/discussion_topics/3" },
+  { context_code: "course_72006", title: "Leitura recomendada para sexta", posted_at: atd(-5, 10), read_state: "read", html_url: location.origin + "/courses/72006/discussion_topics/4" }];
 const R = b => new Response("while(1);" + JSON.stringify(b), { headers: { "Content-Type": "application/json" } });
 const realFetch = window.fetch;
 window.fetch = async u => { u = String(u);
@@ -104,7 +104,7 @@ history.replaceState(null, "", "/");   // the Canvas dashboard path, so content.
     <div class="cv"><div class="scroller" id="scroller">
       <h1 class="pg" id="pgtitle">Painel</h1>
       <div id="content">
-        <div class="ic-DashboardCard"><i style="background:#5B7FA6"></i><a href="/courses/11">Programação Imperativa</a></div><div class="ic-DashboardCard"><i style="background:#8A6FB0"></i><a href="/courses/12">Arquitetura de Banco de Dados</a></div><div class="ic-DashboardCard"><i style="background:#3F8F86"></i><a href="/courses/13">Resolução de Problemas</a></div>
+        <div class="ic-DashboardCard"><i style="background:#5B7FA6"></i><a href="/courses/72009">Programação Imperativa</a></div><div class="ic-DashboardCard"><i style="background:#8A6FB0"></i><a href="/courses/71306">Arquitetura de Banco de Dados</a></div><div class="ic-DashboardCard"><i style="background:#3F8F86"></i><a href="/courses/72005">Resolução de Problemas</a></div>
       </div></div></div>
   </div>
 </div>
@@ -152,9 +152,9 @@ at(5900, () => { const n = $("cp-nav"); if (n) { const p = center(n); click(p.x,
 at(6300, () => move(820, 520, 900));
 // 3. a course page: the ring and the grades table; "Abrir no Campus+" opens that subject
 at(10200, () => {
-  history.replaceState(null, "", "/courses/12"); const old = $("cp-app"); if (old) old.remove(); const d = $("cp-dash"); if (d) d.remove();
+  history.replaceState(null, "", "/courses/71306"); const old = $("cp-app"); if (old) old.remove(); const d = $("cp-dash"); if (d) d.remove();
   $("nav-dash").classList.remove("on"); $("nav-courses").classList.add("on");
-  $("tabt").textContent = "Arquitetura de Banco de Dados"; $("url").textContent = "pucpr.instructure.com/courses/12";
+  $("tabt").textContent = "Arquitetura de Banco de Dados"; $("url").textContent = "pucpr.instructure.com/courses/71306";
   sy = 0; $("scroller").style.transform = "none";
   $("scroller").innerHTML = '<div class="crumbs">Arquitetura de Banco de Dados &rsaquo; <span>Página inicial</span></div><div class="course"><nav class="cnav"><b>Página inicial</b><br>Avisos<br>Tarefas<br>Notas<br>Pessoas<br>Módulos<br>Arquivos</nav>' +
     '<div id="content"><div class="mods"><div>Módulo 1: Modelagem</div><div>Aula 1: Modelo entidade-relacionamento</div><div>Aula 2: Normalização</div></div></div></div>';

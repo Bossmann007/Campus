@@ -19,5 +19,12 @@ chrome.storage.local.get("cache").then(({ cache }) => {
   const d = new Date(cache.at), n = cache.data.courses ? cache.data.courses.length : 0;
   $("status").textContent = n + " matérias lidas do Canvas às " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + ".";
 });
+// Atualizar agora: the last reading counts as old (and no tab holds the read lock), so the next Canvas page reads everything.
+$("refresh").addEventListener("click", async () => {
+  const { cache } = await chrome.storage.local.get("cache");
+  if (cache) await chrome.storage.local.set({ cache: Object.assign({}, cache, { at: 0 }) });
+  await chrome.storage.local.remove("refreshing");
+  $("status").textContent = "Atualiza ao abrir ou recarregar uma página do Canvas.";
+});
 $("open").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
 $("canvas").addEventListener("click", () => chrome.tabs.create({ url: "https://pucpr.instructure.com/" }));

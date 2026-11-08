@@ -83,6 +83,7 @@
   .fbform { padding:20px 22px; display:grid; gap:10px; }
   .fbform h2 { margin:0; font-size:17px; letter-spacing:-.01em; }
   .fbform p { margin:0; font-size:13.5px; } .fbform .fine { font-size:12.5px; }
+  .fbform .fbwarn { padding:8px 10px; border-radius:8px; background:var(--warn-soft); color:var(--warn-ink); font-size:13px; }
   .fbform textarea { font-family:var(--sans); font-size:14px; }
   button, .btn { font:inherit; font-size:13px; font-weight:500; color:var(--txt); background:var(--surface); border:1px solid var(--line);
                  border-radius:10px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
@@ -247,6 +248,7 @@
   .bar .m { width:2px; background:var(--txt); }
   .msg { font-size:13px; padding:9px 12px; border-radius:8px; }
   .detail > .msg { margin:14px 18px 0; }
+  .msg.termover { margin:16px 0 0; }
   .detail { display:none; border-top:1px solid var(--line); }
   .card.open .detail { display:block; }
   .formula { padding:12px 18px 0; color:var(--muted); font-size:12.5px; }
@@ -575,7 +577,8 @@
     <h2 id="fbtitle">Feedback para o Enzo</h2>
     <p class="muted">O que você mudaria, uma ideia ou algo que deu errado. A mensagem abre pronta no GitHub do projeto; lá é só clicar em <b>Create</b>.</p>
     <textarea id="fbtext" rows="5" maxlength="1200" placeholder="Ex.: queria ver a média geral do semestre" aria-label="Sua mensagem"></textarea>
-    <p class="muted fine">Precisa de uma conta no GitHub (é grátis). A mensagem fica pública: não escreva notas, tokens nem dados pessoais.</p>
+    <p class="fbwarn" role="note"><b>Vira uma issue pública no GitHub: não escreva nome, RA nem notas.</b></p>
+    <p class="muted fine">Precisa de uma conta no GitHub (é grátis). Também não cole tokens nem outros dados pessoais.</p>
     <div class="acts"><button id="fbsend" class="btn primary" type="button">Abrir no GitHub</button><button class="btn" value="cancel">Cancelar</button></div>
   </form>
 </dialog>
@@ -711,22 +714,34 @@ const NotasCore = (() => {
     return g;
   }
 
+  // The rules are for one turma: Ciência da Computação, manhã, 2026/2. cid = its Canvas course id; other turmas (same course
+  // names, other ids) get no grades from these rules. TERM is how Canvas names the semester; after TERM_END the rules are old.
+  const TERM = "2026 / 2", TERM_END = "2027-01-31", TURMA = "Ciência da Computação, manhã";
+  const expired = today => today > TERM_END;
+  const EXPIRED_NOTE = "As regras de " + TERM.replace(/ /g, "") + " acabaram. Atualize o Campus+ quando sair a versão do próximo semestre.";
+  // The calculator inside the extension (cpExt = window.CP_EXT): after the term, the notice and no automatic import of the
+  // Canvas reading. Site copy (no cpExt): unchanged.
+  const extBoot = (cpExt, today) => ({ notice: cpExt && expired(today) ? EXPIRED_NOTE : null, autoImport: !!(cpExt && cpExt.data) && !expired(today) });
   // Canvas assignment names per item (canvas/mapping.json, read from one 2026/2 turma on 2026-11-04).
   // one: one assignment; avg: mean of score/points over all parts; sum: (each part on 0-10) summed times factor, already in the item's scale; pts: scale to use when Canvas lists 0 points; missing ids are typed by hand.
   const CANVAS = {
-    imp:   { match:"Programação Imperativa", items:{ ex1:{ avg:["TDE 1:", "TDE 2:", "PBL01", "PBL02", "PBL03", "PBL04", "PBL05"] }, p1:{ one:"Prova do RA1" },
+    imp:   { cid:72009, match:"Programação Imperativa", items:{ ex1:{ avg:["TDE 1:", "TDE 2:", "PBL01", "PBL02", "PBL03", "PBL04", "PBL05"] }, p1:{ one:"Prova do RA1" },
              ex2:{ avg:["PBL06", "PBL07", "PBL08", "PBL09", "PBL10"] }, t2:{ one:"Trabalho do RA2" }, p2:{ one:"Prova do RA2" } } },
-    abd:   { match:"Arquitetura de Banco de Dados", items:{ pj1:{ one:"PjBL - Parte 1" }, s1:{ one:"Avaliação somativa RA1" }, pj2:{ one:"PjBL - Parte 2" },
+    abd:   { cid:71306, match:"Arquitetura de Banco de Dados", items:{ pj1:{ one:"PjBL - Parte 1" }, s1:{ one:"Avaliação somativa RA1" }, pj2:{ one:"PjBL - Parte 2" },
              s2:{ one:"Avaliação somativa RA2" }, pj3:{ one:"Pjbl Parte 3" }, s3:{ one:"Avaliação somativa RA3" } } },
-    rpnd:  { match:"Resolução de Problemas de Natureza Discreta", items:{ as1:{ one:"AS 01" }, as2:{ one:"AS 02" }, as3:{ one:"AS 03" }, as4:{ one:"AS 04" },
+    rpnd:  { cid:72005, match:"Resolução de Problemas de Natureza Discreta", items:{ as1:{ one:"AS 01" }, as2:{ one:"AS 02" }, as3:{ one:"AS 03" }, as4:{ one:"AS 04" },
              as5:{ one:"AS 05" }, as6:{ one:"AS 06" }, as7:{ one:"AS 07" }, as8:{ one:"AS 08" } } },
-    web:   { match:"Programação WEB", items:{ p1:{ one:"Avaliação Somativa RA1 - GRUPO B e GRUPO A" }, tde:{ one:"Entrega TDE" } } },
-    etica: { match:"Ética", items:{ ra1:{ sum:["Aula 4 - TAREFA SOMATIVA", "Aula 7 - TAREFA SOMATIVA", "Avaliação somativa -  Prova"], factor:7 / 30 },
+    web:   { cid:71310, match:"Programação WEB", items:{ p1:{ one:"Avaliação Somativa RA1 - GRUPO B e GRUPO A" }, tde:{ one:"Entrega TDE" } } },
+    etica: { cid:72006, match:"Ética", items:{ ra1:{ sum:["Aula 4 - TAREFA SOMATIVA", "Aula 7 - TAREFA SOMATIVA", "Avaliação somativa -  Prova"], factor:7 / 30 },
              ra2:{ one:"TDE - TAREFA SOMATIVA - VÍDEO" } } },
-    cscf:  { match:"Conectividade em Sistemas Ciberfísicos", items:{ as1:{ one:"AS01 - NOTAS", pts:10 }, pj:{ one:"Projeto CSCF" } } }
+    cscf:  { cid:72011, match:"Conectividade em Sistemas Ciberfísicos", items:{ as1:{ one:"AS01 - NOTAS", pts:10 }, pj:{ one:"Projeto CSCF" } } }
   };
   const str = x => typeof x === "string" ? x : null;
   const num = x => typeof x === "number" && Number.isFinite(x) ? x : null;
+  const cidOf = x => typeof x === "number" && Number.isInteger(x) && x > 0 ? x : typeof x === "string" && /^\d{1,15}$/.test(x) ? Number(x) : null;
+  // The subject of one Canvas course ({ id, name }): by course id when the data has ids; by name prefix only for data without
+  // ids (old backups, older exports).
+  const subjectOf = (cv, byId) => COURSES.find(c => CANVAS[c.id] && (byId ? cidOf(cv.id) === CANVAS[c.id].cid : typeof cv.name === "string" && cv.name.startsWith(CANVAS[c.id].match))) || null;
   // Extension export -> { grades: {"course:item": "x"}, missing: [{key, reason}], notes: [{key, reason}] }. Never evaluates input.
   function fromCanvas(input) {
     let data = input;
@@ -734,15 +749,16 @@ const NotasCore = (() => {
     if (!data || typeof data !== "object" || !Array.isArray(data.courses)) throw new Error("formato inválido: falta a lista de matérias");
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
-      return { name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
+      return { id:cidOf(c.id), name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
         due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
         submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false,
         stats:a.stats && typeof a.stats === "object" && [a.stats.mean, a.stats.min, a.stats.max].every(x => num(x) !== null) ? { mean:a.stats.mean, min:a.stats.min, max:a.stats.max } : null })) };
     });
+    const byId = courses.some(cv => cv.id !== null);
     // Assignments Canvas marks as missing (due date passed, nothing handed in), in any 2026/2 course, oldest first.
     const pending = [];
     for (const cv of courses) {
-      const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
+      const ours = subjectOf(cv, byId);
       for (const a of cv.assignments) if (a.missing) pending.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
     }
     pending.sort((x, y) => (x.due || "9") < (y.due || "9") ? -1 : (x.due || "9") > (y.due || "9") ? 1 : 0);
@@ -750,7 +766,7 @@ const NotasCore = (() => {
     // Not handed in yet and not late: everything with a due date, soonest first; the page keeps the next two weeks.
     const todo = [];
     for (const cv of courses) {
-      const ours = COURSES.find(c => CANVAS[c.id] && cv.name.startsWith(CANVAS[c.id].match));
+      const ours = subjectOf(cv, byId);
       for (const a of cv.assignments) if (a.hasSub && !a.submitted && !a.missing && !a.offline && a.due) todo.push({ course:ours ? ours.id : null, courseName:cv.name.split(" (")[0].split(" - ")[0], name:a.name, due:a.due });
     }
     todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
@@ -758,7 +774,7 @@ const NotasCore = (() => {
     const knownStats = Array.isArray(data.courses) && data.courses.some(c => c && Array.isArray(c.assignments) && c.assignments.some(a => a && "stats" in a));
     const grades = {}, missing = [], notes = [];
     for (const c of COURSES) {
-      const map = CANVAS[c.id], cvs = map ? courses.filter(x => x.name.startsWith(map.match)) : [], cv = cvs.length === 1 ? cvs[0] : null;
+      const map = CANVAS[c.id], cvs = map ? courses.filter(x => subjectOf(x, byId) === c) : [], cv = cvs.length === 1 ? cvs[0] : null;
       for (const it of c.items) {
         const k = key(c, it), rule = map && map.items[it.id];
         if (!rule) { missing.push({ key:k, reason:"lance à mão: não há uma avaliação equivalente no Canvas" }); continue; }
@@ -783,7 +799,7 @@ const NotasCore = (() => {
     const ext = data.ext === "script" || data.ext === "bookmarklet" || (str(data.ext) !== null && /^\d+(\.\d+){0,3}$/.test(data.ext)) ? data.ext : null;   // "script": tools/canvas-export.py
     // Announcements: plain text only; links kept only when they point into the PUCPR Canvas.
     const news = !Array.isArray(data.announcements) ? null : data.announcements.filter(a => a && str(a.title) !== null).slice(0, 50).map(a => {
-      const cn = str(a.course) || "", ours = COURSES.find(c => CANVAS[c.id] && cn.startsWith(CANVAS[c.id].match));
+      const cn = str(a.course) || "", ours = "courseId" in a ? subjectOf({ id:a.courseId }, true) : subjectOf({ name:cn }, false);
       const url = str(a.url) !== null && /^https:\/\/pucpr\.instructure\.com\//.test(a.url) ? a.url : null;
       return { course:ours ? ours.id : null, courseName:cn.split(" (")[0].split(" - ")[0], title:a.title.slice(0, 200),
                at:str(a.at) !== null && !Number.isNaN(Date.parse(a.at)) ? localISO(new Date(a.at)) : null, unread:a.unread === true, url };
@@ -793,7 +809,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "1.0.0";
+  const EXT_LATEST = "1.0.1";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -821,6 +837,19 @@ const NotasCore = (() => {
     }
     return { grades, missing, notes, meta: typeof d.meta === "string" ? d.meta : null };
   }
+  // localStorage key of the calculator: per Canvas user inside the extension (a shared computer keeps each student's grades
+  // apart); the first user to open it adopts grades saved before the key had a user, and the old key is never written there
+  // again. Inside the extension without a user (no Canvas reading): a key of its own that nobody adopts. Site copy: the old key.
+  const STORE = "notas-pucpr-2026-2";
+  function storageKey(ls, user, inExt) {
+    const u = user != null && /^\d{1,20}$/.test(String(user)) ? String(user) : null;
+    if (!u) return inExt ? STORE + ":nouser" : STORE;
+    const k = STORE + ":u" + u;
+    try { if (ls.getItem(k) == null) { const old = ls.getItem(STORE); if (old != null) { ls.setItem(k, old); ls.removeItem(STORE); } } } catch (e) { /* storage off: nothing to move */ }
+    return k;
+  }
+  // "garantido" is a reading of the grades, not an official result.
+  const GARANTIDO_TIP = "Garantido pelas notas lançadas; não considera frequência nem recuperação";
   const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
   // Shared by the calculator page and the panels inside Canvas (extension/content.js), so both show the same numbers.
   const fractionTone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
@@ -854,13 +883,15 @@ const NotasCore = (() => {
     items.sort((a, b) => a.item.date.localeCompare(b.item.date));
     return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok").length, late: items.filter(x => x.s === "late").length };
   }
-  return { COURSES, SEED, CANVAS, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();
 </script>
 <script id="ui">
 (() => {
-  const C = NotasCore, LS = "notas-pucpr-2026-2";
+  const C = NotasCore;
+  let LS = window.CP_EXT ? "notas-pucpr-2026-2:nouser" : "notas-pucpr-2026-2";
+  try { LS = C.storageKey(localStorage, window.CP_EXT && window.CP_EXT.user, !!window.CP_EXT); } catch (e) { /* storage off: the save warning covers it */ }
   const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
   const SHORT = C.SHORT;
   let saved;
@@ -939,7 +970,7 @@ const NotasCore = (() => {
     return w;
   }
   function needBadge(st, it) {
-    if (st.status === "garantido") return badge("ok", "garantido");
+    if (st.status === "garantido") { const b = badge("ok", "garantido"); b.title = C.GARANTIDO_TIP; return b; }
     const dep = st.status === "depende-atrasadas", req = C.requiredFor(st, it);
     return badge(dep ? "warn" : req.impossible ? "bad" : tone(req.f), reqText(req, it, st));
   }
@@ -1135,7 +1166,7 @@ const NotasCore = (() => {
       if (st.invalid.length) text = (st.invalid.length === 1 ? "1 nota inválida ignorada: " : st.invalid.length + " notas inválidas ignoradas: ") + st.invalid.map(i => i.name).join(", ") + ". " + text;
       const box = $("msg-" + c.id); box.className = "msg " + cls; box.textContent = text;
       const label = { garantido:"garantido", "nao-da":"recuperação", "depende-atrasadas":"faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10";
-      const pill = $("pill-" + c.id); pill.className = "badge " + cls; pill.textContent = label;
+      const pill = $("pill-" + c.id); pill.className = "badge " + cls; pill.textContent = label; pill.title = st.status === "garantido" ? C.GARANTIDO_TIP : "";
     }
 
     const sum = $("summary"); sum.textContent = "";
@@ -1471,7 +1502,10 @@ const NotasCore = (() => {
       });
     });
     // Inside the extension (the Campus+ page in Canvas): the last Canvas reading is applied as the page opens.
-    if (window.CP_EXT && window.CP_EXT.data) { ta.value = JSON.stringify(window.CP_EXT.data); read(true); }
+    // After the term (TERM_END) it shows the notice at the top instead.
+    const boot = C.extBoot(window.CP_EXT, C.localISO(new Date()));
+    if (boot.notice) { const n = el("div", "msg warn termover", boot.notice); n.setAttribute("role", "status"); const hero = document.querySelector("header.hero"); hero.parentNode.insertBefore(n, hero); }
+    if (boot.autoImport) { ta.value = JSON.stringify(window.CP_EXT.data); read(true); }
     function read(auto) {
       out.textContent = "";
       let res;

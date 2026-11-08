@@ -4,7 +4,8 @@
 // Same-origin read-only GETs with the student's session; everything stays in chrome.storage.local on this computer.
 (() => {
   if (window.top !== window) return;
-  const C = NotasCore, F = QFFiles, T = 7, TTL = 10 * 60 * 1000;
+  const C = NotasCore, F = QFFiles, T = 7, TTL = 10 * 60 * 1000, LOCK = 60 * 1000;
+  const TERM = C.TERM.replace(/ /g, "");   // "2026/2"
   const VERSION = chrome.runtime.getManifest().version;
   const APP = chrome.runtime.getURL ? chrome.runtime.getURL("app.html") : null;   // the full calculator; null in the bookmarklet
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -31,31 +32,51 @@
     return out;
   }
 
-  // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything.
-  async function load(force) {
-    let user;
-    try { user = (await getAll("/api/v1/users/self")).id; } catch (e) { await chrome.storage.local.remove("cache"); throw e; }   // logged out: forget the last reading
-    const { cache } = await chrome.storage.local.get("cache");
-    if (!force && cache && cache.v === VERSION && cache.user === user && Date.now() - cache.at < TTL) return cache;
-    const data = await collectCanvasGrades();
-    if (data.error) throw new Error(data.error);
-    const ids = (await getAll("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string").map(c => ({ id: c.id, name: c.name }));
-    const planner = await getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders
-    const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null };
-    await chrome.storage.local.set({ cache: fresh });
-    return fresh;
+  // The Canvas user, always confirmed before any reading is shown: the id Canvas prints in the page (ENV.current_user_id), else
+  // one GET /users/self. A reading of another user is dropped before anything is drawn. Logged out (401): forget the reading.
+  function pageUser() {
+    for (const sc of (document.scripts || [])) { const m = /"current_user_id":"?(\d+)/.exec(sc.textContent || ""); if (m) return Number(m[1]); }
+    return null;
   }
+  async function whoAmI() {
+    let id = pageUser();
+    if (!id) { try { id = (await getAll("/api/v1/users/self")).id; } catch (e) { await forget(); throw e; } }
+    const { cache } = await chrome.storage.local.get("cache");
+    if (cache && cache.user !== id) await forget();
+    return id;
+  }
+  const forget = () => chrome.storage.local.remove("cache");
+  // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
+  // time: while another tab is reading (lock under a minute old), this one uses the last reading.
+  async function load() {
+    const user = await whoAmI();
+    const { cache, refreshing } = await chrome.storage.local.get(["cache", "refreshing"]);
+    const mine = cache && cache.v === VERSION && cache.user === user;
+    if (mine && Date.now() - cache.at < TTL) return cache;
+    if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
+    await chrome.storage.local.set({ refreshing: Date.now() });
+    try {
+      const got = {}, data = await collectCanvasGrades(got);
+      if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
+      const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
+      const planner = await getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders
+      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null };
+      await chrome.storage.local.set({ cache: fresh });
+      return fresh;
+    } finally { await chrome.storage.local.remove("refreshing"); }
+  }
+  const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
+  // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
+  // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
   function analyse(cache) {
     const grades = C.fromCanvas(cache.data).grades, t = today(), byCanvasId = {};
-    for (const c of C.COURSES) {
-      const match = C.CANVAS[c.id] && C.CANVAS[c.id].match, hits = match ? cache.ids.filter(x => x.name.startsWith(match)) : [];
-      if (hits.length === 1) byCanvasId[hits[0].id] = c;
-    }
+    for (const x of cache.ids) { const c = C.subjectOf(x, true); if (c) { byCanvasId[x.id] = c; courseOf[c.id] = String(x.id); } }
+    const mine = C.COURSES.filter(c => courseOf[c.id]), expired = C.expired(t), rules = mine.length > 0 && !expired;
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
-    const upcoming = C.upcoming(C.COURSES, grades, t, T);
-    const has = Object.keys(byCanvasId).length > 0 && Object.keys(grades).length > 0;   // no matched course or no grade read: no grade parts
-    return { grades, byCanvasId, state, label, tone: C.statusTone, upcoming, has };
+    const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
+    const has = rules && Object.keys(grades).length > 0;   // no matched course, term over or no grade read: no grade parts
+    return { grades, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
   }
 
   // The icon number: days to the next exam that still matters.
@@ -108,7 +129,7 @@
       card.dataset.qf = "1";
       if (!c) continue;
       const st = a.state(c), p = pill(a.label(st), a.tone(st));
-      p.title = "Campus+ · quanto falta (notas do Canvas, meta 7)";
+      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Campus+ · quanto falta (notas do Canvas, meta 7)";
       (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
     }
   }
@@ -129,7 +150,12 @@
     close.addEventListener("click", closeCampus);
     box.cpFrame = frame; box.append(frame, close); document.body.appendChild(box);
   }
-  function closeCampus() { history.replaceState(null, "", location.pathname + location.search); campusPage(); }
+  // Fechar on a subject opened from the dashboard goes to that subject's Canvas course; otherwise it stays on the page.
+  function closeCampus() {
+    const m = /^#campus=([a-z0-9]{1,20})$/.exec(location.hash), cv = m && courseOf[m[1]], home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
+    if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
+    history.replaceState(null, "", location.pathname + location.search); campusPage();
+  }
   // "Campus+" in the Canvas left menu, after Painel.
   function navItem() {
     const menu = document.getElementById("menu");
@@ -198,7 +224,7 @@
     .mk::before { content:"C"; position:absolute; left:2.5px; top:0; font:600 14px/18px var(--serif); color:var(--tile-c); }
     .mk::after { content:""; position:absolute; right:2px; top:3px; width:5px; height:5px;
       background:linear-gradient(var(--coral),var(--coral)) center/100% 1.6px no-repeat, linear-gradient(var(--coral),var(--coral)) center/1.6px 100% no-repeat; }
-    .muted { color:var(--muted); font-size:12.5px; }
+    .muted { color:var(--muted); font-size:12.5px; } .muted.src { margin:-2px 0 10px; font-size:11.5px; } .acts + .muted.src, .items + .muted.src { margin-top:8px; } .muted.why { margin:0 0 10px; }
     h3 { margin:0 0 6px; font:600 17px/1.3 var(--serif); letter-spacing:-.01em; display:flex; gap:8px; align-items:center; }
     .lbl { margin:12px 0 2px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
     .pill { flex:none; padding:0 8px; border-radius:999px; font:600 11.5px/20px var(--sans); white-space:nowrap; }
@@ -372,20 +398,21 @@
     const v = st.status === "garantido" ? "✓" : nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
     const cap = st.status === "garantido" ? "garantido" : st.status === "depende-atrasadas" ? "faltam notas antigas" : nd.impossible ? "nem com nota cheia" : "precisa, em 10";
     box.append(el("b", "v t-" + (st.status === "depende-atrasadas" ? "warn" : nd.tone), v), el("span", null, cap));
+    if (st.status === "garantido") box.title = C.GARANTIDO_TIP;
     return box;
   }
   function gradesView(a) {
-    const t = today(), out = [], list = C.stillCounts(C.COURSES, a.grades, t, T);
+    const t = today(), out = [], list = C.stillCounts(a.mine, a.grades, t, T);
     if (list.length) {
       const u = list[0], d = days(u.item.date), card = toCampus("div", "card upnext", u.course.id), left = el("div", "mid");
       left.append(el("div", "k", "Próxima avaliação que conta"), el("div", "t", u.item.name), el("div", "c", C.SHORT[u.course.id] + " · " + dmy(u.item.date) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias")));
       card.append(left, needBig(u.st)); out.push(card);
     }
-    const sem = C.semester(C.COURSES, a.grades, t, T), kpis = el("div", "kpis");
+    const sem = C.semester(a.mine, a.grades, t, T), kpis = el("div", "kpis");
     const kpi = (k, v, cls, sub) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (sub) d.appendChild(sub); kpis.appendChild(d); return d; };
     const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
     fill.style.width = Math.min(100, sem.mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal);
-    kpi("Média atual", fmt(Math.floor(sem.mean * 10) / 10, 1), null, meter).title = "pontos garantidos de 10, média das " + C.COURSES.length + " matérias · meta " + fmt(T, 1);
+    kpi("Média atual", fmt(Math.floor(sem.mean * 10) / 10, 1), null, meter).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
     const cnt = s => sem.counts[s] || 0;
     if (sem.tight) kpi("Quanto falta", up(sem.states[sem.tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[sem.tight.id] + ", a mais apertada"));
     else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
@@ -396,21 +423,26 @@
     kpi("Entregues", sem.done + " de " + sem.items.length, null, trk);
     out.push(kpis);
     const tiles = el("div", "tiles");
-    for (const c of C.COURSES) {
+    for (const c of a.mine) {
       const st = sem.states[c.id], nx = C.nextItem(st), tile = toCampus("div", "card tile", c.id), txt = el("span", "mid");
       txt.append(el("span", "nm", C.SHORT[c.id]), el("span", "c", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), el("span", "pill " + C.statusTone(st), a.label(st)));
       tile.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + a.label(st));
+      if (st.status === "garantido") tile.title = C.GARANTIDO_TIP;
       tile.append(ring(st), txt); tiles.appendChild(tile);
     }
-    out.push(tiles);
+    out.push(tiles, el("div", "muted src", SOURCE));
     return out;
   }
 
+  const SOURCE = "Pesos do Plano de Ensino " + TERM + " · " + C.TURMA + " · não oficial, confira no Canvas";
+  // Instead of the grade parts: why they are not there (term over, or another turma); null when there is nothing to say.
+  const noRules = a => a.expired ? C.EXPIRED_NOTE
+    : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
   function dashPanel(a, cache, prefs) {
-    const grades = prefs.grades && a.has, week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
-    if (!grades && !week && !news) return;
+    const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
+    if (!grades && !why && !week && !news) return;
     const box = panelHost("cp-dash");
     if (!box) return;
     const grid = el("div", "grid");
@@ -418,6 +450,7 @@
     if (APP) { const brand = el("a", "brand", "Abrir Campus+ →"); brand.href = "#campus"; hd.appendChild(brand); }
     box.append(hd);
     if (grades) box.append(...gradesView(a));
+    else if (why) box.append(el("div", "muted why", why));
     box.appendChild(grid);
     if (week) grid.appendChild(weekView(agenda(a, cache), prefs));
     if (news) {
@@ -432,7 +465,7 @@
           el("span", "d", x.at ? ago(C.localISO(new Date(x.at))) : ""));
         ul.appendChild(li);
       }
-      sec.appendChild(all.length ? ul : el("div", "muted", "Nenhum aviso nos últimos 60 dias."));
+      sec.appendChild(all.length ? ul : el("div", "muted", a.term ? "Nenhum aviso nos últimos 60 dias." : "Nenhuma matéria de " + TERM + " no seu Canvas."));
       grid.appendChild(sec);
     }
   }
@@ -450,7 +483,7 @@
     if (c) {
       const st = a.state(c), nx = C.nextItem(st), head = el("div", "card cring"), mid = el("div", "mid");
       mid.append(el("div", "t", earnedText(st) + " garantidos de 10"),
-        el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida" : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
+        el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida pelas notas lançadas" : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
       head.append(ring(st, true), mid, needBig(st)); box.appendChild(head);
       const tbl = el("div", "card items"), th = el("div", "ir ih"); th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota"));
       tbl.appendChild(th);
@@ -466,6 +499,7 @@
         row.append(name, el("span", "w", Math.round(it.max / total * 100) + "%"), g); tbl.appendChild(row);
       }
       box.appendChild(tbl);
+      box.appendChild(el("div", "muted src", SOURCE));
     }
     const acts = el("div", "acts"), status = el("span", "muted");
     if (prefs.files) {
@@ -493,7 +527,7 @@
     btn.disabled = true; status.textContent = "Listando arquivos…";
     try {
       const all = (await courseFiles(id)).filter(f => f && f.url && !f.locked_for_user)
-        .map(f => ({ id: f.id, url: new URL(f.url, location.href).href, filename: F.target(canvasName, f, C.COURSES, C.CANVAS) })).filter(f => f.filename);
+        .map(f => ({ id: f.id, url: new URL(f.url, location.href).href, filename: F.target(canvasName, f, C.COURSES, C.CANVAS, id) })).filter(f => f.filename);
       const { dl } = await chrome.storage.local.get("dl"), have = new Set(Array.isArray(dl) ? dl : []);
       const fresh = all.filter(f => !have.has(f.id));
       btn.remove();
@@ -514,11 +548,17 @@
     } catch (e) { status.textContent = "Não consegui listar: " + (e && e.message || e); btn.disabled = false; }
   }
 
+  // Canvas login and logout pages (the content script runs on every pucpr.instructure.com page): the next student may be
+  // someone else, so the user and the last reading are forgotten.
+  const SIGN = /^\/(login|logout)(\/|$)|^\/users\/sign_out(\/|$)/;
+  const signedOut = () => forget();   // the calculator page reads the cache too: nothing of the previous student may stay
+
   async function run() {
+    if (SIGN.test(location.pathname)) { await signedOut(); return; }
     navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
     let cache;
-    try { cache = await load(false); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    try { cache = await load(); } catch (e) { return; }   // logged out or Canvas down: stay quiet
     const a = analyse(cache);
     sendNext(a);
     sendReminders(agenda(a, cache), prefs, cache);
@@ -526,7 +566,7 @@
     if (m) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       dashPanel(a, cache, prefs);
-      if (!prefs.grades) return;
+      if (!prefs.grades || !a.rules) return;
       decorateCards(a);
       let t = 0;
       new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); }).observe(document.body, { childList: true, subtree: true });

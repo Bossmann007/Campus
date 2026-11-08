@@ -9,7 +9,7 @@ read = lambda f: open("extension/" + f, encoding="utf-8").read()
 shim = """if (location.hostname !== "pucpr.instructure.com") { alert("Abra o Canvas da PUCPR (pucpr.instructure.com) e clique de novo neste favorito."); return; }
 if (!/^\\/(dashboard)?$|^\\/courses\\/\\d+(\\/(modules|files|assignments|grades|announcements))?\\/?$/.test(location.pathname)) { alert("Campus+: abra o painel do Canvas ou a página de uma matéria e clique de novo."); return; }
 const mem = {}, chrome = { runtime: { getManifest: () => ({ version: "bookmarklet" }), sendMessage: () => Promise.resolve() },
-  storage: { local: { get: async k => ({ [k]: k === "prefs" ? { files: false, remind: false } : mem[k] }), set: async o => { Object.assign(mem, o); }, remove: async k => { delete mem[k]; } } } };
+  storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, x === "prefs" ? { files: false, remind: false } : mem[x]])), set: async o => { Object.assign(mem, o); }, remove: async k => { [].concat(k).forEach(x => delete mem[x]); } } } };
 """
 src = "(function () {\n" + shim + "\n".join(read(f) for f in ("prefs.js", "collect.js", "core.js", "files.js", "content.js")) + "\n})();"
 page = open("index.html", encoding="utf-8").read()
