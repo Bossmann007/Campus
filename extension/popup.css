@@ -1,26 +1,34 @@
-:root { color-scheme:light dark; --bg:#fff; --txt:#18181b; --muted:#71717a; --line:#e4e4e7; --soft:#f4f4f5; --off:#d4d4d8; --knob:#fff; --ok:#15803d; --bad:#b91c1c; }
-@media (prefers-color-scheme:dark) { :root { --bg:#111113; --txt:#fafafa; --muted:#a1a1aa; --line:#2e2e33; --soft:#1c1c1f; --off:#3f3f46; --knob:#a1a1aa; --ok:#4ade80; --bad:#f87171; } }
-body { margin:0; width:300px; padding:14px 16px; background:var(--bg); color:var(--txt); font:13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-header { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:650; margin-bottom:12px; }
-.logo { flex-shrink:0; }
-@media (prefers-color-scheme:dark) { .logo rect { fill:#2e2e33; } }   /* the #202020 tile vanishes on the dark popup */
+/* Campus+ identity "Caderno": paper and ink, coral accent, Fraunces (fonts/OFL.txt) for the wordmark and headings. */
+@font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
+:root { color-scheme:light dark; --bg:#FBF7EF; --card:#fff; --txt:#1D2433; --muted:#5F6675; --line:#ECE4D3; --soft:#F4EEE3; --off:#DCD1BC; --knob:#fff; --coral:#E2482B;
+  --ok:#2F7D5B; --bad:#C2361F; --tile:#1D2433; --tile-c:#FBF7EF; --serif:"Fraunces","Iowan Old Style","New York",Georgia,serif; }
+@media (prefers-color-scheme:dark) { :root { --bg:#141925; --card:#1B2130; --txt:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --soft:#222938; --off:#394256; --knob:#F3EDE1; --coral:#F0603F;
+  --ok:#6CC59A; --bad:#FF876C; --tile:#F3EDE1; --tile-c:#1D2433; } }
+body { margin:0; width:300px; padding:14px 16px; background:var(--bg); color:var(--txt); font:13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-variant-numeric:tabular-nums; }
+header { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+.logo { flex-shrink:0; } .logo .lt { fill:var(--tile); } .logo .lc { fill:var(--tile-c); } .logo .lp { fill:none; stroke:var(--coral); stroke-width:2.4; stroke-linecap:round; }
+.wm { font:500 19px/1 var(--serif); letter-spacing:-.02em; } .wm i { font-style:normal; color:var(--coral); }
+.tag { margin-left:auto; font-size:11px; color:var(--muted); }
 section { padding:12px 0; border-top:1px solid var(--line); }
-h2 { margin:0 0 6px; font-size:11.5px; font-weight:600; color:var(--muted); }
-.list { display:grid; }
-.row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:32px; cursor:pointer; }
+h2 { margin:0 0 6px; font-size:10.5px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.list { display:grid; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:2px 12px; }
+.row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:34px; cursor:pointer; }
+.row + .row { border-top:1px solid var(--line); }
 .row small { display:block; color:var(--muted); font-size:11.5px; }
-.row input[type=checkbox] { appearance:none; flex:none; position:relative; width:28px; height:16px; margin:0; border-radius:999px; background:var(--off); cursor:pointer; transition:background .15s; }
-.row input[type=checkbox]::after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--knob); transition:transform .15s; }
-.row input[type=checkbox]:checked { background:var(--txt); }
-.row input[type=checkbox]:checked::after { transform:translateX(12px); background:var(--bg); }
-select { font:inherit; font-size:12.5px; padding:3px 6px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--txt); cursor:pointer; }
-:is(button, select, input):focus-visible { outline:2px solid var(--muted); outline-offset:2px; }
+.row input[type=checkbox] { appearance:none; flex:none; position:relative; width:30px; height:18px; margin:0; border-radius:999px; background:var(--off); cursor:pointer; transition:background .18s; }
+.row input[type=checkbox]::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:var(--knob); box-shadow:0 1px 2px rgba(0,0,0,.2); transition:transform .2s cubic-bezier(.23,1,.32,1); }
+.row input[type=checkbox]:checked { background:var(--coral); }
+.row input[type=checkbox]:checked::after { transform:translateX(12px); background:#fff; }
+.row:active input[type=checkbox]::after { width:17px; } .row:active input[type=checkbox]:checked::after { transform:translateX(9px); }
+select { font:inherit; font-size:12.5px; padding:3px 6px; border-radius:7px; border:1px solid var(--line); background:var(--bg); color:var(--txt); cursor:pointer; }
+:is(button, select, input):focus-visible { outline:2px solid var(--coral); outline-offset:2px; }
 #status { margin:0 0 10px; } #status.ok { color:var(--ok); } #status.bad { color:var(--bad); }
 .acts { display:grid; gap:6px; }
-button { font:inherit; font-weight:500; padding:7px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--txt); cursor:pointer; }
-button:hover:not(:disabled) { background:var(--soft); }
-button.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); } button.primary:hover:not(:disabled) { background:var(--txt); opacity:.88; }
+button { font:inherit; font-weight:550; padding:8px 12px; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--txt); cursor:pointer; transition:background-color .15s, box-shadow .15s, transform .15s; }
+button:hover:not(:disabled) { background:var(--soft); } button:active:not(:disabled) { transform:translateY(1px); }
+button.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); } button.primary:hover:not(:disabled) { background:var(--txt); box-shadow:0 2px 0 var(--coral); }
 button:disabled { opacity:.5; cursor:default; }
 .fine { color:var(--muted); font-size:12px; margin:6px 0 0; }
 footer { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:11.5px; }
-#ver { flex:none; font-variant-numeric:tabular-nums; }
+#ver { flex:none; }
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; } }

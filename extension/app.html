@@ -4,35 +4,44 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; form-action 'none'; base-uri 'none'">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2230%22%20height%3D%2230%22%20rx%3D%229%22%20fill%3D%22%23202020%22/%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%227.2%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223.2%22/%3E%3Cpath%20d%3D%22m17.2%2018.6%203.3%203.4%206-7.2%22%20fill%3D%22none%22%20stroke%3D%22%233fd07f%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; form-action 'none'; base-uri 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%3E%3Crect%20x=%221%22%20y=%221%22%20width=%2230%22%20height=%2230%22%20rx=%227%22%20fill=%22%231D2433%22/%3E%3Cpath%20fill=%22%23FBF7EF%22%20d=%22M18.71%2019.77Q18.7%2020.58%2018.26%2021.39Q17.82%2022.21%2017%2022.89Q16.17%2023.58%2014.99%2023.99Q13.81%2024.4%2012.3%2024.4Q9.84%2024.4%208.04%2023.34Q6.25%2022.28%205.28%2020.4Q4.3%2018.52%204.3%2016.09Q4.3%2014.24%204.88%2012.7Q5.45%2011.16%206.5%2010.01Q7.54%208.87%208.95%208.23Q10.35%207.6%2012%207.6Q13.15%207.6%2013.86%207.82Q14.58%208.05%2014.99%208.27Q15.4%208.5%2015.64%208.5Q15.93%208.5%2016.08%208.3Q16.23%208.1%2016.39%207.91Q16.55%207.71%2016.83%207.71Q17.04%207.71%2017.17%207.85Q17.31%207.98%2017.4%208.28L18.6%2012.22Q18.68%2012.48%2018.55%2012.69Q18.42%2012.9%2018.16%2012.95Q17.88%2013.01%2017.66%2012.9Q17.45%2012.79%2017.32%2012.52Q16.71%2011.15%2015.96%2010.34Q15.21%209.54%2014.34%209.19Q13.48%208.83%2012.47%208.83Q11.46%208.83%2010.61%209.29Q9.77%209.76%209.15%2010.61Q8.53%2011.47%208.2%2012.67Q7.86%2013.87%207.86%2015.36Q7.86%2017.65%208.57%2019.25Q9.29%2020.84%2010.52%2021.66Q11.75%2022.48%2013.34%2022.48Q14.86%2022.48%2015.98%2021.76Q17.11%2021.03%2017.73%2019.71Q17.86%2019.45%2018.02%2019.36Q18.18%2019.28%2018.37%2019.31Q18.54%2019.33%2018.63%2019.45Q18.71%2019.57%2018.71%2019.77Z%22/%3E%3Cpath%20d=%22M24.5%209v6.6M21.2%2012.3h6.6%22%20fill=%22none%22%20stroke=%22%23E2482B%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20transform=%22rotate%28-6%2024.5%2012.3%29%22/%3E%3C/svg%3E">
 <meta name="description" content="Calculadora de notas da PUCPR 2026/2: quanto falta em cada prova para passar.">
 <title>Minhas matérias · Campus+</title>
 <style>
-  /* Radix Colors 3.0 scales (gray, blue, grass, amber, tomato): 1-2 backgrounds, 3 soft fills, 4-7 borders, 9 solid, 11 text, 12 strong text */
-  :root { --bg:#f9f9f9; --surface:#fff; --sunk:#f0f0f0; --line:#e8e8e8; --line2:#d9d9d9; --txt:#202020; --muted:#646464; --faint:#838383; --field:#bbbbbb; --brand:#9be8be; --logo-check:#3fd07f; --warn-ink:#4f3422; --bad-ink:#5c271f; --acc-ink:#113264; --ok-ink:#203c25;
-          --acc:#0d74ce; --acc-fill:#0090ff; --acc-soft:#e6f4fe; --ok:#2a7e3b; --ok-soft:#e9f6e9; --warn:#ab6400; --warn-soft:#fff7c2; --bad:#d13415; --bad-soft:#feebe7;
-          --r:12px; --shadow:0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.02);
-          --sans:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* Campus+ identity "Caderno": paper and ink, coral accent; Fraunces (OFL, fonts/OFL.txt) for headings and big numbers. Names kept from the old scale. */
+  @font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family:"Fraunces"; font-style:italic; font-weight:400; font-display:swap; src:url(fonts/fraunces-latin-400-italic.woff2) format("woff2"); }
+  :root { --bg:#FBF7EF; --surface:#fff; --sunk:#F4EEE3; --line:#ECE4D3; --line2:#DCD1BC; --txt:#1D2433; --muted:#5F6675; --faint:#8C909A; --field:#CFC3AC; --brand:#E2482B; --logo-check:#E2482B; --warn-ink:#744405; --bad-ink:#912713; --acc-ink:#912713; --ok-ink:#1F5C42;
+          --acc:#C03A1F; --acc-fill:#E2482B; --acc-soft:#FFE6DF; --ok:#2F7D5B; --ok-soft:#E2F1E9; --warn:#A8650F; --warn-soft:#FBEFD6; --bad:#C2361F; --bad-soft:#FCE4DD;
+          --coral:#E2482B; --logo-tile:#1D2433; --logo-c:#FBF7EF;
+          --r:12px; --shadow:0 1px 0 rgba(29,36,51,.03), 0 1px 2px rgba(29,36,51,.05);
+          --serif:"Fraunces","Iowan Old Style","New York",Georgia,serif;
+          --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
           --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace; color-scheme:light; }
   @media (prefers-color-scheme:dark) {
-    :root { --bg:#191919; --surface:#222222; --sunk:#2a2a2a; --line:#313131; --line2:#484848; --txt:#eeeeee; --muted:#b4b4b4; --faint:#7b7b7b; --field:#606060; --brand:#9be8be; --logo-check:#2fb36b; --warn-ink:#ffca16; --bad-ink:#ff977d; --acc-ink:#70b8ff; --ok-ink:#71d083;
-            --acc:#70b8ff; --acc-fill:#0090ff; --acc-soft:#0d2847; --ok:#71d083; --ok-soft:#1b2a1e; --warn:#ffca16; --warn-soft:#302008;
-            --bad:#ff977d; --bad-soft:#391714; --shadow:none; color-scheme:dark; }
+    :root { --bg:#141925; --surface:#1B2130; --sunk:#222938; --line:#2A3242; --line2:#394256; --txt:#F3EDE1; --muted:#A9AFBC; --faint:#7A8292; --field:#4A5468; --brand:#F0603F; --logo-check:#F0603F; --warn-ink:#F0C67E; --bad-ink:#FFA28C; --acc-ink:#FFA28C; --ok-ink:#8FD8B3;
+            --acc:#FF8D72; --acc-fill:#F0603F; --acc-soft:#3B2220; --ok:#6CC59A; --ok-soft:#173229; --warn:#E6B15C; --warn-soft:#33291A;
+            --bad:#FF876C; --bad-soft:#3A1F1D; --coral:#F0603F; --logo-tile:#F3EDE1; --logo-c:#1D2433; --shadow:none; color-scheme:dark; }
   }
+  .logo .lt { fill:var(--logo-tile); } .logo .lc { fill:var(--logo-c); } .logo .lp { fill:none; stroke:var(--coral); stroke-width:2.4; stroke-linecap:round; }
+  h1, .bhead h2, .focus .t, .focus .need .v, .ring b, .figs .v, .fbform h2, .flow h2, .brand b { font-family:var(--serif); font-weight:500; }
+  #h1b { font-style:italic; font-weight:400; color:var(--muted); }
+  .bhead h2 { font-size:21px !important; letter-spacing:-.02em !important; }
+  ::selection { background:#FFD5C7; color:#1D2433; }
   * { box-sizing:border-box; }
   html { scroll-behavior:smooth; scroll-padding-top:72px; }
-  body { margin:0; font-family:var(--sans); background:var(--bg); color:var(--txt); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  body { margin:0; font-variant-numeric:tabular-nums; font-family:var(--sans); background:var(--bg); color:var(--txt); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
   a { color:inherit; text-decoration:none; }
   .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
   .num { font-variant-numeric:tabular-nums; }
 
   .top { position:sticky; top:12px; z-index:5; margin:12px auto 0; max-width:1032px; padding:0 12px; }
-  .top .wrap { display:flex; align-items:center; gap:16px; height:52px; padding:0 8px 0 16px; border-radius:999px;
-               background:color-mix(in srgb, var(--surface) 82%, transparent); border:1px solid var(--line); box-shadow:0 4px 16px rgba(0,0,0,.06);
+  .top .wrap { display:flex; align-items:center; gap:16px; height:52px; padding:0 8px 0 14px; border-radius:14px;
+               background:color-mix(in srgb, var(--surface) 82%, transparent); border:1px solid var(--line); box-shadow:0 6px 20px -10px rgba(29,36,51,.18);
                -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
   .sem { color:var(--muted); font-size:13px; padding-left:12px; margin-left:4px; border-left:1px solid var(--line); }
-  .brand { display:flex; align-items:center; gap:8px; font-weight:650; letter-spacing:-.01em; }
+  .brand { display:flex; align-items:center; gap:8px; font-size:17px; letter-spacing:-.02em; }
   .logo { flex-shrink:0; }
   .top .spacer { flex:1; }
   .nav { display:flex; gap:2px; margin-left:8px; }
@@ -77,7 +86,7 @@
   .fbform p { margin:0; font-size:13.5px; } .fbform .fine { font-size:12.5px; }
   .fbform textarea { font-family:var(--sans); font-size:14px; }
   button, .btn { font:inherit; font-size:13px; font-weight:500; color:var(--txt); background:var(--surface); border:1px solid var(--line);
-                 border-radius:999px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
+                 border-radius:10px; padding:6px 14px; cursor:pointer; box-shadow:var(--shadow); transition:border-color .15s, background-color .15s, transform .16s cubic-bezier(.23,1,.32,1); }
   button:active, .btn:active { transform:scale(.97); }
   @media (hover:hover) and (pointer:fine) { button:hover { border-color:var(--line2); background:var(--sunk); } }
   .linkbtn[aria-pressed="true"] { color:var(--acc); }
@@ -91,9 +100,6 @@
   input.bad { border-color:var(--bad); box-shadow:0 0 0 3px var(--bad-soft); }
 
   .hero { padding:72px 0 8px; text-align:center; position:relative; isolation:isolate; }
-  .hero::before { content:""; position:absolute; z-index:-1; inset:-24px 0 0; pointer-events:none;
-                  background-image:radial-gradient(var(--line2) 1px, transparent 1px); background-size:22px 22px;
-                  -webkit-mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); mask-image:radial-gradient(ellipse 60% 70% at 50% 35%, #000 30%, transparent 75%); }
   .hero .lead { margin:0 auto; }
   .hero details.how { margin-left:auto; margin-right:auto; }
   .hero details.how ul { text-align:left; display:inline-block; }
@@ -136,17 +142,17 @@
   .hero.mine .focus { max-width:680px; margin:28px auto 0; text-align:left; }
   .more { display:block; width:100%; border:0; border-top:1px solid var(--line); border-radius:0; box-shadow:none; padding:10px; color:var(--muted); }
   .cta { display:flex; gap:10px; margin-top:26px; flex-wrap:wrap; justify-content:center; }
-  .btn { display:inline-flex; align-items:center; padding:10px 20px; font-size:14px; border-radius:999px; }
+  .btn { display:inline-flex; align-items:center; padding:10px 18px; font-size:14px; border-radius:11px; }
   .btn:hover { border-color:var(--line2); background:var(--sunk); }
   .btn.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); }
-  .btn.primary:hover { opacity:.88; background:var(--txt); }
+  .btn.primary:hover { background:var(--txt); border-color:var(--txt); box-shadow:0 2px 0 var(--coral); }
   .seg { display:inline-flex; background:var(--sunk); border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; }
   .seg button { border:0; box-shadow:none; background:transparent; color:var(--muted); padding:5px 12px; border-radius:999px; font-size:12.5px; }
   .seg button:hover { background:transparent; color:var(--txt); }
   .seg button .c { color:var(--faint); margin-left:5px; font-variant-numeric:tabular-nums; }
   .seg button[aria-pressed="true"] { background:var(--surface); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.08); }
   .hint.below { margin:-4px 0 12px; display:block; color:var(--muted); font-size:13px; }
-  h1 { font-size:clamp(38px,6.4vw,64px); line-height:1.02; letter-spacing:-.04em; font-weight:700; margin:0 0 16px; }
+  h1 { font-size:clamp(40px,6.4vw,68px); line-height:1; letter-spacing:-.04em; margin:0 0 16px; }
   .lead { color:var(--muted); font-size:16px; max-width:60ch; margin:0; }
   details.how { margin-top:14px; max-width:680px; }
   details.how summary, .exthow summary, .pastebox summary { cursor:pointer; color:var(--muted); font-size:13px; font-weight:500; }
@@ -264,9 +270,9 @@
   /* hero, openbot.run style: availability row, logo inside the headline */
   .avail { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; font-size:12px; color:var(--muted);
            border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:3px 12px 3px 3px; margin-bottom:26px; }
-  .avail .new { background:var(--txt); color:var(--bg); font-weight:700; font-size:10.5px; letter-spacing:.04em; border-radius:999px; padding:2px 8px; }
+  .avail .new { background:var(--acc-soft); color:var(--acc); font-weight:700; font-size:10.5px; letter-spacing:.04em; border-radius:999px; padding:2px 8px; }
   .avail b { color:var(--txt); font-weight:500; } .avail i { width:1px; height:12px; background:var(--line2); }
-  .hlogo { width:.92em; height:.92em; vertical-align:-.12em; margin:0 .04em; filter:drop-shadow(0 8px 24px rgba(0,0,0,.25)); }
+  .hlogo { width:.82em; height:.82em; vertical-align:-.08em; margin:0 .04em; }
   .btn svg { margin-right:7px; }
 
   /* demo window: a scripted import, like the product videos on openbot.run */
@@ -274,14 +280,14 @@
   .demo-slot { margin-top:44px; }
   .win { text-align:left; border:1px solid var(--line); border-radius:14px; background:var(--bg); box-shadow:0 30px 80px rgba(0,0,0,.35); overflow:hidden; }
   .win-bar { display:flex; align-items:center; gap:14px; height:40px; padding:0 14px; border-bottom:1px solid var(--line); background:var(--surface); font-size:12.5px; }
-  .dots { display:flex; gap:7px; } .dots i { width:11px; height:11px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
+  .dots { display:flex; gap:7px; } .dots i { width:9px; height:9px; border-radius:50%; background:var(--line2); }
   .win-bar .tab { display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:8px; background:var(--sunk); color:var(--txt); }
   .win-bar .sp { flex:1; } .win-bar .demo-tag { color:var(--faint); }
   .win-body { display:grid; grid-template-columns:230px minmax(0,1fr); height:460px; }
   .win-side { border-right:1px solid var(--line); background:var(--surface); padding:12px 10px; overflow:hidden; }
   .win-side h4 { margin:6px 8px 8px; font-size:11.5px; color:var(--faint); font-weight:600; }
   .srow { display:grid; grid-template-columns:30px minmax(0,1fr); gap:10px; align-items:center; padding:7px 8px; border-radius:10px; }
-  .srow .av { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font-size:10px; font-weight:800; color:#141414; }
+  .srow .av { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; font:500 13px/1 var(--serif); color:#1D2433; }
   .srow b { display:block; font-size:13px; font-weight:600; } .srow small { display:block; font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .srow small.on { color:var(--txt); }
   .win-main { position:relative; padding:18px 22px; overflow:hidden; display:flex; flex-direction:column; gap:12px; justify-content:flex-end; min-height:0; }
@@ -347,7 +353,7 @@
   .cday:nth-child(7n) { border-right:0; }
   .cday .n { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding:2px 4px; align-self:flex-start; border-radius:999px; }
   .cday.out { background:color-mix(in srgb, var(--sunk) 55%, transparent); } .cday.out .n { color:var(--faint); }
-  .cday.today .n { background:var(--txt); color:var(--bg); font-weight:700; }
+  .cday.today .n { background:var(--coral); color:#fff; font-weight:700; }
   .cday.has { cursor:pointer; } .cday.sel { box-shadow:inset 0 0 0 2px var(--acc); }
   .chip { display:block; font-size:11.5px; line-height:1.35; padding:3px 6px; border-radius:6px; background:var(--sunk); border-left:3px solid var(--c, var(--line2));
           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--txt); }
@@ -401,7 +407,7 @@
 </head>
 <body>
 <div class="top"><div class="wrap">
-  <a class="brand" href="#" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Campus+</b></a><span class="sem">PUCPR · 2026/2</span>
+  <a class="brand" href="#" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><b>Campus+</b></a><span class="sem">PUCPR · 2026/2</span>
   <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#proximas">Próximas</a></nav>
   <div class="viewsw" id="viewsw" role="group" aria-label="Ver matérias ou calendário"><span class="thumb" aria-hidden="true"></span><button type="button" data-v="app" aria-pressed="true">Matérias</button><button type="button" data-v="cal" aria-pressed="false">Calendário</button></div>
   <div class="spacer"></div>
@@ -419,7 +425,7 @@
 <div class="wrap">
   <header class="hero">
     <div class="avail"><span class="new">NOVO</span><span>Funciona no</span><b>Chrome</b><b>Brave</b><b>Edge</b><i></i><b>Canvas PUCPR 2026/2</b></div>
-    <h1 id="h1"><span id="h1a">Campus+</span> <svg class="hlogo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg><br><span class="dim" id="h1b">quanto falta?</span></h1>
+    <h1 id="h1"><span id="h1a">Campus+</span> <svg class="hlogo logo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><br><span class="dim" id="h1b">quanto falta?</span></h1>
     <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
     <div class="focus" id="focus" hidden></div>
     <div class="cta"><a class="btn primary" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Baixar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
