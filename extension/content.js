@@ -424,7 +424,7 @@
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
     h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
     .folded > h3[role=button]::before { transform:rotate(-90deg); } .folded > :not(h3) { display:none !important; } .folded > h3 { margin-bottom:0; }
-    .simi { all:unset; box-sizing:border-box; width:100%; max-width:130px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
+    .simi { all:unset; box-sizing:border-box; width:100%; max-width:180px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
     .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }

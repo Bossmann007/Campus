@@ -18,7 +18,7 @@ shot() {   # $1 = virtual ms, $2 = output png, $3 = query, $4 = window height
     --screenshot="$2" "http://127.0.0.1:$port/video/scene.html${3:-}" 2>/dev/null
 }
 if [ -n "${STILL:-}" ]; then   # store screenshots: STILL=1 renders both
-  shot 3000 store/screenshot-1280x800.png "?still=dash" 800; shot 3000 store/screenshot-2-1280x800.png "?still=app" 800
+  shot 3000 store/screenshot-1280x800.png "?still=dash" 800; shot 3000 store/screenshot-2-1280x800.png "?still=cal" 800
   ls -la store; exit 0
 fi
 if [ -n "${FRAMES:-}" ]; then

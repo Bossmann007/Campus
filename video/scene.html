@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Video scene for media/demo.mp4 (not deployed). scripts/render-video serves the repo over localhost and loads this page once per
      frame with headless virtual time. The page is a mock Canvas tab running the real extension (content.js) on made-up data:
-     0-6 s the dashboard panel, 6-10.5 s the calculator (the real app.html) opened from the "Caderno+" menu item, then a course
+     0-5 s the dashboard panel, 5-8.5 s the Foco mode, 8.5-12 s the semester calendar, then a course page with the simulator
      page whose "Abrir no Caderno+" button opens that subject. chrome.* and the Canvas API are stubbed below (no real student data). -->
 <html lang="pt-BR"><head><meta charset="UTF-8"><title>scene</title>
 <style>
@@ -82,7 +82,7 @@ window.fetch = async u => { u = String(u);
   return new Response("[]", { status: 404 }); };
 const STILL = new URLSearchParams(location.search).get("still");
 if (STILL) document.documentElement.classList.add("still");
-history.replaceState(null, "", "/");   // the Canvas dashboard path, so content.js draws the dashboard panel
+history.replaceState(null, "", STILL === "cal" ? "/calendar" : "/");   // the Canvas dashboard path (or the calendar still), so content.js draws there
 </script>
 <script src="/ext/prefs.js"></script><script src="/ext/theme.js"></script>
 </head><body>
@@ -97,7 +97,7 @@ history.replaceState(null, "", "/");   // the Canvas dashboard path, so content.
         <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9786;</div><div class="menu-item__text">Conta</div></a></li>
         <li class="menu-item ic-app-header__menu-list-item on" id="nav-dash"><a id="global_nav_dashboard_link" class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9638;</div><div class="menu-item__text">Painel</div></a></li>
         <li class="menu-item ic-app-header__menu-list-item" id="nav-courses"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9776;</div><div class="menu-item__text">Cursos</div></a></li>
-        <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9783;</div><div class="menu-item__text">Calendário</div></a></li>
+        <li class="menu-item ic-app-header__menu-list-item" id="nav-cal"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9783;</div><div class="menu-item__text">Calendário</div></a></li>
         <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">&#9993;</div><div class="menu-item__text">Caixa de entrada</div></a></li>
         <li class="menu-item ic-app-header__menu-list-item"><a class="ic-app-header__menu-list-link" href="#"><div class="menu-item-icon-container">?</div><div class="menu-item__text">Ajuda</div></a></li>
       </ul></header>
@@ -129,16 +129,12 @@ const NOANIM = "*, *::before, *::after { animation:none !important; transition:n
 const calm = root => { const s = document.createElement("style"); s.textContent = NOANIM; root.appendChild(s); };
 calm(document.head);
 new MutationObserver(() => {
-  for (const id of ["cp-dash", "qf-panel"]) { const r = shadow(id); if (r && !r.cpCalm) { r.cpCalm = 1; calm(r); } }
-  const box = $("cp-app"), f = box && box.cpFrame;
-  if (f && !f.cpCalm) { f.cpCalm = 1; f.addEventListener("load", () => { calm(f.contentDocument.head); f.contentDocument.documentElement.style.scrollBehavior = "auto";
-    const m = /[?&]m=([a-z0-9]+)/.exec(f.src); if (m) setTimeout(() => { const d = f.contentDocument, c = d.getElementById("card-" + m[1]); if (c) { const y = c.getBoundingClientRect().top + f.contentWindow.scrollY - 24;
-      const b = d.body, y0 = 0; tween(700, k => { b.style.transform = "translateY(" + -(y0 + y * k) + "px)"; }); } }, 350); }); }
+  for (const id of ["cp-dash", "qf-panel", "cp-cal"]) { const r = shadow(id); if (r && !r.cpCalm) { r.cpCalm = 1; calm(r); } }
 }).observe(document.body, { childList: true, subtree: true });
 place();
+if (STILL === "cal") { $("pgtitle").textContent = "Calendário"; $("tabt").textContent = "Calendário"; $("nav-dash").classList.remove("on"); $("nav-cal").classList.add("on"); }
 if (STILL === "dash") at(900, () => { const r = shadow("cp-dash"), w = r && r.querySelector(".week"); if (w) { sy = Math.max(0, $("cp-dash").getBoundingClientRect().top - 14); $("scroller").style.transform = "translateY(" + -sy + "px)"; }
   const s = document.createElement("style"); s.textContent = ".lanes .col:nth-child(3) .ev:first-child .tip { opacity:1; visibility:visible; transform:none; }"; r.appendChild(s); });
-if (STILL === "app") location.hash = "#campus";
 if (!STILL) {
 // 1. the dashboard panel; hover a chip in the 7-day timeline
 const chip = () => { const r = shadow("cp-dash"); return r && r.querySelector(".lanes .col:nth-child(3) .ev"); };
@@ -146,26 +142,29 @@ at(900, () => { const r = shadow("cp-dash"), w = r && r.querySelector(".week"); 
 at(2300, () => { const c = chip(); if (c) { const p = center(c); move(p.x + 6, p.y + 2, 800); } });
 at(3150, () => { const c = chip(); if (c) { const s = document.createElement("style"); s.textContent = ".lanes .col:nth-child(3) .ev:first-child .tip { opacity:1; visibility:visible; transform:none; } .lanes .col:nth-child(3) .ev:first-child { transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); z-index:4; }";
   shadow("cp-dash").appendChild(s); cap("Passe o mouse: prazo, matéria e se já entregou"); } });
-// 2. "Caderno+" in the left menu opens the calculator over Canvas
-at(5000, () => { const r = shadow("cp-dash"), s = r && r.querySelector("style:last-of-type"); if (s && s.textContent.includes(".tip")) s.remove(); const n = $("cp-nav"); if (n) { const p = center(n); move(p.x + 4, p.y, 800); } });
-at(5900, () => { const n = $("cp-nav"); if (n) { const p = center(n); click(p.x, p.y); location.hash = "#campus"; } cap("Um clique em Caderno+ e a calculadora abre no próprio Canvas"); });
-at(6300, () => move(820, 520, 900));
-// 3. a course page: the ring and the grades table; "Abrir no Caderno+" opens that subject
-at(10200, () => {
-  history.replaceState(null, "", "/courses/71306"); const old = $("cp-app"); if (old) old.remove(); const d = $("cp-dash"); if (d) d.remove();
-  $("nav-dash").classList.remove("on"); $("nav-courses").classList.add("on");
-  $("tabt").textContent = "Arquitetura de Banco de Dados"; $("url").textContent = "pucpr.instructure.com/courses/71306";
-  sy = 0; $("scroller").style.transform = "none";
-  $("scroller").innerHTML = '<div class="crumbs">Arquitetura de Banco de Dados &rsaquo; <span>Página inicial</span></div><div class="course"><nav class="cnav"><b>Página inicial</b><br>Avisos<br>Tarefas<br>Notas<br>Pessoas<br>Módulos<br>Arquivos</nav>' +
-    '<div id="content"><div class="mods"><div>Módulo 1: Modelagem</div><div>Aula 1: Modelo entidade-relacionamento</div><div>Aula 2: Normalização</div></div></div></div>';
-  const s = document.createElement("script"); s.src = "/ext/content.js?course"; document.body.appendChild(s);   // a new page load runs the content script again
-  cap("Em cada matéria: quanto já tem, o peso e a nota que falta");
-});
-const openBtn = () => { const r = shadow("qf-panel"); return r && [...r.querySelectorAll("button")].find(b => b.textContent.includes("Abrir no Caderno+")); };
-at(11500, () => scrollTo_(230, 900));   // done before the cursor reads the button position
-at(12450, () => { const b = openBtn(); if (b) { const p = center(b); move(p.x - 10, p.y + 4, 800); } });
-at(13350, () => { const b = openBtn(); if (b) { const p = center(b); click(p.x - 4, p.y); b.click(); } cap("E abre direto no cartão da matéria"); });
-at(13850, () => move(900, 560, 900));
+// 2. the Foco mode: one list, what to do now (the panel's own switch)
+const segBtn = label => { const r = shadow("cp-dash"); return r && [...r.querySelectorAll(".seg button")].find(b => b.textContent === label); };
+at(5000, () => { const r = shadow("cp-dash"), s = r && r.querySelector("style:last-of-type"); if (s && s.textContent.includes(".tip")) s.remove(); scrollTo_(0, 700); });
+at(5800, () => { const b = segBtn("Foco"); if (b) { const p = center(b); move(p.x, p.y + 2, 700); } });
+at(6600, () => { const b = segBtn("Foco"); if (b) { const p = center(b); click(p.x, p.y); b.click(); } cap("Modo Foco: só o que fazer agora"); });
+// 3. the semester calendar in place of Canvas's
+const page = (path, title, nav, html, caption) => {
+  history.replaceState(null, "", path); for (const id of ["cp-dash", "qf-panel", "cp-cal"]) { const o = $(id); if (o) o.remove(); }
+  for (const id of ["nav-dash", "nav-courses", "nav-cal"]) { const n = $(id); if (n) n.classList.toggle("on", id === nav); }
+  $("tabt").textContent = title; $("url").textContent = "pucpr.instructure.com" + path; sy = 0; $("scroller").style.transform = "none"; $("scroller").innerHTML = html;
+  const s = document.createElement("script"); s.src = "/ext/content.js?" + path.length; document.body.appendChild(s);   // a new page load runs the content script again
+  cap(caption);
+};
+at(8700, () => page("/calendar", "Calendário", "nav-cal", '<h1 class="pg">Calendário</h1><div id="content"></div>', "O semestre inteiro, mês a mês, no lugar do calendário do Canvas"));
+// 4. a course page: the ring, the grades table and the simulator
+at(12100, () => page("/courses/71306", "Arquitetura de Banco de Dados", "nav-courses", '<div class="crumbs">Arquitetura de Banco de Dados &rsaquo; <span>Página inicial</span></div><div class="course"><nav class="cnav"><b>Página inicial</b><br>Avisos<br>Tarefas<br>Notas<br>Pessoas<br>Módulos<br>Arquivos</nav>' +
+  '<div id="content"><div class="mods"><div>Módulo 1: Modelagem</div><div>Aula 1: Modelo entidade-relacionamento</div><div>Aula 2: Normalização</div></div></div></div>', "Em cada matéria: quanto já tem, o peso e a nota que falta"));
+const simBtn = () => { const r = shadow("qf-panel"); return r && [...r.querySelectorAll("button")].find(b => b.textContent.includes("Simular")); };
+at(13300, () => scrollTo_(200, 700));
+at(14000, () => { const b = simBtn(); if (b) { const p = center(b); move(p.x, p.y + 2, 600); } });
+at(14700, () => { const b = simBtn(); if (b) { const p = center(b); click(p.x, p.y); b.click(); }
+  const r = shadow("qf-panel"), i = r && r.querySelector(".simi"); if (i) { const m = /de ([\d,]+)\)$/.exec(i.getAttribute("aria-label")); i.value = m ? m[1] : "1"; i.dispatchEvent(new Event("input")); }
+  cap("Simule uma nota e veja na hora se garante a meta"); });
 }
 </script>
 </body></html>

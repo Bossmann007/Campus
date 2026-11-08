@@ -65,6 +65,10 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
   assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
   assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
+  store.cache = Object.assign({}, store.cache, { user: 5 });
+  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "quanto-falta", grades: { "imp:pbl09": "8", "abd:s3": "0,9", "x y": "1" } }) }];
+  await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
+  assert(store.hand[5]["imp:pbl09"] === "8" && store.hand[5]["abd:s3"] === "1" && !store.hand[5]["x y"], "the site calculator's backup becomes this student's grades (ones already there win)");
   assert(/id="refresh"/.test(html), "popup has the Atualizar agora button");
   await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.cache.at, 0, "reading marked old"); assert.strictEqual(store.refreshing, undefined, "no read lock left"); assert.match(pel("status").textContent, /Atualiza/, "says what happens next");
