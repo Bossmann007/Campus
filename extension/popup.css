@@ -24,11 +24,13 @@ select { font:inherit; font-size:12.5px; padding:3px 6px; border-radius:7px; bor
 :is(button, select, input):focus-visible { outline:2px solid var(--coral); outline-offset:2px; }
 #status { margin:0 0 10px; } #status.ok { color:var(--ok); } #status.bad { color:var(--bad); }
 .acts { display:grid; gap:6px; }
-button { font:inherit; font-weight:550; padding:8px 12px; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--txt); cursor:pointer; transition:background-color .15s, box-shadow .15s, transform .15s; }
-button:hover:not(:disabled) { background:var(--soft); } button:active:not(:disabled) { transform:translateY(1px); }
+button { font:inherit; font-weight:550; padding:8px 12px; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--txt); cursor:pointer; transition:background-color .15s, box-shadow .15s, transform .15s cubic-bezier(.23,1,.32,1); }
+button:hover:not(:disabled) { background:var(--soft); transform:translateY(-1px); } button:active:not(:disabled) { transform:scale(.97); }
 button.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); } button.primary:hover:not(:disabled) { background:var(--txt); box-shadow:0 2px 0 var(--coral); }
 button:disabled { opacity:.5; cursor:default; }
 .fine { color:var(--muted); font-size:12px; margin:6px 0 0; }
 footer { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:11.5px; }
 #ver { flex:none; }
-@media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+.row { margin:0 -12px; padding:0 12px; transition:background-color .15s; } .row:hover { background:color-mix(in srgb, var(--soft) 60%, transparent); }
+.list { overflow:hidden; }
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; } button:hover:not(:disabled), button:active:not(:disabled) { transform:none; } }

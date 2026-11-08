@@ -97,8 +97,9 @@
     for (const b of document.querySelectorAll("#viewsw button")) b.setAttribute("aria-pressed", (b.dataset.v === "cal") === CAL); };
   applyView();
   // The switch changes the view in place and keeps the address in step (?view=calendario).
+  const swap = e => { if (!e) return; e.classList.remove("swap"); void e.offsetWidth; e.classList.add("swap"); };   // replay the short fade-in
   function setView(cal, push) {
-    if (cal === CAL) return; CAL = cal; applyView(); calc(); scrollTo({ top:0, behavior:"auto" });
+    if (cal === CAL) return; CAL = cal; applyView(); calc(); swap($(CAL ? "calendario" : "materias")); scrollTo({ top:0, behavior:"auto" });
     if (push) history.pushState(null, "", cal ? "?view=calendario" : location.pathname);
   }
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
@@ -199,7 +200,7 @@
       links.forEach(a => { const t = document.getElementById(a.getAttribute("href").slice(1)); if (t) io.observe(t); });
     }
     for (const b of $("filter").children) b.addEventListener("click", () => {
-      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); });
+      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); swap($("next")); });
     $("startbtn").addEventListener("click", () => { const first = document.querySelector(".card"); if (first && !document.querySelector(".card.open")) first.setOpen(true); });
     const sb = el("button", "linkbtn", "Mostrar de onde vêm os pesos e as datas"); sb.type = "button"; sb.setAttribute("aria-pressed", "false");
     sb.addEventListener("click", () => { const on = document.body.classList.toggle("src-on"); sb.setAttribute("aria-pressed", on);
@@ -274,7 +275,7 @@
     [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
       const count = n != null ? n : groups[k].length; if (!count) return;
       const b = el("button", null, l); b.type = "button"; b.setAttribute("aria-pressed", k === cardFilter);
-      b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); }); sum.appendChild(b); });
+      b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); swap($("cards")); }); sum.appendChild(b); });
     for (const c of C.COURSES) { const cd = $("card-" + c.id); cd.hidden = cardFilter !== "all" && states[c.id].status !== cardFilter && !cd.contains(document.activeElement); }
 
     const next = $("next"); next.textContent = "";
@@ -295,7 +296,7 @@
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T); renderTiles(states, T); renderTodo(); renderNews(); renderCal(T);
+    renderFocus(T); renderKpis(states, T); renderTiles(states, T); renderTodo(); renderNews(); renderCal(T);
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -472,6 +473,34 @@
     if (rest.length) { const t = el("div", "then", "Depois: ");
       rest.forEach((r, i) => { const a = el("a", null, r.item.name + " (" + (SHORT[r.course.id] || r.course.name) + ", " + dmy(r.item.date) + ")"); a.href = "#card-" + r.course.id; if (i) t.append(" · "); t.appendChild(a); });
       box.appendChild(t); }
+  }
+
+  // KPI row over the tiles, from the same states: the mean of the points earned, the tightest grade still needed, and every item
+  // of the semester as a tracker block (graded, past without a grade, still to come).
+  function renderKpis(states, T) {
+    const box = $("kpis"); box.textContent = "";
+    const card = (k, v, sub, cls) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v num" + (cls ? " " + cls : ""), v), el("div", "s", sub)); box.appendChild(d); return d; };
+    const sts = C.COURSES.map(c => states[c.id]), mean = sts.reduce((s, st) => s + Math.min(10, st.earned), 0) / sts.length;
+    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + sts.length + " matérias · meta " + fmt(T, 1));
+    const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
+    fill.style.width = Math.min(100, mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); avg.insertBefore(meter, avg.lastChild);
+    const tight = C.COURSES.filter(c => states[c.id].status === "precisa").sort((a, b) => states[b.id].fraction - states[a.id].fraction)[0];
+    const count = s => C.COURSES.filter(c => states[c.id].status === s).length;
+    if (tight) card("Quanto falta", up(states[tight.id].fraction * 10, 1), "em 10 em cada item que falta, em " + SHORT[tight.id] + " (a mais apertada)", "need");
+    else if (count("depende-atrasadas")) card("Quanto falta", "?", "lance as notas que já saíram para calcular", "need");
+    else if (count("nao-da")) card("Quanto falta", "—", count("nao-da") + (count("nao-da") === 1 ? " matéria vai" : " matérias vão") + " para a recuperação", "need");
+    else card("Quanto falta", "0", "tudo garantido, pela meta " + fmt(T, 1), "need ok");
+    const items = [];
+    for (const c of C.COURSES) for (const it of c.items) {
+      const p = C.itemPoints(it, saved.grades[C.key(c, it)]), graded = p !== null && !Number.isNaN(p);
+      items.push({ c, it, s: graded ? "ok" : it.date < today ? "late" : "next" });
+    }
+    items.sort((a, b) => a.it.date.localeCompare(b.it.date));
+    const done = items.filter(x => x.s === "ok").length, late = items.filter(x => x.s === "late").length;
+    const kp = card("Entregues", done + " de " + items.length, late ? late + (late === 1 ? " passou da data sem nota" : " passaram da data sem nota") : "notas lançadas no semestre");
+    const trk = el("div", "trk"); trk.setAttribute("role", "img"); trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
+    for (const x of items) { const b = el("i", x.s); b.dataset.tip = SHORT[x.c.id] + " · " + x.it.name + " · " + dmy(x.it.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
+    kp.insertBefore(trk, kp.lastChild);
   }
 
   // One tile per course: ring = points earned of 10 (lighter: still possible), tick = the goal.
