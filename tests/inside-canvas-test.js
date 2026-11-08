@@ -394,6 +394,31 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 0, "no reading at all: waits for Canvas");
   await new Promise(r => setTimeout(r, 250));
   assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 1, "and draws once it lands");
+  // new grades: compared with the last reading of the same user; saved for the dashboard and handed to the service worker
+  const oldData = JSON.parse(JSON.stringify(st10.cache)); oldData.data.courses[0].assignments.find(x => /RA2/.test(x.name)).score = null;
+  const ngr = await runContent("/", null, Object.assign({}, st10, { cache: oldData }), { scripts: pageEnv });
+  await new Promise(r => setTimeout(r, 60));
+  const gmsg1 = ngr.sent.find(m => m.type === "grades");
+  assert(gmsg1 && gmsg1.items.length === 1 && /RA2/.test(gmsg1.items[0].name) && gmsg1.items[0].score === 3 && gmsg1.items[0].course === "Arquitetura de Banco de Dados", "one new grade found and sent");
+  assert.strictEqual(ngr.store.recent[5].length, 1, "kept for this user");
+  const ngBox = ngr.anchor.kids.find(k => k.id === "cp-dash");
+  assert.match(text(ngBox), /Notas novas \| 1 nova/); assert.match(text(ngBox), /Avaliação somativa RA2 22\/10 \| Arquitetura de Banco de Dados · hoje \| 3 \|  de 3/);
+  const firstRead = await runContent("/", null, {}, { scripts: pageEnv });
+  assert(!firstRead.sent.some(m => m.type === "grades") && !firstRead.store.recent, "the first reading only sets the baseline");
+  const otherUser = await runContent("/", null, Object.assign({}, st10, { cache: Object.assign({}, oldData, { user: 9 }) }), { scripts: pageEnv });
+  await new Promise(r => setTimeout(r, 60));
+  assert(!otherUser.sent.some(m => m.type === "grades"), "another user's reading is not a baseline");
+  const quietG = await runContent("/", null, Object.assign({}, st10, { cache: oldData, prefs: { newgrades: false } }), { scripts: pageEnv });
+  await new Promise(r => setTimeout(r, 60));
+  assert(!quietG.sent.some(m => m.type === "grades") && quietG.store.recent && !/Notas novas/.test(text(quietG.anchor)), "switched off: no notification, no card (still recorded)");
+  local.prefs = { newgrades: true }; notes.length = 0;
+  await ask({ type: "grades", items: [{ name: "RA2", course: "BD", score: 8.5, points: 10, url: "https://pucpr.instructure.com/courses/71306/assignments/2" }] }, CANVAS_TAB);
+  assert.deepStrictEqual([notes[0].title, notes[0].message], ["Nota nova: BD", "RA2: 8,5 de 10"], "notification text");
+  await ask({ type: "grades", items: [1, 2, 3, 4].map(i => ({ name: "T" + i, course: "C" + i, score: i, points: 10, url: "https://evil.example/" })) }, CANVAS_TAB);
+  assert.strictEqual(notes.length, 2, "more than 3: one notification"); assert.strictEqual(notes[1].title, "4 notas novas");
+  assert.strictEqual(local.shown[notes[1].id], "https://pucpr.instructure.com/grades", "its click opens the grades, never an outside link");
+  local.prefs = { newgrades: false }; await ask({ type: "grades", items: [{ name: "X", score: 1, points: 1 }] }, CANVAS_TAB);
+  assert.strictEqual(notes.length, 2, "switched off in the popup: nothing shown"); ok();
   const locked = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 5000 }), { scripts: pageEnv });
   assert.strictEqual(locked.fetches.length, 0, "another tab is reading: this one uses the last reading");
   assert(all(locked.anchor).some(e => /kpi/.test(e.className)), "and still draws it");
@@ -498,5 +523,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades)");
 })().catch(e => { console.error(e); process.exit(1); });

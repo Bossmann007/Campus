@@ -53,6 +53,18 @@ async function notify(alarm) {
   chrome.notifications.create(alarm.name, { type: "basic", iconUrl: "icons/icon128.png", title: r.title, message: r.body, priority: 1 });
 }
 
+// New grades the Canvas page found: one notification each (up to 3), or one summing them up; a click opens the assignment.
+async function grades(items) {
+  if (!cpPrefs((await chrome.storage.local.get("prefs")).prefs).newgrades) return;
+  const ok = items.filter(g => g && typeof g.name === "string" && typeof g.score === "number").slice(0, 10), num = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
+  if (!ok.length) return;
+  const { shown = {} } = await chrome.storage.local.get("shown"), keep = Object.entries(shown).slice(-30), id = "g|" + Date.now();
+  const show = (nid, title, message, url) => { keep.push([nid, typeof url === "string" && url.startsWith(CANVAS + "/") ? url : CANVAS + "/grades"]); chrome.notifications.create(nid, { type: "basic", iconUrl: "icons/icon128.png", title, message, priority: 1 }); };
+  if (ok.length <= 3) ok.forEach((g, i) => show(id + "|" + i, "Nota nova: " + String(g.course || "").slice(0, 60), g.name.slice(0, 90) + ": " + num(g.score) + " de " + num(g.points), g.url));
+  else show(id, ok.length + " notas novas", ok.map(g => String(g.course || "").slice(0, 30) + " " + num(g.score)).join(" · ").slice(0, 160), CANVAS + "/grades");
+  await chrome.storage.local.set({ shown: Object.fromEntries(keep) });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id || sender.origin !== CANVAS || !msg) return;
   if (msg.type === "next") {
@@ -62,6 +74,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   if (msg.type === "remind" && Array.isArray(msg.items)) {
     remind(msg.items).then(() => reply({ ok: true }));
+    return true;
+  }
+  if (msg.type === "grades" && Array.isArray(msg.items)) {
+    grades(msg.items).then(() => reply({ ok: true }));
     return true;
   }
   if (msg.type === "download" && Array.isArray(msg.items)) {

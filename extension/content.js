@@ -66,6 +66,7 @@
       if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
       const planner = await plan;
+      await newGrades(user, data);
       const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null };
       await chrome.storage.local.set({ cache: fresh });
       return fresh;
@@ -87,6 +88,24 @@
     await chrome.storage.local.set({ marks: Object.assign({}, all, { [user]: mine }) });
     return mine;
   }
+  // New grades: what got a score (or a different one) since the last reading of this user. The first reading only sets the
+  // baseline. Kept in "recent" per user (20 newest, 30 days) for the dashboard; the service worker shows a notification.
+  const gradeKey = (c, x) => c.id + ":" + x.name;
+  async function newGrades(user, data) {
+    const { cache: old, recent, prefs } = await chrome.storage.local.get(["cache", "recent", "prefs"]);
+    if (!old || old.user !== user || !old.data || !Array.isArray(old.data.courses)) return;
+    const before = {};
+    for (const c of old.data.courses) for (const x of c.assignments || []) before[gradeKey(c, x)] = x.score;
+    const now = Date.now(), got = [];
+    for (const c of data.courses) for (const x of c.assignments)
+      if (typeof x.score === "number" && before[gradeKey(c, x)] !== x.score && gradeKey(c, x) in before)
+        got.push({ k: gradeKey(c, x), course: shortName(c.name), courseId: c.id, name: String(x.name), score: x.score, points: x.points, url: x.url && inCanvas(x.url), at: now });
+    if (!got.length) return;
+    const all = recent && typeof recent === "object" ? recent : {}, mine = (Array.isArray(all[user]) ? all[user] : []).filter(r => r && now - r.at < 30 * 864e5 && !got.some(g => g.k === r.k));
+    await chrome.storage.local.set({ recent: Object.assign({}, all, { [user]: got.concat(mine).slice(0, 20) }) });
+    if (cpPrefs(prefs).newgrades) chrome.runtime.sendMessage({ type: "grades", items: got.slice(0, 10) }).catch(() => {});
+  }
+  const pts = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
@@ -321,6 +340,7 @@
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
     .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
+    .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -507,9 +527,9 @@
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
   // Dashboard: the next assessment, the KPI row and the subject tiles (grades), the next 7 days of every course (week)
   // and the latest announcements (news); each part follows its switch in the popup.
-  function dashPanel(a, cache, prefs, marks) {
+  function dashPanel(a, cache, prefs, marks, rec) {
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
-    if (!grades && !why && !week && !news) return;
+    if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length)) return;
     const box = panelHost("cp-dash");
     if (!box) return;
     const grid = el("div", "grid");
@@ -525,6 +545,18 @@
       const draw = () => { const nx = weekView(agenda(a, cache, marks), prefs, mark); if (sec) { grid.insertBefore(nx, sec); sec.remove(); } else grid.appendChild(nx); sec = nx; };
       const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
+    }
+    const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < 30 * 864e5).slice(0, 5) : [];
+    if (recent.length) {   // the latest grades, newest first; "nova" for the last 3 days
+      const sec = el("section", "card news grades-new"), h = el("h3", null, "Notas novas"), fresh = recent.filter(r => Date.now() - r.at < 3 * 864e5).length;
+      if (fresh) h.appendChild(el("span", "pill ok", fresh + (fresh === 1 ? " nova" : " novas")));
+      const ul = el("ul");
+      for (const r of recent) {
+        const li = el("li", "row"), sc = el("span", "sc", pts(r.score)); sc.appendChild(el("small", null, " de " + pts(r.points)));
+        li.append(Date.now() - r.at < 3 * 864e5 ? el("span", "dot", "nova") : el("span"), mid(r.name, r.url || null, r.course + " · " + ago(C.localISO(new Date(r.at)))), sc);
+        ul.appendChild(li);
+      }
+      sec.append(h, ul); grid.appendChild(sec);
     }
     if (news) {
       const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
@@ -729,7 +761,8 @@
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
-      dashPanel(a, cache, prefs, marks);
+      const { recent } = await chrome.storage.local.get("recent");
+      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null);
       if (!prefs.grades || !a.rules) return;
       decorateCards(a, again);
       // the cards render late (React): watch the page for 20 seconds, then stop
