@@ -113,6 +113,24 @@
     if (cpPrefs(prefs).newgrades) chrome.runtime.sendMessage({ type: "grades", items: got.slice(0, 10) }).catch(() => {});
   }
   const pts = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
+  // Own tasks (not from Canvas), per Canvas user in chrome.storage.local "tasks": [{ id, title, date|null }]; done = a tick.
+  let myTasks = [];
+  async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
+  async function saveTasks(user, list) {
+    const { tasks } = await chrome.storage.local.get("tasks"), all = tasks && typeof tasks === "object" ? tasks : {};
+    myTasks = list.slice(0, 100); await chrome.storage.local.set({ tasks: Object.assign({}, all, { [user]: myTasks }) });
+  }
+  const addTask = (user, title, date) => saveTasks(user, myTasks.concat([{ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(title).trim().slice(0, 140), date: date || null }]));
+  // "estudar cap 5 sex" -> title + the next friday; also hoje, amanhã, segunda..domingo, dd/mm
+  function parseWhen(text) {
+    const words = String(text).trim().split(/\s+/), last = (words[words.length - 1] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const WDN = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"], wd = WDN.findIndex(w => last.startsWith(w) && last.length <= 7);
+    let date = null;
+    if (last === "hoje") date = addDays(0); else if (last === "amanha") date = addDays(1);
+    else if (wd >= 0) { const d = (wd - new Date().getDay() + 7) % 7 || 7; date = addDays(d); }
+    else { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(last); if (m) { const y = new Date().getFullYear(), iso = y + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0"); date = iso < addDays(-1) ? (y + 1) + iso.slice(4) : iso; } }
+    return { title: (date ? words.slice(0, -1) : words).join(" "), date };
+  }
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
@@ -147,6 +165,10 @@
       out.push({ key, cid: p.course_id, mine: !!(marks && marks[key]), title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
         task: !!p.submissions, date: C.localISO(new Date(p.plannable_date)), due: p.plannable_date, url: url.startsWith(location.origin + "/") ? url : null,   // task: has a submission (events and pages do not)
         done: !!(s.submitted || s.graded || s.excused || (p.planner_override && p.planner_override.marked_complete)), late: !!s.missing });
+    }
+    for (const t of myTasks) if (t.date) {
+      const key = "own:" + t.id, done = !!(marks && marks[key]);
+      out.push({ key, own: true, mine: done, title: t.title, course: "Minha tarefa", ours: null, task: true, date: t.date, due: null, url: null, done: false, late: t.date < today() });
     }
     for (const u of a.upcoming) if (u.item.exam && !out.some(x => x.ours === u.course && x.date === u.item.date))
       out.push({ key: "qf:" + C.key(u.course, u.item), title: u.item.name, course: u.course.name, ours: u.course, date: u.item.date, due: null, url: null, done: false, late: false, exam: u });
@@ -406,6 +428,10 @@
     .simi { all:unset; box-sizing:border-box; width:100%; max-width:130px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
     .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
+    .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }
+    .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
+    .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
+    @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -625,6 +651,33 @@
     }
     sec.appendChild(ul); return sec;
   }
+  function tasksCard(cache, marks, redraw) {
+    const sec = el("section", "card news tasks"), h = el("h3", null, "Minhas tarefas"), open = myTasks.filter(t => !marks["own:" + t.id]);
+    if (open.length) h.appendChild(el("span", "pill nt", open.length + (open.length === 1 ? " a fazer" : " a fazer")));
+    sec.appendChild(h);
+    const form = el("form", "add"), ti = el("input"), di = el("input"), ok = el("button", "primary", "Adicionar");
+    ti.type = "text"; ti.placeholder = "Nova tarefa (ex.: revisar slides 5 sex)"; ti.setAttribute("aria-label", "Nova tarefa"); ti.maxLength = 140;
+    di.type = "date"; di.setAttribute("aria-label", "Dia (opcional)"); ok.type = "submit";
+    form.addEventListener("submit", async e => {
+      e.preventDefault(); const pw = parseWhen(ti.value || ""), date = di.value || pw.date;
+      if (!pw.title) return; await addTask(cache.user, pw.title, date); redraw();
+    });
+    form.append(ti, di, ok); sec.appendChild(form);
+    const list = myTasks.slice().sort((x, y) => (!!marks["own:" + x.id] - !!marks["own:" + y.id]) || String(x.date || "9").localeCompare(String(y.date || "9")));
+    const ul = el("ul");
+    for (const t of list) {
+      const done = !!marks["own:" + t.id], li = el("li", "row" + (done ? " dn" : "")), end = el("span", "end");
+      const ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(done)); ck.setAttribute("aria-label", (done ? "Desmarcar: " : "Marcar como feito: ") + t.title);
+      ck.addEventListener("click", async () => { await setMark(cache.user, { key: "own:" + t.id, date: t.date || addDays(0) }, !done); redraw(); });
+      const del = el("button", "ck del", "×"); del.type = "button"; del.setAttribute("aria-label", "Apagar: " + t.title);
+      del.addEventListener("click", async () => { await saveTasks(cache.user, myTasks.filter(x => x.id !== t.id)); redraw(); });
+      end.append(ck, del);
+      li.append(el("span", "d", t.date ? cap(dayLabel(t.date)) : "sem dia"), mid(t.title, null, done ? "feita" : t.date && t.date < today() ? "atrasada" : "minha tarefa"), end);
+      ul.appendChild(li);
+    }
+    if (list.length) sec.appendChild(ul); else sec.appendChild(el("div", "muted", "Coisas que não estão no Canvas: estudar, imprimir, levar material. Com dia, entram na semana e nos lembretes."));
+    foldable(sec, h, "tasks"); return sec;
+  }
   function dashPanel(a, cache, prefs, marks, rec, onMode) {
     const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
@@ -653,6 +706,7 @@
       const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
     }
+    if (prefs.tasks) grid.appendChild(tasksCard(cache, marks, () => onMode && onMode(mode)));
     const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < (clean ? 3 : 30) * 864e5).slice(0, 5) : [];
     if (recent.length) {   // the latest grades, newest first; "nova" for the last 3 days
       const sec = el("section", "card news grades-new"), h = el("h3", null, "Notas novas"), fresh = recent.filter(r => Date.now() - r.at < 3 * 864e5).length;
@@ -871,14 +925,20 @@
     ul.setAttribute("role", "listbox"); ul.id = "pal-r"; q.setAttribute("aria-controls", "pal-r");
     let items = inCanvasOnly(baseIndex(a, cache)), hits = [], sel = 0;
     const close = () => host.remove();
-    const go = x => { close(); if (x.u.startsWith("#")) location.hash = x.u.slice(1); else location.assign(inCanvas(x.u)); };
+    const go = async x => {
+      close();
+      if (x.pw) { await loadTasks(cache.user); await addTask(cache.user, x.pw.title, x.pw.date); if (window.cpRedraw) window.cpRedraw(); return; }
+      if (x.u.startsWith("#")) location.hash = x.u.slice(1); else location.assign(inCanvas(x.u));
+    };
     const draw = () => {
-      hits = find(items, q.value); sel = Math.min(sel, Math.max(0, hits.length - 1)); ul.replaceChildren();
+      const plus = /^\+\s*(.+)/.exec(String(q.value || ""));
+      if (plus) { const pw = parseWhen(plus[1]); hits = pw.title ? [{ t: "Criar tarefa: " + pw.title, c: pw.date ? cap(dayLabel(pw.date)) : "sem dia", u: "#task", k: "nova", pw }] : []; }
+      else hits = find(items, q.value); sel = Math.min(sel, Math.max(0, hits.length - 1)); ul.replaceChildren();
       hits.forEach((x, i) => {
         const li = el("li", "pal-i" + (i === sel ? " on" : "")); li.setAttribute("role", "option"); li.setAttribute("aria-selected", String(i === sel));
         li.append(el("span", "pal-k", x.k), mid(x.t, null, x.c)); li.addEventListener("click", () => go(x)); ul.appendChild(li);
       });
-      if (!hits.length) ul.appendChild(el("li", "pal-e", q.value ? "Nada encontrado." : "Digite para buscar."));
+      if (!hits.length) ul.appendChild(el("li", "pal-e", q.value ? "Nada encontrado." : "Digite para buscar, ou + para criar uma tarefa (ex.: + revisar slides sex)."));
     };
     q.addEventListener("input", () => { sel = 0; draw(); });
     q.addEventListener("keydown", e => {
@@ -933,6 +993,7 @@
   let cardWatch = null;
   async function draw(cache, prefs, again) {
     const a = analyse(cache), marks = await myMarks(cache.user);
+    await loadTasks(cache.user);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
@@ -949,11 +1010,15 @@
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};
-      const onMode = async k => {   // switch from the panel: saved for the popup and theme.js, the panel redrawn at once
-        const { prefs: saved } = await chrome.storage.local.get("prefs"), next = Object.assign({}, saved, { mode: k });
-        await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); const old = document.getElementById("cp-dash"); if (old) old.remove();
-        dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
+      const onMode = async k => {   // switch from the panel (or a change of tasks): saved, the panel redrawn at once with fresh ticks and tasks
+        const { prefs: saved } = await chrome.storage.local.get("prefs");
+        if (cpPrefs(saved).mode !== k) { const next = Object.assign({}, saved, { mode: k }); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); }
+        const m2 = await myMarks(cache.user); await loadTasks(cache.user);
+        const old = document.getElementById("cp-dash"); if (old) old.remove();
+        dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
+        sendReminders(agenda(a, cache, m2), prefs, cache);
       };
+      window.cpRedraw = () => onMode(prefs.mode);
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       const { colors } = await chrome.storage.local.get("colors");
       const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };

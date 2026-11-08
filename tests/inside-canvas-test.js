@@ -532,6 +532,27 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await segB.listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(mFull.store.prefs.mode === "foco" && /Agora/.test(text(mFull.anchor)) && all(mFull.anchor).filter(e => e.id === "cp-dash").length === 1, "switched from the panel: saved and redrawn once"); ok();
 
+  // own tasks: added in the card (or with + in Ctrl+K), in the week when they have a day, ticked and deleted; per user
+  const tk = await runContent("/", null, { tasks: { 9: [{ id: "x", title: "do outro", date: null }] } });
+  const tcard = () => all(tk.anchor).find(e => /card news tasks/.test(e.className));
+  assert(tcard() && !/do outro/.test(text(tcard())), "the card is there; another user's tasks are not mine");
+  const [tin, tdate] = all(tcard()).filter(e => e.tag === "input");
+  tin.value = "imprimir resumo amanhã"; await all(tcard()).find(e => e.tag === "form").listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+  assert(tk.store.tasks[5].length === 1 && tk.store.tasks[5][0].title === "imprimir resumo" && tk.store.tasks[5][0].date === isoIn(1) && tk.store.tasks[9], "saved per user, the day read from the words");
+  assert(all(tk.anchor).some(e => /^ev /.test(e.className) && /^imprimir resumo · Minha tarefa/.test(e["aria-label"] || "")), "a task with a day shows in the week");
+  assert(tk.sent.filter(m => m.type === "remind").pop().items.some(i => /imprimir resumo/.test(i.title)), "and gets a reminder");
+  await all(tcard()).find(e => /^Marcar como feito: imprimir/.test(e["aria-label"] || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
+  assert(/ dn$/.test(all(tcard()).find(e => /^row/.test(e.className) && /imprimir/.test(text(e))).className), "ticked: greyed");
+  await all(tcard()).find(e => /^Apagar: imprimir/.test(e["aria-label"] || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
+  assert.strictEqual(tk.store.tasks[5].length, 0, "deleted");
+  const key2 = k => tk.winListeners.keydown({ key: k, ctrlKey: true, preventDefault() {}, stopPropagation() {} });
+  key2("k"); await new Promise(r => setTimeout(r, 15));
+  const q3 = all(tk.body.kids.find(k => k.id === "cp-search")).find(e => e.className === "pal-q");
+  q3.value = "+ ler capítulo 4"; q3.listeners.input();
+  assert.match(text(all(tk.body.kids.find(k => k.id === "cp-search")).find(e => /^pal-i/.test(e.className))), /nova \|.*Criar tarefa: ler capítulo 4 \| sem dia/, "+ in the search offers a new task");
+  await q3.listeners.keydown({ key: "Enter", preventDefault() {} }); await new Promise(r => setTimeout(r, 20));
+  assert(tk.store.tasks[5].some(t => t.title === "ler capítulo 4" && t.date === null) && /ler capítulo 4/.test(text(tcard())), "created from the search, the panel redrawn"); ok();
+
   // course cards: next deadline, a color per course (kept here, never sent to Canvas), gradient
   const cd = await runContent("/", null, { prefs: { gradient: true } });
   assert.match(text(cd.header), /Próx\.: Lista 3 · amanhã \d\d:\d\d/, "the next deadline on the card");
@@ -691,5 +712,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks)");
 })().catch(e => { console.error(e); process.exit(1); });
