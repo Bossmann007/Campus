@@ -151,11 +151,28 @@
   // What the service worker should remind: work not yet handed in and exams, in the next 14 days. Without a planner reading
   // (Canvas failed) nothing is sent, so a passing error does not wipe the reminders already set.
   function sendReminders(list, prefs, cache) {
-    if (prefs.remind && !cache.planner) return;
+    if ((prefs.remind || prefs.summary) && !cache.planner) return;
     const t = today(), end = addDays(14);
-    const items = prefs.remind ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
+    const items = prefs.remind || prefs.summary ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
       .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
-    chrome.runtime.sendMessage({ type: "remind", items }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "remind", items, alarms: prefs.remind }).catch(() => {});   // the Monday summary reads the list too
+  }
+
+  // The deadlines and exams from today on as a calendar file (.ics) for Google Agenda, Outlook or the phone.
+  function icsText(list) {
+    const esc = v => String(v).replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, " ");
+    const utc = iso => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const day = iso => iso.replace(/-/g, ""), stamp = utc(new Date().toISOString());
+    const next = iso => C.localISO(new Date(Date.parse(iso + "T12:00:00") + 864e5));
+    const ev = list.filter(x => x.date >= today() && (x.task || x.exam || x.due)).slice(0, 200).map(x => ["BEGIN:VEVENT", "UID:" + esc(x.key) + "@caderno-plus", "DTSTAMP:" + stamp,
+      ...(x.due ? ["DTSTART:" + utc(x.due), "DTEND:" + utc(x.due)] : ["DTSTART;VALUE=DATE:" + day(x.date), "DTEND;VALUE=DATE:" + day(next(x.date))]),
+      "SUMMARY:" + esc((x.exam ? "Prova: " : "") + x.title + " · " + x.course), ...(x.url ? ["URL:" + x.url] : []), "END:VEVENT"].join("\r\n"));
+    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Caderno+//PUCPR//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Caderno+ · entregas e provas", ...ev, "END:VCALENDAR"].join("\r\n") + "\r\n";
+  }
+  function saveIcs(list) {
+    const a = el("a"), url = URL.createObjectURL(new Blob([icsText(list)], { type: "text/calendar" }));
+    a.href = url; a.download = "caderno-entregas-e-provas.ics"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
   const COLORS = { ok: ["#e2f1e9", "#1f5c42"], warn: ["#fbefd6", "#744405"], bad: ["#fce4dd", "#912713"] };
@@ -332,6 +349,7 @@
     .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
     .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
+    .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini { margin-left:10px; }
     .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
     .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
@@ -404,6 +422,8 @@
       pr.append(r, el("span", null, got + " de " + work.length + " feitas"));
       pr.setAttribute("aria-label", got + " de " + work.length + " feitas nesta semana"); h.appendChild(pr);
     }
+    const ics = el("button", "mini", "↓ .ics"); ics.type = "button"; ics.title = "Exportar entregas e provas para a sua agenda (Google, Outlook, celular)";
+    ics.addEventListener("click", () => saveIcs(list)); h.appendChild(ics);
     sec.appendChild(h);
     if (overdue.length) {   // ticked overdue work stays here greyed (so it can be unticked) until it leaves the planner window
       const row = el("div", "late"); row.appendChild(el("span", "pill " + (late.length ? "bad" : "ok"), "Atrasadas"));

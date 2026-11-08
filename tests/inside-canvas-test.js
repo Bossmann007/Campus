@@ -46,7 +46,7 @@ const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listene
   action: { setBadgeText: async o => { local.badge = o.text; }, setTitle: async () => {}, setBadgeBackgroundColor: async () => {} },
   downloads: { onChanged: { addListener: f => { listeners.changed = f; } }, download: async o => { if (/boom/.test(o.filename)) throw new Error("Invalid filename"); swSaved.push(o); return nextId++; } } };
 const imported = [];   // importScripts("prefs.js") shares the worker's global scope: the test puts prefs.js in front instead
-const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload };")(chromeSW, f => imported.push(f));
+const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
 for (const bad of [{ url: "https://evil.example/a", filename: "PUCPR/a.pdf" }, { url: "https://pucpr.instructure.com/x", filename: "Documents/a.pdf" },
@@ -61,6 +61,7 @@ const items = [{ id: 1, url: "https://pucpr.instructure.com/files/1/download", f
 function fakeEl(tag) {
   const e = { tag, kids: [], style: {}, dataset: {}, className: "", textContent: "", listeners: {}, parent: null,
     append(...c) { c.forEach(x => { x.parent = this; }); this.kids.push(...c); }, appendChild(c) { this.append(c); return c; },
+    click() { this.clicked = true; },
     replaceChildren(...c) { this.kids.forEach(k => { k.parent = null; }); this.kids = []; this.append(...c); },
     prepend(c) { c.parent = this; this.kids.unshift(c); }, insertBefore(c, ref) { c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); },
     remove() { if (this.parent) this.parent.kids.splice(this.parent.kids.indexOf(this), 1); this.parent = null; this.removed = true; },
@@ -419,6 +420,30 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(local.shown[notes[1].id], "https://pucpr.instructure.com/grades", "its click opens the grades, never an outside link");
   local.prefs = { newgrades: false }; await ask({ type: "grades", items: [{ name: "X", score: 1, points: 1 }] }, CANVAS_TAB);
   assert.strictEqual(notes.length, 2, "switched off in the popup: nothing shown"); ok();
+  // Monday summary: next Monday 08:00, from the list the page sent
+  const nm = new Date(sw.nextMonday8(new Date(2026, 10, 8, 12)));   // a Sunday
+  assert.deepStrictEqual([nm.getDay(), nm.getHours(), nm.getDate()], [1, 8, 9], "Sunday noon: the next day at 08:00");
+  assert.strictEqual(new Date(sw.nextMonday8(new Date(2026, 10, 9, 9))).getDate(), 16, "Monday 09:00: next week");
+  assert.strictEqual(new Date(sw.nextMonday8(new Date(2026, 10, 9, 7))).getDate(), 9, "Monday 07:00: today");
+  local.prefs = {}; notes.length = 0;
+  await ask({ type: "remind", items: [{ key: "a", title: "Entrega: Lista", course: "BD", date: isoIn(1) }, { key: "b", title: "Prova: RA2", course: "BD", date: isoIn(2) }, { key: "c", title: "Entrega: Longe", date: isoIn(9) }], alarms: false }, CANVAS_TAB);
+  assert(!Object.keys(alarms).some(k => k.startsWith("r|")), "alarms: false sets no reminder");
+  await sw.summary({ scheduledTime: Date.now() });
+  const wd = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(isoIn(2) + "T12:00:00").getDay()];
+  assert.deepStrictEqual([notes[0].title, notes[0].message], ["Sua semana: 1 entrega e 1 prova", "RA2 (" + wd + ")"], "summary text, only the next 7 days");
+  await sw.summary({ scheduledTime: Date.now() - 13 * 36e5 }); assert.strictEqual(notes.length, 1, "a summary half a day late is dropped");
+  local.prefs = { summary: false }; await sw.summary({ scheduledTime: Date.now() }); assert.strictEqual(notes.length, 1, "summary off");
+  local.prefs = {};
+
+  // .ics: the deadlines and exams from today on
+  const icsPage = await runContent("/", null);
+  const icsBtn = all(icsPage.anchor).find(e => e.textContent === "↓ .ics");
+  let blob = null; const realCreate = URL.createObjectURL; URL.createObjectURL = b => { blob = b; return "blob:x"; };
+  icsBtn.listeners.click(); URL.createObjectURL = realCreate;
+  const ics = await blob.text();
+  assert(/^BEGIN:VCALENDAR\r\n/.test(ics) && /END:VCALENDAR\r\n$/.test(ics), "a calendar file");
+  assert(/SUMMARY:Lista 3 · Arquitetura de Banco de Dados\r\n/.test(ics) && /DTSTART:\d{8}T\d{6}Z/.test(ics) && /URL:https:\/\/pucpr.instructure.com\/courses\/71306\/assignments\/1/.test(ics), "timed deadline with its link");
+  assert(!/Relatório/.test(ics), "past work left out"); assert(/UID:assignment:1@caderno-plus/.test(ics)); ok();
   const locked = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 5000 }), { scripts: pageEnv });
   assert.strictEqual(locked.fetches.length, 0, "another tab is reading: this one uses the last reading");
   assert(all(locked.anchor).some(e => /kpi/.test(e.className)), "and still draws it");
@@ -458,9 +483,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(out.anchor.kids.length, 0, "and nothing drawn"); ok();
 
   // every module off: nothing on the page, and the reminders cleared
-  const off = await runContent("/", null, { prefs: { week: false, news: false, grades: false, remind: false } });
+  const off = await runContent("/", null, { prefs: { week: false, news: false, grades: false, remind: false, summary: false } });
   assert.strictEqual(off.anchor.kids.length, 0, "no dashboard panel"); assert.strictEqual(text(off.header), "", "no card pill");
-  assert.deepStrictEqual(off.sent.find(m => m.type === "remind").items, [], "reminders off: the list sent is empty");
+  assert.deepStrictEqual(off.sent.find(m => m.type === "remind").items, [], "reminders and summary off: the list sent is empty");
+  const sumOnly = await runContent("/", null, { prefs: { remind: false } });
+  const sm = sumOnly.sent.find(m => m.type === "remind");
+  assert(sm.items.length > 0 && sm.alarms === false, "reminders off, summary on: the list goes for the summary, no alarms");
   const nofiles = await runContent("/courses/71306", [], { prefs: { files: false } });
   assert(!all(nofiles.anchor).some(e => e.textContent === "Baixar arquivos da matéria"), "files off: no download button");
   assert.match(text(nofiles.anchor), /garantidos de 10/, "grades still shown");
@@ -523,5 +551,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics)");
 })().catch(e => { console.error(e); process.exit(1); });
