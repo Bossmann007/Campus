@@ -750,7 +750,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!/font-family/.test(lookCss()) && !/Fraunces/.test(lookCss()), "no font forced on Canvas (InstUI sets its own; mixed families looked broken)");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()), "cards rounded");
   assert(/\.ic-DashboardCard__box__container \{ text-align:center/.test(lookCss()) && !/\.ic-DashboardCard \{ display:flex/.test(lookCss()) && !/__header_hero, \.ic-DashboardCard__header_image \{ height/.test(lookCss()), "Canvas's own card layout kept, rows only centered (no forced sizes)");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false }), "kept for the next first paint");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false, navHide: false }), "kept for the next first paint");
+  assert(!/translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()), "the left menu stays by default");
+  lk.listen.change({ prefs: { newValue: { navHide: true } } }, "local");
+  assert(/\.ic-app-header \{ transform:translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()) && /\.ic-app-header:is\(:hover, :focus-within\) \{ transform:none/.test(lookCss()) && /\.ic-Layout-wrapper \{ margin-left:10px !important/.test(lookCss()), "menu hidden: a strip that opens on hover or focus, the page takes the room");
+  lk.listen.change({ prefs: { newValue: {} } }, "local");
   assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
   assert(/:is\(#my_courses_table, #past_enrollments_table/.test(lookCss()) && /#nav-tray-portal li \{/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");

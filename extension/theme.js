@@ -34,6 +34,14 @@
 :root.cp-look ${TB} thead th { background:var(--cp-paper) !important; color:var(--cp-muted) !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.05em; }
 :root.cp-look ${TB} :is(th, td) { padding:12px 16px !important; border-color:var(--cp-line) !important; }
 :root.cp-look ${TB} tbody tr:hover td { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }`);
+    // Menu lateral escondido: Canvas's left menu (.ic-app-header, fixed; the page leaves it room on .ic-Layout-wrapper, canvas-lms
+    // _ic_app_layout.scss) slides out leaving a thin strip, and comes back while the mouse (or the keyboard focus) is on it
+    if (cards.navHide) out.push(`@media (min-width: 768px) {
+:root .ic-app-header { transform:translateX(calc(-100% + 10px)); transition:transform .22s cubic-bezier(.23,1,.32,1) .25s, box-shadow .22s; z-index:1000 !important; }
+:root .ic-app-header::after { content:""; position:absolute; top:0; right:0; bottom:0; width:10px; background:linear-gradient(90deg, transparent, rgba(255,255,255,.18)); pointer-events:none; }
+:root .ic-app-header:is(:hover, :focus-within) { transform:none; transition-delay:0s; box-shadow:8px 0 30px -12px rgba(0,0,0,.45); }
+:root .ic-app-header:is(:hover, :focus-within)::after { opacity:0; }
+:root .ic-Layout-wrapper { margin-left:10px !important; } }`);
     // the left-menu trays (Cursos, Grupos, Histórico, Ajuda) in #nav-tray-portal: paper, items as small cards
     if (L) out.push(`:root.cp-look #nav-tray-portal [role="dialog"], :root.cp-look #nav-tray-portal [role="dialog"] > div { background:var(--cp-paper) !important; }
 :root.cp-look #nav-tray-portal h2 { color:var(--cp-ink) !important; letter-spacing:-.01em; }
@@ -117,7 +125,7 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .
   };
   const take = prefs => {
     p = cpPrefs(prefs); apply();
-    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal })); } catch (e) { /* no storage */ }
+    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal, navHide: p.navHide })); } catch (e) { /* no storage */ }
   };
   apply();
   setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);
