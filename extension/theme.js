@@ -80,9 +80,9 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     if (cards.mode === "foco") out.push(`${D}.cp-has-panel :is(#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, #cp-scroll) { display:none !important; }`);
     // Canvas's own card layout (262px cards in .ic-DashboardCard__box__container, canvas-lms dashboard_card.scss) is kept;
     // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
-    out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:116px; }
+    out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:96px; } .ic-DashboardCard__header-term { display:none !important; }   /* the term repeats on every card */
 :root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 298px - 24px); margin-left:auto !important; margin-right:auto !important; }`);
-    if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; } .ic-DashboardCard__header_hero { opacity:1 !important; }`);
+    if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; height:72px !important; } .ic-DashboardCard__header_hero { opacity:1 !important; height:72px !important; }`);
     if (L) {
       const [paper, card, ink, muted, line, accent, link, menu] = L;
       out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent};
@@ -100,7 +100,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look #section-tabs li a:hover { background:color-mix(in srgb, var(--cp-accent) 8%, transparent) !important; text-decoration:none !important; }
 :root.cp-look #section-tabs li a.active { background:color-mix(in srgb, var(--cp-accent) 15%, transparent) !important; font-weight:650 !important; }
 :root.cp-look .context_module { border:1px solid var(--cp-line) !important; border-radius:14px !important; overflow:hidden; background:var(--cp-card) !important; margin-bottom:14px !important; box-shadow:0 1px 2px rgba(29,36,51,.05); }
-:root.cp-look .context_module > .ig-header { background:var(--cp-paper) !important; border:0 !important; border-bottom:1px solid var(--cp-line) !important; }
+:root.cp-look .context_module > .ig-header { background:var(--cp-paper) !important; border:0 !important; border-bottom:1px solid var(--cp-line) !important; padding:10px 14px !important; font-weight:600; }
 :root.cp-look .context_module .ig-row { border-color:var(--cp-line) !important; transition:background-color .15s; }
 :root.cp-look .context_module_item:hover .ig-row { background:color-mix(in srgb, var(--cp-accent) 5%, transparent) !important; }
 :root.cp-look #course_show_secondary :is(.btn, .Button, a.button-sidebar-wide) { border-radius:10px !important; }`);

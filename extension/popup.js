@@ -11,14 +11,20 @@ function showPrefs(prefs) {
   const p = cpPrefs(prefs);
   $("theme").value = p.theme;
   for (const sel of document.querySelectorAll("[data-sel]")) sel.value = p[sel.dataset.sel];
-  looks.forEach(b => b.setAttribute("aria-checked", String(b.dataset.look === p.look)));
-  modes.forEach(b => b.setAttribute("aria-checked", String(b.dataset.mode === p.mode)));
+  looks.forEach(b => { b.setAttribute("aria-checked", String(b.dataset.look === p.look)); b.tabIndex = b.dataset.look === p.look ? 0 : -1; });
+  modes.forEach(b => { b.setAttribute("aria-checked", String(b.dataset.mode === p.mode)); b.tabIndex = b.dataset.mode === p.mode ? 0 : -1; });
   for (const box of document.querySelectorAll("[data-pref]")) box.checked = p[box.dataset.pref];
 }
 $("theme").addEventListener("change", () => setPref("theme", $("theme").value));
 for (const sel of document.querySelectorAll("[data-sel]")) sel.addEventListener("change", () => setPref(sel.dataset.sel, sel.value));
 for (const b of looks) b.addEventListener("click", () => setPref("look", b.dataset.look));
 for (const b of modes) b.addEventListener("click", () => setPref("mode", b.dataset.mode));
+// radio groups: one Tab stop (the checked one), arrows move and choose
+const roving = (group, key) => group.forEach((b, i) => b.addEventListener("keydown", e => {
+  const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0; if (!d) return;
+  e.preventDefault(); const nb = group[(i + d + group.length) % group.length]; setPref(key, nb.dataset[key]); nb.focus();
+}));
+roving(looks, "look"); roving(modes, "mode");
 for (const box of document.querySelectorAll("[data-pref]")) box.addEventListener("change", () => setPref(box.dataset.pref, box.checked));
 chrome.storage.local.get("prefs").then(({ prefs }) => showPrefs(prefs));
 if (chrome.storage.onChanged) chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs) showPrefs(ch.prefs.newValue); });
