@@ -144,7 +144,7 @@
       const s = p.submissions || {};
       const url = p.html_url ? new URL(p.html_url, location.href).href : "";
       const key = p.plannable_type + ":" + p.plannable_id;
-      out.push({ key, mine: !!(marks && marks[key]), title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
+      out.push({ key, cid: p.course_id, mine: !!(marks && marks[key]), title: String(p.plannable.title || ""), course: short(p.context_name, p.course_id), ours: a.byCanvasId[p.course_id] || null,
         task: !!p.submissions, date: C.localISO(new Date(p.plannable_date)), due: p.plannable_date, url: url.startsWith(location.origin + "/") ? url : null,   // task: has a submission (events and pages do not)
         done: !!(s.submitted || s.graded || s.excused || (p.planner_override && p.planner_override.marked_complete)), late: !!s.missing });
     }
@@ -191,16 +191,46 @@
   }
 
   // Dashboard: one status pill per card of the six courses. Cards render late (React), so watch the page.
-  function decorateCards(a, again) {
-    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { if (card.cpPill) card.cpPill.remove(); delete card.dataset.qf; }
+  // Course cards (every course, not only ours): the status pill (our subjects), the next deadline, the color chosen for the
+  // course (kept here, never written to Canvas) and an optional gradient. ctx: { prefs, list, colors, setColor }.
+  const SWATCHES = ["#E2482B", "#1D2433", "#2F7D5B", "#1E5FA8", "#7C5CDB", "#C2185B", "#A8650F", "#00897B"];
+  const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16), f = c => Math.max(0, Math.min(255, Math.round(c + (k > 0 ? (255 - c) * k : c * k)))); return "rgb(" + f(n >> 16) + "," + f((n >> 8) & 255) + "," + f(n & 255) + ")"; };
+  function decorateCards(a, again, ctx) {
+    const prefs = ctx.prefs;
+    if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); card.cpPalette = null; delete card.dataset.qf; }
     for (const card of document.querySelectorAll(".ic-DashboardCard:not([data-qf])")) {
       const link = card.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href"));
-      const c = m && a.byCanvasId[m[1]];
-      card.dataset.qf = "1";
-      if (!c) continue;
-      const st = a.state(c), p = pill(a.label(st), a.tone(st));
-      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
-      card.cpPill = p; (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
+      card.dataset.qf = "1"; card.cpAdded = [];
+      if (!m) continue;
+      const id = m[1], c = a.byCanvasId[id], head = card.querySelector(".ic-DashboardCard__header_content") || card, add = x => { card.cpAdded.push(x); head.appendChild(x); return x; };
+      if (c && prefs.grades && a.rules) {
+        const st = a.state(c), p = add(pill(a.label(st), a.tone(st)));
+        p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
+      }
+      const nx = prefs.cardNext && ctx.list.find(x => String(x.cid) === id && x.task && !fin(x) && x.date >= today());
+      if (nx) { const d = add(el("span", null, "Próx.: " + nx.title + " · " + dayLabel(nx.date) + (nx.due ? " " + hhmm(nx.due) : ""))); d.title = nx.title;
+        d.style.cssText = "display:block;margin-top:4px;font:500 11.5px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#5F6675;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"; }
+      const hero = card.querySelector(".ic-DashboardCard__header_hero"), color = ctx.colors[id];
+      if (hero && (color || prefs.gradient || hero.cpBase !== undefined)) {
+        if (hero.cpBase === undefined) hero.cpBase = hero.style.backgroundColor || "";   // Canvas's own color, back when the course color is cleared
+        hero.style.backgroundColor = color || hero.cpBase;
+        hero.style.backgroundImage = prefs.gradient && /^#[0-9a-f]{6}$/i.test(color || "") ? "linear-gradient(115deg," + color + " 0%," + shade(color, .35) + " 100%)" : prefs.gradient ? "linear-gradient(115deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.35) 100%)" : "";
+      }
+      // a small palette on the card: pick a color for this course, or back to Canvas's
+      const pick = add(el("button", null, "●")); pick.type = "button"; pick.title = "Cor desta matéria (só no Caderno+)"; pick.setAttribute("aria-label", "Escolher a cor desta matéria");
+      pick.style.cssText = "position:absolute;top:8px;right:8px;z-index:2;width:22px;height:22px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:rgba(29,36,51,.35);color:#fff;font:12px/20px sans-serif;cursor:pointer";
+      pick.addEventListener("click", e => {
+        e.preventDefault(); e.stopPropagation();
+        const open = card.cpPalette; if (open) { open.remove(); card.cpPalette = null; return; }
+        const pal = el("div"); pal.style.cssText = "position:absolute;top:34px;right:8px;z-index:3;display:grid;grid-template-columns:repeat(5,20px);gap:6px;padding:8px;border-radius:10px;background:#fff;box-shadow:0 10px 24px -10px rgba(29,36,51,.5)";
+        for (const sw of SWATCHES.concat([""])) {
+          const b = el("button"); b.type = "button"; b.setAttribute("aria-label", sw ? "Cor " + sw : "Cor do Canvas"); b.title = sw || "Cor do Canvas";
+          b.style.cssText = "width:20px;height:20px;padding:0;border-radius:50%;cursor:pointer;border:1px solid #ECE4D3;background:" + (sw || "repeating-linear-gradient(45deg,#fff 0 3px,#ddd 3px 6px)");
+          b.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); ctx.setColor(id, sw); });
+          pal.appendChild(b);
+        }
+        card.cpPalette = pal; card.cpAdded.push(pal); head.appendChild(pal);
+      });
     }
   }
 
@@ -889,12 +919,17 @@
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null);
-      if (!prefs.grades || !a.rules) return;
-      decorateCards(a, again);
+      const { colors } = await chrome.storage.local.get("colors");
+      const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };
+      ctx.setColor = async (id, color) => {
+        const next = Object.assign({}, ctx.colors); if (color) next[id] = color; else delete next[id];
+        ctx.colors = next; await chrome.storage.local.set({ colors: next }); decorateCards(a, true, ctx);
+      };
+      decorateCards(a, again, ctx);
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
-      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a), 250); });
+      const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => decorateCards(a, false, ctx), 250); });
       watch.observe(document.body, { childList: true, subtree: true });
       setTimeout(() => watch.disconnect(), 20000);
     }

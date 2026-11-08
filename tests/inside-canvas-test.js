@@ -90,7 +90,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null, querySelector: () => null,
-    querySelectorAll: sel => sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
+    querySelectorAll: sel => sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
   const cid = opts.courseId || 71306, fetches = [];
@@ -347,7 +347,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(all(ob).some(e => e.className === "muted why" && e.textContent === "O Quanto falta ainda não tem as regras da sua turma."), "other turma: the muted line");
   assert.match(text(ob), /Próximos 7 dias/); assert.match(text(ob), /Prova adiada/, "week and announcements still shown");
   assert(!all(ob).some(e => e.tag === "button" && /rascunho/i.test(e.textContent)) && !/rascunho/i.test(text(ob)), "other turma: just the note, no draft button");
-  assert.strictEqual(text(ot.header), "", "no pill on the dashboard cards");
+  assert(!/precisa|garantido|faltam|recuperação/.test(text(ot.header)), "no pill on the dashboard cards");
   assert(!ot.sent.find(m => m.type === "remind").items.some(i => i.key.startsWith("qf:")), "no Plano exams in the reminders");
   assert(ot.sent.find(m => m.type === "remind").items.some(i => i.key === "assignment:1"), "real Canvas tasks still reminded");
   assert.strictEqual(ot.sent.find(m => m.type === "next").date, null, "no exam on the icon");
@@ -520,6 +520,23 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await listeners.alarm({ name: "focus|pausa", scheduledTime: Date.now() }); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(notes[1].title, "Pausa acabou"); ok();
 
+  // course cards: next deadline, a color per course (kept here, never sent to Canvas), gradient
+  const cd = await runContent("/", null, { prefs: { gradient: true } });
+  assert.match(text(cd.header), /Próx\.: Lista 3 · amanhã \d\d:\d\d/, "the next deadline on the card");
+  const pick = all(cd.header).find(e => e["aria-label"] === "Escolher a cor desta matéria");
+  pick.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  const swatch = all(cd.header).find(e => e["aria-label"] === "Cor #2F7D5B");
+  await swatch.listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(cd.store.colors, { 71306: "#2F7D5B" }, "the color is saved for this course");
+  assert(cd.header.style.backgroundColor === "#2F7D5B" && /linear-gradient\(115deg,#2F7D5B/.test(cd.header.style.backgroundImage), "painted, with the gradient");
+  assert.strictEqual(all(cd.header).filter(e => /^Próx\./.test(e.textContent)).length, 1, "redrawn, not duplicated");
+  const pick2 = all(cd.header).find(e => e["aria-label"] === "Escolher a cor desta matéria"); pick2.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  await all(cd.header).find(e => e["aria-label"] === "Cor do Canvas").listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
+  assert(!cd.store.colors[71306] && cd.header.style.backgroundColor === "", "back to Canvas's color");
+  assert(!cd.fetches.some(u => /colors/.test(u)), "nothing written to the Canvas account");
+  const noNext = await runContent("/", null, { prefs: { cardNext: false } });
+  assert(!/Próx\./.test(text(noNext.header)), "switched off: no deadline on the card"); ok();
+
   // .ics: the deadlines and exams from today on
   const icsPage = await runContent("/", null);
   const icsBtn = all(icsPage.anchor).find(e => e.textContent === "↓ .ics");
@@ -569,7 +586,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   // every module off: nothing on the page, and the reminders cleared
   const off = await runContent("/", null, { prefs: { week: false, news: false, grades: false, remind: false, summary: false } });
-  assert.strictEqual(off.anchor.kids.length, 0, "no dashboard panel"); assert.strictEqual(text(off.header), "", "no card pill");
+  assert.strictEqual(off.anchor.kids.length, 0, "no dashboard panel"); assert(!/precisa|garantido|faltam|recuperação/.test(text(off.header)), "no card pill");
   assert.deepStrictEqual(off.sent.find(m => m.type === "remind").items, [], "reminders and summary off: the list sent is empty");
   const sumOnly = await runContent("/", null, { prefs: { remind: false } });
   const sm = sumOnly.sent.find(m => m.type === "remind");
@@ -605,7 +622,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const lookCss = () => lk.styles.find(x => x.id === "cp-look").textContent;
   assert(["cp-look", "cp-look-nav", "cp-look-font"].every(c => lk.cls.has(c)) && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look, menu and font");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()) && /Fraunces/.test(lookCss()), "cards and serif titles");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno" }), "kept for the next first paint");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true }), "kept for the next first paint");
+  lk.listen.change({ prefs: { newValue: { cardStyle: "lista", cardImg: false } } }, "local");
+  assert(/grid-template-columns:72px 1fr/.test(lookCss()) && /__header_image \{ background-image:none/.test(lookCss()), "cards as a list, without pictures");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "original", font: "original" } } }, "local");
   assert(!lk.cls.has("cp-look") && !lk.cls.has("cp-look-nav") && !lk.cls.has("cp-look-font") && lookCss() === "", "Canvas original: nothing changed, live");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "verde", font: "sistema" } } }, "local");
@@ -656,5 +675,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards)");
 })().catch(e => { console.error(e); process.exit(1); });

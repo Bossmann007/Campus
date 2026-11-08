@@ -16,8 +16,12 @@
     serifa: ['"Iowan Old Style","New York",Georgia,"Times New Roman",serif', '"Iowan Old Style","New York",Georgia,serif']
   };
   const font = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL ? chrome.runtime.getURL("fonts/fraunces-latin-500-normal.woff2") : "";
-  const css = (look, nav, f) => {
+  const css = (look, nav, f, cards) => {
     const L = LOOKS[look], out = [];
+    if (cards.cardStyle === "compacto") out.push(`.ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:64px !important; } .ic-DashboardCard { min-height:0 !important; } .ic-DashboardCard__action-container { display:none !important; }`);
+    if (cards.cardStyle === "lista") out.push(`.ic-DashboardCard__box { display:grid !important; grid-template-columns:1fr; gap:8px; } .ic-DashboardCard { width:auto !important; margin:0 !important; display:grid !important; grid-template-columns:72px 1fr; align-items:stretch; }
+.ic-DashboardCard__header { display:contents; } .ic-DashboardCard__header_hero, .ic-DashboardCard__header_image { height:auto !important; min-height:64px; grid-row:span 2; } .ic-DashboardCard__action-container { justify-content:flex-start; }`);
+    if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; } .ic-DashboardCard__header_hero { opacity:1 !important; }`);
     if (L) {
       const [paper, card, ink, muted, line, accent, link, menu] = L;
       out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent};
@@ -60,12 +64,12 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .
   const apply = () => {
     const t = p.theme, on = t === "dark" || t === "dim" || (t === "auto" && dark.matches) || (t === "night" && night()), cl = document.documentElement.classList;
     cl.toggle("cp-dark", on); cl.toggle("cp-dim", on && t === "dim");
-    look.textContent = css(p.look, p.nav, p.font);
+    look.textContent = css(p.look, p.nav, p.font, p);
     cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look])); cl.toggle("cp-look-font", !!FONTS[p.font]);
   };
   const take = prefs => {
     p = cpPrefs(prefs); apply();
-    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, font: p.font })); } catch (e) { /* no storage */ }
+    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, font: p.font, cardStyle: p.cardStyle, cardImg: p.cardImg })); } catch (e) { /* no storage */ }
   };
   apply();
   setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);
