@@ -2,6 +2,7 @@
 const assert = require("assert"), fs = require("fs"), path = require("path");
 const dir = path.join(__dirname, "..", "extension");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+assert(manifest.description.length <= 132 && manifest.name.length <= 75, "Chrome Web Store limits: description <= 132 (" + manifest.description.length + "), name <= 75");
 assert.strictEqual(manifest.manifest_version, 3);
 assert.deepStrictEqual(manifest.permissions, ["storage", "downloads", "alarms", "notifications"], "no broad permissions");
 assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*"], "host access only to the PUCPR Canvas");
