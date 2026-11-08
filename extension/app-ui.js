@@ -97,7 +97,7 @@
   // ?view=calendario shows only the calendar.
   const urlCal = () => new URLSearchParams(location.search).get("view") === "calendario";
   let CAL = urlCal();
-  const applyView = () => { document.body.classList.toggle("cal", CAL); document.title = CAL ? "Calendário · Campus+" : "Minhas matérias · Campus+";
+  const applyView = () => { document.body.classList.toggle("cal", CAL); document.title = CAL ? "Calendário · Caderno+" : "Minhas matérias · Caderno+";
     for (const b of document.querySelectorAll("#viewsw button")) b.setAttribute("aria-pressed", (b.dataset.v === "cal") === CAL); };
   applyView();
   // The switch changes the view in place and keeps the address in step (?view=calendario).
@@ -157,7 +157,7 @@
     }
 
     const foot = $("foot");
-    foot.append(el("p", null, "Feito por um aluno para a turma. Não é um sistema oficial da PUCPR: confira pesos e datas no Canvas e no Plano de Ensino."),
+    foot.append(el("p", null, "Projeto independente, não é um sistema oficial da PUCPR: confira pesos e datas no Canvas e no Plano de Ensino."),
       el("p", null, "Suas notas ficam salvas só neste navegador (localStorage). Nada é enviado para servidor nenhum."),
       el("p", null, "Recuperação (só informação, não simulada): os Planos permitem recuperar um único RA com média abaixo de 7,0. Conectividade: recuperação estendida para final entre 4,0 e 7,0, com teto 7,0."));
 
@@ -187,10 +187,10 @@
       const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
       const add = (id, date, title, desc) => ev.push("BEGIN:VEVENT", "UID:" + id + "@quanto-falta", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + day(date), "DTEND;VALUE=DATE:" + next(date),
         "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
-      for (const u of C.upcoming(COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Campus+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
+      for (const u of C.upcoming(COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Caderno+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
       if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
         .forEach(t => add("todo-" + [...(t.courseName + "|" + t.name)].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 7).toString(36) + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
-      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Campus+//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Campus+"].concat(ev, "END:VCALENDAR").join("\r\n");
+      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Caderno+//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Caderno+"].concat(ev, "END:VCALENDAR").join("\r\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       const nTodo = ev.filter(x => x.startsWith("UID:todo-")).length, nAll = ev.filter(x => x.startsWith("UID:")).length;
@@ -349,7 +349,7 @@
   const con = (() => {
     const w = el("div", "win"), bar = el("div", "win-bar"), dots = el("span", "dots"), tab = el("span", "tab"), tag = el("span", "demo-tag");
     dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg class="logo" viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg>';
-    tab.append(" Campus+"); bar.append(dots, tab, el("span", "sp"), tag);
+    tab.append(" Caderno+"); bar.append(dots, tab, el("span", "sp"), tag);
     const body = el("div", "win-body"), side = el("div", "win-side"), main = el("div", "win-main fade");
     main.setAttribute("aria-live", "polite");
     side.appendChild(el("h4", null, "Matérias · 2026/2"));
@@ -468,7 +468,7 @@
       con.side(side, true);
       if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
     const open = COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
-    $("h1a").textContent = !any ? "Campus+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
+    $("h1a").textContent = !any ? "Caderno+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
     $("h1b").textContent = !any ? "quanto falta?" : open ? "pra fechar o semestre." : "bom descanso.";
     const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
     sb.textContent = any ? "Ver minhas matérias" : "Lançar minhas notas";
@@ -607,7 +607,7 @@
     $("importfile").addEventListener("change", e => {
       const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
       out.textContent = "";
-      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Campus+.")); return; }
+      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Caderno+.")); return; }
       f.text().then(t => {
         let res;
         try { res = C.fromBackup(t); } catch (err) { out.appendChild(el("div", "msg bad", "Não reconheci esse arquivo (" + err.message + ").")); return; }
@@ -615,7 +615,7 @@
         importRun(res, "Importar o backup " + f.name, [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
       });
     });
-    // Inside the extension (the Campus+ page in Canvas): the last Canvas reading is applied as the page opens.
+    // Inside the extension (the Caderno+ page in Canvas): the last Canvas reading is applied as the page opens.
     // After the term (TERM_END) it shows the notice at the top instead.
     const boot = C.extBoot(window.CP_EXT, C.localISO(new Date()));
     if (boot.notice) { const n = el("div", "msg warn termover", boot.notice); n.setAttribute("role", "status"); const hero = document.querySelector("header.hero"); hero.parentNode.insertBefore(n, hero); }

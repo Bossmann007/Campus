@@ -1,4 +1,4 @@
-// Campus+ on pucpr.instructure.com pages (after prefs.js, collect.js, core.js and files.js). Each part can be turned off in the popup:
+// Caderno+ on pucpr.instructure.com pages (after prefs.js, collect.js, core.js and files.js). Each part can be turned off in the popup:
 // dashboard: the week (deadlines and exams of every course) and the announcements; cards: the course status (quanto falta);
 // course pages: the next assessments, what each needs, and a files download; reminders handed to the service worker.
 // Same-origin read-only GETs with the student's session; everything stays in chrome.storage.local on this computer.
@@ -149,12 +149,12 @@
       card.dataset.qf = "1";
       if (!c) continue;
       const st = a.state(c), p = pill(a.label(st), a.tone(st));
-      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Campus+ · quanto falta (notas do Canvas, meta 7)";
+      p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta 7)";
       (card.querySelector(".ic-DashboardCard__header_content") || card).appendChild(p);
     }
   }
 
-  // The Campus+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
+  // The Caderno+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
   // #campus=<subject id> (course page button) opens it on that subject.
   function campusPage() {
     const cur = document.getElementById("cp-app"), m = /^#campus(?:=([a-z0-9]{1,20})(?:@\d{1,12})?)?$/.exec(location.hash);
@@ -164,7 +164,7 @@
     const nav = document.querySelector(".ic-app-header"), left = nav && nav.getBoundingClientRect ? Math.round(nav.getBoundingClientRect().width) : 0;
     const box = el("div"); box.id = "cp-app";
     box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:" + left + "px;z-index:9999;background:#FBF7EF";
-    const frame = el("iframe"); frame.src = src; frame.title = "Campus+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
+    const frame = el("iframe"); frame.src = src; frame.title = "Caderno+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
     const close = el("button", null, "Fechar"); close.type = "button";
     close.style.cssText = "position:absolute;bottom:16px;right:16px;font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:10px 16px;border-radius:10px;border:1px solid #1D2433;background:#1D2433;color:#FBF7EF;cursor:pointer;box-shadow:0 2px 0 #E2482B,0 8px 20px -8px rgba(29,36,51,.5)";
     close.addEventListener("click", closeCampus);
@@ -176,7 +176,7 @@
     if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
     history.replaceState(null, "", location.pathname + location.search); campusPage();
   }
-  // "Campus+" in the Canvas left menu, after Painel.
+  // "Caderno+" in the Canvas left menu, after Painel.
   function navItem() {
     const menu = document.getElementById("menu");
     if (!menu || !APP || document.getElementById("cp-nav")) return;
@@ -188,7 +188,7 @@
     plus.style.cssText = "font:700 14px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#FF7A5C;vertical-align:8px;margin-left:1px";
     icon.appendChild(plus);
     icon.style.color = "var(--ic-brand-global-nav-ic-icon-svg-fill,#fff)";
-    a.append(icon, el("div", "menu-item__text", "Campus+")); li.appendChild(a);
+    a.append(icon, el("div", "menu-item__text", "Caderno+")); li.appendChild(a);
     const dash = document.getElementById("global_nav_dashboard_link"), after = dash && dash.closest ? dash.closest("li") : null;
     menu.insertBefore(li, after ? after.nextSibling : null);
   }
@@ -323,7 +323,7 @@
     :host-context(html.cp-dark) .ev.bd { background:#3A1F1D; color:#FFA28C; border-color:#5A2E29; } :host-context(html.cp-dark) .ev.ex { color:#1B1210; } :host-context(html.cp-dark) .trk i.ok { background:var(--ok); }`;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const mark = () => { const m = el("span", "mk"); m.setAttribute("aria-hidden", "true"); return m; };   // the logo tile, drawn in CSS
-  const wordmark = () => { const b = el("b", null, "Campus"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Campus+"); return b; };
+  const wordmark = () => { const b = el("b", null, "Caderno"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Caderno+"); return b; };
 
   // A panel in a shadow root at the top of the page content; null when it is already there or the page has no content area.
   function panelHost(id) {
@@ -440,8 +440,8 @@
     return sec;
   }
 
-  // The calculator's own components, drawn from the shared core (same numbers as the Campus+ page): ring, next card,
-  // KPI row and subject tiles. Links open Campus+ on a subject (#campus=<id>); in the bookmarklet they are plain text.
+  // The calculator's own components, drawn from the shared core (same numbers as the Caderno+ page): ring, next card,
+  // KPI row and subject tiles. Links open Caderno+ on a subject (#campus=<id>); in the bookmarklet they are plain text.
   const toCampus = (tag, cls, id) => { const x = el(APP ? "a" : tag, cls); if (APP) x.href = "#campus" + (id ? "=" + id + (courseOf[id] ? "@" + courseOf[id] : "") : ""); return x; };   // @<Canvas course id>: Fechar goes there
   const earnedText = st => st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1);
   function ring(st, big) {
@@ -508,7 +508,7 @@
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
     if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
-    if (APP) { const brand = el("a", "brand", "Abrir Campus+ →"); brand.href = "#campus"; hd.appendChild(brand); }
+    if (APP) { const brand = el("a", "brand", "Abrir Caderno+ →"); brand.href = "#campus"; hd.appendChild(brand); }
     box.append(hd);
     if (grades) box.append(...gradesView(a));
     else if (why) box.append(el("div", "muted why", why));
@@ -537,7 +537,7 @@
   }
 
   // Course pages: the ring card (earned, what is left, the needed grade), every assessment of the subject with its weight
-  // and grade or what it needs, and the actions (files download, open Campus+ on this subject).
+  // and grade or what it needs, and the actions (files download, open Caderno+ on this subject).
   function coursePanel(courseId, a, cache, prefs) {
     const c = prefs.grades && a.has ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
     if (!c && !prefs.files) return;
@@ -573,7 +573,7 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
-    if (c && APP) { const open = el("button", null, "Abrir no Campus+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
+    if (c && APP) { const open = el("button", null, "Abrir no Caderno+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
     acts.appendChild(status); box.appendChild(acts);
   }
 
@@ -628,7 +628,7 @@
       out.push({ t: nm, c: "Matéria", u: "/courses/" + c.id, k: "matéria" });
       for (const x of c.assignments) if (x.url) out.push({ t: x.name, c: nm, u: x.url, k: "tarefa" });
     }
-    if (APP) for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Campus+", u: "#campus=" + c.id + "@" + courseOf[c.id], k: "campus" });
+    if (APP) for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Caderno+", u: "#campus=" + c.id + "@" + courseOf[c.id], k: "campus" });
     return out;
   }
   async function moduleIndex(cache) {

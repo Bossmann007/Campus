@@ -1,6 +1,6 @@
 # Segurança
 
-O Campus+ (antes Quanto falta) lida com as notas dos alunos e com a sessão deles no Canvas. Se você achou uma falha, **não abra uma issue pública**.
+O Caderno+ (antes Campus+ e Quanto falta) lida com as notas dos alunos e com a sessão deles no Canvas. Se você achou uma falha, **não abra uma issue pública**.
 
 Reporte em particular pela aba **Security → Report a vulnerability** deste repositório. Respondo assim que puder.
 

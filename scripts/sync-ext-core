@@ -1,6 +1,6 @@
 #!/bin/sh
 # Embed the rule packs, then copy app.html into the extension: <script id="core"> -> extension/core.js (the in-Canvas panels compute with it), and the
-# whole calculator -> extension/app.html + app-ui.js (the Campus+ page opened inside Canvas). MV3 pages cannot run inline
+# whole calculator -> extension/app.html + app-ui.js (the Caderno+ page opened inside Canvas). MV3 pages cannot run inline
 # scripts, so the two blocks become files and the CSP allows 'self' instead of 'unsafe-inline'; network stays blocked.
 set -eu
 cd "$(dirname "$0")/.."

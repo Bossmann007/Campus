@@ -1,4 +1,4 @@
-// Popup: the Campus+ settings (chrome.storage.local "prefs") and the way into the full calculator (the extension's app.html,
+// Popup: the Caderno+ settings (chrome.storage.local "prefs") and the way into the full calculator (the extension's app.html,
 // which reads the last Canvas reading that content.js saved).
 const $ = id => document.getElementById(id);
 $("ver").textContent = "v" + chrome.runtime.getManifest().version;

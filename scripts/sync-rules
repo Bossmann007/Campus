@@ -17,7 +17,7 @@ function termPacks(dir, today, env) {
   const packs = all.filter(p => termOf(p) === latest);
   const running = all.find(p => termOf(p) !== latest && p.data && typeof p.data.termEnd === "string" && p.data.termEnd >= today);
   if (running && env.CP_RULES_NEW_TERM !== "1") throw new Error("o semestre " + running.data.term + " ainda vale até " + running.data.termEnd + " (" + running.file + ") e a pasta " + latest +
-    " o tiraria do Campus+. Espere ele acabar ou rode com CP_RULES_NEW_TERM=1 se a troca é de propósito.");
+    " o tiraria do Caderno+. Espere ele acabar ou rode com CP_RULES_NEW_TERM=1 se a troca é de propósito.");
   const errs = checkPacks(packs);
   if (errs.length) throw new Error("regras inválidas:\n" + errs.join("\n"));
   if (!packs.length) throw new Error("nenhuma regra em rules/<semestre>/*.json");

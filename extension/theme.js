@@ -1,4 +1,4 @@
-// Runs at document_start on pucpr.instructure.com: the Campus+ dark theme, applied before Canvas paints.
+// Runs at document_start on pucpr.instructure.com: the Caderno+ dark theme, applied before Canvas paints.
 // Inverts the page and turns pictures, videos, embeds, the left menu (already dark), the course colors and our own panels back.
 (() => {
   const BACK = "invert(1) hue-rotate(180deg)";

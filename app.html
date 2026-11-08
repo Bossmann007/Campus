@@ -6,9 +6,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; form-action 'none'; base-uri 'none'">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%3E%3Crect%20x=%221%22%20y=%221%22%20width=%2230%22%20height=%2230%22%20rx=%227%22%20fill=%22%231D2433%22/%3E%3Cpath%20fill=%22%23FBF7EF%22%20d=%22M18.71%2019.77Q18.7%2020.58%2018.26%2021.39Q17.82%2022.21%2017%2022.89Q16.17%2023.58%2014.99%2023.99Q13.81%2024.4%2012.3%2024.4Q9.84%2024.4%208.04%2023.34Q6.25%2022.28%205.28%2020.4Q4.3%2018.52%204.3%2016.09Q4.3%2014.24%204.88%2012.7Q5.45%2011.16%206.5%2010.01Q7.54%208.87%208.95%208.23Q10.35%207.6%2012%207.6Q13.15%207.6%2013.86%207.82Q14.58%208.05%2014.99%208.27Q15.4%208.5%2015.64%208.5Q15.93%208.5%2016.08%208.3Q16.23%208.1%2016.39%207.91Q16.55%207.71%2016.83%207.71Q17.04%207.71%2017.17%207.85Q17.31%207.98%2017.4%208.28L18.6%2012.22Q18.68%2012.48%2018.55%2012.69Q18.42%2012.9%2018.16%2012.95Q17.88%2013.01%2017.66%2012.9Q17.45%2012.79%2017.32%2012.52Q16.71%2011.15%2015.96%2010.34Q15.21%209.54%2014.34%209.19Q13.48%208.83%2012.47%208.83Q11.46%208.83%2010.61%209.29Q9.77%209.76%209.15%2010.61Q8.53%2011.47%208.2%2012.67Q7.86%2013.87%207.86%2015.36Q7.86%2017.65%208.57%2019.25Q9.29%2020.84%2010.52%2021.66Q11.75%2022.48%2013.34%2022.48Q14.86%2022.48%2015.98%2021.76Q17.11%2021.03%2017.73%2019.71Q17.86%2019.45%2018.02%2019.36Q18.18%2019.28%2018.37%2019.31Q18.54%2019.33%2018.63%2019.45Q18.71%2019.57%2018.71%2019.77Z%22/%3E%3Cpath%20d=%22M24.5%209v6.6M21.2%2012.3h6.6%22%20fill=%22none%22%20stroke=%22%23E2482B%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20transform=%22rotate%28-6%2024.5%2012.3%29%22/%3E%3C/svg%3E">
 <meta name="description" content="Calculadora de notas da PUCPR 2026/2: quanto falta em cada prova para passar.">
-<title>Minhas matérias · Campus+</title>
+<title>Minhas matérias · Caderno+</title>
 <style>
-  /* Campus+ identity "Caderno": paper and ink, coral accent; Fraunces (OFL, fonts/OFL.txt) for headings and big numbers. Names kept from the old scale. */
+  /* Caderno+ identity "Caderno": paper and ink, coral accent; Fraunces (OFL, fonts/OFL.txt) for headings and big numbers. Names kept from the old scale. */
   @font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
   @font-face { font-family:"Fraunces"; font-style:italic; font-weight:400; font-display:swap; src:url(fonts/fraunces-latin-400-italic.woff2) format("woff2"); }
   :root { --bg:#FBF7EF; --surface:#fff; --sunk:#F4EEE3; --line:#ECE4D3; --line2:#DCD1BC; --txt:#1D2433; --muted:#5F6675; --faint:#8C909A; --field:#CFC3AC; --brand:#E2482B; --logo-check:#E2482B; --warn-ink:#744405; --bad-ink:#912713; --acc-ink:#912713; --ok-ink:#1F5C42;
@@ -333,7 +333,7 @@
   @keyframes glow { 50% { box-shadow:0 0 0 6px color-mix(in srgb, var(--brand) 30%, transparent); } }
   .win-main .fade { transition:opacity .25s ease-out; }
 
-  /* Canvas -> Campus+ diagram */
+  /* Canvas -> Caderno+ diagram */
   .flow { text-align:center; margin-top:80px; }
   .flow h2 { font-size:clamp(28px,4.6vw,46px); line-height:1.08; letter-spacing:-.035em; margin:0 0 12px; font-weight:700; }
   .flow p { color:var(--muted); margin:0 auto; max-width:56ch; font-size:15.5px; }
@@ -441,7 +441,7 @@
 </head>
 <body>
 <div class="top"><div class="wrap">
-  <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><b>Campus+</b></a><span class="sem">PUCPR · 2026/2</span>
+  <a class="brand" href="/" title="Página inicial"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><b>Caderno+</b></a><span class="sem">PUCPR · 2026/2</span>
   <nav class="nav" id="nav"><a href="#panorama">Panorama</a><a href="#proximas">Próximas</a></nav>
   <div class="viewsw" id="viewsw" role="group" aria-label="Ver matérias ou calendário"><span class="thumb" aria-hidden="true"></span><button type="button" data-v="app" aria-pressed="true">Matérias</button><button type="button" data-v="cal" aria-pressed="false">Calendário</button></div>
   <div class="spacer"></div>
@@ -459,7 +459,7 @@
 <div class="wrap">
   <header class="hero">
     <div class="avail"><span class="new">NOVO</span><span>Funciona no</span><b>Chrome</b><b>Brave</b><b>Edge</b><i></i><b>Canvas PUCPR 2026/2</b></div>
-    <h1 id="h1"><span id="h1a">Campus+</span> <svg class="hlogo logo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><br><span class="dim" id="h1b">quanto falta?</span></h1>
+    <h1 id="h1"><span id="h1a">Caderno+</span> <svg class="hlogo logo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><br><span class="dim" id="h1b">quanto falta?</span></h1>
     <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
     <div class="focus" id="focus" hidden></div>
     <div class="cta"><a class="btn primary" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Baixar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
@@ -531,7 +531,7 @@
       <div class="acts canvasgo"><a class="btn" href="https://pucpr.instructure.com/" target="_blank" rel="noopener noreferrer">Abrir o Canvas da PUCPR ↗</a><span class="muted">entre, clique na extensão (ou no favorito) e volte aqui</span></div>
       <details class="exthow" id="exthow"><summary>Como importar pela extensão</summary>
       <ol class="steps ext">
-        <li><b>Instale a extensão Campus+</b> no Chrome, Brave ou Edge (no computador).
+        <li><b>Instale a extensão Caderno+</b> no Chrome, Brave ou Edge (no computador).
           <div class="acts"><a class="btn primary" id="extdl" href="https://github.com/Bossmann007/quanto-falta-pucpr/releases/latest/download/quanto-falta-extension.zip">Baixar extensão</a></div>
           <details class="exthelp"><summary>Como instalar (1 minuto)</summary><ol>
             <li>Descompacte o arquivo baixado: fica uma pasta <b>quanto-falta-extension</b>.</li>
@@ -546,7 +546,7 @@
         <ol class="steps ext">
           <li><b>Baixe a versão nova</b> pelo mesmo botão (sempre a mais recente).</li>
           <li><b>Descompacte por cima da pasta antiga</b>, substituindo os arquivos.</li>
-          <li>Em <b>chrome://extensions</b>, clique em <b>↻ Recarregar</b> no Campus+. Se você apagou a pasta antiga, remova a extensão e carregue a pasta nova.</li>
+          <li>Em <b>chrome://extensions</b>, clique em <b>↻ Recarregar</b> no Caderno+. Se você apagou a pasta antiga, remova a extensão e carregue a pasta nova.</li>
         </ol>
         <p class="muted">Suas notas não se perdem: elas ficam salvas neste site, não na extensão. A versão instalada aparece embaixo do botão da extensão.</p>
       </details>
@@ -724,7 +724,7 @@ const NotasCore = (() => {
   const TERM = PACKS[0].term, TERM_END = PACKS[0].termEnd, TURMA = PACKS.map(p => p.turma).join(" / ");
   const turmaOf = c => PACK_OF[c.id] ? PACK_OF[c.id].turma : null;
   const expired = today => today > TERM_END;
-  const EXPIRED_NOTE = "As regras de " + TERM.replace(/ /g, "") + " acabaram. Atualize o Campus+ quando sair a versão do próximo semestre.";
+  const EXPIRED_NOTE = "As regras de " + TERM.replace(/ /g, "") + " acabaram. Atualize o Caderno+ quando sair a versão do próximo semestre.";
   // The calculator inside the extension (cpExt = window.CP_EXT): after the term, the notice and no automatic import of the
   // Canvas reading. Site copy (no cpExt): unchanged.
   const extBoot = (cpExt, today) => ({ notice: cpExt && expired(today) ? EXPIRED_NOTE : null, autoImport: !!(cpExt && cpExt.data) && !expired(today) });
@@ -826,8 +826,8 @@ const NotasCore = (() => {
   }
   function fromBackup(text) {
     let d;
-    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Campus+"); }
-    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Campus+");
+    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Caderno+"); }
+    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Caderno+");
     const grades = {}, missing = [], notes = [];
     if (d.semester !== SEMESTER) notes.push({ key:"", reason:"backup de outro semestre (" + String(d.semester) + "): confira antes de aplicar" });
     for (const k of Object.keys(d.grades)) {
@@ -996,7 +996,7 @@ const NotasCore = (() => {
   // ?view=calendario shows only the calendar.
   const urlCal = () => new URLSearchParams(location.search).get("view") === "calendario";
   let CAL = urlCal();
-  const applyView = () => { document.body.classList.toggle("cal", CAL); document.title = CAL ? "Calendário · Campus+" : "Minhas matérias · Campus+";
+  const applyView = () => { document.body.classList.toggle("cal", CAL); document.title = CAL ? "Calendário · Caderno+" : "Minhas matérias · Caderno+";
     for (const b of document.querySelectorAll("#viewsw button")) b.setAttribute("aria-pressed", (b.dataset.v === "cal") === CAL); };
   applyView();
   // The switch changes the view in place and keeps the address in step (?view=calendario).
@@ -1056,7 +1056,7 @@ const NotasCore = (() => {
     }
 
     const foot = $("foot");
-    foot.append(el("p", null, "Feito por um aluno para a turma. Não é um sistema oficial da PUCPR: confira pesos e datas no Canvas e no Plano de Ensino."),
+    foot.append(el("p", null, "Projeto independente, não é um sistema oficial da PUCPR: confira pesos e datas no Canvas e no Plano de Ensino."),
       el("p", null, "Suas notas ficam salvas só neste navegador (localStorage). Nada é enviado para servidor nenhum."),
       el("p", null, "Recuperação (só informação, não simulada): os Planos permitem recuperar um único RA com média abaixo de 7,0. Conectividade: recuperação estendida para final entre 4,0 e 7,0, com teto 7,0."));
 
@@ -1086,10 +1086,10 @@ const NotasCore = (() => {
       const ev = [], stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
       const add = (id, date, title, desc) => ev.push("BEGIN:VEVENT", "UID:" + id + "@quanto-falta", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + day(date), "DTEND;VALUE=DATE:" + next(date),
         "SUMMARY:" + esc(title), "DESCRIPTION:" + esc(desc), "END:VEVENT");
-      for (const u of C.upcoming(COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Campus+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
+      for (const u of C.upcoming(COURSES, saved.grades, today, target())) add(C.key(u.course, u.item), u.item.date, (u.item.exam ? "Prova: " : "") + u.item.name + " · " + SHORT[u.course.id], "Caderno+: " + reqText(u.req, u.item, u.st) + ". Data do Plano de Ensino.");
       if (saved.todo) saved.todo.list.filter(t => t && typeof t.name === "string" && typeof t.due === "string" && ISO.test(t.due) && days(t.due) >= 0)
         .forEach(t => add("todo-" + [...(t.courseName + "|" + t.name)].reduce((h, ch) => (h * 31 + ch.codePointAt(0)) >>> 0, 7).toString(36) + "-" + day(t.due), t.due, "Entregar: " + t.name, "Prazo no Canvas." + (t.courseName ? " " + t.courseName : "")));
-      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Campus+//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Campus+"].concat(ev, "END:VCALENDAR").join("\r\n");
+      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Caderno+//PUCPR 2026-2//PT", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Caderno+"].concat(ev, "END:VCALENDAR").join("\r\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" })); a.download = "quanto-falta-" + C.SEMESTER + ".ics";
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       const nTodo = ev.filter(x => x.startsWith("UID:todo-")).length, nAll = ev.filter(x => x.startsWith("UID:")).length;
@@ -1248,7 +1248,7 @@ const NotasCore = (() => {
   const con = (() => {
     const w = el("div", "win"), bar = el("div", "win-bar"), dots = el("span", "dots"), tab = el("span", "tab"), tag = el("span", "demo-tag");
     dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg class="logo" viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg>';
-    tab.append(" Campus+"); bar.append(dots, tab, el("span", "sp"), tag);
+    tab.append(" Caderno+"); bar.append(dots, tab, el("span", "sp"), tag);
     const body = el("div", "win-body"), side = el("div", "win-side"), main = el("div", "win-main fade");
     main.setAttribute("aria-live", "polite");
     side.appendChild(el("h4", null, "Matérias · 2026/2"));
@@ -1367,7 +1367,7 @@ const NotasCore = (() => {
       con.side(side, true);
       if (!con.busy) { const nl = nextLines(saved.grades, 3); con.idle(nl.length ? "O que importa agora:" : "Tudo garantido por enquanto.", nl); } }
     const open = COURSES.filter(c => C.courseState(c, saved.grades, today, T).status !== "garantido").length;
-    $("h1a").textContent = !any ? "Campus+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
+    $("h1a").textContent = !any ? "Caderno+" : open ? "Faltam " + open + (open === 1 ? " matéria" : " matérias") : "Semestre garantido";
     $("h1b").textContent = !any ? "quanto falta?" : open ? "pra fechar o semestre." : "bom descanso.";
     const how = $("exthow"); if (!how.dataset.set) { how.open = !any; how.dataset.set = "1"; }
     sb.textContent = any ? "Ver minhas matérias" : "Lançar minhas notas";
@@ -1506,7 +1506,7 @@ const NotasCore = (() => {
     $("importfile").addEventListener("change", e => {
       const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
       out.textContent = "";
-      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Campus+.")); return; }
+      if (f.size > 1e6) { out.appendChild(el("div", "msg bad", "Arquivo grande demais para ser um backup do Caderno+.")); return; }
       f.text().then(t => {
         let res;
         try { res = C.fromBackup(t); } catch (err) { out.appendChild(el("div", "msg bad", "Não reconheci esse arquivo (" + err.message + ").")); return; }
@@ -1514,7 +1514,7 @@ const NotasCore = (() => {
         importRun(res, "Importar o backup " + f.name, [...out.querySelectorAll("button")].find(b => /^Aplicar/.test(b.textContent)));
       });
     });
-    // Inside the extension (the Campus+ page in Canvas): the last Canvas reading is applied as the page opens.
+    // Inside the extension (the Caderno+ page in Canvas): the last Canvas reading is applied as the page opens.
     // After the term (TERM_END) it shows the notice at the top instead.
     const boot = C.extBoot(window.CP_EXT, C.localISO(new Date()));
     if (boot.notice) { const n = el("div", "msg warn termover", boot.notice); n.setAttribute("role", "status"); const hero = document.querySelector("header.hero"); hero.parentNode.insertBefore(n, hero); }

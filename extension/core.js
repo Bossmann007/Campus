@@ -138,7 +138,7 @@ const NotasCore = (() => {
   const TERM = PACKS[0].term, TERM_END = PACKS[0].termEnd, TURMA = PACKS.map(p => p.turma).join(" / ");
   const turmaOf = c => PACK_OF[c.id] ? PACK_OF[c.id].turma : null;
   const expired = today => today > TERM_END;
-  const EXPIRED_NOTE = "As regras de " + TERM.replace(/ /g, "") + " acabaram. Atualize o Campus+ quando sair a versão do próximo semestre.";
+  const EXPIRED_NOTE = "As regras de " + TERM.replace(/ /g, "") + " acabaram. Atualize o Caderno+ quando sair a versão do próximo semestre.";
   // The calculator inside the extension (cpExt = window.CP_EXT): after the term, the notice and no automatic import of the
   // Canvas reading. Site copy (no cpExt): unchanged.
   const extBoot = (cpExt, today) => ({ notice: cpExt && expired(today) ? EXPIRED_NOTE : null, autoImport: !!(cpExt && cpExt.data) && !expired(today) });
@@ -240,8 +240,8 @@ const NotasCore = (() => {
   }
   function fromBackup(text) {
     let d;
-    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Campus+"); }
-    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Campus+");
+    try { d = JSON.parse(text); } catch (e) { throw new Error("arquivo inválido: não é um backup do Caderno+"); }
+    if (!d || d.app !== "quanto-falta" || !d.grades || typeof d.grades !== "object" || Array.isArray(d.grades)) throw new Error("arquivo inválido: não é um backup do Caderno+");
     const grades = {}, missing = [], notes = [];
     if (d.semester !== SEMESTER) notes.push({ key:"", reason:"backup de outro semestre (" + String(d.semester) + "): confira antes de aplicar" });
     for (const k of Object.keys(d.grades)) {

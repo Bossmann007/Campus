@@ -4,8 +4,8 @@ Upload: `./scripts/package-extension` gera `dist/quanto-falta-extension-<versão
 
 ## Item
 
-- **Nome:** Campus+ · PUCPR
-- **Resumo (até 132 caracteres):** O Canvas da PUCPR melhorado: semana, avisos, lembretes, tema escuro, quanto falta e arquivos. Feito por um aluno, para alunos.
+- **Nome:** Caderno+ · PUCPR
+- **Resumo (até 132 caracteres):** O Canvas da PUCPR melhorado: semana, avisos, lembretes, busca, tema escuro, quanto falta e arquivos. Não oficial.
 - **Categoria:** Educação
 - **Idioma:** Português (Brasil)
 - **Ícone:** `extension/icons/icon128.png`
@@ -16,7 +16,7 @@ Upload: `./scripts/package-extension` gera `dist/quanto-falta-extension-<versão
 
 ## Descrição
 
-O Canvas da PUCPR do jeito que o aluno usa. Feito por um aluno, para alunos (2026/2).
+O Canvas da PUCPR do jeito que o aluno usa (2026/2). Projeto independente, sem vínculo com a PUCPR nem com a Instructure.
 
 Dentro do Canvas, sem configurar nada:
 
@@ -30,7 +30,7 @@ Dentro do Canvas, sem configurar nada:
 
 Cada parte pode ser desligada no botão da extensão.
 
-No item Campus+ do menu lateral do Canvas, a calculadora completa mostra:
+No item Caderno+ do menu lateral do Canvas, a calculadora completa mostra:
 
 - quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino;
 - o mínimo em cada prova se você tirar nota cheia no resto;

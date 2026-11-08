@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Bossmann007/quanto-falta-pucpr/blob/main/rules/schema.json",
-  "title": "Regras de uma turma (Campus+ · Quanto falta)",
+  "title": "Regras de uma turma (Caderno+ · Quanto falta)",
   "description": "Um arquivo = uma turma num semestre: rules/<semestre>/<turma>.json, por exemplo rules/2026-2/cc-manha.json. O scripts/check-rules confere este formato e mais: pesos somam 10, datas dentro do semestre, ids únicos e matérias do Canvas sem repetir entre turmas.",
   "type": "object",
   "additionalProperties": false,
@@ -21,7 +21,7 @@
         "id": { "type": "string", "pattern": "^[a-z0-9]{1,20}$", "description": "Identificador curto da matéria (só letras minúsculas e números, até 20). Único entre todas as turmas do semestre, porque as notas salvas e os backups usam \"matéria:avaliação\". Em turma nova, comece com uma sigla da turma (ex.: sinbd)." },
         "name": { "type": "string", "minLength": 1, "description": "Nome da matéria como começa no Canvas (ex.: \"Programação WEB\"). Também serve para casar dados antigos que não têm o número da matéria." },
         "short": { "type": "string", "minLength": 1, "description": "Nome curto para os cartões e o calendário (ex.: \"WEB\")." },
-        "canvasIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "integer", "exclusiveMinimum": 0 }, "description": "Números da matéria no Canvas (o 71306 de pucpr.instructure.com/courses/71306). É assim que o Campus+ sabe que o aluno é desta turma; cada número só pode aparecer em uma turma." },
+        "canvasIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "integer", "exclusiveMinimum": 0 }, "description": "Números da matéria no Canvas (o 71306 de pucpr.instructure.com/courses/71306). É assim que o Caderno+ sabe que o aluno é desta turma; cada número só pode aparecer em uma turma." },
         "formula": { "type": "string", "minLength": 1, "description": "Como o Plano de Ensino calcula a nota final, em uma frase (ex.: \"Final = 25% RA1 + 40% RA2 + 35% RA3\")." },
         "src": { "type": "string", "minLength": 1, "description": "De onde vêm os pesos: Plano de Ensino (com página ou linha), tabela do professor ou aviso." },
         "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/item" }, "description": "As avaliações. A soma de todos os max da matéria precisa dar 10 (a nota final)." },
