@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Caderno+ · PUCPR",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "O Canvas da PUCPR melhorado: semana, avisos, lembretes, busca, tema escuro, quanto falta e arquivos. Não oficial.",
   "action": {
     "default_popup": "popup.html",
@@ -58,14 +58,6 @@
   },
   "homepage_url": "https://falta-quanto.vercel.app/",
   "web_accessible_resources": [
-    {
-      "resources": [
-        "app.html"
-      ],
-      "matches": [
-        "https://pucpr.instructure.com/*"
-      ]
-    },
     {
       "resources": [
         "fonts/*.woff2"

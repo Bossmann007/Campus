@@ -4,10 +4,11 @@
 // Same-origin read-only GETs with the student's session; everything stays in chrome.storage.local on this computer.
 (() => {
   if (window.top !== window) return;
-  const C = NotasCore, F = QFFiles, T = 7, TTL = 10 * 60 * 1000, LOCK = 60 * 1000;
+  const C = NotasCore, F = QFFiles, TTL = 10 * 60 * 1000, LOCK = 60 * 1000;
   const TERM = C.TERM.replace(/ /g, "");   // "2026/2"
   const VERSION = chrome.runtime.getManifest().version;
-  const APP = chrome.runtime.getURL ? chrome.runtime.getURL("app.html") : null;   // the full calculator; null in the bookmarklet
+  const EXT = !!chrome.runtime.getURL;   // the extension (the bookmarklet keeps nothing after a reload)
+  let T = 7;   // the meta (goal), from the popup or the dashboard; 7 by default
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
   const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -113,6 +114,14 @@
     if (cpPrefs(prefs).newgrades) chrome.runtime.sendMessage({ type: "grades", items: got.slice(0, 10) }).catch(() => {});
   }
   const pts = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
+  // Grades typed by the student where Canvas has none (exams on paper, a grade not posted yet): chrome.storage.local "hand",
+  // per Canvas user, { "<subject>:<item>": "8,5" }. Moved once from the old Caderno+ page by the popup.
+  async function myHand(user) { const { hand } = await chrome.storage.local.get("hand"); const h = hand && typeof hand === "object" ? hand[user] : null; return h && typeof h === "object" ? h : {}; }
+  async function setHand(user, changes) {
+    const { hand } = await chrome.storage.local.get("hand"), all = hand && typeof hand === "object" ? hand : {}, mine = Object.assign({}, all[user]);
+    for (const [k, v] of Object.entries(changes)) if (v == null || v === "") delete mine[k]; else mine[k] = String(v);
+    await chrome.storage.local.set({ hand: Object.assign({}, all, { [user]: mine }) }); return mine;
+  }
   // Own tasks (not from Canvas), per Canvas user in chrome.storage.local "tasks": [{ id, title, date|null }]; done = a tick.
   let myTasks = [];
   async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
@@ -181,15 +190,16 @@
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
-  function analyse(cache) {
-    const grades = C.fromCanvas(cache.data).grades, t = today(), byCanvasId = {};
+  // grades: Canvas first; where Canvas has none, the grade the student typed (hand, kept per Canvas user)
+  function analyse(cache, hand) {
+    const canvas = C.fromCanvas(cache.data).grades, grades = Object.assign({}, hand || {}, canvas), t = today(), byCanvasId = {};
     for (const x of cache.ids) { const c = C.subjectOf(x, true); if (c) { byCanvasId[x.id] = c; courseOf[c.id] = String(x.id); } }
     const mine = C.COURSES.filter(c => courseOf[c.id]), expired = C.expired(t), rules = mine.length > 0 && !expired;
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
     const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
     const has = rules && Object.keys(grades).length > 0;   // no matched course, term over or no grade read: no grade parts
-    return { grades, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
+    return { grades, canvas, hand: hand || {}, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
   }
 
   // The icon number: days to the next exam that still matters.
@@ -301,45 +311,6 @@
         card.cpPalette = pal; card.cpAdded.push(pal); head.appendChild(pal);
       });
     }
-  }
-
-  // The Caderno+ page: the full calculator over the Canvas content, opened by #campus (left menu item, panel buttons);
-  // #campus=<subject id> (course page button) opens it on that subject.
-  function campusPage() {
-    const cur = document.getElementById("cp-app"), m = /^#campus(?:=([a-z0-9]{1,20})(?:@\d{1,12})?)?$/.exec(location.hash);
-    if (!m || !APP) { if (cur) cur.remove(); return; }
-    const src = APP + (m[1] ? "?m=" + m[1] : "");
-    if (cur) { if (cur.cpFrame && cur.cpFrame.src !== src) cur.cpFrame.src = src; return; }
-    const nav = document.querySelector(".ic-app-header"), left = nav && nav.getBoundingClientRect ? Math.round(nav.getBoundingClientRect().width) : 0;
-    const box = el("div"); box.id = "cp-app";
-    box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:" + left + "px;z-index:9999;background:#FBF7EF";
-    const frame = el("iframe"); frame.src = src; frame.title = "Caderno+"; frame.style.cssText = "border:0;width:100%;height:100%;display:block";
-    const close = el("button", null, "Fechar"); close.type = "button";
-    close.style.cssText = "position:absolute;bottom:16px;right:16px;font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:10px 16px;border-radius:10px;border:1px solid #1D2433;background:#1D2433;color:#FBF7EF;cursor:pointer;box-shadow:0 2px 0 #E2482B,0 8px 20px -8px rgba(29,36,51,.5)";
-    close.addEventListener("click", closeCampus);
-    box.cpFrame = frame; box.append(frame, close); document.body.appendChild(box);
-  }
-  // Fechar on a subject opened from the dashboard goes to that subject's Canvas course; otherwise it stays on the page.
-  function closeCampus() {
-    const m = /^#campus=([a-z0-9]{1,20})(?:@(\d{1,12}))?$/.exec(location.hash), cv = m && (courseOf[m[1]] || m[2]), home = cv && /^\d+$/.test(cv) ? "/courses/" + cv : null;
-    if (home && location.pathname !== home && !location.pathname.startsWith(home + "/")) { location.assign(home); return; }
-    history.replaceState(null, "", location.pathname + location.search); campusPage();
-  }
-  // "Caderno+" in the Canvas left menu, after Painel.
-  function navItem() {
-    const menu = document.getElementById("menu");
-    if (!menu || !APP || document.getElementById("cp-nav")) return;
-    const li = el("li", "menu-item ic-app-header__menu-list-item"); li.id = "cp-nav";
-    const a = el("a", "ic-app-header__menu-list-link"); a.href = "#campus";
-    a.style.cssText = "text-decoration:none;color:var(--ic-brand-global-nav-menu-item__text-color,#fff)";   // Canvas's own classes style it; this only guards the link look
-    const icon = el("div", "menu-item-icon-container", "C"), plus = el("span", null, "+"); icon.setAttribute("aria-hidden", "true");
-    icon.style.cssText = "font:600 22px/26px 'Iowan Old Style','New York',Georgia,serif";
-    plus.style.cssText = "font:700 14px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#FF7A5C;vertical-align:8px;margin-left:1px";
-    icon.appendChild(plus);
-    icon.style.color = "var(--ic-brand-global-nav-ic-icon-svg-fill,#fff)";
-    a.append(icon, el("div", "menu-item__text", "Caderno+")); li.appendChild(a);
-    const dash = document.getElementById("global_nav_dashboard_link"), after = dash && dash.closest ? dash.closest("li") : null;
-    menu.insertBefore(li, after ? after.nextSibling : null);
   }
 
   const CSS = `
@@ -480,6 +451,8 @@
     .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
+    .meta { display:inline-flex; align-items:center; gap:4px; margin-left:10px; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
+    .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -621,9 +594,9 @@
     return sec;
   }
 
-  // The calculator's own components, drawn from the shared core (same numbers as the Caderno+ page): ring, next card,
-  // KPI row and subject tiles. Links open Caderno+ on a subject (#campus=<id>); in the bookmarklet they are plain text.
-  const toCampus = (tag, cls, id) => { const x = el(APP ? "a" : tag, cls); if (APP) x.href = "#campus" + (id ? "=" + id + (courseOf[id] ? "@" + courseOf[id] : "") : ""); return x; };   // @<Canvas course id>: Fechar goes there
+  // The calculator's components, drawn from the shared core: ring, next card, KPI row and subject tiles. A subject opens its
+  // Canvas course page, where the course panel has the grades, the simulator and the notes.
+  const toCampus = (tag, cls, id) => { const x = el(courseOf[id] ? "a" : tag, cls); if (courseOf[id]) x.href = "/courses/" + courseOf[id]; return x; };   // a subject opens its Canvas course (the panel there has everything)
   const earnedText = st => st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1);
   function ring(st, big) {
     const r = el("span", "ring" + (big ? " big" : "")), rp = C.ringParts(st), tn = C.statusTone(st), e = rp.earned * 100, f = (rp.earned + rp.future) * 100;
@@ -742,7 +715,12 @@
     }
     hd.appendChild(seg);
     if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
-    if (APP && mode === "completo") { const brand = el("a", "brand", "Abrir Caderno+ →"); brand.href = "#campus"; hd.appendChild(brand); }
+    // the meta (goal) every number is computed against
+    const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
+    dn.type = upb.type = "button"; dn.setAttribute("aria-label", "Meta menor"); upb.setAttribute("aria-label", "Meta maior"); meta.title = "A nota que você quer em cada matéria";
+    const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };
+    dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
+    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.appendChild(meta);
     box.append(hd);
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     if (grades) { const g = gradesView(a); box.append(...(clean ? g.filter(x => !/kpis|src/.test(x.className)) : g)); }
@@ -817,27 +795,33 @@
       tbl.appendChild(th);
       const total = C.weightSum(c), d2 = it => it.inMax >= 5 ? 1 : 2, open = [];
       for (const it of c.items) {
-        const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.grades[k]), name = el("span", "n", it.name);
+        const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.canvas[k]), name = el("span", "n", it.name);
         if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st0.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
         let g;
         if (Number.isNaN(p)) g = el("span", "g e", "nota inválida");
-        else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.grades[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
+        else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.canvas[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
         else { g = el("span", "g e"); open.push({ it, k, g }); }
         row.append(name, el("span", "w", Math.round(it.max / total * 100) + "%"), g); tbl.appendChild(row);
       }
       const hint = it => st => st.late.includes(it) && !(C.key(c, it) in sim) ? "falta a nota" : st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it });
       paint = () => {
-        const st = C.courseState(c, Object.assign({}, a.grades, sim), today(), T);
+        const g = Object.assign({}, a.canvas, simOn ? {} : a.hand, sim), st = C.courseState(c, g, today(), T);
         headBox.replaceChildren(headCard(st));
         for (const o of open) {
-          const txt = (o.k in sim) ? "" : hint(o.it)(st);
-          if (!simOn) { o.g.replaceChildren(); o.g.textContent = txt; o.mounted = false; continue; }
+          const txt = (o.k in sim) ? "" : hint(o.it)(st), mineV = a.hand[o.k];
+          if (!simOn) {
+            o.g.replaceChildren(); o.mounted = false;
+            if (mineV != null && !Number.isNaN(C.itemPoints(o.it, mineV)) && C.itemPoints(o.it, mineV) !== null) { o.g.className = "g"; o.g.textContent = fmt(C.parseNum(mineV), d2(o.it)); o.g.appendChild(el("small", null, " sua nota")); }
+            else { o.g.className = "g e"; o.g.textContent = txt; }
+            continue;
+          }
+          o.g.className = "g e";
           if (!o.input) {
             o.input = el("input", "simi"); o.input.type = "text"; o.input.inputMode = "decimal"; o.input.setAttribute("aria-label", "Simular a nota de " + o.it.name + " (de " + fmt(o.it.inMax, d2(o.it)) + ")");
             o.input.addEventListener("input", () => { const v = String(o.input.value || "").trim(), pp = v && C.itemPoints(o.it, v);
               if (typeof pp === "number" && !Number.isNaN(pp)) sim[o.k] = v; else delete sim[o.k]; paint(); });
           }
-          if (!o.mounted) { o.g.textContent = ""; o.g.replaceChildren(o.input); o.mounted = true; }
+          if (!o.mounted) { o.g.textContent = ""; o.g.replaceChildren(o.input); o.mounted = true; o.input.value = sim[o.k] || ""; }
           o.input.placeholder = txt || "e se?";
         }
       };
@@ -851,16 +835,26 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
-    if (c && c.items.some(it => C.itemPoints(it, a.grades[C.key(c, it)]) === null)) {
-      const sb = el("button", null, "Simular notas"), note = el("span", "muted", "");
+    // Simular (nothing saved) or, with "Guardar como minhas notas", the grades typed where Canvas has none (kept per user)
+    if (c && c.items.some(it => C.itemPoints(it, a.canvas[C.key(c, it)]) === null)) {
+      const sb = el("button", null, "Simular ou lançar notas"), note = el("label", "muted keep"), keep = el("input"), save = el("button", "primary", "Guardar");
+      keep.type = "checkbox"; note.append(keep, el("span", null, " guardar como minhas notas")); note.hidden = true; save.hidden = true;
+      const ownOpen = () => c.items.filter(it => C.itemPoints(it, a.canvas[C.key(c, it)]) === null).map(it => C.key(c, it));
       sb.addEventListener("click", () => {
-        simOn = !simOn; if (!simOn) for (const k of Object.keys(sim)) delete sim[k];
-        sb.textContent = simOn ? "Sair da simulação" : "Simular notas"; note.textContent = simOn ? "Digite notas nas avaliações sem nota · nada é salvo" : "";
+        simOn = !simOn; for (const k of Object.keys(sim)) delete sim[k];
+        if (simOn) for (const k of ownOpen()) if (a.hand[k] != null) sim[k] = a.hand[k];   // start from the grades already typed
+        sb.textContent = simOn ? "Sair sem guardar" : "Simular ou lançar notas"; note.hidden = save.hidden = !simOn; keep.checked = false;
         paint();
       });
-      acts.append(sb, note);
+      save.addEventListener("click", async () => {
+        if (!keep.checked) { note.textContent = ""; note.append(keep, el("span", null, " marque para guardar (senão é só simulação)")); return; }
+        const ch = {}; for (const k of ownOpen()) ch[k] = k in sim ? sim[k] : null;
+        a.hand = await setHand(cache.user, ch); a.grades = Object.assign({}, a.hand, a.canvas);
+        simOn = false; for (const k of Object.keys(sim)) delete sim[k]; sb.textContent = "Simular ou lançar notas"; note.hidden = save.hidden = true; status.textContent = "Notas guardadas neste computador";
+        paint();
+      });
+      acts.append(sb, note, save);
     }
-    if (c && APP) { const open = el("button", null, "Abrir no Caderno+ →"); open.addEventListener("click", () => { location.hash = "campus=" + c.id; }); acts.appendChild(open); }
     // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
     const nb = el("button", null, "Anotações"), pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
     ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
@@ -879,8 +873,8 @@
       if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
     });
     nb.addEventListener("click", () => { pad.hidden = !pad.hidden; if (!pad.hidden && ta.focus) ta.focus(); });
-    if (APP) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
-    acts.appendChild(status); box.append(acts); if (APP) box.appendChild(pad);
+    if (EXT) acts.appendChild(nb);   // the bookmarklet keeps nothing after a reload: no notes there
+    acts.appendChild(status); box.append(acts); if (EXT) box.appendChild(pad);
   }
 
   async function courseFiles(id) {
@@ -934,7 +928,7 @@
       out.push({ t: nm, c: "Matéria", u: "/courses/" + c.id, k: "matéria" });
       for (const x of c.assignments) if (x.url) out.push({ t: x.name, c: nm, u: x.url, k: "tarefa" });
     }
-    if (APP) for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Caderno+", u: "#campus=" + c.id + "@" + courseOf[c.id], k: "campus" });
+    for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Caderno+", u: "/courses/" + courseOf[c.id], k: "campus" });
     return out;
   }
   async function moduleIndex(cache) {
@@ -977,7 +971,7 @@
     const go = async x => {
       close();
       if (x.pw) { await loadTasks(cache.user); await addTask(cache.user, x.pw.title, x.pw.date); if (window.cpRedraw) window.cpRedraw(); return; }
-      if (x.u.startsWith("#")) location.hash = x.u.slice(1); else location.assign(inCanvas(x.u));
+      location.assign(inCanvas(x.u));
     };
     const draw = () => {
       const plus = /^\+\s*(.+)/.exec(String(q.value || ""));
@@ -1002,7 +996,7 @@
     moduleIndex(cache).then(mods => { items = items.concat(inCanvasOnly(mods)); note.textContent = KEYS + " abre e fecha · ↑↓ escolhe · Enter abre"; draw(); },
       () => { note.textContent = "Não consegui ler os módulos agora; busca só nas tarefas e matérias."; });
   }
-  const inCanvasOnly = list => list.filter(x => x.u.startsWith("#campus=") || inCanvas(x.u));
+  const inCanvasOnly = list => list.filter(x => inCanvas(x.u));
 
   // Canvas login and logout pages (the content script runs on every pucpr.instructure.com page): the next student may be
   // someone else, so the user and the last reading are forgotten.
@@ -1029,7 +1023,6 @@
 
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
-    navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
     if (prefs.scroll) scrollButtons();
     let cache;
@@ -1041,7 +1034,8 @@
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
   let cardWatch = null;
   async function draw(cache, prefs, again) {
-    const a = analyse(cache), marks = await myMarks(cache.user);
+    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7));
+    let a = analyse(cache, await myHand(cache.user)); const marks = await myMarks(cache.user);
     await loadTasks(cache.user); await loadChanges(cache.user);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
@@ -1059,9 +1053,10 @@
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};
-      const onMode = async k => {   // switch from the panel (or a change of tasks): saved, the panel redrawn at once with fresh ticks and tasks
-        const { prefs: saved } = await chrome.storage.local.get("prefs");
-        if (cpPrefs(saved).mode !== k) { const next = Object.assign({}, saved, { mode: k }); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); }
+      const onMode = async (k, meta) => {   // switch from the panel (mode, meta, or a change of tasks): saved, redrawn at once with fresh ticks and tasks
+        const { prefs: saved } = await chrome.storage.local.get("prefs"), was = cpPrefs(saved);
+        if (was.mode !== k || (meta != null && Number(was.meta) !== meta)) { const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); }
+        if (meta != null) { T = meta; a = analyse(cache, await myHand(cache.user)); }
         const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
         const old = document.getElementById("cp-dash"); if (old) old.remove();
         dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);

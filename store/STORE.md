@@ -39,15 +39,16 @@ Dentro do Canvas, sem configurar nada:
 
 Cada parte pode ser desligada no botão da extensão.
 
-No item Caderno+ do menu lateral do Canvas, a calculadora completa mostra:
+Na página de cada matéria, a calculadora mostra:
 
 - quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino;
 - o mínimo em cada prova se você tirar nota cheia no resto;
 - quais matérias já estão garantidas e quais ainda dependem de nota;
 - o que falta entregar nos próximos 14 dias e o que passou do prazo sem envio;
-- o prazo do Canvas ao lado da data do Plano de Ensino, e quais notas são novas desde a última importação;
-- a sua nota comparada com a média da turma (quando o professor libera) e os avisos dos professores, com os não lidos em destaque;
-- um arquivo de calendário (.ics) com as avaliações e entregas.
+- um simulador: digite notas e veja na hora se garante a meta, ou guarde como suas notas onde o Canvas não tem;
+- a meta (de 5 a 10) muda no painel e todos os números acompanham.
+
+Aparência: o Canvas inteiro com a identidade do Caderno+ (9 temas, fonte, cor do menu, cards em grade, compactos ou lista, cor por matéria) e os modos Limpo (só o que importa) e Foco (só o que fazer agora).
 
 Privacidade: a extensão usa o login que você já tem no Canvas, não pede senha nem token, só lê (nunca grava no Canvas) e não envia nada para servidor nenhum. As notas ficam só no seu navegador.
 
@@ -57,7 +58,7 @@ Projeto independente e não oficial, sem vínculo com a PUCPR nem com a Instruct
 ## Práticas de privacidade (aba Privacy)
 
 - **Finalidade única:** melhorar o Canvas da PUCPR para o próprio aluno: organizar prazos, avisos, notas e arquivos das matérias dele.
-- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR a semana, os avisos, quanto falta em cada matéria, a calculadora completa (página da própria extensão, a única exposta ao Canvas), o tema escuro e o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
+- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR a semana, os avisos, quanto falta em cada matéria, a calculadora dentro das páginas do Canvas, a aparência (temas, fonte e cores, com as fontes da própria extensão expostas só ao Canvas da PUCPR), o tema escuro e o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
 - **storage:** guardar no dispositivo as escolhas do usuário, a última leitura do Canvas, os lembretes, a data da próxima prova (número no ícone), quais arquivos já foram baixados, as tarefas marcadas como feitas, as notas novas encontradas, as anotações por matéria, quais cards foram recolhidos, a lista da semana para o resumo de segunda e o fim do timer de foco. Separado por usuário do Canvas; a leitura do Canvas é apagada ao sair dele.
 - **alarms:** atualizar de hora em hora o número de dias até a próxima prova no ícone, disparar os lembretes na hora marcada, o resumo da semana na segunda às 8h e o fim do timer de foco (não lê nada).
 - **notifications:** mostrar os lembretes de entregas e provas, o aviso de nota nova, o resumo da semana e o fim do timer de foco, cada um com sua chave no botão da extensão; o texto é gerado no dispositivo.

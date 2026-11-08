@@ -63,13 +63,16 @@
     </div>
   </section>
   <section aria-labelledby="h-notas">
-    <h2 id="h-notas">Calculadora</h2>
+    <h2 id="h-notas">Seus dados</h2>
     <p id="status" role="status">Abra o Canvas da PUCPR uma vez para ler suas notas.</p>
-    <div class="acts">
-      <button id="open" class="primary" type="button">Abrir o Caderno+</button>
-      <button id="canvas" type="button">Abrir o Canvas</button>
+    <div class="acts two">
+      <button id="canvas" class="primary" type="button">Abrir o Canvas</button>
       <button id="refresh" type="button">Atualizar agora</button>
+      <button id="export" type="button">Exportar backup</button>
+      <button id="import" type="button">Importar backup</button>
     </div>
+    <input id="importFile" type="file" accept="application/json,.json" hidden>
+    <p class="fine">O backup leva suas notas lançadas, tarefas, marcas de feito, anotações, cores e preferências. <a id="feedback" href="https://github.com/Bossmann007/Campus/issues" target="_blank" rel="noopener noreferrer">Sugestões e problemas</a> (página pública: não ponha notas nem dados pessoais).</p>
   </section>
   <footer><span>Só lê os seus dados do Canvas, com o login que você já tem. Nada é enviado para servidor nenhum.</span><span id="ver"></span></footer>
   <script src="prefs.js"></script>

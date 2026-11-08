@@ -36,7 +36,40 @@ $("refresh").addEventListener("click", async () => {
   await chrome.storage.local.remove("refreshing");
   $("status").textContent = "Atualiza ao abrir ou recarregar uma página do Canvas.";
 });
-$("open").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("app.html") }));
+// Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
+const KEEP = ["hand", "marks", "tasks", "notes", "colors", "prefs", "fold"];
+$("export").addEventListener("click", async () => {
+  const got = await chrome.storage.local.get(KEEP), body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = "caderno-plus-backup.json"; a.click();
+  $("status").textContent = "Backup salvo nos Downloads.";
+});
+$("import").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", async () => {
+  const f = $("importFile").files && $("importFile").files[0]; if (!f) return;
+  let d; try { d = JSON.parse(await f.text()); } catch (e) { d = null; }
+  if (!d || d.app !== "caderno-plus") { $("status").textContent = "Esse arquivo não é um backup do Caderno+."; return; }
+  const out = {}; for (const k of KEEP) if (d[k] && typeof d[k] === "object" && !Array.isArray(d[k])) out[k] = d[k];
+  await chrome.storage.local.set(out); $("status").textContent = "Backup aplicado (" + Object.keys(out).length + " partes). Recarregue o Canvas.";
+});
+// Once: the grades and the meta typed in the old Caderno+ page (this extension's localStorage, per Canvas user) become
+// "hand" grades, which the Canvas panels now use. Grades already typed in Canvas win.
+(async () => {
+  const { migrated } = await chrome.storage.local.get("migrated"); if (migrated) return;
+  let ls; try { ls = window.localStorage; } catch (e) { return; }
+  if (!ls) return;
+  const { hand = {}, prefs } = await chrome.storage.local.get(["hand", "prefs"]), next = Object.assign({}, hand); let meta = null;
+  for (let i = 0; i < ls.length; i++) {
+    const k = ls.key(i), m = /^notas-pucpr-[\d-]+:u(\d{1,20})$/.exec(k || ""); if (!m) continue;
+    let saved; try { saved = JSON.parse(ls.getItem(k)); } catch (e) { continue; }
+    if (!saved || !saved.grades || typeof saved.grades !== "object") continue;
+    const mine = Object.assign({}, next[m[1]]);
+    for (const [g, v] of Object.entries(saved.grades)) if (typeof v === "string" && v.trim() && /^[a-z0-9]+:[a-z0-9]+$/.test(g) && mine[g] == null) mine[g] = v.trim();
+    next[m[1]] = mine; if (typeof saved.meta === "string") meta = saved.meta;
+  }
+  const set = { hand: next, migrated: 1 };
+  if (meta && !(prefs && prefs.meta)) set.prefs = Object.assign({}, prefs, { meta });
+  await chrome.storage.local.set(set);
+})();
 $("canvas").addEventListener("click", () => chrome.tabs.create({ url: "https://pucpr.instructure.com/" }));
 
 // Foco: 25 minutes of study or 5 of break; the service worker shows a notification when the alarm fires.

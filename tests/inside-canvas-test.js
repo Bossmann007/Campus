@@ -9,9 +9,7 @@ const f1 = x => x.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFra
 // core.js is a copy of app.html's core block
 const core = fs.readFileSync(path.join(root, "app.html"), "utf8").match(/<script id="core">([\s\S]*?)<\/script>/)[1].replace(/^\n+|\n+$/g, "");
 assert.strictEqual(read("core.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), core, "extension/core.js is stale: run scripts/sync-ext-core"); ok();
-const ui = fs.readFileSync(path.join(root, "app.html"), "utf8").match(/<script id="ui">([\s\S]*?)<\/script>/)[1].replace(/^\n+|\n+$/g, "");
-assert.strictEqual(read("app-ui.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), ui, "extension/app-ui.js is stale: run scripts/sync-ext-core");
-assert(read("app.html").includes('<script src="core.js"></script>\n<script src="app-boot.js"></script>'), "extension/app.html loads the core, then the boot");
+assert(!["app.html", "app-ui.js", "app-boot.js"].some(f => fs.existsSync(path.join(dir, f))), "no separate calculator page in the extension: it lives in Canvas");
 const C = new Function(read("core.js") + "\nreturn NotasCore;")();
 assert.strictEqual(C.EXT_LATEST, JSON.parse(read("manifest.json")).version, "EXT_LATEST matches the manifest"); ok();
 
@@ -146,7 +144,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     { id: 2, display_name: "virus.exe", url: "/files/2/download", size: 5 }, { id: 3, display_name: "Gabarito.pdf", url: "/files/3/download", locked_for_user: true, size: 5 }]);
   const host = course.anchor.kids[0];
   assert(host && host.id === "qf-panel" && host.shadow, "course panel in a shadow root");
-  assert.match(text(host), /Caderno\+/);
+  assert.match(text(host), /Caderno \| \+/, "the wordmark");
   const abd = C.COURSES.find(c => c.id === "abd"), st42 = C.courseState(abd, C.fromCanvas(course.store.cache.data).grades, isoIn(0), 7);
   assert.match(text(host), new RegExp((st42.earned >= 10 ? "10" : f1(Math.floor(st42.earned * 10) / 10)) + " garantidos de 10"), "ring card: points earned, from the core");
   const irows = all(host).filter(e => e.className === "ir");
@@ -321,18 +319,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
     sem.tight ? up1(sem.states[sem.tight.id].fraction * 10) : cnt("depende-atrasadas") ? "?" : cnt("nao-da") ? "—" : "0", sem.done + " de " + sem.items.length], "KPI numbers are the core's");
   assert.strictEqual(all(gb).filter(e => e.parent && e.parent.className === "trk").length, sem.items.length, "one tracker block per item");
   const nextCard = all(gb).find(e => /upnext/.test(e.className));
-  if (nx) assert(nextCard && nextCard.href === "#campus=" + nx.course.id + "@" + cvOf(nx.course.id) && text(nextCard).includes(nx.item.name), "next card: the soonest assessment that still counts, opens its subject");
+  if (nx) assert(nextCard && nextCard.href === "/courses/" + cvOf(nx.course.id) && text(nextCard).includes(nx.item.name), "next card: the soonest assessment that still counts, opens its Canvas course");
   else assert(!nextCard, "nothing left that counts: no next card");
   const tiles = all(gb).filter(e => e.className === "card tile");
-  assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "#campus=" + c.id + "@" + cvOf(c.id)), "a tile per enrolled subject, each opening Caderno+ on it and naming its Canvas course");
+  assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "/courses/" + cvOf(c.id)), "a tile per enrolled subject, each opening its Canvas course");
   assert(tiles.every((t, i) => text(t).includes(C.SHORT[mine[i].id])), "tiles named like the calculator");
   assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · Ciência da Computação, manhã · não oficial, confira no Canvas"), "dashboard grades: source line");
-  gd.env.location.hash = tiles[0].href; gd.winListeners.hashchange();
-  await all(gd.body.kids.find(k => k.id === "cp-app")).find(e => e.textContent === "Fechar").listeners.click();
-  assert.strictEqual(gd.env.location.assigned, "/courses/" + cvOf(mine[0].id), "Fechar on a subject opened from the dashboard goes to its Canvas course");
-  const direct0 = await runContent("/", null, { cache: { v: C.EXT_LATEST, user: 5, at: Date.now(), data: { v: 1, courses: [], announcements: [] }, ids: [], planner: null } }, { hash: "#campus=abd@71306" });
-  await all(direct0.body.kids.find(k => k.id === "cp-app")).find(e => e.textContent === "Fechar").listeners.click();
-  assert.strictEqual(direct0.env.location.assigned, "/courses/71306", "the course id in the link is enough: Fechar goes there without any panel data");
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
@@ -463,7 +455,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // Simular notas on the course page: the ring and the needs follow the typed grades; nothing is saved
   const simP = await runContent("/courses/71306", []), sp = simP.anchor.kids.find(k => k.id === "qf-panel");
   const headTxt = () => text(all(sp).find(e => /^card cring/.test(e.className)));
-  const keys0 = JSON.stringify(simP.store), before = headTxt(), sbtn = all(sp).find(e => e.textContent === "Simular notas");
+  const keys0 = JSON.stringify(simP.store), before = headTxt(), sbtn = all(sp).find(e => e.textContent === "Simular ou lançar notas");
   assert(sbtn && !all(sp).some(e => e.className === "simi"), "a Simular button, no inputs yet");
   sbtn.listeners.click();
   const ins = all(sp).filter(e => e.className === "simi");
@@ -475,14 +467,24 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(/simulating/.test(all(sp).find(e => /^card cring/.test(e.className)).className), "the head is marked as a simulation");
   sbtn.listeners.click();
   assert.strictEqual(headTxt(), before, "leaving puts the real numbers back"); assert(!all(sp).some(e => e.className === "simi"), "inputs gone");
-  assert.strictEqual(JSON.stringify(simP.store), keys0, "nothing saved"); ok();
+  assert.strictEqual(JSON.stringify(simP.store), keys0, "nothing saved");
+  // the same inputs, with "guardar como minhas notas": kept per user, shown as "sua nota", and counted everywhere
+  sbtn.listeners.click(); const in2 = all(sp).filter(e => e.className === "simi");
+  const top0 = String(in2[0]["aria-label"].match(/de ([\d,]+)\)$/)[1]); in2[0].value = top0; in2[0].listeners.input();
+  const saveB = all(sp).find(e => e.textContent === "Guardar"), keepBox = all(sp).find(e => e.tag === "input" && e.type === "checkbox");
+  await saveB.listeners.click(); assert(!simP.store.hand, "without the box ticked it is only a simulation");
+  keepBox.checked = true; await saveB.listeners.click(); await new Promise(r => setTimeout(r, 10));
+  const handKey = Object.keys(simP.store.hand[5])[0];
+  assert(simP.store.hand[5][handKey] === top0 && /sua nota/.test(text(sp)) && !all(sp).some(e => e.className === "simi"), "saved for this user, shown as their grade: " + JSON.stringify(simP.store.hand) + " " + /sua nota/.test(text(sp)) + " " + all(sp).filter(e => e.className === "simi").length);
+  const reload = await runContent("/courses/71306", [], { hand: simP.store.hand });
+  assert(/sua nota/.test(text(reload.anchor)), "back on the next visit and in the numbers"); ok();
 
   // logging out also clears the reminders, the week list and the icon; a course panel in use is not swapped by a newer reading
   const lo2 = await runContent("/logout", null, cold.store);
   assert(lo2.sent.some(m => m.type === "remind" && m.items.length === 0 && m.alarms === false) && lo2.sent.some(m => m.type === "next" && m.date === null), "logout: service worker state dropped");
   const busy2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
   const p0 = busy2.anchor.kids.find(k => k.id === "qf-panel");
-  all(p0).find(e => e.textContent === "Simular notas").listeners.click();
+  all(p0).find(e => e.textContent === "Simular ou lançar notas").listeners.click();
   await new Promise(r => setTimeout(r, 350));
   assert(busy2.store.cache.at > st10.cache.at && busy2.anchor.kids.find(k => k.id === "qf-panel") === p0, "simulating: the panel stays while the new reading is saved");
   const idle2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
@@ -619,13 +621,6 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert.strictEqual(lo.store.who, undefined, pth + ": cached user forgotten"); assert.strictEqual(lo.store.cache, undefined, pth + ": last reading removed, not only marked old");
     assert.strictEqual(lo.fetches.length, 0, pth + ": nothing read"); assert.strictEqual(lo.anchor.kids.length, 0, pth + ": nothing drawn");
   }
-  { // after a login page, the calculator page (app-boot.js) gets no reading of the previous student
-    const lo = await runContent("/login/canvas", null, cold.store), win = {};
-    new Function("chrome", "window", "document", read("app-boot.js"))({ runtime: { getManifest: () => ({ version: C.EXT_LATEST }) }, storage: { local: { get: async k => ({ [k]: lo.store[k] }) } } },
-      win, { createElement: () => ({}), body: { appendChild() {} } });
-    await new Promise(r => setTimeout(r, 5));
-    assert.strictEqual(win.CP_EXT.data, null, "app-boot: data null after logout"); assert.strictEqual(win.CP_EXT.user, null, "app-boot: no user after logout");
-  }
   // no user id in the page, a 12 h cached user A, but the session is now B: a fresh read is labelled with B, A's reading dropped
   const asA = Object.assign({}, st10, { who: { id: 5, at: Date.now() } });
   const asB = await runContent("/", null, asA, { selfId: 8 });
@@ -691,31 +686,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const firstPaint = theme("off", false, undefined, { look: "original", nav: "original", font: "original" });
   assert(!firstPaint.cls.has("cp-look"), "the first paint already uses the last choice (before prefs arrive)"); ok();
 
-  // the Caderno+ page: a left-menu item, and the calculator over Canvas on #campus
-  const camp = await runContent("/", null);
-  const item = camp.menu.kids.find(k => k.id === "cp-nav");
-  assert(item && all(item).some(e => e.href === "#campus") && /Caderno\+/.test(text(item)), "Caderno+ item in the Canvas left menu");
-  assert(all(camp.anchor).some(e => e.href === "#campus"), "the dashboard panel opens the Caderno+ page");
-  assert(!camp.body.kids.some(k => k.id === "cp-app"), "closed until asked");
-  camp.env.location.hash = "#campus"; camp.winListeners.hashchange();
-  const page1 = camp.body.kids.find(k => k.id === "cp-app"), frame = page1 && all(page1).find(e => e.tag === "iframe");
-  assert(frame && frame.src === "chrome-extension://me/app.html", "#campus shows the extension's calculator page");
-  await all(page1).find(e => e.textContent === "Fechar").listeners.click();
-  assert(!camp.body.kids.some(k => k.id === "cp-app") && camp.env.location.hash === "", "Fechar closes it and clears the address");
-  const direct = await runContent("/courses/71306", [], {}, { hash: "#campus" });
-  assert(direct.body.kids.some(k => k.id === "cp-app"), "a link straight to #campus opens it");
-  const openBtn = all(direct.anchor).find(e => e.textContent === "Abrir no Caderno+ →");
-  assert(openBtn, "course panel opens the Caderno+ page");
-  direct.env.location.hash = ""; direct.winListeners.hashchange();
-  await openBtn.listeners.click();
-  assert(/^campus=[a-z0-9]+$/.test(direct.env.location.hash), "the course button asks for that subject: " + direct.env.location.hash);
-  direct.env.location.hash = "#" + direct.env.location.hash; direct.winListeners.hashchange();
-  const subj = all(direct.body.kids.find(k => k.id === "cp-app")).find(e => e.tag === "iframe");
-  assert(subj && /app\.html\?m=[a-z0-9]+$/.test(subj.src), "#campus=<id> opens the calculator on that subject: " + (subj && subj.src));
-  await all(direct.body.kids.find(k => k.id === "cp-app")).find(e => e.textContent === "Fechar").listeners.click();
-  assert(!direct.env.location.assigned && direct.env.location.hash === "" && !direct.body.kids.some(k => k.id === "cp-app"), "Fechar on the course page stays on it");
-  direct.env.location.hash = "#campus=../x"; direct.winListeners.hashchange();
-  assert(!direct.body.kids.some(k => k.id === "cp-app"), "an odd subject id does not open anything"); ok();
+  // no separate page: no menu item, no #campus overlay; the meta lives on the dashboard and is saved
+  const camp = await runContent("/", null, {}, { hash: "#campus" });
+  assert(!camp.menu.kids.length && !camp.body.kids.some(k => k.id === "cp-app") && !all(camp.anchor).some(e => /^#campus/.test(e.href || "")), "no Caderno+ page, menu item or #campus link");
+  const metaUp = all(camp.anchor).find(e => e["aria-label"] === "Meta maior");
+  assert(metaUp && /Meta[ |]+−[ |]+7[ |]+\+/.test(text(all(camp.anchor).find(e => e.className === "meta"))), "meta 7 on the dashboard");
+  await metaUp.listeners.click(); await new Promise(r => setTimeout(r, 15));
+  assert(camp.store.prefs.meta === "7.5" && /Meta[ |]+−[ |]+7,5/.test(text(all(camp.anchor).find(e => e.className === "meta"))), "meta raised, saved and redrawn"); ok();
 
   // the bookmarklet on the site: the extension's page scripts, bundled with an in-memory chrome stand-in
   const lit = fs.readFileSync(path.join(root, "index.html"), "utf8").match(/\/\*CP-BM\*\/("(?:[^"\\]|\\.)*")\/\*CP-BM\*\//);
@@ -724,7 +701,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   new Function(bm);   // valid code
   const bmDash = await runContent("/", null, {}, { src: bm });
   assert.match(text(bmDash.anchor), /Próximos 7 dias/); assert.match(text(bmDash.anchor), /Prova adiada/);
-  assert(!all(bmDash.anchor).some(e => e.href === "#campus") && !bmDash.menu.kids.length, "no Caderno+ page without the extension");
+  assert(!bmDash.menu.kids.length, "no menu item in the bookmarklet");
   const bmCourse = await runContent("/courses/71306", [], {}, { src: bm });
   assert.match(text(bmCourse.anchor), /garantidos de 10/);
   assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no|^Anotações/.test(e.textContent)), "no downloads, no calculator page and no notes in the bookmarklet");
@@ -733,5 +710,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, no separate page and meta, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox, focus, cards, modes, tasks, what changed)");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -1,18 +1,14 @@
 #!/bin/sh
 # Render media/demo.mp4 (and a poster) from video/scene.html: one headless frame per step of virtual time.
 # The scene is a mock Canvas tab running the real extension on made-up data. It is served over localhost (content.js reads
-# location.pathname, and the calculator iframe needs a same-origin copy of app.html wired to the scene's stubbed chrome.storage).
+# location.pathname). The calculator now lives in the Canvas panels, so there is no extension page to serve.
 # Needs Brave or Chrome, python3 and ffmpeg. FRAMES="ms ms ..." renders only those moments to $OUT (default /tmp/cp-media) for review;
 # STILL=1 renders the two store screenshots (1280x800) instead.
 set -eu
 cd "$(dirname "$0")/.."
 B="${BROWSER:-/Applications/Brave Browser.app/Contents/MacOS/Brave Browser}"
 fps=20; secs=16; tmp=$(mktemp -d); root=$(mktemp -d)
-ln -s "$PWD/extension" "$root/ext"; ln -s "$PWD/video" "$root/video"; mkdir "$root/extapp"
-for f in extension/*; do ln -s "$PWD/$f" "$root/extapp/"; done
-rm "$root/extapp/app.html"
-sed 's#<script src="core.js"></script>#<script src="/video/ext-stub.js"></script>&#' extension/app.html > "$root/extapp/app.html"
-grep -q ext-stub "$root/extapp/app.html" || { echo "app.html: core.js script tag not found"; exit 1; }
+ln -s "$PWD/extension" "$root/ext"; ln -s "$PWD/video" "$root/video"
 port=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
 python3 -m http.server "$port" --bind 127.0.0.1 --directory "$root" >/dev/null 2>&1 & srv=$!
 trap 'kill $srv 2>/dev/null; rm -rf "$tmp" "$root"' EXIT
