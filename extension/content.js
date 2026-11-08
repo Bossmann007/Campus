@@ -283,8 +283,10 @@
       card.dataset.qf = "1"; card.cpAdded = [];
       if (!m) continue;
       const id = m[1], c = a.byCanvasId[id], head = card.querySelector(".ic-DashboardCard__header_content") || card, add = x => { card.cpAdded.push(x); head.appendChild(x); return x; };
+      card.style.display = ctx.hidden.includes(id) ? "none" : "";   // courses the student took off the dashboard
+      if (ctx.hidden.includes(id)) continue;
       if (c && prefs.grades && a.rules) {
-        const st = a.state(c), p = add(pill(a.label(st), a.tone(st)));
+        const st = a.state(c), p = add(pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)));
         p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · quanto falta (notas do Canvas, meta " + fmt(T, T % 1 ? 1 : 0) + ")";
       }
       const nx = prefs.cardNext && ctx.list.find(x => String(x.cid) === id && x.task && !fin(x) && x.date >= today());
@@ -311,6 +313,9 @@
         }
         card.cpPalette = pal; card.cpAdded.push(pal); head.appendChild(pal);
       });
+      const hideB = add(el("button", null, "×")); hideB.type = "button"; hideB.title = "Tirar esta matéria do painel (dá para mostrar de novo no Caderno+)"; hideB.setAttribute("aria-label", "Tirar esta matéria do painel");
+      hideB.style.cssText = pick.style.cssText.replace("right:8px", "right:36px");
+      hideB.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); ctx.setHidden(ctx.hidden.concat([id])); });
     }
   }
 
@@ -482,7 +487,8 @@
   let dashWatch = null, widgets = null;
   const widgetDash = () => widgets != null ? widgets : (widgets = [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));   // ENV flag in the page
   function placeDash() {
-    const host = document.getElementById("cp-dash"), cols = document.querySelector ? document.querySelector('[data-testid="widget-columns"]') : null;
+    const host = document.getElementById("cp-dash"), q = sel => document.querySelector ? document.querySelector(sel) : null;
+    const cols = q('[data-testid="widget-columns"]') || q("#DashboardCard_Container");   // new widget dashboard, or the classic one with course cards
     if (!host || !cols || !cols.parentNode || host.nextSibling === cols) return;
     cols.parentNode.insertBefore(host, cols);
   }
@@ -490,7 +496,13 @@
   // 92% halfway through the term). On our subjects the card keeps its picture and gets our numbers instead: points
   // guaranteed of 10, the share of the term secured and what is still needed. Canvas's figure is hidden by a stylesheet
   // of ours (not React's), and the badge comes back if React redraws the card.
-  let gradeA = null;
+  let gradeA = null, hiddenIds = [];
+  function hideGradeCards(ids) {
+    hiddenIds = ids || hiddenIds;
+    let st = document.getElementById("cp-hidden");
+    if (!st) { st = el("style"); st.id = "cp-hidden"; (document.head || document.body).appendChild(st); }
+    st.textContent = hiddenIds.length ? hiddenIds.map(id => '[data-testid="course-grade-card-' + id + '"]').join(",") + " { display:none !important; }" : "";
+  }
   function enhanceGradeCards() {
     const a = gradeA;
     if (!a || !document.querySelectorAll) return;
@@ -767,6 +779,14 @@
       if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
     }
     hd.appendChild(seg);
+    const oldSw = widgetDash() && document.querySelector ? document.querySelector('[data-testid="switch-to-old-dashboard-button"]') : null;
+    if (oldSw) { const b = el("button", "find natv", "Painel com cards"); b.type = "button"; b.title = "Voltar ao painel antigo do Canvas, com os cards das matérias (o Caderno+ entra junto)"; b.addEventListener("click", () => oldSw.click()); hd.appendChild(b); }
+    // courses outside the student's grade (extension courses, other terms): off the dashboard in one click, back in one click
+    const hc = window.cpHidden, outside = cache.ids.filter(x => !String(x.name).includes(C.TERM) && !(hc && hc.hidden.includes(String(x.id))));
+    if (hc && outside.length) { const b = el("button", "find natv", "Esconder " + outside.length + (outside.length === 1 ? " curso fora da grade" : " cursos fora da grade")); b.type = "button";
+      b.title = outside.map(x => x.name).join("\n"); b.addEventListener("click", () => hc.setHidden(hc.hidden.concat(outside.map(x => String(x.id))))); hd.appendChild(b); }
+    if (hc && hc.hidden.length) { const b = el("button", "find natv", "Mostrar " + hc.hidden.length + (hc.hidden.length === 1 ? " escondido" : " escondidos")); b.type = "button";
+      b.addEventListener("click", () => hc.setHidden([])); hd.appendChild(b); }
     if (onMode) {   // the Canvas dashboard under ours, or ours alone (the default)
       const nat = el("button", "find natv", prefs.native ? "Só Caderno+" : "Quadros do Canvas"); nat.type = "button";
       nat.title = prefs.native ? "Esconder os quadros do Canvas e deixar só o Caderno+" : "Mostrar de novo os quadros do Canvas (Trabalho do curso, Avisos) abaixo do Caderno+";
@@ -781,8 +801,8 @@
     meta.append(el("span", null, "Meta"), dn, mv, upb); hd.appendChild(meta);
     box.append(hd);
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
-    // inside Canvas's dashboard its "Notas do curso" cards carry our numbers: no subject tiles of ours there
-    if (grades) { const inside = prefs.native && widgetDash(), g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
+    // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
+    if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
     else if (why) box.append(el("div", "muted why", why));
     box.appendChild(grid);
     if (week) {
@@ -1130,16 +1150,19 @@
         sendReminders(agenda(a, cache, m2), prefs, cache);
       };
       window.cpRedraw = () => onMode(prefs.mode);
-      if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // not while the student types in the panel   // in the background: the panel never waits for it
-      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
-      gradeA = a; watchDash(); enhanceGradeCards();
+      if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
       const { colors } = await chrome.storage.local.get("colors");
-      const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {} };
+      const { hidden } = await chrome.storage.local.get("hidden");
+      const ctx = { prefs, list: agenda(a, cache, marks), colors: colors && typeof colors === "object" ? colors : {}, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
+      ctx.setHidden = async list => { ctx.hidden = [...new Set(list.map(String))]; await chrome.storage.local.set({ hidden: ctx.hidden }); decorateCards(a, true, ctx); hideGradeCards(ctx.hidden); if (window.cpRedraw) window.cpRedraw(); };
+      window.cpHidden = ctx;
       ctx.setColor = async (id, color) => {
         const next = Object.assign({}, ctx.colors); if (color) next[id] = color; else delete next[id];
         ctx.colors = next; await chrome.storage.local.set({ colors: next }); decorateCards(a, true, ctx);
       };
-      decorateCards(a, again, ctx);
+      dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
+      gradeA = a; watchDash(); enhanceGradeCards();
+      decorateCards(a, again, ctx); hideGradeCards(ctx.hidden);
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();

@@ -91,11 +91,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   gcard.append(gname, ggrade); gcard.getAttribute = k => k === "data-testid" ? "course-grade-card-" + (opts.courseId || 71306) : null;
   Object.defineProperty(gname, "parentNode", { get() { return this.parent; } }); Object.defineProperty(gname, "nextSibling", { get() { return this.parent.kids[this.parent.kids.indexOf(this) + 1] || null; } });
   gcard.querySelector = sel => sel === "[data-cp-grade]" ? all(gcard).find(e => e["data-cp-grade"]) || null : /-name"\]$/.test(sel) ? gname : null;
-  const tabContent = fakeEl("div"), cols = fakeEl("div"); if (opts.widgetCols) { tabContent.append(cols); anchor.append(tabContent); }
+  const tabContent = fakeEl("div"), cols = fakeEl("div"); if (opts.widgetCols || opts.classic) { tabContent.append(cols); anchor.append(tabContent); }
   tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); };
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
-    querySelector: sel => opts.widgetCols && sel === '[data-testid="widget-columns"]' ? cols : null,
+    querySelector: sel => (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
     querySelectorAll: sel => sel === '[data-testid^="course-grade-card-"]' ? (opts.gradeCard ? [gcard] : []) : sel === "[data-cp-grade]" ? all(gcard).filter(e => e["data-cp-grade"]) : sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
@@ -317,7 +317,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.match(text(emb), /Nada nos próximos 7 dias/, "empty week: a friendly line"); assert(!all(emb).some(e => /^tl/.test(e.className)), "and no empty grid"); ok();
 
   // dashboard grades: the next assessment that counts, the KPI row and the tiles, all from the shared core
-  const gd = await runContent("/", null), gb = gd.anchor.kids.find(k => k.id === "cp-dash"), gr = C.fromCanvas(gd.store.cache.data).grades;
+  const gd = await runContent("/", null, { prefs: { native: false } }), gb = gd.anchor.kids.find(k => k.id === "cp-dash"), gr = C.fromCanvas(gd.store.cache.data).grades;
   const cvOf = id => { const h = gd.store.cache.ids.filter(x => C.CANVAS[id] && x.id === C.CANVAS[id].cid); return h.length === 1 ? String(h[0].id) : null; };
   const mine = C.COURSES.filter(c => cvOf(c.id));   // subjects paired to the student's Canvas courses by course id
   assert.deepStrictEqual(mine.map(c => c.id), ["abd"], "fixture: enrolled only in Banco de Dados");
@@ -607,6 +607,25 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const gw2 = await runContent("/", null, {}, { gradeCard: true, courseId: 77, courseName: "Inglês - 2026 / 2º Sem" }); await new Promise(r => setTimeout(r, 20));
   assert(!all(gw2.gcard).some(e => e["data-cp-grade"]) && gw2.body.kids.find(k => k.id === "cp-grades").textContent === "", "a course without our rules keeps Canvas's figure"); ok();
 
+  // the classic dashboard: our panel right above the course cards; courses outside the grade off the dashboard and back
+  const EXT = { id: 88, name: "Fundamentos de Design de interação - Extensão - (21/09/2026 a 27/09/2026)" };
+  const cl = await runContent("/", null, {}, { classic: true, more: [EXT] }); await new Promise(r => setTimeout(r, 30));
+  const clHost = cl.cols.parent.kids.find(k => k.id === "cp-dash");
+  assert(clHost && cl.cols.parent.kids.indexOf(clHost) === cl.cols.parent.kids.indexOf(cl.cols) - 1, "between the header and Canvas's course cards");
+  assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
+  const outB = all(clHost).find(e => /^Esconder 1 curso fora da grade$/.test(e.textContent));
+  assert(outB && /Extensão/.test(outB.title), "offers to hide the extension course");
+  await outB.listeners.click(); await new Promise(r => setTimeout(r, 30));
+  assert.deepStrictEqual(cl.store.hidden, ["88"], "saved");
+  const xB = all(cl.header).find(e => e["aria-label"] === "Tirar esta matéria do painel");
+  await xB.listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 30));
+  const clHost2 = cl.cols.parent.kids.find(k => k.id === "cp-dash") || cl.anchor.kids.find(k => k.id === "cp-dash");
+  const showB = all(clHost2).find(e => /^Mostrar 2 escondidos$/.test(e.textContent));
+  assert(cl.store.hidden.length === 2 && showB, "a card's × hides it too; one button shows them again");
+  assert(cl.body.kids.find(k => k.id === "cp-hidden").textContent.includes('course-grade-card-71306'), "hidden in Canvas's Notas do curso widget too");
+  await showB.listeners.click(); await new Promise(r => setTimeout(r, 30));
+  assert.deepStrictEqual(cl.store.hidden, [], "all back"); ok();
+
   // course cards: next deadline, a color per course (kept here, never sent to Canvas), gradient
   const cd = await runContent("/", null, { prefs: { gradient: true } });
   assert.match(text(cd.header), /Próx\.: Lista 3 · amanhã \d\d:\d\d/, "the next deadline on the card");
@@ -709,7 +728,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const dk = theme("dark", false); await new Promise(r => setTimeout(r, 5));
   assert(/--cp-paper:#FFFFFF; --cp-card:#F3F3F3/.test(dk.styles.find(x => x.id === "cp-look").textContent), "dark: neutral paper under the inversion (no mud)");
   lk.listen.change({ prefs: { newValue: { mode: "limpo" } } }, "local");
-  assert(lk.cls.has("cp-mode-limpo") && /#right-side-wrapper, #right-side, #footer/.test(lookCss()) && !/#DashboardCard_Container/.test(lookCss()), "limpo: Canvas clutter hidden, cards kept");
+  assert(lk.cls.has("cp-mode-limpo") && /#right-side-wrapper, #right-side, #footer/.test(lookCss()) && !/:is\(#DashboardCard_Container/.test(lookCss()), "limpo: Canvas clutter hidden, cards kept");
   assert(lk.cls.has("cp-dash-page") && /:root\.cp-dash-page :is\(#right-side-wrapper/.test(lookCss()), "the clutter rules apply on the dashboard only");
   const quizPage = theme("off", false, undefined, undefined, { path: "/courses/1/quizzes/2/take", mode: "limpo" }); await new Promise(r => setTimeout(r, 5));
   assert(!quizPage.cls.has("cp-dash-page"), "a quiz page keeps its side column (timer, questions)");

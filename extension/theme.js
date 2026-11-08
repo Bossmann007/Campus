@@ -31,6 +31,9 @@
     const W = ":root.cp-dash-page";
     if (!cards.native || cards.mode === "foco") out.push(`${W}.cp-has-panel [data-testid="widget-columns"] { display:none !important; }`);
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${W} [data-testid="switch-to-old-dashboard-button"] { display:none !important; }`);
+    // the classic dashboard: our panel sits between its header and the course cards; its side column (to do, coming up:
+    // our week shows them) goes away while our panel is there
+    out.push(`${W}.cp-has-panel #right-side-wrapper { display:none !important; } ${W}.cp-has-panel #DashboardCard_Container { margin-top:6px; }`);
     // Only on the dashboard (quizzes, grades and assignments keep their side column: timers, totals and submissions live there).
     // limpo: the side column, footer, activity stream and card icons go; foco: also the course cards, once our panel is drawn
     const D = ":root.cp-dash-page";
