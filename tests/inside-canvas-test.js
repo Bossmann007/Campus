@@ -107,6 +107,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if ((opts.more || []).some(c => url.startsWith("/api/v1/courses/" + c.id + "/assignments"))) return page([]);
     if (url.startsWith("/api/v1/announcements")) return page([{ context_code: "course_" + cid, title: "Prova adiada", posted_at: new Date().toISOString(), read_state: "unread", html_url: "https://pucpr.instructure.com/courses/71306/discussion_topics/1" },
       { context_code: "course_" + cid, title: "Bem-vindos", posted_at: "2026-08-01T12:00:00Z", read_state: "read", html_url: "https://evil.example/x" }]);
+    if (url.startsWith("/api/v1/conversations?")) return opts.inboxFails ? { ok: false, status: 403, text: async () => "", headers: { get: () => null } } : page(opts.inbox || []);
     if (url.startsWith("/api/v1/planner/items?")) return plannerFails ? { ok: false, status: 500, text: async () => "", headers: { get: () => null } } : page(plannerItems || PLANNER);
     if (url.startsWith("/api/v1/courses/71306/files?")) return files ? page(files) : { ok: false, status: 401, text: async () => "", headers: { get: () => null } };
     if (opts.modules && url.startsWith("/api/v1/courses/71306/modules?")) return page(opts.modules);
@@ -374,17 +375,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // Canvas calls per dashboard load (1 course). Before: /users/self on every page + /courses twice = 6 cold, 1 warm, 6 after 10 min.
   // Now the user is always confirmed (the id in the page, else /users/self); /courses once; one tab reads at a time.
   const cold = await runContent("/", null);
-  assert.deepStrictEqual(cold.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 5 calls, /courses once");
+  assert.deepStrictEqual(cold.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 6 calls, /courses once");
   const warm = await runContent("/", null, cold.store);
   assert.deepStrictEqual(warm.fetches, ["/api/v1/users/self"], "warm, no user id in the page: only the user is confirmed (1 call)");
   const warmEnv = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"5"}' }] });
   assert.strictEqual(warmEnv.fetches.length, 0, "warm with the user id in the page: no call");
   const st10 = Object.assign({}, cold.store, { cache: Object.assign({}, cold.store.cache, { at: Date.now() - 11 * 60 * 1000 }) });
   const later = await runContent("/", null, st10);
-  assert.deepStrictEqual(later.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (5 calls)");
+  assert.deepStrictEqual(later.fetches.map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (6 calls)");
   const pageEnv = [{ textContent: 'ENV = {"current_user_id":"5"}' }];
   const laterEnv = await runContent("/", null, st10, { scripts: pageEnv });
-  assert.strictEqual(laterEnv.fetches.length, 4, "reading older than 10 min with the user id in the page: 4 calls");
+  assert.strictEqual(laterEnv.fetches.length, 5, "reading older than 10 min with the user id in the page: 5 calls");
   // an older reading shows at once; the new one replaces it when Canvas answers (one panel, never two)
   const oldFirst = await runContent("/", null, st10, { scripts: pageEnv, slow: 80 });
   const dashes = () => all(oldFirst.anchor).filter(e => e.id === "cp-dash");
@@ -484,6 +485,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
   ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed"); ok();
 
+  // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
+  const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ name: "Prof. Ana" }, { name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
+  const ibx = all(ib.anchor).find(e => /card news inbox/.test(e.className));
+  assert(ibx && /Caixa de entrada \| 1 não lida/.test(text(ibx)) && /Dúvida RA3 \| Prof\. Ana, Aluno/.test(text(ibx)), "subject and who");
+  assert(!/segredo/.test(JSON.stringify(ib.store.cache)), "the message text is never read into the cache");
+  assert.strictEqual(all(ibx).find(e => e.textContent === "Dúvida RA3").href, "https://pucpr.instructure.com/conversations");
+  const ibf = await runContent("/", null, {}, { inboxFails: true });
+  assert(ibf.store.cache && ibf.store.cache.inbox === null && /Próximos 7 dias/.test(text(ibf.anchor)), "inbox refused: the rest still drawn");
+  const ibo = await runContent("/", null, { prefs: { inbox: false } }, { inbox: [{ subject: "x", participants: [] }] });
+  assert(!all(ibo.anchor).some(e => /inbox/.test(e.className)), "switched off: no card"); ok();
+
   // .ics: the deadlines and exams from today on
   const icsPage = await runContent("/", null);
   const icsBtn = all(icsPage.anchor).find(e => e.textContent === "↓ .ics");
@@ -497,7 +509,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(locked.fetches.length, 0, "another tab is reading: this one uses the last reading");
   assert(all(locked.anchor).some(e => /kpi/.test(e.className)), "and still draws it");
   const freed = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 2 * 60 * 1000 }));
-  assert.strictEqual(freed.fetches.length, 5, "a lock left by a closed tab expires after a minute"); assert.strictEqual(freed.store.refreshing, undefined, "lock released");
+  assert.strictEqual(freed.fetches.length, 6, "a lock left by a closed tab expires after a minute"); assert.strictEqual(freed.store.refreshing, undefined, "lock released");
   // SSO or cookie switch: no user id in the page, a fresh reading of A, but the session is B → nothing of A is drawn
   const toB = await runContent("/", null, Object.assign({}, cold.store, { who: { id: 5, at: Date.now() } }), { selfId: 8, failCourses: true });
   assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert.strictEqual(toB.anchor.kids.length, 0, "nothing of A drawn"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");
@@ -506,7 +518,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const fromPage = await runContent("/", null, {}, { scripts: [{ textContent: 'ENV = {"current_user_id":"5","x":1}' }] });
   assert(!fromPage.fetches.includes("/api/v1/users/self") && fromPage.store.cache.user === 5, "user id printed in the page: no /users/self");
   const switched = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"8"}' }] });
-  assert(switched.store.cache.user === 8 && switched.fetches.length === 4, "another user in the page: the reading is not reused");
+  assert(switched.store.cache.user === 8 && switched.fetches.length === 5, "another user in the page: the reading is not reused");
   for (const pth of ["/login/canvas", "/logout", "/users/sign_out"]) {
     const lo = await runContent(pth, null, cold.store);
     assert.strictEqual(lo.store.who, undefined, pth + ": cached user forgotten"); assert.strictEqual(lo.store.cache, undefined, pth + ": last reading removed, not only marked old");
@@ -604,5 +616,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll, simulator, notes, inbox)");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -61,13 +61,15 @@
   async function refresh(user) {
     await chrome.storage.local.set({ refreshing: Date.now() });
     try {
+      const inbox = getAll("/api/v1/conversations?scope=unread&per_page=5").then(list => list.slice(0, 5).map(m => ({ subject: String(m.subject || "(sem assunto)").slice(0, 140),
+        from: (Array.isArray(m.participants) ? m.participants : []).map(x => x && x.name).filter(Boolean).slice(0, 2).join(", ").slice(0, 80), at: m.last_message_at || null })), () => null);   // unread messages (subject and who), read alongside
       const plan = getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders, read alongside the grades
       const got = {}, data = await collectCanvasGrades(got);
       if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
       const planner = await plan;
       await newGrades(user, data);
-      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null };
+      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh });
       return fresh;
     } finally { await chrome.storage.local.remove("refreshing"); }
@@ -595,6 +597,13 @@
         ul.appendChild(li);
       }
       sec.append(h, ul); foldable(sec, h, "grades-new"); grid.appendChild(sec);
+    }
+    if (prefs.inbox && Array.isArray(cache.inbox) && cache.inbox.length) {   // the unread Canvas messages, a click opens the inbox
+      const sec = el("section", "card news inbox"), h = el("h3", null, "Caixa de entrada"), n = cache.inbox.length;
+      h.appendChild(el("span", "pill nt", (n >= 5 ? "5+" : n) + (n === 1 ? " não lida" : " não lidas"))); sec.appendChild(h);
+      const ul = el("ul");
+      for (const m of cache.inbox) { const li = el("li", "row unread"); li.append(el("span", "dot", "não lida"), mid(m.subject, location.origin + "/conversations", m.from), el("span", "d", m.at ? ago(C.localISO(new Date(m.at))) : "")); ul.appendChild(li); }
+      sec.appendChild(ul); foldable(sec, h, "inbox"); grid.appendChild(sec);
     }
     if (news) {
       const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
