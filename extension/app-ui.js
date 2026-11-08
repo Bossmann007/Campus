@@ -2,7 +2,7 @@
 (() => {
   const C = NotasCore, LS = "notas-pucpr-2026-2";
   const CHEV = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>', ALERT = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.4v.1"/></svg>';
-  const SHORT = { imp:"Imperativa", abd:"Banco de Dados", rpnd:"RPND", web:"WEB", etica:"Ética", cscf:"Conectividade" };
+  const SHORT = C.SHORT;
   let saved;
   try { saved = JSON.parse(localStorage.getItem(LS)); } catch (e) { saved = null; }
   if (!saved || typeof saved !== "object" || !saved.grades || typeof saved.grades !== "object" || Array.isArray(saved.grades))
@@ -35,7 +35,7 @@
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function cell(label, cls, text) { const d = el("div", cls, text); if (label) d.dataset.label = label; return d; }
   const badge = (cls, text) => el("span", "badge " + cls, text);
-  const tone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
+  const tone = C.fractionTone;
 
   function reqText(req, it, st) {
     if (!req) return "—";
@@ -97,9 +97,18 @@
     for (const b of document.querySelectorAll("#viewsw button")) b.setAttribute("aria-pressed", (b.dataset.v === "cal") === CAL); };
   applyView();
   // The switch changes the view in place and keeps the address in step (?view=calendario).
+  const swap = e => { if (!e) return; e.classList.remove("swap"); void e.offsetWidth; e.classList.add("swap"); };   // replay the short fade-in
   function setView(cal, push) {
-    if (cal === CAL) return; CAL = cal; applyView(); calc(); scrollTo({ top:0, behavior:"auto" });
+    if (cal === CAL) return; CAL = cal; applyView(); calc(); swap($(CAL ? "calendario" : "materias")); scrollTo({ top:0, behavior:"auto" });
     if (push) history.pushState(null, "", cal ? "?view=calendario" : location.pathname);
+  }
+  // ?m=<subject id> (the course page button in Canvas) opens that subject's card and scrolls to it.
+  function focusSubject() {
+    const id = new URLSearchParams(location.search).get("m"), card = id && /^[a-z0-9]+$/.test(id) && $("card-" + id);
+    if (!card) return;
+    if (CAL) setView(false, false);
+    if (!card.classList.contains("open")) card.setOpen(true);
+    card.scrollIntoView({ block:"start", behavior:"auto" }); card.classList.add("focus"); setTimeout(() => card.classList.remove("focus"), 1600);
   }
   const syncAll = () => { const b = $("allbtn"); if (b) b.textContent = [...document.querySelectorAll(".card")].every(x => x.classList.contains("open")) ? "Fechar todas" : "Abrir todas"; };
   function build() {
@@ -199,7 +208,7 @@
       links.forEach(a => { const t = document.getElementById(a.getAttribute("href").slice(1)); if (t) io.observe(t); });
     }
     for (const b of $("filter").children) b.addEventListener("click", () => {
-      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); });
+      filter = b.dataset.f; for (const x of $("filter").children) x.setAttribute("aria-pressed", x === b); calc(); swap($("next")); });
     $("startbtn").addEventListener("click", () => { const first = document.querySelector(".card"); if (first && !document.querySelector(".card.open")) first.setOpen(true); });
     const sb = el("button", "linkbtn", "Mostrar de onde vêm os pesos e as datas"); sb.type = "button"; sb.setAttribute("aria-pressed", "false");
     sb.addEventListener("click", () => { const on = document.body.classList.toggle("src-on"); sb.setAttribute("aria-pressed", on);
@@ -233,7 +242,7 @@
       const nFresh = c.items.filter(it => saved.fresh.includes(C.key(c, it))).length;
       const [g, f, m] = $("bar-" + c.id).children;
       g.style.width = Math.min(100, st.earned * 10) + "%";
-      g.style.background = "var(--" + (st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction)) + ")";
+      g.style.background = "var(--" + C.statusTone(st) + ")";
       f.style.left = Math.min(100, st.earned * 10) + "%"; f.style.width = st.futureMax * 10 + "%";
       m.style.left = Math.min(99.5, T * 10) + "%";
 
@@ -274,7 +283,7 @@
     [["all", "Todas", C.COURSES.length], ["precisa", "Precisa de nota"], ["depende-atrasadas", "Faltam notas"], ["nao-da", "Recuperação"], ["garantido", "Garantido"]].forEach(([k, l, n]) => {
       const count = n != null ? n : groups[k].length; if (!count) return;
       const b = el("button", null, l); b.type = "button"; b.setAttribute("aria-pressed", k === cardFilter);
-      b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); }); sum.appendChild(b); });
+      b.appendChild(el("span", "c", String(count))); b.addEventListener("click", () => { cardFilter = k; calc(); swap($("cards")); }); sum.appendChild(b); });
     for (const c of C.COURSES) { const cd = $("card-" + c.id); cd.hidden = cardFilter !== "all" && states[c.id].status !== cardFilter && !cd.contains(document.activeElement); }
 
     const next = $("next"); next.textContent = "";
@@ -295,7 +304,7 @@
 
     if (!showAll && list.length > 6) { const b = el("button", "more", "Ver todas (" + list.length + ")"); b.type = "button";
       b.addEventListener("click", () => { showAll = true; calc(); }); next.appendChild(b); }
-    renderFocus(T); renderTiles(states, T); renderTodo(); renderNews(); renderCal(T);
+    renderFocus(T); renderKpis(states, T); renderTiles(states, T); renderTodo(); renderNews(); renderCal(T);
     const late = $("late"); late.textContent = "";
     const lh = el("div", "row head late-row"); ["Matéria", "Avaliações", "Vale"].forEach(x => lh.appendChild(el("div", null, x))); late.appendChild(lh);
     let any = false;
@@ -318,7 +327,7 @@
   const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wait = ms => new Promise(r => setTimeout(r, RM ? 0 : ms));
   const CHECK = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const COLORS = { imp:"#f5a25b", abd:"#7cc4fa", rpnd:"#c8a6f7", web:"#f7c948", etica:"#f28fb1", cscf:"#7ee0d0" };
+  const COLORS = { imp:"#E9A77F", abd:"#8FB4D9", rpnd:"#B9A6DA", web:"#E8C766", etica:"#E6A0B0", cscf:"#8CCBB4" };
   function stepRow(title, sub) {
     const r = el("div", "stp enter"), ic = el("span", "ico-s"), tx = el("div"), t = el("span", "t");
     ic.appendChild(el("span", "spin")); tx.append(el("span", null, title), el("span", "sub", sub)); r.append(ic, tx, t);
@@ -334,7 +343,7 @@
   }
   const con = (() => {
     const w = el("div", "win"), bar = el("div", "win-bar"), dots = el("span", "dots"), tab = el("span", "tab"), tag = el("span", "demo-tag");
-    dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="var(--txt)"/><circle cx="15" cy="15" r="7.2" fill="none" stroke="var(--bg)" stroke-width="3.2"/><path d="m17.2 18.6 3.3 3.4 6-7.2" fill="none" stroke="var(--logo-check)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    dots.append(el("i"), el("i"), el("i")); tab.innerHTML = '<svg class="logo" viewBox="0 0 32 32" width="14" height="14" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg>';
     tab.append(" Campus+"); bar.append(dots, tab, el("span", "sp"), tag);
     const body = el("div", "win-body"), side = el("div", "win-side"), main = el("div", "win-main fade");
     main.setAttribute("aria-live", "polite");
@@ -351,7 +360,7 @@
     // One tool run: the student's request, the steps with real counts, the result and an optional action.
     api.run = async ({ ask, title, doneTitle, steps, text, lines, action, scroll }) => {
       const me = ++run, alive = () => me === run; busy = true; used = true; document.body.classList.add("ran"); tag.textContent = "ao vivo";
-      main.textContent = ""; if (scroll) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
+      main.textContent = ""; if (scroll && w.offsetParent) w.scrollIntoView({ behavior:RM ? "auto" : "smooth", block:"center" });
       bubble("me", ask); await wait(300); if (!alive()) return;
       const card = stepsCard(title); card.set(0, steps.length, true); main.appendChild(card);
       const t0 = performance.now();
@@ -445,7 +454,7 @@
   function renderFocus(T) {
     const box = $("focus"), hero = box.parentElement, sb = $("startbtn");
     const any = Object.keys(saved.grades).some(k => String(saved.grades[k]).trim() !== "");
-    const all = C.upcoming(C.COURSES, saved.grades, today, T), list = all.filter(u => u.st.status !== "garantido");
+    const list = C.stillCounts(C.COURSES, saved.grades, today, T);
     hero.classList.toggle("mine", any && list.length > 0); box.hidden = !(any && list.length > 0);
     document.body.classList.toggle("fresh", !any);
     if (!any) { con.side({}, false); if (!con.busy) con.idle("Ainda sem notas. Importe do Canvas ou lance uma nota: cada passo aparece aqui.", []); }
@@ -462,16 +471,34 @@
     const u = list[0], d = days(u.item.date), when = d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias";
     const left = el("div"), need = el("div", "need");
     left.append(el("div", "t", u.item.name), el("div", "s", (SHORT[u.course.id] || u.course.name) + " · " + dmy(u.item.date) + ", " + when));
-    const st = u.st, dep = st.status === "depende-atrasadas";
-    const v = st.status === "nao-da" || u.req.impossible ? "não dá" : dep ? (st.fractionIfLate == null || st.fractionIfLate > 1 + 1e-9 ? "não dá" : "≈ " + up(st.fractionIfLate * 10, 1)) : up(u.req.of10, 1);
-    const tn = v === "não dá" ? "bad" : dep ? "warn" : tone(u.req.f);
-    const vv = el("div", "v num", v); vv.style.color = "var(--" + tn + ")";
-    need.append(vv, el("div", "u", v === "não dá" ? "nem com nota cheia" : "precisa, em 10" + (dep ? " (faltam notas antigas)" : "")));
+    const nd = C.courseNeed(u.st), v = nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
+    const vv = el("div", "v num", v); vv.style.color = "var(--" + nd.tone + ")";
+    need.append(vv, el("div", "u", nd.impossible ? "nem com nota cheia" : "precisa, em 10" + (nd.approx ? " (faltam notas antigas)" : "")));
     box.append(el("div", "k", "Próxima avaliação que conta"), left, need);
     const rest = list.slice(1, 3);
     if (rest.length) { const t = el("div", "then", "Depois: ");
       rest.forEach((r, i) => { const a = el("a", null, r.item.name + " (" + (SHORT[r.course.id] || r.course.name) + ", " + dmy(r.item.date) + ")"); a.href = "#card-" + r.course.id; if (i) t.append(" · "); t.appendChild(a); });
       box.appendChild(t); }
+  }
+
+  // KPI row over the tiles, from the same states: the mean of the points earned, the tightest grade still needed, and every item
+  // of the semester as a tracker block (graded, past without a grade, still to come).
+  function renderKpis(states, T) {
+    const box = $("kpis"); box.textContent = "";
+    const card = (k, v, sub, cls) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v num" + (cls ? " " + cls : ""), v), el("div", "s", sub)); box.appendChild(d); return d; };
+    const sem = C.semester(C.COURSES, saved.grades, today, T), mean = sem.mean, tight = sem.tight, count = s => sem.counts[s] || 0;
+    const avg = card("Média atual", fmt(Math.floor(mean * 10) / 10, 1), "pontos garantidos de 10, nas " + C.COURSES.length + " matérias · meta " + fmt(T, 1));
+    const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
+    fill.style.width = Math.min(100, mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); avg.insertBefore(meter, avg.lastChild);
+    if (tight) card("Quanto falta", up(states[tight.id].fraction * 10, 1), "em 10 em cada item que falta, em " + SHORT[tight.id] + " (a mais apertada)", "need");
+    else if (count("depende-atrasadas")) card("Quanto falta", "?", "lance as notas que já saíram para calcular", "need");
+    else if (count("nao-da")) card("Quanto falta", "—", count("nao-da") + (count("nao-da") === 1 ? " matéria vai" : " matérias vão") + " para a recuperação", "need");
+    else card("Quanto falta", "0", "tudo garantido, pela meta " + fmt(T, 1), "need ok");
+    const items = sem.items, done = sem.done, late = sem.late;
+    const kp = card("Entregues", done + " de " + items.length, late ? late + (late === 1 ? " passou da data sem nota" : " passaram da data sem nota") : "notas lançadas no semestre");
+    const trk = el("div", "trk"); trk.setAttribute("role", "img"); trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
+    for (const x of items) { const b = el("i", x.s); b.dataset.tip = SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
+    kp.insertBefore(trk, kp.lastChild);
   }
 
   // One tile per course: ring = points earned of 10 (lighter: still possible), tick = the goal.
@@ -482,14 +509,13 @@
       c.setAttribute("class", cls); c.setAttribute("cx", 32); c.setAttribute("cy", 32); c.setAttribute("r", R);
       c.setAttribute("stroke-dasharray", Math.max(0, len) + " " + L); c.setAttribute("stroke-dashoffset", -from); return c; };
     for (const c of C.COURSES) {
-      const st = states[c.id], e = Math.min(10, st.earned) / 10 * L, f = Math.min(10 - Math.min(10, st.earned), st.futureMax) / 10 * L;
-      const cls = st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : tone(st.fraction);
+      const st = states[c.id], rp = C.ringParts(st), e = rp.earned * L, f = rp.future * L, cls = C.statusTone(st);
       const t = el("a", "tile"); t.href = "#card-" + c.id;
       const ring = el("span", "ring"), svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 64 64"); svg.setAttribute("aria-hidden", "true");
       const er = arc("er", 0, e), fu = arc("fu", e, f); er.style.stroke = "var(--" + cls + ")"; fu.style.stroke = "color-mix(in srgb, var(--" + cls + ") 22%, transparent)";
       svg.append(arc("tr", 0, L), fu); if (e > 0.5) svg.appendChild(er); svg.appendChild(arc("mk", Math.min(T, 9.9) / 10 * L, 2));
       ring.append(svg, el("b", null, st.earned >= 10 ? "10" : fmt(Math.floor(st.earned * 10) / 10, 1)));
-      const txt = el("span"), nx = st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0];
+      const txt = el("span"), nx = C.nextItem(st);
       txt.append(el("span", "nm", SHORT[c.id]), el("span", "nx", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), badge(cls, $("pill-" + c.id).textContent));
       t.append(ring, txt); t.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + $("pill-" + c.id).textContent); box.appendChild(t);
     }
@@ -651,5 +677,5 @@
       }
     }
   }
-  build(); buildImport(); calc();
+  build(); buildImport(); calc(); focusSubject();
 })();
