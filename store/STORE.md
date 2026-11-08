@@ -20,7 +20,7 @@ O Canvas da PUCPR do jeito que o aluno usa. Feito por um aluno, para alunos (202
 
 Dentro do Canvas, sem configurar nada:
 
-- **Esta semana:** no painel, as entregas e provas de todas as matérias por dia, com o que já foi entregue e o que está atrasado;
+- **Próximos 7 dias:** no painel, a próxima avaliação, a média, as matérias e uma linha do tempo com as entregas e provas de todas as matérias, com o que já foi entregue e o que está atrasado;
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos contados;
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova;
 - **Tema escuro** (ou igual ao sistema);
