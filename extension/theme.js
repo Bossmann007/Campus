@@ -29,11 +29,24 @@
     // /calendar: ours in place of Canvas's (its calendar, mini month and calendar list), unless the student keeps Canvas's
     if (!cards.nativeCal) out.push(`:root.cp-cal-page.cp-has-cal #content > :not(#cp-cal), :root.cp-cal-page.cp-has-cal #right-side-wrapper { display:none !important; }`);
     // Cursos and Grupos (Canvas tables): our cards' look
-    const TB = ":is(#my_courses_table, .course-list-table, #current_groups_table, #previous_groups_table)";   // only the Cursos and Grupos lists (the grades table uses th per row)
+    const TB = ":is(#my_courses_table, #past_enrollments_table, #future_enrollments_table, #my_groups_table, .course-list-table, #current_groups_table, #previous_groups_table)";   // only the Cursos and Grupos lists (the grades table uses th per row)
     if (L) out.push(`:root.cp-look ${TB} { background:var(--cp-card) !important; border:1px solid var(--cp-line) !important; border-radius:14px !important; border-collapse:separate !important; border-spacing:0 !important; }
 :root.cp-look ${TB} thead th { background:var(--cp-paper) !important; color:var(--cp-muted) !important; font-size:11.5px !important; text-transform:uppercase; letter-spacing:.05em; }
 :root.cp-look ${TB} :is(th, td) { padding:12px 16px !important; border-color:var(--cp-line) !important; }
 :root.cp-look ${TB} tbody tr:hover td { background:color-mix(in srgb, var(--cp-accent) 6%, transparent) !important; }`);
+    // the left-menu trays (Cursos, Grupos, Histórico, Ajuda) in #nav-tray-portal: paper, items as small cards
+    if (L) out.push(`:root.cp-look #nav-tray-portal [role="dialog"], :root.cp-look #nav-tray-portal [role="dialog"] > div { background:var(--cp-paper) !important; }
+:root.cp-look #nav-tray-portal h2 { color:var(--cp-ink) !important; letter-spacing:-.01em; }
+:root.cp-look #nav-tray-portal hr { border:0 !important; border-top:1px solid var(--cp-line) !important; }
+:root.cp-look #nav-tray-portal li { padding:10px 12px !important; margin:0 0 8px !important; border:1px solid var(--cp-line); border-radius:12px; background:var(--cp-card); }
+:root.cp-look #nav-tray-portal li:has(> hr) { padding:0 !important; border:0; background:none; }
+:root.cp-look #nav-tray-portal a { color:var(--cp-ink) !important; font-weight:600 !important; text-decoration:none !important; }
+:root.cp-look #nav-tray-portal a:hover { color:var(--cp-accent) !important; }
+:root.cp-look #nav-tray-portal li a { display:-webkit-box !important; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }`);
+    // Cursos page (/courses) and Grupos page: headers and spacing in our look (the tables are styled above)
+    if (L) out.push(`:root.cp-look :is(.ic-Action-header, .page_header_container) { border-bottom:1px solid var(--cp-line) !important; padding-bottom:10px; margin-bottom:16px; }
+:root.cp-look :is(#my_courses_table, #past_enrollments_table, #future_enrollments_table, #my_groups_table) { margin:6px 0 26px !important; }
+:root.cp-look .course-list-term-column, :root.cp-look .course-list-group-column { color:var(--cp-muted) !important; font-size:13px; }`);
     // the classic dashboard: our panel sits between its header and the course cards; its side column (to do, coming up:
     // our week shows them) goes away while our panel is there
     out.push(`${W}.cp-has-panel #right-side-wrapper { display:none !important; } ${W}.cp-has-panel #DashboardCard_Container { margin-top:6px; }`);

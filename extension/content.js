@@ -464,7 +464,9 @@
   // on the widget dashboard, at the top of #content (never inside its React grid). The watcher re-applies the Notas do curso
   // badges when React redraws that widget.
   let dashWatch = null, widgets = null;
-  const widgetDash = () => widgets != null ? widgets : (widgets = [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));   // ENV flag in the page
+  // the widget dashboard is on screen: its ENV flag, and not the classic dashboard (whose cards container is in the page
+  // HTML; the flag stays true after the student switches back to the old view)
+  const widgetDash = () => widgets != null ? widgets : (widgets = !document.getElementById("DashboardCard_Container") && [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));
   function placeDash() {
     const host = document.getElementById("cp-dash"), q = sel => document.querySelector ? document.querySelector(sel) : null;
     const cols = q("#DashboardCard_Container");   // the classic dashboard: right above its cards (outside its React root); the widget dashboard keeps ours at the top of #content
@@ -1047,6 +1049,43 @@
   }
   const inCanvasOnly = list => list.filter(x => inCanvas(x.u));
 
+  // The left-menu trays (Cursos, Grupos, Histórico, Ajuda: canvas-lms navigation_header/react/trays, all in #nav-tray-portal):
+  // the look is page CSS; here the Cursos tray gets our pill on our subjects and leaves out the courses taken off the dashboard.
+  let trayWatch = null;
+  function enhanceTray(a, hidden) {
+    const portal = document.getElementById("nav-tray-portal");
+    if (!portal || !portal.querySelectorAll) return;
+    for (const link of portal.querySelectorAll('a[href^="/courses/"]')) {
+      const m = /^\/courses\/(\d+)$/.exec(link.getAttribute("href") || ""); if (!m) continue;
+      const item = link.closest ? link.closest("li") : null;
+      if (item) item.style.display = hidden().includes(m[1]) ? "none" : "";
+      const c = a.byCanvasId[m[1]];
+      if (!c || !a.has || !item || item.querySelector("[data-cp-tray]")) continue;
+      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.setAttribute("data-cp-tray", "1"); item.appendChild(p);
+    }
+  }
+  function watchTray(a, hidden) {
+    if (trayWatch || typeof MutationObserver === "undefined" || !document.body) return;
+    let t = 0;
+    trayWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => enhanceTray(a, hidden), 150); });
+    trayWatch.observe(document.body, { childList: true, subtree: true });
+    enhanceTray(a, hidden);
+  }
+  // /courses (Todos os cursos): our pill per subject and, on every course, "Tirar do painel" / "Mostrar no painel".
+  function coursesPage(a, hidden, setHidden) {
+    for (const row of document.querySelectorAll("#my_courses_table tbody tr")) {
+      const link = row.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href") || "");
+      if (!m || row.querySelector("[data-cp-row]")) continue;
+      const id = m[1], c = a.byCanvasId[id], cell = link.parentNode, box = el("span"); box.setAttribute("data-cp-row", "1");
+      box.style.cssText = "display:inline-flex;gap:8px;align-items:center;margin-left:10px;vertical-align:middle";
+      if (c && a.has) { const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.style.marginTop = "0"; box.appendChild(p); }
+      const off = hidden().includes(id), b = el("button", null, off ? "Mostrar no painel" : "Tirar do painel"); b.type = "button";
+      b.style.cssText = "font:500 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:5px 10px;border-radius:8px;border:1px solid #ECE4D3;background:#fff;color:#5F6675;cursor:pointer";
+      b.addEventListener("click", async () => { const now = hidden(), next = now.includes(id) ? now.filter(x => x !== id) : now.concat([id]); await setHidden(next); b.textContent = next.includes(id) ? "Mostrar no painel" : "Tirar do painel"; });
+      box.appendChild(b); cell.appendChild(box);
+    }
+  }
+
   // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
   // deadlines (the planner, read a month at a time when outside the last reading), our exams and the student's own tasks.
   // "Calendário do Canvas" brings the original back (prefs.nativeCal).
@@ -1166,6 +1205,13 @@
       }, true);
     }
     if (/^\/calendar\/?$/.test(location.pathname) && prefs.calendar) calendarPage(a, cache, prefs, marks);
+    { // trays (every page) and the course list use the courses taken off the dashboard
+      const { hidden } = await chrome.storage.local.get("hidden");
+      let off = Array.isArray(hidden) ? hidden.map(String) : [];
+      const getOff = () => off, setOff = async list => { off = list.map(String); await chrome.storage.local.set({ hidden: off }); };
+      watchTray(a, getOff);
+      if (/^\/courses\/?$/.test(location.pathname)) coursesPage(a, getOff, setOff);
+    }
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {

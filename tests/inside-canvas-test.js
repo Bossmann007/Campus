@@ -84,6 +84,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   anchor.prepend = function (c) { c.parent = this; this.kids.unshift(c); byId[c.id] = c; };
   const menu = fakeEl("ul"), body = fakeEl("body"), winListeners = {}, alerts = [];
   const byId = { content: anchor, menu };
+  if (opts.classic) byId.DashboardCard_Container = { id: "DashboardCard_Container" };
+  if (opts.tray) byId["nav-tray-portal"] = opts.tray;
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
@@ -96,7 +98,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
     querySelector: sel => (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
-    querySelectorAll: sel => sel === '[data-testid^="course-grade-card-"]' ? (opts.gradeCard ? [gcard] : []) : sel === "[data-cp-grade]" ? all(gcard).filter(e => e["data-cp-grade"]) : sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
+    querySelectorAll: sel => sel === "#my_courses_table tbody tr" ? (opts.rows || []) : sel === '[data-testid^="course-grade-card-"]' ? (opts.gradeCard ? [gcard] : []) : sel === "[data-cp-grade]" ? all(gcard).filter(e => e["data-cp-grade"]) : sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
   const cid = opts.courseId || 71306, fetches = [];
@@ -616,6 +618,22 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(clHost && cl.cols.parent.kids.indexOf(clHost) === cl.cols.parent.kids.indexOf(cl.cols) - 1, "between the header and Canvas's course cards");
   assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
   assert(!all(clHost).some(e => /^Esconder|^Mostrar|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes and the meta");
+  const clW = await runContent("/", null, {}, { classic: true, scripts: [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }] });
+  assert(/Prova adiada/.test(text(clW.anchor)), "back on the classic dashboard (the widget flag stays true): our announcements show");
+  // the Cursos tray (left menu): our pill on our subjects, courses taken off the dashboard left out
+  const tray = fakeEl("div"), mkItem = id => { const li = fakeEl("li"), a = fakeEl("a"); a.getAttribute = k => k === "href" ? "/courses/" + id : null; a.closest = () => li; li.append(a);
+    li.querySelector = sel => all(li).find(e => e["data-cp-tray"]) || null; return { li, a }; };
+  const t1 = mkItem(71306), t2 = mkItem(88); tray.append(t1.li, t2.li); tray.querySelectorAll = sel => [t1.a, t2.a];
+  const trp = await runContent("/", null, { hidden: ["88"] }, { tray }); await new Promise(r => setTimeout(r, 200));
+  assert(/\/10 · /.test(text(t1.li)) && t2.li.style.display === "none", "Cursos tray: pill on ours, hidden course left out");
+  // /courses: our pill per subject and Tirar do painel / Mostrar no painel on every course
+  const mkRow = id => { const tr = fakeEl("tr"), td = fakeEl("td"), a = fakeEl("a"); a.getAttribute = () => "/courses/" + id; td.append(a); tr.append(td);
+    Object.defineProperty(a, "parentNode", { get() { return this.parent; } }); tr.querySelector = sel => sel === "[data-cp-row]" ? all(tr).find(e => e["data-cp-row"]) || null : a; return tr; };
+  const r1 = mkRow(71306), r2 = mkRow(88);
+  const cpage = await runContent("/courses", null, {}, { rows: [r1, r2], more: [{ id: 88, name: "Extensão X" }] }); await new Promise(r => setTimeout(r, 20));
+  assert(/\/10 · /.test(text(r1)) && /Tirar do painel/.test(text(r2)) && !/\/10/.test(text(r2)), "pill on ours, the button on every course");
+  await all(r2).find(e => e.textContent === "Tirar do painel").listeners.click(); await new Promise(r => setTimeout(r, 10));
+  assert(cpage.store.hidden.includes("88") && /Mostrar no painel/.test(text(r2)), "taken off the dashboard from the course list");
   const clHidden = await runContent("/", null, { hidden: ["71306"] }, { classic: true });
   assert(!/\/10 · /.test(text(clHidden.header)), "a course unticked in the popup leaves the dashboard"); ok();
 
@@ -723,7 +741,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(/\.ic-DashboardCard__box__container \{ text-align:center/.test(lookCss()) && !/\.ic-DashboardCard \{ display:flex/.test(lookCss()) && !/__header_hero, \.ic-DashboardCard__header_image \{ height/.test(lookCss()), "Canvas's own card layout kept, rows only centered (no forced sizes)");
   assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false }), "kept for the next first paint");
   assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
-  assert(/:is\(#my_courses_table, \.course-list-table/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
+  assert(/:is\(#my_courses_table, #past_enrollments_table/.test(lookCss()) && /#nav-tray-portal li \{/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
   lk.listen.change({ prefs: { newValue: { native: false } } }, "local"); assert(/cp-has-panel \[data-testid="widget-columns"\] \{ display:none/.test(lookCss()), "Canvas's widgets off: hidden");
   const dk = theme("dark", false); await new Promise(r => setTimeout(r, 5));

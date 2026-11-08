@@ -28,6 +28,7 @@ Original goal: a public page where any PUCPR 2026/2 classmate sees how much they
     - 12b. Course cards: color per course, gradient, hide image, grid or list, next due on the card.
     - 12c. To-do list: own tasks (title, optional day) per Canvas user, in the week timeline and a card.
     - 12d. Calculator in Canvas: meta on the dashboard, grades by hand and the simulator on the course page (saved), semester calendar on the dashboard, backup and feedback in the popup; remove the menu item, the #campus overlay and app.html from the package; migrate the old page's localStorage grades through the popup.
+    - 12e (2.0.0). Checked against PUCPR's real Canvas CSS (saved pages + canvas-lms markup): Canvas's own card layout kept (rows centered and balanced), no buttons over its card menu, no page-wide fonts, table look only on the Cursos/Grupos lists; ours on the classic dashboard above the cards and at the top of the widget dashboard; Notas do curso badges; left-menu trays (Cursos, Grupos, Histórico, Ajuda) in our look, the Cursos tray with pills and without hidden courses; /courses with pills and Tirar/Mostrar no painel; semester calendar on /calendar.
     - Check: `scripts/verify`, mock-Canvas screenshots per look; the real Canvas is checked by Enzo (selectors cannot be seen from here).
 6. **Launch.** Enzo shares the link with the turma (I draft the message; I never send it).
 
