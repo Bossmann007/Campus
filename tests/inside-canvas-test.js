@@ -533,7 +533,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const segB = all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Foco");
   assert(segB && all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Completo")["aria-checked"] === "true", "the header switch shows the mode");
   await segB.listeners.click(); await new Promise(r => setTimeout(r, 10));
-  assert(mFull.store.prefs.mode === "foco" && /Agora/.test(text(mFull.anchor)) && all(mFull.anchor).filter(e => e.id === "cp-dash").length === 1, "switched from the panel: saved and redrawn once"); ok();
+  assert(mFull.store.prefs.mode === "foco" && /Agora/.test(text(mFull.anchor)) && all(mFull.anchor).filter(e => e.id === "cp-dash").length === 1, "switched from the panel: saved and redrawn once");
+  const allC = await runContent("/", null);
+  assert(/Todas as matérias/.test(text(allC.anchor)) && all(allC.anchor).some(e => e.href === "https://pucpr.instructure.com/courses/71306"), "every course one click away while Canvas's dashboard is hidden");
+  const natB = all(allC.anchor).find(e => e.textContent === "Painel do Canvas");
+  await natB.listeners.click(); await new Promise(r => setTimeout(r, 10));
+  assert(allC.store.prefs.native === true && all(allC.anchor).some(e => e.textContent === "Esconder painel do Canvas") && !/Todas as matérias/.test(text(allC.anchor)), "Painel do Canvas: the original comes back, saved"); ok();
 
   // own tasks: added in the card (or with + in Ctrl+K), in the week when they have a day, ticked and deleted; per user
   const tk = await runContent("/", null, { tasks: { 9: [{ id: "x", title: "do outro", date: null }] } });
@@ -674,7 +679,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const lookCss = () => lk.styles.find(x => x.id === "cp-look").textContent;
   assert(["cp-look", "cp-look-nav", "cp-look-font"].every(c => lk.cls.has(c)) && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look, menu and font");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()) && /Fraunces/.test(lookCss()), "cards and serif titles");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true, mode: "completo" }), "kept for the next first paint");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", font: "caderno", cardStyle: "grade", cardImg: true, mode: "completo", native: false }), "kept for the next first paint");
+  assert(/:root\.cp-dash-page\.cp-has-panel #content > :not\(\.cp-host\) \{ display:none/.test(lookCss()), "the dashboard: ours in place of Canvas's");
+  assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
+  lk.listen.change({ prefs: { newValue: { native: true } } }, "local"); assert(!/#content > :not/.test(lookCss()), "Painel do Canvas: the original stays");
+  const dk = theme("dark", false); await new Promise(r => setTimeout(r, 5));
+  assert(/--cp-paper:#FFFFFF; --cp-card:#F3F3F3/.test(dk.styles.find(x => x.id === "cp-look").textContent), "dark: neutral paper under the inversion (no mud)");
   lk.listen.change({ prefs: { newValue: { mode: "limpo" } } }, "local");
   assert(lk.cls.has("cp-mode-limpo") && /#right-side-wrapper, #right-side, #footer/.test(lookCss()) && !/#DashboardCard_Container/.test(lookCss()), "limpo: Canvas clutter hidden, cards kept");
   assert(lk.cls.has("cp-dash-page") && /:root\.cp-dash-page :is\(#right-side-wrapper/.test(lookCss()), "the clutter rules apply on the dashboard only");
@@ -685,7 +695,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   lk.listen.change({ prefs: { newValue: { cardStyle: "lista", cardImg: false } } }, "local");
   assert(/grid-template-columns:72px 1fr/.test(lookCss()) && /__header_image \{ background-image:none/.test(lookCss()), "cards as a list, without pictures");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "original", font: "original" } } }, "local");
-  assert(!lk.cls.has("cp-look") && !lk.cls.has("cp-look-nav") && !lk.cls.has("cp-look-font") && lookCss() === "", "Canvas original: nothing changed, live");
+  assert(!lk.cls.has("cp-look") && !lk.cls.has("cp-look-nav") && !lk.cls.has("cp-look-font") && !/--ic-brand|font-family|cp-look-nav/.test(lookCss()), "Canvas original: no colors, fonts or menu changed, live");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "verde", font: "sistema" } } }, "local");
   assert(!lk.cls.has("cp-look") && lk.cls.has("cp-look-nav") && /#1F5C42/.test(lookCss()) && /-apple-system/.test(lookCss()) && !/Fraunces/.test(lookCss()), "menu color and font work without a look");
   lk.listen.change({ prefs: { newValue: { look: "pastel" } } }, "local"); assert(/#7C5CDB/.test(lookCss()), "pastel");

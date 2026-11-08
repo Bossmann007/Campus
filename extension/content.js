@@ -433,7 +433,7 @@
     .seg button { padding:3px 10px; border:0; border-radius:999px; background:none; font-size:12px; color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
     .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:96px minmax(0,1fr) auto; }
-    .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
+    .natv + .find, .find + .natv { margin-left:8px; } .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
     .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
     .pal-q { all:unset; box-sizing:border-box; display:block; width:100%; padding:14px 16px; font:500 16px/1.3 var(--sans); color:var(--fg); border-bottom:1px solid var(--line); }
@@ -716,6 +716,11 @@
       if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
     }
     hd.appendChild(seg);
+    if (onMode) {   // the Canvas dashboard under ours, or ours alone (the default)
+      const nat = el("button", "find natv", prefs.native ? "Esconder painel do Canvas" : "Painel do Canvas"); nat.type = "button";
+      nat.title = prefs.native ? "Deixar só o Caderno+" : "Mostrar também o painel original do Canvas abaixo";
+      nat.addEventListener("click", () => onMode(mode, null, !prefs.native)); hd.appendChild(nat);
+    }
     if (prefs.search) { const f = el("button", "find", "Buscar " + KEYS); f.type = "button"; f.title = "Buscar tarefas, módulos e matérias (" + KEYS + ")"; f.addEventListener("click", () => openSearch(a, cache)); hd.appendChild(f); }
     // the meta (goal) every number is computed against
     const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
@@ -736,6 +741,11 @@
     }
     if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
     if (prefs.tasks) grid.appendChild(tasksCard(cache, marks, () => onMode && onMode(mode)));
+    if (!prefs.native && !clean) {   // with Canvas's dashboard hidden, every course stays one click away (extension courses too)
+      const sec = el("section", "card news courses"), h = el("h3", null, "Todas as matérias"), ul = el("ul");
+      for (const x of cache.ids) { const li = el("li", "row"); li.append(el("span"), mid(shortName(x.name), location.origin + "/courses/" + x.id, String(x.name).slice(0, 120)), el("span")); ul.appendChild(li); }
+      sec.append(h, ul); foldable(sec, h, "courses"); grid.appendChild(sec);
+    }
     const recent = prefs.newgrades && Array.isArray(rec) ? rec.filter(r => r && Date.now() - r.at < (clean ? 3 : 30) * 864e5).slice(0, 5) : [];
     if (recent.length) {   // the latest grades, newest first; "nova" for the last 3 days
       const sec = el("section", "card news grades-new"), h = el("h3", null, "Notas novas"), fresh = recent.filter(r => Date.now() - r.at < 3 * 864e5).length;
@@ -1055,10 +1065,12 @@
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};
-      const onMode = async (k, meta) => {   // switch from the panel (mode, meta, or a change of tasks): saved, redrawn at once with fresh ticks and tasks
+      const onMode = async (k, meta, native) => {   // switch from the panel (mode, meta, native dashboard, or a change of tasks): saved, redrawn at once
         if (meta != null) T = meta;
         const { prefs: saved } = await chrome.storage.local.get("prefs"), was = cpPrefs(saved);
-        if (was.mode !== k || (meta != null && Number(was.meta) !== meta)) { const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); }
+        if (was.mode !== k || (meta != null && Number(was.meta) !== meta) || (native != null && was.native !== native)) {
+          const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next);
+        }
         if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); }
         const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
         const old = document.getElementById("cp-dash"); if (old) old.remove();

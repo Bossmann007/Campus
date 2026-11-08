@@ -21,8 +21,12 @@
     serifa: ['"Iowan Old Style","New York",Georgia,"Times New Roman",serif', '"Iowan Old Style","New York",Georgia,serif']
   };
   const font = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL ? chrome.runtime.getURL("fonts/fraunces-latin-500-normal.woff2") : "";
-  const css = (look, nav, f, cards) => {
-    const L = LOOKS[look], out = [];
+  const css = (look, nav, f, cards, dark) => {
+    // dark modes invert the page: a cream paper would turn to mud, so under them every look paints on neutral white
+    const L = LOOKS[look] && dark ? ["#FFFFFF", "#F3F3F3"].concat(LOOKS[look].slice(2, 4), ["#E0E0E0"], LOOKS[look].slice(5)) : LOOKS[look], out = [];
+    // the dashboard: the Caderno+ panel takes the place of Canvas's (its widget dashboard is React with generated classes);
+    // "Painel do Canvas" in our header brings the original back
+    if (!cards.native) out.push(`:root.cp-dash-page.cp-has-panel #content > :not(.cp-host) { display:none !important; }`);
     // Only on the dashboard (quizzes, grades and assignments keep their side column: timers, totals and submissions live there).
     // limpo: the side column, footer, activity stream and card icons go; foco: also the course cards, once our panel is drawn
     const D = ":root.cp-dash-page";
@@ -50,7 +54,9 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     }
     const menu = nav === "original" ? null : NAV[nav] || (L ? "var(--cp-menu)" : null);
     if (menu) out.push(`:root.cp-look-nav { --ic-brand-global-nav-bgd:${menu} !important; --ic-brand-global-nav-ic-icon-svg-fill:#FBF7EF !important; --ic-brand-global-nav-menu-item__text-color:#FBF7EF !important; }
-:root.cp-look-nav .ic-app-header { background:${menu} !important; }`);
+:root.cp-look-nav .ic-app-header { background:${menu} !important; }
+:root.cp-look-nav .ic-app-header .ic-app-header__menu-list-item.ic-app-header__menu-list-item--active .ic-app-header__menu-list-link { background:${L ? L[5] : "rgba(255,255,255,.18)"} !important; color:#fff !important; }
+:root.cp-look-nav .ic-app-header .ic-app-header__menu-list-link:hover { background-color:rgba(255,255,255,.14) !important; }`);
     const F = FONTS[f];
     if (F) {
       if (F[1] && F[1].startsWith('"Fraunces"') && font) out.push(`@font-face { font-family:"Fraunces"; font-weight:400 700; font-display:swap; src:url(${font}) format("woff2"); }`);
@@ -76,13 +82,13 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .
   const apply = () => {
     const t = p.theme, on = t === "dark" || t === "dim" || (t === "auto" && dark.matches) || (t === "night" && night()), cl = document.documentElement.classList;
     cl.toggle("cp-dark", on); cl.toggle("cp-dim", on && t === "dim");
-    look.textContent = css(p.look, p.nav, p.font, p);
+    look.textContent = css(p.look, p.nav, p.font, p, on);
     cl.toggle("cp-mode-limpo", p.mode === "limpo"); cl.toggle("cp-mode-foco", p.mode === "foco");
     cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look])); cl.toggle("cp-look-font", !!FONTS[p.font]);
   };
   const take = prefs => {
     p = cpPrefs(prefs); apply();
-    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, font: p.font, cardStyle: p.cardStyle, cardImg: p.cardImg, mode: p.mode })); } catch (e) { /* no storage */ }
+    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, font: p.font, cardStyle: p.cardStyle, cardImg: p.cardImg, mode: p.mode, native: p.native })); } catch (e) { /* no storage */ }
   };
   apply();
   setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);
