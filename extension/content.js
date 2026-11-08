@@ -369,7 +369,7 @@
   // Big needed grade on 0-10 and its caption, as the calculator's hero card shows it.
   function needBig(st) {
     const nd = C.courseNeed(st), box = el("div", "big");
-    const v = st.status === "garantido" ? "✓" : st.status === "depende-atrasadas" ? "?" : nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
+    const v = st.status === "garantido" ? "✓" : nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
     const cap = st.status === "garantido" ? "garantido" : st.status === "depende-atrasadas" ? "faltam notas antigas" : nd.impossible ? "nem com nota cheia" : "precisa, em 10";
     box.append(el("b", "v t-" + (st.status === "depende-atrasadas" ? "warn" : nd.tone), v), el("span", null, cap));
     return box;
@@ -387,7 +387,7 @@
     fill.style.width = Math.min(100, sem.mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal);
     kpi("Média atual", fmt(Math.floor(sem.mean * 10) / 10, 1), null, meter).title = "pontos garantidos de 10, média das " + C.COURSES.length + " matérias · meta " + fmt(T, 1);
     const cnt = s => sem.counts[s] || 0;
-    if (sem.tight) kpi("Quanto falta", up(sem.state ? 0 : sem.states[sem.tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[sem.tight.id] + ", a mais apertada"));
+    if (sem.tight) kpi("Quanto falta", up(sem.states[sem.tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[sem.tight.id] + ", a mais apertada"));
     else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
     else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
     else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
