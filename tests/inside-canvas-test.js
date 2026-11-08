@@ -420,8 +420,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await ask({ type: "grades", items: [1, 2, 3, 4].map(i => ({ name: "T" + i, course: "C" + i, score: i, points: 10, url: "https://evil.example/" })) }, CANVAS_TAB);
   assert.strictEqual(notes.length, 2, "more than 3: one notification"); assert.strictEqual(notes[1].title, "4 notas novas");
   assert.strictEqual(local.shown[notes[1].id], "https://pucpr.instructure.com/grades", "its click opens the grades, never an outside link");
+  await ask({ type: "grades", items: [{ k: "71306:RA2", name: "RA2", course: "BD", score: 8.5, points: 10 }] }, CANVAS_TAB);
+  await ask({ type: "grades", items: [{ k: "71306:RA2", name: "RA2", course: "BD", score: 8.5, points: 10 }] }, CANVAS_TAB);
+  assert.strictEqual(notes.length, 3, "the same grade from two tabs: one notification");
   local.prefs = { newgrades: false }; await ask({ type: "grades", items: [{ name: "X", score: 1, points: 1 }] }, CANVAS_TAB);
-  assert.strictEqual(notes.length, 2, "switched off in the popup: nothing shown"); ok();
+  assert.strictEqual(notes.length, 3, "switched off in the popup: nothing shown"); ok();
   // Monday summary: next Monday 08:00, from the list the page sent
   const nm = new Date(sw.nextMonday8(new Date(2026, 10, 8, 12)));   // a Sunday
   assert.deepStrictEqual([nm.getDay(), nm.getHours(), nm.getDate()], [1, 8, 9], "Sunday noon: the next day at 08:00");
@@ -471,6 +474,18 @@ async function runContent(pathname, files, preStore, opts = {}) {
   sbtn.listeners.click();
   assert.strictEqual(headTxt(), before, "leaving puts the real numbers back"); assert(!all(sp).some(e => e.className === "simi"), "inputs gone");
   assert.strictEqual(JSON.stringify(simP.store), keys0, "nothing saved"); ok();
+
+  // logging out also clears the reminders, the week list and the icon; a course panel in use is not swapped by a newer reading
+  const lo2 = await runContent("/logout", null, cold.store);
+  assert(lo2.sent.some(m => m.type === "remind" && m.items.length === 0 && m.alarms === false) && lo2.sent.some(m => m.type === "next" && m.date === null), "logout: service worker state dropped");
+  const busy2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
+  const p0 = busy2.anchor.kids.find(k => k.id === "qf-panel");
+  all(p0).find(e => e.textContent === "Simular notas").listeners.click();
+  await new Promise(r => setTimeout(r, 350));
+  assert(busy2.store.cache.at > st10.cache.at && busy2.anchor.kids.find(k => k.id === "qf-panel") === p0, "simulating: the panel stays while the new reading is saved");
+  const idle2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
+  const q0 = idle2.anchor.kids.find(k => k.id === "qf-panel"); await new Promise(r => setTimeout(r, 350));
+  assert(idle2.anchor.kids.find(k => k.id === "qf-panel") !== q0 && idle2.anchor.kids.filter(k => k.id === "qf-panel").length === 1, "idle: redrawn once with the new reading"); ok();
 
   // Anotações: one note per course and user, saved as you type, shown open when there is one
   const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } });

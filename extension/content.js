@@ -45,7 +45,12 @@
     if (cache && cache.user !== id) await forget();
     return id;
   }
-  const forget = () => chrome.storage.local.remove(["cache", "search"]);
+  // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
+  const forget = async () => {
+    await chrome.storage.local.remove(["cache", "search"]);
+    chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
+  };
   // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
   // time: while another tab is reading (lock under a minute old), this one uses the last reading. An older reading of the same
   // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas).
@@ -701,7 +706,9 @@
       const v = String(ta.value || "").slice(0, 5000); if (v) mine[courseId] = v; else delete mine[courseId];
       await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
     };
-    ta.addEventListener("input", () => { saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
+    let typed = 0;
+    ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
+    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || Date.now() - typed < 30000;
     chrome.storage.local.get("notes").then(({ notes }) => {
       const v = notes && notes[cache.user] && notes[cache.user][courseId];
       if (typeof v === "string" && v) { ta.value = v; pad.hidden = false; nb.textContent = "Anotações ✓"; }
@@ -854,15 +861,18 @@
     navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
     if (prefs.scroll) scrollButtons();
-    let cache, drawn = false;
-    try { cache = await load(fresh => { if (fresh.at !== cache.at) draw(fresh, prefs, drawn); }); } catch (e) { return; }   // logged out or Canvas down: stay quiet
-    drawn = true; await draw(cache, prefs, false);
+    let cache;
+    let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
+    const paintAll = (c, again) => (queue = queue.then(() => draw(c, prefs, again)).catch(() => {}));
+    try { cache = await load(fresh => { if (fresh.at !== cache.at) paintAll(fresh, true); }); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    await paintAll(cache, false);
   }
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
   let cardWatch = null;
   async function draw(cache, prefs, again) {
-    if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (old) old.remove(); }
     const a = analyse(cache), marks = await myMarks(cache.user);
+    let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
+    if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
     sendReminders(agenda(a, cache, marks), prefs, cache);
     if (prefs.search) {   // the bookmarklet can run again on the same page: one listener, opening the latest reading
@@ -873,7 +883,7 @@
       }, true);
     }
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
-    if (m) coursePanel(m[1], a, cache, prefs);
+    if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
       const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
       folds = fold && typeof fold === "object" ? fold : {};

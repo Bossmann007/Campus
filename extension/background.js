@@ -76,8 +76,10 @@ async function notify(alarm) {
 // New grades the Canvas page found: one notification each (up to 3), or one summing them up; a click opens the assignment.
 async function grades(items) {
   if (!cpPrefs((await chrome.storage.local.get("prefs")).prefs).newgrades) return;
-  const ok = items.filter(g => g && typeof g.name === "string" && typeof g.score === "number").slice(0, 10), num = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
+  const { notified = [] } = await chrome.storage.local.get("notified"), seen = new Set(notified);   // two Canvas tabs finding the same grade: one notice
+  const ok = items.filter(g => g && typeof g.name === "string" && typeof g.score === "number" && !seen.has(g.k + "|" + g.score)).slice(0, 10), num = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
   if (!ok.length) return;
+  await chrome.storage.local.set({ notified: notified.concat(ok.map(g => g.k + "|" + g.score)).slice(-100) });
   const { shown = {} } = await chrome.storage.local.get("shown"), keep = Object.entries(shown).slice(-30), id = "g|" + Date.now();
   const show = (nid, title, message, url) => { keep.push([nid, typeof url === "string" && url.startsWith(CANVAS + "/") ? url : CANVAS + "/grades"]); chrome.notifications.create(nid, { type: "basic", iconUrl: "icons/icon128.png", title, message, priority: 1 }); };
   if (ok.length <= 3) ok.forEach((g, i) => show(id + "|" + i, "Nota nova: " + String(g.course || "").slice(0, 60), g.name.slice(0, 90) + ": " + num(g.score) + " de " + num(g.points), g.url));
