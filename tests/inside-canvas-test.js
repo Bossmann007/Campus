@@ -59,7 +59,7 @@ const items = [{ id: 1, url: "https://pucpr.instructure.com/files/1/download", f
   { id: 3, url: "https://evil.example/x", filename: "PUCPR/BD/c.pdf" }, { id: 4, url: "https://pucpr.instructure.com/files/4/download", filename: "PUCPR/BD/d.pdf" }];
 // content.js on a mocked Canvas
 function fakeEl(tag) {
-  const e = { tag, kids: [], style: {}, dataset: {}, className: "", textContent: "", listeners: {}, parent: null,
+  const e = { tag, tagName: String(tag).toUpperCase(), kids: [], style: {}, dataset: {}, className: "", textContent: "", listeners: {}, parent: null,
     append(...c) { c.forEach(x => { x.parent = this; }); this.kids.push(...c); }, appendChild(c) { this.append(c); return c; },
     click() { this.clicked = true; },
     replaceChildren(...c) { this.kids.forEach(k => { k.parent = null; }); this.kids = []; this.append(...c); },
@@ -89,7 +89,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
-  const doc = { createElement: fakeEl, body, scripts: opts.scripts, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null, querySelector: () => null,
+  const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null, querySelector: () => null,
     querySelectorAll: sel => sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
@@ -117,6 +117,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const env = { window: { addEventListener: (t, f) => { winListeners[t] = f; } },
     location: { pathname, search: "", hash: opts.hash || "", href: "https://pucpr.instructure.com" + pathname, origin: "https://pucpr.instructure.com", hostname: "pucpr.instructure.com", assign(u) { this.assigned = u; } } };
   env.window.top = env.window;
+  if (opts.tall) Object.assign(env.window, { innerHeight: 800, scrollTo(o) { this.scrolled = o; } });
   const history = { replaceState: (a, b, url) => { env.location.hash = ""; } };
   const src = opts.src || read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
   new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
@@ -435,6 +436,24 @@ async function runContent(pathname, files, preStore, opts = {}) {
   local.prefs = { summary: false }; await sw.summary({ scheduledTime: Date.now() }); assert.strictEqual(notes.length, 1, "summary off");
   local.prefs = {};
 
+  // cards fold to their title (kept); ↑ ↓ on long pages
+  const fp = await runContent("/", null, {}, { tall: 4000 });
+  const weekSec = () => all(fp.anchor).find(e => /card week/.test(e.className)), wh = () => weekSec().kids.find(e => e.tag === "h3");
+  assert(wh().role === "button" && wh()["aria-expanded"] === "true", "the week title folds it");
+  await wh().listeners.click({ target: all(wh()).find(e => e.textContent === "↓ .ics") });
+  assert(!/folded/.test(weekSec().className), "a button in the title does not fold");
+  await wh().listeners.click({ target: wh() });
+  assert(/ folded$/.test(weekSec().className) && fp.store.fold.week === true && wh()["aria-expanded"] === "false", "folded and kept");
+  const fp2 = await runContent("/", null, { fold: { week: true } });
+  assert(/ folded$/.test(all(fp2.anchor).find(e => /card week/.test(e.className)).className), "stays folded on the next page");
+  const sc = fp.body.kids.find(k => k.id === "cp-scroll");
+  assert(sc && sc.style.display === "block", "long page: ↑ ↓ shown");
+  all(sc).find(e => e["aria-label"] === "Ir para o fim").listeners.click(); assert.deepStrictEqual(fp.env.window.scrolled, { top: 4000, behavior: "smooth" });
+  const shortPage = await runContent("/", null, {}, { tall: 1000 });
+  assert.strictEqual(shortPage.body.kids.find(k => k.id === "cp-scroll").style.display, "none", "short page: hidden");
+  const noScroll = await runContent("/", null, { prefs: { scroll: false } }, { tall: 4000 });
+  assert(!noScroll.body.kids.some(k => k.id === "cp-scroll"), "switched off: none"); ok();
+
   // .ics: the deadlines and exams from today on
   const icsPage = await runContent("/", null);
   const icsBtn = all(icsPage.anchor).find(e => e.textContent === "↓ .ics");
@@ -498,16 +517,20 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!noPlan.sent.some(m => m.type === "remind"), "planner down: the reminders already set are kept"); assert.match(text(noPlan.anchor), /Prova adiada/, "announcements still shown"); ok();
 
   // theme.js: class on <html> from the setting, live when the popup changes it
-  const theme = (pref, systemDark) => {
+  const theme = (pref, systemDark, hour) => {
     const cls = new Set(), listen = {}, doc = { createElement: () => ({}), head: { appendChild() {} }, documentElement: { classList: { toggle: (c, on) => on ? cls.add(c) : cls.delete(c) } } };
     const chrome = { storage: { local: { get: async () => ({ prefs: { theme: pref } }) }, onChanged: { addListener: f => { listen.change = f; } } } };
-    new Function("document", "chrome", "matchMedia", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }));
-    return { cls, listen };
+    const ticks = [], RealDate = Date, D = hour == null ? Date : class extends RealDate { getHours() { return hour; } };
+    new Function("document", "chrome", "matchMedia", "setInterval", "Date", read("prefs.js") + "\n" + read("theme.js"))(doc, chrome, () => ({ matches: systemDark, addEventListener() {} }), f => ticks.push(f), D);
+    return { cls, listen, ticks };
   };
   const th = theme("dark", false); await new Promise(r => setTimeout(r, 5));
   assert(th.cls.has("cp-dark"), "dark theme"); th.listen.change({ prefs: { newValue: { theme: "off" } } }, "local"); assert(!th.cls.has("cp-dark"), "turned off live");
   const auto = theme("auto", true), light = theme(undefined, true); await new Promise(r => setTimeout(r, 5));
-  assert(auto.cls.has("cp-dark") && !light.cls.has("cp-dark"), "auto follows the system; default is the Canvas light theme"); ok();
+  assert(auto.cls.has("cp-dark") && !light.cls.has("cp-dark"), "auto follows the system; default is the Canvas light theme");
+  const thDim = theme("dim", false), thLate = theme("night", false, 22), thDay = theme("night", true, 13); await new Promise(r => setTimeout(r, 5));
+  assert(thDim.cls.has("cp-dark") && thDim.cls.has("cp-dim"), "dim: dark, softer"); assert(thLate.cls.has("cp-dark") && !thLate.cls.has("cp-dim"), "night at 22h: dark");
+  assert(!thDay.cls.has("cp-dark"), "night at 13h: light, whatever the system"); assert.strictEqual(thDay.ticks.length, 1, "checked again every few minutes"); ok();
 
   // the Caderno+ page: a left-menu item, and the calculator over Canvas on #campus
   const camp = await runContent("/", null);
@@ -551,5 +574,5 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   const none = await runContent("/courses/71306/quizzes", null);
   assert.strictEqual(none.anchor.kids.length, 0, "no panel on other course pages"); ok();
-  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics)");
+  console.log("inside canvas ok: core copy, " + n + " groups (routing, safe names, download guard and completion, badge, dashboard pill, course panel, files download, per-user cache, modules fallback, reminders, week timeline and announcements, dashboard grades, exams and empty week, modules off, theme, Caderno+ page, bookmarklet, ticks, search, new grades, summary and .ics, fold and scroll)");
 })().catch(e => { console.error(e); process.exit(1); });

@@ -359,6 +359,8 @@
     .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
+    h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
+    .folded > h3[role=button]::before { transform:rotate(-90deg); } .folded > :not(h3) { display:none !important; } .folded > h3 { margin-bottom:0; }
     .wl { display:none; }
     @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -382,6 +384,18 @@
   const link = (text, url) => { const x = el(url ? "a" : "span", "n", text); if (url) x.href = url; x.title = text; return x; };
   const mid = (title, url, sub) => { const m = el("span", "mid"); m.append(link(title, url), el("div", "c", sub)); return m; };
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  // A dashboard card folds to its title with a click on it (kept per card in chrome.storage.local "fold").
+  let folds = {};
+  function foldable(sec, h, key) {
+    const set = on => { sec.className = sec.className.replace(/ folded$/, "") + (on ? " folded" : ""); h.setAttribute("aria-expanded", String(!on)); };
+    h.tabIndex = 0; h.setAttribute("role", "button"); h.title = "Clique para recolher ou abrir";
+    const flip = async e => {
+      if (e && e.target && e.target !== h && e.target.tagName === "BUTTON") return;
+      folds = Object.assign({}, folds, { [key]: !folds[key] }); set(folds[key]); await chrome.storage.local.set({ fold: folds });
+    };
+    h.addEventListener("click", flip); h.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } });
+    set(!!folds[key]);
+  }
   const ago = iso => { const d = -days(iso); return d <= 0 ? "hoje" : d === 1 ? "ontem" : d < 7 ? "há " + d + " dias" : dmy(iso); };
   const needTone = u => u.req.impossible ? "bad" : u.req.f <= 1e-9 ? "ok" : "warn";
 
@@ -422,6 +436,7 @@
       pr.append(r, el("span", null, got + " de " + work.length + " feitas"));
       pr.setAttribute("aria-label", got + " de " + work.length + " feitas nesta semana"); h.appendChild(pr);
     }
+    foldable(sec, h, "week");
     const ics = el("button", "mini", "↓ .ics"); ics.type = "button"; ics.title = "Exportar entregas e provas para a sua agenda (Google, Outlook, celular)";
     ics.addEventListener("click", () => saveIcs(list)); h.appendChild(ics);
     sec.appendChild(h);
@@ -576,7 +591,7 @@
         li.append(Date.now() - r.at < 3 * 864e5 ? el("span", "dot", "nova") : el("span"), mid(r.name, r.url || null, r.course + " · " + ago(C.localISO(new Date(r.at)))), sc);
         ul.appendChild(li);
       }
-      sec.append(h, ul); grid.appendChild(sec);
+      sec.append(h, ul); foldable(sec, h, "grades-new"); grid.appendChild(sec);
     }
     if (news) {
       const all = cache.data.announcements.slice().sort((x, y) => String(y.at).localeCompare(String(x.at))), unread = all.filter(x => x.unread).length;
@@ -591,7 +606,7 @@
         ul.appendChild(li);
       }
       sec.appendChild(all.length ? ul : el("div", "muted", a.term ? "Nenhum aviso nos últimos 60 dias." : "Nenhuma matéria de " + TERM + " no seu Canvas."));
-      grid.appendChild(sec);
+      foldable(sec, h, "news"); grid.appendChild(sec);
     }
   }
 
@@ -756,10 +771,29 @@
   const SIGN = /^\/(login|logout)(\/|$)|^\/users\/sign_out(\/|$)/;
   const signedOut = () => forget();   // the calculator page reads the cache too: nothing of the previous student may stay
 
+  // ↑ and ↓ on long pages (more than 2.5 screens): to the top or the end in one click.
+  function scrollButtons() {
+    const de = document.documentElement;
+    if (document.getElementById("cp-scroll") || !de || typeof window.innerHeight !== "number" || !window.scrollTo) return;
+    const host = el("div", "cp-host"); host.id = "cp-scroll";
+    host.style.cssText = "position:fixed;right:18px;bottom:76px;z-index:9998;margin:0;display:none";
+    const root = host.attachShadow({ mode: "open" }), style = el("style");
+    style.textContent = `button { display:block; width:34px; height:34px; margin-top:6px; border-radius:50%; border:1px solid #ECE4D3; background:#FBF7EF; color:#1D2433; font:600 15px/1 -apple-system,BlinkMacSystemFont,sans-serif;
+      cursor:pointer; box-shadow:0 6px 16px -8px rgba(29,36,51,.5); opacity:.85; } button:hover { opacity:1; } button:focus-visible { outline:2px solid #E2482B; outline-offset:2px; }`;
+    const go = (txt, label, top) => { const b = el("button", null, txt); b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
+      b.addEventListener("click", () => window.scrollTo({ top: top(), behavior: "smooth" })); return b; };
+    root.append(style, go("↑", "Voltar ao topo", () => 0), go("↓", "Ir para o fim", () => de.scrollHeight));
+    let busy = false;
+    const check = () => { busy = false; host.style.display = de.scrollHeight > window.innerHeight * 2.5 ? "block" : "none"; };
+    window.addEventListener("scroll", () => { if (!busy) { busy = true; setTimeout(check, 200); } }, { passive: true });
+    document.body.appendChild(host); check();
+  }
+
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
     navItem(); campusPage(); window.addEventListener("hashchange", campusPage);
     const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
+    if (prefs.scroll) scrollButtons();
     let cache, drawn = false;
     try { cache = await load(fresh => { if (fresh.at !== cache.at) draw(fresh, prefs, drawn); }); } catch (e) { return; }   // logged out or Canvas down: stay quiet
     drawn = true; await draw(cache, prefs, false);
@@ -781,7 +815,8 @@
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
-      const { recent } = await chrome.storage.local.get("recent");
+      const { recent, fold } = await chrome.storage.local.get(["recent", "fold"]);
+      folds = fold && typeof fold === "object" ? fold : {};
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null);
       if (!prefs.grades || !a.rules) return;
       decorateCards(a, again);
