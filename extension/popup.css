@@ -4,13 +4,14 @@
   --ok:#2F7D5B; --bad:#C2361F; --tile:#1D2433; --tile-c:#FBF7EF; --serif:"Fraunces","Iowan Old Style","New York",Georgia,serif; }
 @media (prefers-color-scheme:dark) { :root { --bg:#141925; --card:#1B2130; --txt:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --soft:#222938; --off:#394256; --knob:#F3EDE1; --coral:#F0603F;
   --ok:#6CC59A; --bad:#FF876C; --tile:#F3EDE1; --tile-c:#1D2433; } }
-body { margin:0; width:300px; padding:14px 16px; background:var(--bg); color:var(--txt); font:13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-variant-numeric:tabular-nums; }
+body { margin:0; width:320px; padding:14px 16px; background:var(--bg); color:var(--txt); font:13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-variant-numeric:tabular-nums; }
 header { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
 .logo { flex-shrink:0; } .logo .lt { fill:var(--tile); } .logo .lc { fill:var(--tile-c); } .logo .lp { fill:none; stroke:var(--coral); stroke-width:2.4; stroke-linecap:round; }
 .wm { font:500 19px/1 var(--serif); letter-spacing:-.02em; } .wm i { font-style:normal; color:var(--coral); }
 .tag { margin-left:auto; font-size:11px; color:var(--muted); }
-section { padding:12px 0; border-top:1px solid var(--line); }
-h2 { margin:0 0 6px; font-size:10.5px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+section { padding:12px 0; border-top:1px solid var(--line); } [role=tabpanel] { border-top:0; padding:4px 0 12px; min-height:260px; animation:in .18s ease-out; }
+@keyframes in { from { opacity:0; transform:translateY(4px); } }
+h2 { margin:14px 0 6px; font-size:10.5px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
 .list { display:grid; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:2px 12px; }
 .row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:34px; cursor:pointer; }
 .row + .row { border-top:1px solid var(--line); }
@@ -58,3 +59,23 @@ footer { display:flex; justify-content:space-between; align-items:flex-end; gap:
 .tints .pick input { position:absolute; inset:0; opacity:0; width:100%; height:100%; border:0; padding:0; cursor:pointer; }
 .notes-l { margin:0 0 10px; padding:10px 12px 10px 28px; background:var(--card); border:1px solid var(--line); border-radius:10px; font-size:12.5px; line-height:1.45; } .notes-l li::marker { color:var(--coral); }
 .err { display:block; color:var(--coral); margin-top:4px; }
+
+/* the reading line: one dot (green once read), what was read and when, and Atualizar */
+.bar { display:flex; align-items:center; gap:8px; margin:0 0 12px; padding:8px 8px 8px 12px; background:var(--card); border:1px solid var(--line); border-radius:12px; font-size:12.5px; }
+.bar .dot { flex:none; width:8px; height:8px; border-radius:50%; background:var(--off); } .bar.read .dot { background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
+.bar #status { flex:1; margin:0; min-width:0; } .bar #refresh { flex:none; padding:5px 9px; font-size:12px; border-radius:8px; }
+/* tabs: a segmented control in the paper color, the open one raised */
+.tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:3px; margin:0 0 4px; background:var(--soft); border-radius:11px; }
+.tabs button { padding:6px 0; border:0; border-radius:8px; background:none; color:var(--muted); font-size:12.5px; font-weight:600; }
+.tabs button:hover:not(:disabled) { background:none; color:var(--txt); transform:none; }
+.tabs button[aria-selected="true"] { background:var(--card); color:var(--txt); box-shadow:0 1px 2px rgba(29,36,51,.12), 0 0 0 1px var(--line); }
+.card { padding:10px 12px; background:var(--card); border:1px solid var(--line); border-radius:10px; } .card #focus { margin:0 0 8px; }
+.beta { margin-left:4px; padding:1px 6px; border-radius:99px; background:var(--soft); font-size:9.5px; letter-spacing:.04em; }
+[role=tabpanel] > h2:first-child { margin-top:10px; }
+.row.col { padding:8px 12px; } .grp .row.col { padding:8px 0; }
+a { color:var(--txt); text-decoration-color:var(--coral); text-underline-offset:2px; } a:hover { color:var(--coral); }
+/* looks in one line each: swatch and name, so the Visual tab fits the 600 px popup */
+.looks button { grid-auto-flow:column; justify-content:start; align-items:center; gap:7px; padding:7px 8px; }
+.looks i { width:22px; height:16px; border-radius:4px; } .looks i::after { right:3px; top:4px; width:6px; height:6px; }
+.modes small { line-height:1.25; }
+.looks button { white-space:nowrap; font-size:11px; }

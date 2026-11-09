@@ -411,6 +411,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(oldFirst.store.cache.at, st10.cache.at, "(Canvas has not answered yet)");
   await new Promise(r => setTimeout(r, 400));
   assert(oldFirst.store.cache.at > st10.cache.at && dashes().length === 1 && dashes()[0] !== undefined, "new reading saved and drawn in place of the old panel");
+  // an update (older version in the reading): drawn at once from it, read again behind
+  const upd = Object.assign({}, cold.store, { cache: Object.assign({}, cold.store.cache, { v: "3.0.0", at: Date.now() }) });
+  const updRun = await runContent("/", null, upd, { scripts: pageEnv, slow: 80 });
+  assert.strictEqual(all(updRun.anchor).filter(e => e.id === "cp-dash").length, 1, "after an update the panel is drawn from the last reading, not after Canvas answers");
+  await new Promise(r => setTimeout(r, 400));
+  assert(updRun.store.cache.v === C.EXT_LATEST && reads(updRun).length === 5, "and the reading is redone in the background");
   const lockedSlow = await runContent("/", null, {}, { slow: 40 });
   assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 0, "no reading at all: waits for Canvas");
   await new Promise(r => setTimeout(r, 250));

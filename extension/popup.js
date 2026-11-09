@@ -53,14 +53,15 @@ if (chrome.storage.onChanged) chrome.storage.onChanged.addListener((ch, area) =>
 chrome.storage.local.get("cache").then(({ cache }) => {
   if (!cache || !cache.data || !cache.at) return;
   const d = new Date(cache.at), n = cache.data.courses ? cache.data.courses.length : 0;
-  $("status").textContent = n + " matérias lidas do Canvas às " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + ".";
+  $("status").textContent = n + " matérias · lidas às " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  $("bar").classList.toggle("read", true);
 });
 // Atualizar agora: the last reading counts as old (and no tab holds the read lock), so the next Canvas page reads everything.
 $("refresh").addEventListener("click", async () => {
   const { cache } = await chrome.storage.local.get("cache");
   if (cache) await chrome.storage.local.set({ cache: Object.assign({}, cache, { at: 0 }) });
   await chrome.storage.local.remove("refreshing");
-  $("status").textContent = "Atualiza ao abrir ou recarregar uma página do Canvas.";
+  $("status").textContent = "Atualiza na próxima página do Canvas.";
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
 const KEEP = ["hand", "marks", "tasks", "notes", "checks", "hidden", "prefs", "fold"];
@@ -114,7 +115,6 @@ $("importFile").addEventListener("change", async () => {
   if (meta && !(prefs && prefs.meta)) set.prefs = Object.assign({}, prefs, { meta });
   await chrome.storage.local.set(set);
 })();
-$("canvas").addEventListener("click", () => chrome.tabs.create({ url: "https://pucpr.instructure.com/" }));
 
 // Foco: 25 minutes of study or 5 of break; the service worker shows a notification when the alarm fires.
 const showFocus = async () => {
@@ -134,6 +134,18 @@ $("f25").addEventListener("click", () => startFocus("foco", 25));
 $("f5").addEventListener("click", () => startFocus("pausa", 5));
 $("fstop").addEventListener("click", async () => { for (const k of ["foco", "pausa"]) await chrome.alarms.clear("focus|" + k); await chrome.storage.local.remove("focus"); showFocus(); });
 showFocus(); setInterval(showFocus, 1000);
+
+// Tabs: Visual, Painel, Avisos, Mais; the last one opened comes back (this extension's localStorage). Novidades stay above them.
+const tabs = [...document.querySelectorAll("[role=tab]")];
+const openTab = (k, focus) => {
+  for (const t of tabs) { const on = t.dataset.tab === k; t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1; $("p-" + t.dataset.tab).hidden = !on; if (on && focus) t.focus(); }
+  try { localStorage.setItem("cpTab", k); } catch (e) {}
+};
+tabs.forEach((t, i) => {
+  t.addEventListener("click", () => openTab(t.dataset.tab));
+  t.addEventListener("keydown", e => { const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0; if (d) { e.preventDefault(); openTab(tabs[(i + d + tabs.length) % tabs.length].dataset.tab, true); } });
+});
+if (tabs.length) { let k = null; try { k = localStorage.getItem("cpTab"); } catch (e) {} openTab(tabs.some(t => t.dataset.tab === k) ? k : "look"); }
 
 // Matérias no painel: every course of the last reading; unticked ones leave the dashboard (chrome.storage.local "hidden").
 (async () => {

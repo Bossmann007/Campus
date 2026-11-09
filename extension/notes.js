@@ -1,7 +1,7 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "3.11.0",
+  version: "3.12.0",
   items: [
     "Fundo do Canvas com a cor do tema, ou a sua cor, e desenhos: pautado, quadriculado, pontilhado e aurora",
     "Modo escuro que mantém a cor do tema",
@@ -13,6 +13,8 @@ const CP_NOTES = {
     "Item do checklist com dia aparece nos próximos 7 dias",
     "Arquivo para a sua IA (beta, desligado de início): o Caderno+ MCP lê o que o painel mostra, sem token",
     "Boas-vindas nova: passos com nome, Pular a qualquer hora, a cor do tema ao vivo e retoma de onde parou",
+    "Botão da extensão em abas (Visual, Painel, Avisos, Mais), com a última leitura e o Atualizar no topo",
+    "Depois de uma atualização, o painel abre na hora com a última leitura e lê o Canvas por trás",
     "Mais rápido: o painel abre com uma leitura só e menos trabalho na página",
   ],
 };

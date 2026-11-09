@@ -54,12 +54,14 @@
   };
   // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
   // time: while another tab is reading (lock under a minute old), this one uses the last reading. An older reading of the same
-  // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas).
+  // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas). A reading
+  // made by an older version of the extension (same format, collect's data.v) counts as old, never as missing: an update
+  // does not leave the panel waiting for a whole new reading.
   async function load(onFresh, pre) {   // pre: { cache, refreshing } read with the prefs (the reading, often large, is read once)
     const got = pre || await chrome.storage.local.get(["cache", "refreshing"]), user = await whoAmI(got.cache);
     const cache = got.cache && got.cache.user === user ? got.cache : null, refreshing = got.refreshing;
-    const mine = cache && cache.v === VERSION && cache.user === user;
-    if (mine && Date.now() - cache.at < TTL) return cache;
+    const mine = cache && cache.user === user && cache.data && cache.data.v === 1, now = mine && cache.v === VERSION;
+    if (now && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
     if (mine && onFresh) { refresh(user).then(onFresh, () => {}); return cache; }
     return refresh(user);
