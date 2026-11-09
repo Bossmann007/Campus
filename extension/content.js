@@ -1421,14 +1421,16 @@
   async function moduleIndex(cache) {
     const { search } = await chrome.storage.local.get("search");
     if (search && search.user === cache.user && Date.now() - search.at < SEARCH_TTL && Array.isArray(search.items)) return search.items;
-    const items = []; let read = 0;
-    for (const c of cache.data.courses) {
+    let read = 0;   // three courses at a time, kept in the course order
+    const per = await pool(cache.data.courses, 3, async c => {
       try {
+        const out = [];
         for (const m of await getAll("/api/v1/courses/" + c.id + "/modules?include[]=items&per_page=100"))
-          for (const it of m.items || []) if (it && it.title && it.html_url && it.type !== "SubHeader") items.push({ t: String(it.title), c: shortName(c.name) + " · " + String(m.name || ""), u: it.html_url, k: KIND[it.type] || "item" });
-        read++;
-      } catch (e) { /* modules hidden in this course */ }
-    }
+          for (const it of m.items || []) if (it && it.title && it.html_url && it.type !== "SubHeader") out.push({ t: String(it.title), c: shortName(c.name) + " · " + String(m.name || ""), u: it.html_url, k: KIND[it.type] || "item" });
+        read++; return out;
+      } catch (e) { return []; }   // modules hidden in this course
+    });
+    const items = [].concat(...per);
     if (read) await chrome.storage.local.set({ search: { user: cache.user, at: Date.now(), items } });
     return items;
   }
