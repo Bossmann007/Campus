@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bem-vindo ao Caderno+</title><link rel="stylesheet" href="onboarding.css"></head>
+<body>
+  <main class="ob">
+    <header><b class="wm">Caderno<i>+</i></b><ol class="dots" id="dots" aria-hidden="true"></ol></header>
+
+    <section class="step" data-step="0">
+      <h1>O Canvas, do seu jeito.</h1>
+      <p class="lead">Em um minuto você escolhe como o Caderno+ deixa o Canvas da PUCPR: o modo, o visual, os avisos e onde salvar os arquivos. Dá para mudar tudo depois no botão da extensão.</p>
+      <p class="fine">Nada sai do seu computador: o Caderno+ só lê o seu Canvas com o login que você já tem.</p>
+    </section>
+
+    <section class="step" data-step="1" hidden>
+      <h1>Qual é a sua turma?</h1>
+      <p class="lead">O Caderno+ calcula quanto falta em cada matéria com os pesos do Plano de Ensino. Por enquanto ele tem as regras destas turmas:</p>
+      <div class="opts" id="turmas" role="radiogroup" aria-label="Turma"></div>
+      <p class="fine">Se a sua turma não está na lista, você ainda tem a semana, os avisos, o calendário, a busca e os arquivos; só não as notas.</p>
+    </section>
+
+    <section class="step" data-step="2" hidden>
+      <h1>Como você quer o painel?</h1>
+      <div class="opts" role="radiogroup" aria-label="Modo">
+        <button type="button" role="radio" data-set="mode" data-value="completo"><b>Completo</b><span>Tudo do Caderno+: notas, semana, avisos, tarefas, o que mudou.</span></button>
+        <button type="button" role="radio" data-set="mode" data-value="limpo"><b>Limpo</b><span>Só o que importa, sem a bagunça do Canvas.</span></button>
+        <button type="button" role="radio" data-set="mode" data-value="foco"><b>Foco</b><span>Uma lista só: o que fazer agora.</span></button>
+      </div>
+      <label class="row"><span>Cards das matérias em cima do painel</span><input type="checkbox" role="switch" data-pref="cardsFirst"></label>
+    </section>
+
+    <section class="step" data-step="3" hidden>
+      <h1>Escolha o visual.</h1>
+      <div class="looks" role="radiogroup" aria-label="Tema">
+        <button type="button" role="radio" data-set="look" data-value="caderno"><i style="--a:#FBF7EF;--b:#1D2433;--c:#E2482B"></i>Caderno</button>
+        <button type="button" role="radio" data-set="look" data-value="kraft"><i style="--a:#F3EBDD;--b:#3B2F25;--c:#C2611F"></i>Kraft</button>
+        <button type="button" role="radio" data-set="look" data-value="marca"><i style="--a:#FFFFFF;--b:#1C1C1C;--c:#E0A800"></i>Marca-texto</button>
+        <button type="button" role="radio" data-set="look" data-value="menta"><i style="--a:#F2F8F5;--b:#1E3B32;--c:#2F9E74"></i>Menta</button>
+        <button type="button" role="radio" data-set="look" data-value="oceano"><i style="--a:#F3F7FB;--b:#14273E;--c:#1E6FD9"></i>Oceano</button>
+        <button type="button" role="radio" data-set="look" data-value="pastel"><i style="--a:#F6F4FB;--b:#3B3363;--c:#7C5CDB"></i>Pastel</button>
+        <button type="button" role="radio" data-set="look" data-value="grafite"><i style="--a:#F7F7F5;--b:#111111;--c:#111111"></i>Grafite</button>
+        <button type="button" role="radio" data-set="look" data-value="contraste"><i style="--a:#FFFFFF;--b:#000000;--c:#0040C1"></i>Contraste</button>
+        <button type="button" role="radio" data-set="look" data-value="original"><i style="--a:#FFFFFF;--b:#334451;--c:#2B7ABC"></i>Original</button>
+      </div>
+      <label class="row"><span>Modo escuro</span>
+        <select data-sel="theme"><option value="off">Desligado</option><option value="dark">Escuro</option><option value="dim">Escuro suave</option><option value="night">À noite (19h às 7h)</option><option value="auto">Igual ao sistema</option></select></label>
+      <label class="row"><span>Esconder o menu lateral <small>aparece ao passar o mouse na borda</small></span><input type="checkbox" role="switch" data-pref="navHide"></label>
+    </section>
+
+    <section class="step" data-step="4" hidden>
+      <h1>O que o Caderno+ te avisa?</h1>
+      <label class="row"><span>Lembretes <small>1 dia e 1 hora antes de cada entrega, e na véspera das provas</small></span><input type="checkbox" role="switch" data-pref="remind"></label>
+      <label class="row"><span>Aviso de nota nova</span><input type="checkbox" role="switch" data-pref="newgrades"></label>
+      <label class="row"><span>Resumo da semana <small>toda segunda, às 8h</small></span><input type="checkbox" role="switch" data-pref="summary"></label>
+    </section>
+
+    <section class="step" data-step="5" hidden>
+      <h1>Onde salvar os arquivos?</h1>
+      <p class="lead">Os arquivos das matérias vão para uma pasta dentro de Downloads, separados por matéria e por tipo. Se a pasta não existir, o Chrome cria.</p>
+      <label class="dl">Downloads/<input type="text" id="dlFolder" maxlength="120" spellcheck="false" aria-label="Pasta dos downloads"></label>
+      <p class="fine" id="dlPreview"></p>
+    </section>
+
+    <section class="step" data-step="6" hidden>
+      <h1>Pronto!</h1>
+      <p class="lead">Abra o Canvas: o Caderno+ já aparece no painel e em cada matéria. Para mudar qualquer coisa, clique no ícone do Caderno+ na barra do navegador.</p>
+      <button type="button" class="primary big" id="openCanvas">Abrir o Canvas</button>
+    </section>
+
+    <nav class="foot"><button type="button" id="back">Voltar</button><button type="button" class="primary" id="next">Começar</button></nav>
+  </main>
+  <script src="prefs.js"></script>
+  <script src="core.js"></script>
+  <script src="onboarding.js"></script>
+</body>
+</html>

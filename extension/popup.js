@@ -132,3 +132,4 @@ showFocus(); setInterval(showFocus, 1000);
     row.append(name, box2); box.appendChild(row);
   }
 })();
+$("setup").addEventListener("click", e => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }); });

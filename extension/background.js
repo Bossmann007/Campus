@@ -131,7 +131,10 @@ chrome.downloads.onChanged.addListener(async ch => {
   if (!have.includes(fileId)) await chrome.storage.local.set({ dl: [...have, fileId] });
 });
 chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); });
-chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create("tick", { periodInMinutes: 60 }); scheduleWeek(); showNext(); });
+chrome.runtime.onInstalled.addListener(details => {
+  chrome.alarms.create("tick", { periodInMinutes: 60 }); scheduleWeek(); showNext();
+  if (details && details.reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });   // first install: the onboarding
+});
 // Foco (started in the popup): the end of a study block or a break.
 async function focusDone(alarm) {
   await chrome.storage.local.remove("focus");
