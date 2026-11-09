@@ -312,7 +312,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   key("k"); const q2 = all(sr.body.kids.find(k => k.id === "cp-search")).find(e => e.className === "pal-q");
   q2.listeners.keydown({ key: "Escape", preventDefault() {} }); assert(!sr.body.kids.some(k => k.id === "cp-search"), "Esc closes it");
   const noFind = await runContent("/", null, { prefs: { search: false } });
-  assert(!noFind.winListeners.keydown && !all(noFind.anchor).some(e => e.className === "find"), "switched off in the popup: no shortcut, no button");
+  if (noFind.winListeners.keydown) noFind.winListeners.keydown({ key: "k", ctrlKey: true, preventDefault() {}, stopPropagation() {} });
+  assert(!noFind.body.kids.some(k => k.id === "cp-search") && !all(noFind.anchor).some(e => e.className === "find"), "switched off in the popup: Ctrl+K does nothing, no button");
   const bye = await runContent("/logout", null, { search: { user: 5, at: Date.now(), items: [] }, cache: {} });
   assert(!bye.store.search && !bye.store.cache, "logging out forgets the search index too"); ok();
 
@@ -533,7 +534,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed");
   { const ck = () => all(paneOf("Anotações")).find(e => /card notes chk/.test(e.className)), cf = () => all(ck()).find(e => e.tag === "form");
-    assert(ck() && /Meu checklist/.test(text(ck())), "a checklist under the note");
+    assert(ck() && /Checklist da matéria/.test(text(ck())), "a checklist under the note");
     all(cf()).find(e => e.tag === "input").value = "  refazer a lista 3 "; await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
     all(cf()).find(e => e.tag === "input").value = "   "; await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
     const mine = np.store.checks[5][71306];
@@ -541,9 +542,27 @@ async function runContent(pathname, files, preStore, opts = {}) {
     await all(ck()).find(e => /^Marcar: /.test(e["aria-label"] || (e.getAttribute && e.getAttribute("aria-label")) || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
     assert(np.store.checks[5][71306][0].done === true, "ticked");
     await all(ck()).find(e => /^Apagar: /.test(e["aria-label"] || (e.getAttribute && e.getAttribute("aria-label")) || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
-    assert.deepStrictEqual(np.store.checks[5], {}, "deleted: removed"); }
+    assert.deepStrictEqual(np.store.checks[5], {}, "deleted: removed");
+    const ins = all(cf()).filter(e => e.tag === "input"); ins[0].value = "lista 4"; ins[1].value = isoIn(2); await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+    assert(np.store.checks[5][71306][0].date === isoIn(2) && !ins[1].value, "a day goes with the item"); }
   await tabB("Materiais").listeners.click(); await new Promise(r => setTimeout(r, 20));
-  assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened"); ok();
+  assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened");
+  np.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 5));
+  assert(!paneOf("Anotações").hidden && paneOf("Materiais").hidden, "Alt+N opens the course's Anotações");
+  { // the dashboard: the checklist's dated items in the 7 days, ticked there; Alt+N or the bar's button opens the column
+    const dsh = await runContent("/", null, { checks: { 5: { painel: [{ id: "p1", t: "imprimir resumo", done: false, date: isoIn(1) }, { id: "p2", t: "sem dia", done: false }], 71306: [{ id: "c1", t: "refazer lista", done: false, date: isoIn(2) }] } } });
+    await new Promise(r => setTimeout(r, 20));
+    const lab = e => e["aria-label"] || "";
+    assert(all(dsh.anchor).some(e => /^imprimir resumo · Meu checklist/.test(lab(e))) && all(dsh.anchor).some(e => /^refazer lista · /.test(lab(e))) && !all(dsh.anchor).some(e => /^sem dia · /.test(lab(e))), "dated checklist items (dashboard and course) in the 7 days, undated ones not");
+    await all(dsh.anchor).find(e => lab(e) === "Marcar como feito: imprimir resumo").listeners.click({ preventDefault() {} }); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.checks[5].painel[0].done === true && !dsh.store.marks, "ticked in the week: done in the checklist itself");
+    const nbtn = all(dsh.header).concat(all(dsh.anchor)).find(e => e.textContent === "Anotações" && e.tag === "button");
+    assert(nbtn, "Anotações in the bar");
+    dsh.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.notesOpen === true && nbtn["aria-pressed"] === "true", "Alt+N opens the column (kept open)");
+    await nbtn.listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.notesOpen === false, "the button closes it"); }
+  ok();
 
   // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
   const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
@@ -651,7 +670,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
   assert(!all(clHost).some(e => /^Esconder \d|^Mostrar \d|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes, the meta and the fold");
   const pf = await runContent("/", null); await new Promise(r => setTimeout(r, 20));
-  const pfBox = () => all(pf.anchor).find(e => /^box/.test(e.className)), pfB = all(pf.anchor).find(e => /^pfold/.test(e.className));
+  const pfBox = () => all(pf.anchor).find(e => /^box/.test(e.className)), pfB = all(pf.anchor).find(e => /^pfold/.test(e.className) && !/pnotes/.test(e.className));
   assert(pfB && pfB.textContent === "Esconder ▴" && !/pfolded/.test(pfBox().className), "the panel open, with Esconder");
   await pfB.listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(/pfolded/.test(pfBox().className) && pf.store.panelFold === true && pfB.textContent === "Mostrar ▾", "folded to its bar, kept");

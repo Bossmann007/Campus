@@ -124,6 +124,69 @@
   }
   // Own tasks (not from Canvas), per Canvas user in chrome.storage.local "tasks": [{ id, title, date|null }]; done = a tick.
   let myTasks = [];
+  // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
+  // the dated ones join the week like Minhas tarefas. chrome.storage.local "checks"; 50 items of 200 chars per list.
+  let myChecks = {};
+  async function loadChecks(user) {
+    const { checks } = await chrome.storage.local.get("checks"), mine = checks && typeof checks === "object" ? checks[user] : null, out = {};
+    if (mine && typeof mine === "object") for (const k of Object.keys(mine)) if (Array.isArray(mine[k])) out[k] = mine[k].filter(x => x && x.id && typeof x.t === "string");
+    myChecks = out; return out;
+  }
+  let checkQ = Promise.resolve();   // one write at a time (a tick in the week and one in the list)
+  const editChecks = (user, key, f) => (checkQ = checkQ.catch(() => {}).then(async () => {
+    const { checks } = await chrome.storage.local.get("checks"), all = checks && typeof checks === "object" ? checks : {}, mine = Object.assign({}, all[user]);
+    const next = f(Array.isArray(mine[key]) ? mine[key].filter(x => x && x.id && typeof x.t === "string") : []).slice(0, 50);
+    if (next.length) mine[key] = next; else delete mine[key];
+    await chrome.storage.local.set({ checks: Object.assign({}, all, { [user]: mine }) }); await loadChecks(user); return next;
+  }));
+  // a tick from the week or a course's A seguir: checklist items change their own list, the rest go to the marks
+  async function tick(user, x, on) {
+    if (!x.chk) return setMark(user, x, on);
+    await editChecks(user, x.chk[0], l => l.map(y => y.id === x.chk[1] ? Object.assign({}, y, { done: on }) : y));
+    return myMarks(user);
+  }
+  // Anotações: a note and a checklist for one key (a course id, or "painel" on the dashboard), only on this computer
+  // (chrome.storage.local "notes" and "checks", per Canvas user), saved as you type. onChange: a checklist edit (the week).
+  function notesBlock(cache, key, hasNote, onChange) {
+    const pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
+    ta.setAttribute("aria-label", key === "painel" ? "Minhas anotações" : "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
+    pad.append(ta, saved);
+    let tm = 0, typed = 0;
+    const store = async () => {
+      const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
+      const v = String(ta.value || "").slice(0, 5000); if (v) mine[key] = v; else delete mine[key];
+      await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
+    };
+    ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
+    chrome.storage.local.get("notes").then(({ notes }) => {
+      const v = notes && notes[cache.user] && notes[cache.user][key];
+      if (typeof v === "string" && v) { ta.value = v; if (hasNote) hasNote(); }
+    });
+    // the checklist: with a day, the item shows in the dashboard's 7 days (and its reminders)
+    const chk = el("div", "card notes chk"), form = el("form", "add"), cin = el("input"), din = el("input"), add = el("button", "primary", "Adicionar"), ul = el("ul");
+    cin.type = "text"; cin.placeholder = "Novo item (ex.: refazer a lista 3)"; cin.setAttribute("aria-label", "Novo item do checklist"); cin.maxLength = 200;
+    din.type = "date"; din.setAttribute("aria-label", "Dia (opcional: aparece nos próximos 7 dias)"); din.title = "Com dia, aparece nos próximos 7 dias do painel"; add.type = "submit";
+    form.append(cin, din, add); chk.append(el("h3", null, key === "painel" ? "Meu checklist" : "Checklist da matéria"), form, ul);
+    const edit = async f => { await editChecks(cache.user, key, f); draw(); if (onChange) onChange(); };
+    const draw = () => {
+      const items = myChecks[key] || []; ul.replaceChildren();
+      if (!items.length) { ul.appendChild(el("li", "muted", "Nada ainda. Com dia, o item aparece nos próximos 7 dias do painel.")); return; }
+      for (const x of items.slice().sort((p, q) => (!!p.done - !!q.done) || String(p.date || "9").localeCompare(String(q.date || "9")))) {
+        const li = el("li", "row" + (x.done ? " dn" : "")), end = el("span", "end"), ck = el("button", "ck", "✓"), del = el("button", "ck del", "×");
+        ck.type = del.type = "button"; ck.setAttribute("aria-pressed", String(!!x.done)); ck.setAttribute("aria-label", (x.done ? "Desmarcar: " : "Marcar: ") + x.t); del.setAttribute("aria-label", "Apagar: " + x.t);
+        ck.addEventListener("click", () => edit(l => l.map(y => y.id === x.id ? Object.assign({}, y, { done: !y.done }) : y)));
+        del.addEventListener("click", () => edit(l => l.filter(y => y.id !== x.id)));
+        end.append(ck, del); li.append(el("span", "d", x.date ? cap(dayLabel(x.date)) : "sem dia"), el("span", "n", x.t), end); ul.appendChild(li);
+      }
+    };
+    form.addEventListener("submit", e => { e.preventDefault(); const t = String(cin.value || "").trim().slice(0, 200); if (!t) return;
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(din.value || "") ? din.value : null; cin.value = ""; din.value = "";
+      edit(l => l.concat(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t, done: false }, date ? { date } : {}))); });
+    cin.addEventListener("input", () => { typed = Date.now(); });   // no redraw under the student's typing
+    loadChecks(cache.user).then(draw);
+    if (chrome.storage.onChanged) chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.checks && ul.isConnected !== false) loadChecks(cache.user).then(draw); });   // ticked in the week or another tab
+    return { nodes: [pad, chk], ta, busy: () => Date.now() - typed < 30000 };
+  }
   async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
   async function saveTasks(user, list) {
     const { tasks } = await chrome.storage.local.get("tasks"), all = tasks && typeof tasks === "object" ? tasks : {};
@@ -244,6 +307,11 @@
     for (const t of myTasks) if (t.date) {
       const key = "own:" + t.id, done = !!(marks && marks[key]);
       out.push({ key, own: true, mine: done, title: t.title, course: "Minha tarefa", ours: null, task: true, date: t.date, due: null, url: null, done: false, late: t.date < today() });
+    }
+    for (const k of Object.keys(myChecks)) for (const x of myChecks[k]) if (x.date) {
+      const ci = k !== "painel" && cache.ids.find(i => String(i.id) === k), course = k === "painel" ? "Meu checklist" : (a.byCanvasId[k] && a.byCanvasId[k].name) || (ci ? shortName(ci.name) : "Checklist");
+      out.push({ key: "chk:" + k + ":" + x.id, chk: [k, x.id], own: true, cid: k === "painel" ? null : k, mine: !!x.done, title: x.t, course, ours: (k !== "painel" && a.byCanvasId[k]) || null, task: true, date: x.date, due: null,
+        url: k === "painel" ? null : location.origin + "/courses/" + k + "#anot", done: false, late: x.date < today() });
     }
     for (const u of a.upcoming) if (u.item.exam && !out.some(x => x.ours === u.course && x.date === u.item.date))
       out.push({ key: "qf:" + C.key(u.course, u.item), title: u.item.name, course: u.course.name, ours: u.course, date: u.item.date, due: null, url: null, done: false, late: false, exam: u });
@@ -476,7 +544,8 @@
     .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }
-    .chk h3 { margin:0 0 6px; } .chk .add { grid-template-columns:minmax(0,1fr) auto; } .chk ul { list-style:none; margin:0; padding:0; } .chk .row { grid-template-columns:minmax(0,1fr) auto; border-top:1px solid var(--line); padding:5px 0; } .chk .row:first-child { border-top:0; }
+    .side { padding:12px; } .side-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font:600 15px/1.2 var(--serif); } .side .notes:first-of-type { margin-top:0; }
+    .chk h3 { margin:0 0 6px; } .chk .add { grid-template-columns:minmax(0,1fr) 140px auto; } .side .chk .add { grid-template-columns:1fr auto; } .side .chk .add input[type=text] { grid-column:1 / -1; } .side .chk .row { grid-template-columns:64px minmax(0,1fr) auto; } .chk ul { list-style:none; margin:0; padding:0; } .chk .row { grid-template-columns:76px minmax(0,1fr) auto; border-top:1px solid var(--line); padding:5px 0; } .chk .row:first-child { border-top:0; }
     .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
@@ -529,7 +598,7 @@
     .box.head .pfold { margin:0; height:32px; padding:0 12px; border:0; border-left:1px solid var(--line); border-radius:0 10px 10px 0; background:none; font-size:12.5px; } .box.head .pfold:hover { background:var(--soft); color:var(--fg); transform:none; }
     .box.nohd { padding-top:14px; }
     .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
-    .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold { margin-left:auto; }
+    .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold:not(.pnotes) { margin-left:auto; } .box.pfolded .pnotes { display:none; } .box.head .pnotes { border-radius:0; } .pnotes[aria-pressed="true"] { color:var(--coral); }
     .wl { display:none; }
     @container cp (max-width:760px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -861,6 +930,31 @@
     if (list.length) sec.appendChild(ul); else sec.appendChild(el("div", "muted", "Coisas que não estão no Canvas: estudar, imprimir, levar material. Com dia, entram na semana e nos lembretes."));
     foldable(sec, h, "tasks"); return sec;
   }
+  // Anotações on the dashboard: a column beside Canvas's course cards (the right sidebar our panel hides), opened from the
+  // bar's Anotações button or Alt+N, kept open ("notesOpen"). Built once per page: a redraw of the panel keeps what is typed.
+  function notesSide(cache, show) {
+    let host = document.getElementById("cp-notes");
+    if (!show) { if (host) host.remove(); return; }
+    if (host) return;
+    const cols = document.getElementById("DashboardCard_Container");
+    host = el("div", "cp-host cp-noteshost"); host.id = "cp-notes";
+    const root = host.attachShadow({ mode: "open" }), box = el("div", "box side"), h = el("div", "side-h"), close = el("button", "mini", "Fechar ×");
+    close.type = "button"; close.setAttribute("aria-label", "Fechar as anotações"); close.addEventListener("click", () => toggleNotes(false));
+    h.append(el("b", null, "Anotações"), close);
+    const nb = notesBlock(cache, "painel", null, () => window.cpRedraw && window.cpRedraw());
+    box.append(h, ...nb.nodes); styleRoot(root); root.append(box);
+    host.cpBusy = nb.busy;
+    if (cols && cols.parentNode) { host.style.cssText = "float:right;width:320px;margin:28px 0 12px 18px;position:relative;z-index:1"; cols.parentNode.insertBefore(host, cols); }
+    else { const c = document.getElementById("content"); if (!c) return; c.prepend(host); }
+  }
+  let notesCache = null;
+  async function toggleNotes(on) {
+    const open = on != null ? on : !document.getElementById("cp-notes");
+    await chrome.storage.local.set({ notesOpen: open });
+    if (notesCache) notesSide(notesCache, open);
+    const b = window.cpNotesBtn; if (b) b.setAttribute("aria-pressed", String(open));
+    if (open) { const h = document.getElementById("cp-notes"), ta = h && h.shadowRoot && h.shadowRoot.querySelector("textarea"); if (ta && on == null) ta.focus(); }
+  }
   function dashPanel(a, cache, prefs, marks, rec, onMode) {
     const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
@@ -886,12 +980,16 @@
       if (save) await chrome.storage.local.set({ panelFold: on }); };
     foldB.addEventListener("click", () => setFold(!/pfolded/.test(box.className), true));
     chrome.storage.local.get("panelFold").then(({ panelFold }) => setFold(panelFold === true, false));
+    // Anotações beside the cards (Alt+N)
+    const notesB = el("button", "pfold pnotes", "Anotações"); notesB.type = "button"; notesB.title = "Suas anotações e checklist, ao lado dos cards (Alt+N)"; notesB.setAttribute("aria-pressed", "false");
+    notesB.addEventListener("click", () => toggleNotes()); window.cpNotesBtn = notesB; notesCache = cache;
+    if (EXT) chrome.storage.local.get("notesOpen").then(({ notesOpen }) => { notesB.setAttribute("aria-pressed", String(notesOpen === true)); notesSide(cache, notesOpen === true); });
     // the meta (goal) every number is computed against
     const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
     dn.type = upb.type = "button"; dn.setAttribute("aria-label", "Meta menor"); upb.setAttribute("aria-label", "Meta maior"); meta.title = "A nota que você quer em cada matéria";
     const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };   // onMode sets T before any wait, so quick clicks add up
     dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
-    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.append(meta, foldB);
+    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.append(meta); if (EXT) hd.appendChild(notesB); hd.appendChild(foldB);
     // on the classic dashboard the bar sits in Canvas's header, next to the greeting, where "Alternar para a nova
     // visualização" was; folding then hides the whole panel. Elsewhere (widget dashboard) it stays on top of the panel.
     if (!headBar(hd)) box.append(hd); else box.classList.add("nohd");
@@ -911,7 +1009,7 @@
     if (week) {
       let sec = null;
       const draw = () => { const nx = weekView(agenda(a, cache, marks), prefs, mark); if (sec) { grid.insertBefore(nx, sec); sec.remove(); } else grid.appendChild(nx); sec = nx; };
-      const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
+      const mark = async (x, on) => { marks = await tick(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
     }
     if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
@@ -1054,51 +1152,8 @@
       });
       simActs.append(sb, note, save);
     }
-    // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
-    const pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
-    ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
-    pad.append(ta, saved);
-    let tm = 0;
-    const store = async () => {
-      const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
-      const v = String(ta.value || "").slice(0, 5000); if (v) mine[courseId] = v; else delete mine[courseId];
-      await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
-    };
-    let typed = 0;
-    ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
-    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || Date.now() - typed < 30000;
-    chrome.storage.local.get("notes").then(({ notes }) => {
-      const v = notes && notes[cache.user] && notes[cache.user][courseId];
-      if (typeof v === "string" && v) { ta.value = v; if (btns.anot) btns.anot.textContent = "Anotações ✓"; }
-    });
-    // Checklist: the student's own list for this course, below the note (chrome.storage.local "checks", per Canvas user and
-    // course; up to 50 items of 200 chars; only on this computer).
-    const chk = el("div", "card notes chk"), cform = el("form", "add"), cin = el("input"), cadd = el("button", "primary", "Adicionar"), cul = el("ul");
-    cin.type = "text"; cin.placeholder = "Novo item (ex.: refazer a lista 3)"; cin.setAttribute("aria-label", "Novo item do checklist"); cin.maxLength = 200; cadd.type = "submit";
-    cform.append(cin, cadd); chk.append(el("h3", null, "Meu checklist"), cform, cul);
-    let items = [];
-    const readChecks = async () => { const { checks } = await chrome.storage.local.get("checks"), all = checks && typeof checks === "object" ? checks : {}, mine = all[cache.user];
-      return { all, list: mine && Array.isArray(mine[courseId]) ? mine[courseId].filter(x => x && typeof x.t === "string" && x.id) : [] }; };
-    const editChecks = async f => {   // read, change, write: another tab's edits are kept
-      const { all, list } = await readChecks(), next = f(list).slice(0, 50), mine = Object.assign({}, all[cache.user]);
-      if (next.length) mine[courseId] = next; else delete mine[courseId];
-      await chrome.storage.local.set({ checks: Object.assign({}, all, { [cache.user]: mine }) }); items = next; drawChecks();
-    };
-    const drawChecks = () => {
-      cul.replaceChildren();
-      if (!items.length) { cul.appendChild(el("li", "muted", "Nada ainda: o que você quer conferir nesta matéria.")); return; }
-      for (const x of items.slice().sort((p, q) => !!p.done - !!q.done)) {
-        const li = el("li", "row" + (x.done ? " dn" : "")), end = el("span", "end"), ck = el("button", "ck", "✓"), del = el("button", "ck del", "×");
-        ck.type = del.type = "button"; ck.setAttribute("aria-pressed", String(!!x.done)); ck.setAttribute("aria-label", (x.done ? "Desmarcar: " : "Marcar: ") + x.t); del.setAttribute("aria-label", "Apagar: " + x.t);
-        ck.addEventListener("click", () => editChecks(l => l.map(y => y.id === x.id ? Object.assign({}, y, { done: !y.done }) : y)));
-        del.addEventListener("click", () => editChecks(l => l.filter(y => y.id !== x.id)));
-        end.append(ck, del); li.append(el("span", "n", x.t), end); cul.appendChild(li);
-      }
-    };
-    cform.addEventListener("submit", e => { e.preventDefault(); const t = String(cin.value || "").trim().slice(0, 200); if (!t) return; cin.value = "";
-      editChecks(l => l.concat({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t, done: false })); });
-    cin.addEventListener("input", () => { typed = Date.now(); });   // no redraw under the student's typing
-    readChecks().then(r => { items = r.list; drawChecks(); });
+    const nb = notesBlock(cache, courseId, () => { if (btns.anot) btns.anot.textContent = "Anotações ✓"; });
+    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || nb.busy();
     acts.appendChild(status);
     // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
     const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
@@ -1111,7 +1166,7 @@
     const show = async (k, byClick) => {
       for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); btns[key].tabIndex = key === k ? 0 : -1; }
       if (k === "materiais" && !panes.materiais.cpLoaded) { panes.materiais.cpLoaded = 1; materials(courseId, panes.materiais); }
-      if (k === "anot" && byClick && ta.focus) ta.focus();   // only when the student opens it (never on page load)
+      if (k === "anot" && byClick && nb.ta.focus) nb.ta.focus();   // only when the student opens it (never on page load)
       await chrome.storage.local.set({ ctab: k });
     };
     for (const [k, label] of tabs) {
@@ -1122,9 +1177,11 @@
     if (c) panes.notas.append(...parts.notas, simActs);
     panes.materiais.appendChild(acts);
     panes.avisos.appendChild(courseNews(cache, courseId));
-    if (EXT) panes.anot.append(pad, chk);
+    if (EXT) panes.anot.append(...nb.nodes);
     box.append(bar, ...tabs.map(([k]) => panes[k]));
-    chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
+    if (EXT && host) host.cpOpenNotes = () => show("anot", true);
+    if (EXT && location.hash === "#anot") show("anot"); else chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
+
   }
 
   // The course's color in Canvas (the user's custom colors, GET /users/self/colors), read once a day per user.
@@ -1165,7 +1222,7 @@
         if (!x.exam && !x.done && cache.user) {
           ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(!!x.mine));
           ck.setAttribute("aria-label", (x.mine ? "Desmarcar: " : "Marcar como feito: ") + name); ck.title = x.mine ? "Desmarcar" : "Marcar como feito (só aqui, o Canvas não muda)";
-          ck.addEventListener("click", async () => { marks = await setMark(cache.user, x, !x.mine); build(); draw(); });
+          ck.addEventListener("click", async () => { marks = await tick(cache.user, x, !x.mine); build(); draw(); });
         }
         r.append(el("i"), when, link(name, x.url), ck); right.appendChild(r); }
     };
@@ -1625,19 +1682,22 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   let cardWatch = null;
   async function draw(cache, prefs, again) {
     T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null;
-    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user)]);   // side by side, not one after another
+    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user)]);   // side by side, not one after another
     let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
     sendReminders(agenda(a, cache, marks), prefs, cache);
-    if (prefs.search) {   // the bookmarklet can run again on the same page: one listener, opening the latest reading
-      const first = !window.cpSearch;
-      window.cpSearch = () => openSearch(a, cache);
-      if (first) addEventListener("keydown", e => {
-        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); }
-      }, true);
-    }
+    if (prefs.search) window.cpSearch = () => openSearch(a, cache);   // opens the latest reading
+    // one listener per page (the bookmarklet can run again): Ctrl+K the search; Alt+N the course's Anotações tab, or the
+    // dashboard's column
+    if (!window.cpKeys) { window.cpKeys = 1; addEventListener("keydown", e => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { if (window.cpSearch) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); } return; }
+      if (!EXT || !e.altKey || e.ctrlKey || e.metaKey || e.code !== "KeyN") return;
+      const cp = document.getElementById("qf-panel");
+      if (cp && cp.cpOpenNotes) { e.preventDefault(); cp.cpOpenNotes(); const sh = cp.shadowRoot, t = sh && sh.querySelector("textarea"); if (t && t.scrollIntoView) t.scrollIntoView({ block: "center" }); }
+      else if (notesCache && /^\/(dashboard)?\/?$/.test(location.pathname)) { e.preventDefault(); toggleNotes(); }
+    }, true); }
     if (/^\/calendar\/?$/.test(location.pathname) && prefs.calendar) calendarPage(a, cache, prefs, marks);
     { // trays (every page) and the course list use the courses taken off the dashboard
       const { hidden } = await chrome.storage.local.get("hidden");
@@ -1660,7 +1720,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
           const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next);
         }
         if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); gradeA = a; for (const b of (document.querySelectorAll ? document.querySelectorAll("[data-cp-grade]") : [])) b.remove(); enhanceGradeCards(); }
-        const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
+        const [m2] = await Promise.all([myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user)]);
         const old = document.getElementById("cp-dash"); if (old) old.remove();
         dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode); placeDash();
         sendReminders(agenda(a, cache, m2), prefs, cache);
