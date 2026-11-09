@@ -19,7 +19,7 @@ const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 const ob = fs.readFileSync(path.join(dir, "onboarding.html"), "utf8");
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ob) && !/\son\w+=/.test(ob), "onboarding: no inline script or handler (MV3 CSP)");
 assert(/details\.reason === "install"\) \{ chrome\.storage\.local\.set\(\{ notesSeen: chrome\.runtime\.getManifest\(\)\.version \}\); chrome\.tabs\.create\(\{ url: chrome\.runtime\.getURL\("onboarding\.html"\) \}\)/.test(fs.readFileSync(path.join(dir, "background.js"), "utf8")), "the onboarding opens on first install");
-for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
+for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst", "agentFile"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
 assert(/id="agentErr"/.test(html) && /Perguntar onde salvar cada arquivo/.test(html), "popup: the file switch says Chrome must not ask where to save, and shows why it turned off");
 { // "Conectar sua IA": the popup only links to the site page; the page and the privacy text carry the warnings
