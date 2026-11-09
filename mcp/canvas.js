@@ -28,13 +28,15 @@ function spend(budget) {
   if (Date.now() - budget.at > 5 * 60e3) { budget.n = 0; budget.at = Date.now(); }
   if (++budget.n > 400) throw new Error("limite de leituras do Canvas atingido; tente de novo em alguns minutos");
 }
+// every request gives up after 20 s, so a silent Canvas or Centro de Notas never hangs the AI (or the Centro queue)
+const limit = () => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined);
 function guardedFetch(token, realFetch, budget = { n: 0, at: Date.now() }) {
   return async (raw, opts = {}) => {
     const method = String(opts.method || "GET").toUpperCase();
     if (method !== "GET") throw new Error("bloqueado: só leitura");
     const u = checkUrl(raw);
     spend(budget);
-    return realFetch(u.href, { method: "GET", redirect: "error", headers: { Accept: "application/json", Authorization: "Bearer " + token } });
+    return realFetch(u.href, { method: "GET", redirect: "error", headers: { Accept: "application/json", Authorization: "Bearer " + token }, signal: limit() });
   };
 }
 // the launch page Canvas returned (its verifier is the authorization): GET, no token, no redirects
@@ -51,7 +53,7 @@ function launchFetch(realFetch, budget) {
       if (u.origin !== BASE || !(LAUNCH_PATH.test(u.pathname) || TOOL_PAGE.test(u.pathname))) throw new Error("bloqueado: o lançamento foi para fora do Canvas");
       spend(budget);
       const cookie = [...jar].map(([k, v]) => k + "=" + v).join("; ");
-      const r = await realFetch(u.href, { method: "GET", redirect: "manual", headers: Object.assign({ Accept: "text/html" }, cookie ? { Cookie: cookie } : {}) });
+      const r = await realFetch(u.href, { method: "GET", redirect: "manual", headers: Object.assign({ Accept: "text/html" }, cookie ? { Cookie: cookie } : {}), signal: limit() });
       for (const sc of setCookies(r)) { const nv = String(sc).split(";")[0], i = nv.indexOf("="); if (i > 0 && jar.size < 20) jar.set(nv.slice(0, i).trim(), nv.slice(i + 1).trim().slice(0, 4096)); }
       if (r.status < 300 || r.status > 399) return r;
       const loc = r.headers && r.headers.get && r.headers.get("location");
@@ -79,7 +81,7 @@ function toolFetch(realFetch, budget) {
     const headers = {}; for (const k of ["Accept", "X-Requested-With", "X-Inertia", "X-Inertia-Version"]) if (opts.headers && opts.headers[k] != null) headers[k] = String(opts.headers[k]);
     if (form) headers["Content-Type"] = "application/x-www-form-urlencoded";
     if (jar.size) headers.Cookie = [...jar].map(([k, v]) => k + "=" + v).join("; ");
-    const r = await realFetch(u.href, form ? { method, headers, body: opts.body, redirect: "manual" } : { method: "GET", headers, redirect: "manual" });
+    const r = await realFetch(u.href, form ? { method, headers, body: opts.body, redirect: "manual", signal: limit() } : { method: "GET", headers, redirect: "manual", signal: limit() });
     take(r);
     if (r.status >= 300 && r.status < 400) {
       const loc = r.headers && typeof r.headers.get === "function" && r.headers.get("location");

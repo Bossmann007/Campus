@@ -3,13 +3,26 @@
 // courses of the term (NotasCore.TERM), or { error } (never rejects). seen.courses gets every active course ({ id, name }), so the caller
 // does not fetch the list again.
 async function collectCanvasGrades(seen) {
+  // one GET: 20 s for the whole answer; a throttle (429, 403 with no quota left) or a gateway error is tried twice more
+  const once = async url => {
+    for (let i = 0; ; i++) {
+      const ctl = typeof AbortController === "function" ? new AbortController() : null, t = ctl ? setTimeout(() => ctl.abort(), 20000) : 0;
+      try {
+        const r = await fetch(url, Object.assign({ credentials: "same-origin", headers: { Accept: "application/json" } }, ctl ? { signal: ctl.signal } : {}));
+        const left = r.headers && r.headers.get ? parseFloat(r.headers.get("X-Rate-Limit-Remaining")) : NaN;
+        if ((r.status === 429 || [502, 503, 504].includes(r.status) || (r.status === 403 && left <= 0)) && i < 2) { if (r.body && r.body.cancel) r.body.cancel().catch(() => {}); await new Promise(res => setTimeout(res, 1200 * (i + 1))); continue; }
+        return { ok: r.ok, status: r.status, link: r.headers && r.headers.get ? r.headers.get("Link") : null, body: await r.text() };
+      } catch (e) { if (i < 2) { await new Promise(res => setTimeout(res, 800 * (i + 1))); continue; } throw new Error(e && e.name === "AbortError" ? "o Canvas demorou demais" : "sem conexão com o Canvas"); }
+      finally { clearTimeout(t); }
+    }
+  };
   const get = async url => {
     const out = [];
     while (url) {
-      const r = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
+      const r = await once(url);
       if (!r.ok) throw new Error("o Canvas respondeu " + r.status);
-      out.push(...JSON.parse((await r.text()).replace(/^while\(1\);/, "")));
-      const m = /<([^>]+)>;\s*rel="next"/.exec(r.headers.get("Link") || "");
+      out.push(...JSON.parse(r.body.replace(/^while\(1\);/, "")));
+      const m = /<([^>]+)>;\s*rel="next"/.exec(r.link || "");
       url = m ? m[1] : null;
       if (url && new URL(url, location.href).origin !== location.origin) throw new Error("o Canvas indicou uma página fora do Canvas");
     }

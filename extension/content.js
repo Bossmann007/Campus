@@ -26,14 +26,14 @@
   async function canvasGet(url) {
     for (let i = 0; ; i++) {
       const ctl = typeof AbortController === "function" ? new AbortController() : null, t = ctl ? setTimeout(() => ctl.abort(), 20000) : 0;
-      let r;
-      try { r = await fetch(url, Object.assign({ credentials: "same-origin", headers: { Accept: "application/json" } }, ctl ? { signal: ctl.signal } : {})); }
-      catch (e) { if (i < 2) { await new Promise(res => setTimeout(res, 800 * (i + 1))); continue; } throw new Error(e && e.name === "AbortError" ? "o Canvas demorou demais" : "sem conexão com o Canvas"); }
+      try {
+        const r = await fetch(url, Object.assign({ credentials: "same-origin", headers: { Accept: "application/json" } }, ctl ? { signal: ctl.signal } : {}));
+        const left = r.headers && r.headers.get ? parseFloat(r.headers.get("X-Rate-Limit-Remaining")) : NaN;
+        if ((r.status === 429 || [502, 503, 504].includes(r.status) || (r.status === 403 && left <= 0)) && i < 2) { if (r.body && r.body.cancel) r.body.cancel().catch(() => {}); await new Promise(res => setTimeout(res, 1200 * (i + 1))); continue; }
+        const body = await r.text();   // the whole answer inside the 20 s
+        return { ok: r.ok, status: r.status, headers: r.headers, text: async () => body };
+      } catch (e) { if (i < 2) { await new Promise(res => setTimeout(res, 800 * (i + 1))); continue; } throw new Error(e && e.name === "AbortError" ? "o Canvas demorou demais" : "sem conexão com o Canvas"); }
       finally { clearTimeout(t); }
-      const left = r.headers && r.headers.get ? parseFloat(r.headers.get("X-Rate-Limit-Remaining")) : NaN;
-      const busy = r.status === 429 || [502, 503, 504].includes(r.status) || (r.status === 403 && left <= 0);
-      if (busy && i < 2) { await new Promise(res => setTimeout(res, 1200 * (i + 1))); continue; }
-      return r;
     }
   }
   async function getAll(url, pages = Infinity) {   // pages: stop after that many (the inbox reads only the first)
@@ -101,7 +101,7 @@
       await newGrades(user, data);
       const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner.map(slimPlan) : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh });
-      await chrome.storage.local.remove("refreshing");
+      await chrome.storage.local.remove(["refreshing", "lastError"]);   // a reading that worked: the old error is over
       // the Centro de Notas of the term's courses, read by the worker behind (the cards repaint when it lands)
       if (EXT) chrome.runtime.sendMessage({ type: "centro", user, ids: (data.courses || []).map(c => c.id) }).catch(() => {});
       return fresh;
@@ -155,7 +155,7 @@
   let myCentro = {};
   async function loadCentro(user) { const { centro } = await chrome.storage.local.get("centro"); myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
   // quanto falta from the professor's formula in the Centro de Notas, for a course without our rules; null without a formula
-  const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && r.status !== "sem-formula" ? r : null; };
+  const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && ["garantido", "precisa", "nao-da"].includes(r.status) ? r : null; };   // sem-formula and incompleto: no number
   const centroText = r => fmt(r.now, 1) + "/10 · " + (r.status === "garantido" ? "garantido" : r.status === "nao-da" ? "recuperação" : "precisa " + up(r.need, 1) + "/10" + (r.approx ? " (aprox.)" : ""));
   const centroTone = r => r.status === "garantido" ? "ok" : r.status === "nao-da" ? "bad" : r.need > 8 ? "bad" : "warn";
   // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
@@ -1025,6 +1025,7 @@
     const h = document.getElementById("cp-notes"); if (open && on == null && h && h.cpFocus) h.cpFocus();
     await chrome.storage.local.set({ notesOpen: open });
   }
+  let hiddenNow = [];
   function dashPanel(a, cache, prefs, marks, rec, onMode) {
     const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
@@ -1075,7 +1076,8 @@
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
     if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
     else if (why) {   // no rules of ours: the Centro de Notas formulas, course by course, when the professors set them
-      const rows = cache.data.courses.map(c => ({ c, r: centroOf(String(c.id)) })).filter(x => x.r);
+      const off = hiddenNow;   // the courses taken off the dashboard in the popup
+      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => ({ c, r: centroOf(String(c.id)) })).filter(x => x.r);
       if (rows.length) {
         const sec = el("section", "card centro"), h = el("h3", null, "Quanto falta"), ul = el("ul");
         h.appendChild(el("span", "pill nt", "Centro de Notas")); sec.appendChild(h);
@@ -1160,7 +1162,7 @@
       if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); } }); });
     if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
       const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
-      for (const g of myCentro[courseId].grupos || []) for (const gc of g.grupo_colunas || []) if (gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
+      for (const g of Array.isArray(myCentro[courseId].grupos) ? myCentro[courseId].grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
       m.append(el("div", "t", fmt(cr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
         el("div", "c", cr.status === "garantido" ? "meta garantida pela fórmula do professor" : cr.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "precisa " + up(cr.need, 1) + "/10 em média no que falta" + (cr.approx ? " (aproximado: parte da fórmula está escondida para o aluno)" : "")),
         el("div", "c", "Falta: " + (cr.left.map(id => names.get(id)).filter(Boolean).slice(0, 8).join(", ") || "nada lançado em aberto") + " · fórmula do Centro de Notas"));
@@ -1776,9 +1778,9 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   // Errors are never silent: the last one is kept (what failed and the message, no data) for the popup and for a bug report,
   // and a dashboard with nothing to show says why and that it tries again.
   function oops(where, e) {
-    const msg = String(e && e.message || e).slice(0, 160);
+    const msg = e && e.name === "SyntaxError" ? "resposta inválida do Canvas" : String(e && e.message || e).replace(/[^\p{L}\p{N} .,:()/-]/gu, "").slice(0, 120);   // never a piece of an answer
     try { console.warn("Caderno+: erro ao " + where + ":", e); } catch (x) { /* no console */ }
-    chrome.storage.local.set({ lastError: { at: Date.now(), where, msg, v: VERSION, page: location.pathname.replace(/\d+/g, ":id").slice(0, 60) } }).catch(() => {});
+    try { chrome.storage.local.set({ lastError: { at: Date.now(), where, msg, v: VERSION, page: location.pathname.replace(/\d+/g, ":id").slice(0, 60) } }).catch(() => {}); } catch (x) { /* the extension was updated under this tab */ }
   }
   function troubleBanner(e) {
     if (!/^\/(dashboard)?\/?$/.test(location.pathname)) return;
@@ -1794,8 +1796,9 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     let cache;
     let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
     const paintAll = (c, again) => (queue = queue.then(() => draw(c, prefs, again)).catch(e => oops("desenhar o painel", e)));
-    try { cache = await load(fresh => { if (fresh.at !== cache.at) paintAll(fresh, true); }, first); }
+    try { cache = await load(fresh => { if (fresh.at !== cache.at) { cache = fresh; paintAll(fresh, true); } }, first); }
     catch (e) { oops("ler o Canvas", e); if (!/ 401$/.test(String(e && e.message))) troubleBanner(e); return; }   // logged out: quiet (Canvas asks to log in)
+    window.cpRepaint = () => paintAll(cache, true);   // the latest reading drawn again (the Centro de Notas landed)
     await paintAll(cache, false);
   }
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
@@ -1866,12 +1869,12 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       }); }
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
       const { hidden } = await chrome.storage.local.get("hidden");
-      const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
+      const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] }; hiddenNow = ctx.hidden;
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       cardsFirst = !!prefs.cardsFirst; gradeA = a; watchDash(); placeDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
-      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed
+      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpRepaint ? window.cpRepaint() : window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
