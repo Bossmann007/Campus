@@ -1,0 +1,88 @@
+// The Centro de Notas engine (NotasCore.centro): synthetic trees shaped like the real tool's JSON (props.curso), no
+// personal data. The Imperativa-like tree reproduces the values the tool computed on 2026-11-09 (bridge/SPEC-centro-notas.md).
+const assert = require("assert"), fs = require("fs"), path = require("path");
+const NotasCore = new Function(fs.readFileSync(path.join(__dirname, "..", "extension", "core.js"), "utf8") + "\nreturn NotasCore;")();
+const { centro } = NotasCore;
+let n = 0; const ok = () => n++;
+
+// columns: id, tipo_coluna, tipo_calculo, points, grade ("8,00" or null), children [[id, weight]], published
+const col = (id, tipo, calc, pts, nota, kids = [], pub = 1) => ({ id_coluna: id, nome_coluna: "c" + id, tipo_coluna: tipo, tipo_calculo: calc, publicacao_nota: pub,
+  atividade: pts == null ? null : { pontos_possiveis: pts, omitir_nota_final: 0 }, notas: nota == null ? [] : [{ nota }],
+  colunas_associadas_pai: kids.map(([k, w]) => ({ id_coluna: k, pivot: { id_coluna_filho: k, peso_coluna_filho: w == null ? null : w } })) });
+const curso = (groups, finals) => ({ grupos: groups.map((cols, i) => ({ nome_grupo: "g" + i, grupo_colunas: cols.map(c => ({ coluna: c })) })), colunas: finals });
+
+// Imperativa-like: RA1 = prova 75 + exercícios 25 (mean of 3 leaves); RA2 = max(nota do RA2, recuperação); final = RA1 40 + RA2 60
+const imp = (ra2work, ra2exam, finalShown) => curso([
+  [col(1, "padrao", null, 10, "10,00"), col(2, "padrao", null, 10, "10,00"), col(3, "padrao", null, 10, "10,00")],
+  [col(10, "padrao", null, 10, "8,00"), col(11, "calculo", "media_aritmetica", null, "10,00", [[1], [2], [3]]), col(12, "grupo", "media_ponderada", null, "8,50", [[10, 75], [11, 25]])],
+  [col(20, "padrao", null, 10, ra2work), col(21, "padrao", null, 10, ra2exam), col(22, "padrao", null, 10, null, [], 0), col(23, "grupo", "media_ponderada", null, null, [[20, 30], [21, 70]]),
+   col(24, "recuperacao_grupo", "total", 10, null, [[22]]), col(25, "final_grupo", "maximo", null, null, [[23], [24]])],
+], [col(99, "final", "media_ponderada", null, finalShown, [[12, 40], [25, 60]])]);
+
+{ // now: the tool's own value when it has one, else the formula (a part without a grade counts 0)
+  const r = centro(imp(null, null, "3,40"), 7);
+  assert.strictEqual(r.status, "precisa"); assert.strictEqual(r.now, 3.4, "the tool's Nota Final");
+  assert.strictEqual(centro(imp(null, null, null), 7).now, 3.4, "computed like the tool: 0,4 × 8,5 + 0,6 × 0");
+  ok();
+}
+{ // quanto falta: 7 = 3,4 + 0,6 × x → x = 6 on the RA2 work and exam (the recovery exam is not counted on)
+  const r = centro(imp(null, null, "3,40"), 7);
+  assert(Math.abs(r.need - 6) < 0.01, "need 6,0 in what is left: " + r.need);
+  assert.deepStrictEqual(r.left.sort(), [20, 21], "left: the RA2 work and exam, not the recovery");
+  ok();
+}
+{ // partly graded and the extremes
+  const half = centro(imp("10,00", null, null), 7);   // 3,4 + 0,6 × (0,3 × 10 + 0,7 × x) ≥ 7 → x = 4,29
+  assert(Math.abs(half.need - 4.29) < 0.01, "one RA2 part graded: " + half.need);
+  const done = centro(imp("10,00", "10,00", null), 7);
+  assert.strictEqual(done.status, "garantido"); assert.strictEqual(done.now, 9.4);
+  const no = centro(imp("0,00", "0,00", null), 7);
+  assert.strictEqual(no.status, "nao-da", "nothing left and below the meta");
+  assert.strictEqual(centro(imp(null, null, "3,40"), 9.9).status, "nao-da", "not even with 10 in everything left");
+  ok();
+}
+{ // RPND-like: the maximum of the RA grade and the recovery, and the recovery's own grade counts once given
+  const c = curso([[col(1, "padrao", null, 10, "2,00"), col(2, "padrao", null, 10, null, [], 0), col(3, "grupo", "media_ponderada", null, null, [[1, 100]]),
+    col(4, "recuperacao_grupo", "total", 10, null, [[2]]), col(5, "final_grupo", "maximo", null, null, [[3], [4]])]], [col(9, "final", "media_ponderada", null, null, [[5, 100]])]);
+  assert.strictEqual(centro(c, 7).now, 2, "max(2, 0)");
+  c.grupos[0].grupo_colunas[1].coluna.notas = [{ nota: "8,00" }];
+  assert.strictEqual(centro(c, 7).now, 8, "a recovery grade replaces a lower RA grade (maximo)");
+  ok();
+}
+{ // the student's view hides some formula columns (real Imperativa: the RA2 "Nota Final do RA" is only a reference with
+  // its group): the hidden one is the mean of its group's leaves, recovery exams out; approximate once the group is part-graded
+  const hide = (ra2work, finalShown) => { const c = imp(ra2work, null, finalShown);
+    c.grupos[2].grupo_colunas = c.grupos[2].grupo_colunas.filter(gc => ![23, 25].includes(gc.coluna.id_coluna));
+    for (const gc of c.grupos[2].grupo_colunas) gc.coluna.grupos = undefined;
+    c.grupos[2].id_grupo = 7; for (const gc of c.grupos[2].grupo_colunas) gc.id_grupo = 7;
+    c.colunas[0].colunas_associadas_pai[1] = { id_coluna: 25, tipo_coluna: "final_grupo", pivot: { id_coluna_filho: 25, peso_coluna_filho: 60 }, grupos: [{ id_grupo: 7 }] };
+    return c; };
+  const r = centro(hide(null, "3,40"), 7);
+  assert.strictEqual(centro(hide(null, null), 7).now, 3.4, "hidden RA2 counts 0 while nothing in it has a grade: 0,4 × 8,5");
+  assert(Math.abs(r.need - 6) < 0.01 && !r.approx && r.left.sort().join() === "20,21", "same need as the full tree when the group has no grade: " + JSON.stringify(r));
+  assert.strictEqual(centro(hide("10,00", null), 7).approx, true, "part of the hidden group graded: the weights inside are unknown, say approximate");
+  ok();
+}
+{ // calibrated by the tool's Nota Final: one hidden part, its current value is what the shown final leaves over
+  // (hidden RA2 really = 0,2 × trabalho + 0,8 × prova; with trabalho 10 the tool shows 0,4 × 8,5 + 0,6 × 2 = 4,60)
+  const c = imp("10,00", null, "4,60");
+  c.grupos[2].grupo_colunas = c.grupos[2].grupo_colunas.filter(gc => ![23, 25].includes(gc.coluna.id_coluna)); c.grupos[2].id_grupo = 7;
+  c.colunas[0].colunas_associadas_pai[1] = { id_coluna: 25, tipo_coluna: "final_grupo", pivot: { id_coluna_filho: 25, peso_coluna_filho: 60 }, grupos: [{ id_grupo: 7 }] };
+  const r = centro(c, 7);
+  assert.strictEqual(r.now, 4.6); assert(r.approx, "still approximate: the share left inside is a guess");
+  // calibrated: 4,6 + 0,6 × (x × 1/2) ≥ 7 → x = 8,0 (uncalibrated equal weights would say (7 − 3,4)/0,6 × 2 − 10 = 2,0)
+  assert(Math.abs(r.need - 8) < 0.01, "calibrated need: " + r.need);
+  ok();
+}
+{ // no formula (BD, Web, Ética, Conectividade): nothing invented
+  const bd = curso([[col(1, "padrao", null, 1.25, "1,10"), col(2, "padrao", null, 3, "3,00")]], [col(9, "final", null, null, null)]);
+  assert.strictEqual(centro(bd, 7).status, "sem-formula"); assert.strictEqual(centro(null, 7).status, "sem-formula");
+  ok();
+}
+{ // odd input never throws: unknown calc, a missing child, a loop, a grade that is not a number
+  const bad = curso([[col(1, "padrao", null, 10, "abc"), col(2, "grupo", "estranho", null, null, [[1], [404]]), col(3, "grupo", "media_ponderada", null, null, [[4, 50]]), col(4, "grupo", "media_ponderada", null, null, [[3, 50]])]],
+    [col(9, "final", "media_ponderada", null, null, [[2, 50], [3, 50]])]);
+  const r = centro(bad, 7); assert(["precisa", "nao-da", "garantido", "sem-formula"].includes(r.status) && Number.isFinite(r.now), "safe on odd input: " + JSON.stringify(r));
+  ok();
+}
+console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");
