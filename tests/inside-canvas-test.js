@@ -628,7 +628,14 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const clHost = cl.cols.parent.kids.find(k => k.id === "cp-dash");
   assert(clHost && cl.cols.parent.kids.indexOf(clHost) === cl.cols.parent.kids.indexOf(cl.cols) - 1, "between the header and Canvas's course cards");
   assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
-  assert(!all(clHost).some(e => /^Esconder|^Mostrar|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes and the meta");
+  assert(!all(clHost).some(e => /^Esconder \d|^Mostrar \d|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes, the meta and the fold");
+  const pf = await runContent("/", null); await new Promise(r => setTimeout(r, 20));
+  const pfBox = () => all(pf.anchor).find(e => /^box/.test(e.className)), pfB = all(pf.anchor).find(e => /^pfold/.test(e.className));
+  assert(pfB && pfB.textContent === "Esconder ▴" && !/pfolded/.test(pfBox().className), "the panel open, with Esconder");
+  await pfB.listeners.click(); await new Promise(r => setTimeout(r, 10));
+  assert(/pfolded/.test(pfBox().className) && pf.store.panelFold === true && pfB.textContent === "Mostrar ▾", "folded to its bar, kept");
+  const pfOff = await runContent("/", null, { prefs: { dash: false } }); await new Promise(r => setTimeout(r, 20));
+  assert(!all(pfOff.anchor).some(e => e.id === "cp-dash") && /\/10 · /.test(text(pfOff.header)), "panel switched off in the popup: gone, the cards keep their grades");
   const clTop = await runContent("/", null, { prefs: { cardsFirst: true } }, { classic: true }); await new Promise(r => setTimeout(r, 30));
   const topHost = clTop.cols.parent.kids.find(k => k.id === "cp-dash");
   assert(topHost && clTop.cols.parent.kids.indexOf(topHost) === clTop.cols.parent.kids.indexOf(clTop.cols) + 1, "cards first: our panel right below Canvas's cards");

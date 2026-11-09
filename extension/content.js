@@ -492,6 +492,8 @@
     .mc-i { display:grid; grid-template-columns:8px 78px minmax(0,1fr); gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--line); } .mc-i:first-of-type { border-top:0; }
     .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:12px; color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
     @container cp (max-width:620px) { .mcal { grid-template-columns:minmax(0,1fr); } }
+    .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
+    .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold { margin-left:auto; }
     .wl { display:none; }
     @container cp (max-width:760px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
@@ -805,6 +807,7 @@
   function dashPanel(a, cache, prefs, marks, rec, onMode) {
     const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
+    if (!prefs.dash) return;   // the student switched the Caderno+ panel off in the popup (the cards keep their grades)
     if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
@@ -818,12 +821,19 @@
       if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
     }
     hd.appendChild(seg);
+    // fold: the panel shrinks to this bar (kept in chrome.storage.local "panelFold") and opens again
+    const foldB = el("button", "pfold"); foldB.type = "button";
+    const setFold = async (on, save) => { box.classList ? box.classList.toggle("pfolded", on) : (box.className = box.className.replace(/ pfolded/, "") + (on ? " pfolded" : ""));
+      foldB.textContent = on ? "Mostrar ▾" : "Esconder ▴"; foldB.setAttribute("aria-expanded", String(!on)); foldB.title = on ? "Abrir o painel do Caderno+" : "Recolher o painel do Caderno+";
+      if (save) await chrome.storage.local.set({ panelFold: on }); };
+    foldB.addEventListener("click", () => setFold(!/pfolded/.test(box.className), true));
+    chrome.storage.local.get("panelFold").then(({ panelFold }) => setFold(panelFold === true, false));
     // the meta (goal) every number is computed against
     const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
     dn.type = upb.type = "button"; dn.setAttribute("aria-label", "Meta menor"); upb.setAttribute("aria-label", "Meta maior"); meta.title = "A nota que você quer em cada matéria";
     const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };   // onMode sets T before any wait, so quick clicks add up
     dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
-    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.appendChild(meta);
+    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.append(meta, foldB);
     box.append(hd);
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
