@@ -42,7 +42,9 @@
 <p><b>Antes de conectar, saiba:</b></p>
 <ul>
 <li>O que a IA consulta (notas, prazos, títulos de avisos e módulos, nomes das matérias) vai para o app de IA e, por ele, para a nuvem da empresa da IA (por exemplo, a Anthropic no Claude). Fica no histórico da conversa.</li>
+<li>A IA consulta sozinha durante a conversa, sem pedir a cada vez (as consultas só leem). Também entram os títulos das avaliações e os links do Canvas.</li>
 <li>Títulos escritos no Canvas podem ter nomes de professores ou colegas.</li>
+<li>O cofre protege o token de arquivos e de outras contas do computador, mas não de programas que rodam com o seu próprio usuário.</li>
 <li>O token do Canvas dá acesso <b>total</b> à sua conta. Quem limita a leitura é o Caderno+ MCP, não o token. Crie com validade até o fim do semestre e revogue quando parar de usar.</li>
 <li>A política de API da Instructure (dona do Canvas), item 3(i), proíbe acessar o Canvas por servidores MCP que ela não aprovou. Este não é aprovado pela Instructure nem pela PUCPR, e elas podem bloquear tokens de alunos. Use por sua conta.</li>
 </ul>
@@ -62,17 +64,8 @@
 <p>O mais fácil, sem instalar nada além do Claude: baixe o arquivo <code>caderno-mcp.mcpb</code>, abra com dois cliques e cole o token quando o Claude pedir. O Claude guarda o token no cofre do sistema e já traz o que precisa para rodar.</p>
 
 <h3>Outros apps <span class="soon">em breve</span></h3>
-<p>Precisam do <a href="https://nodejs.org/" rel="noopener noreferrer">Node.js</a> 18 ou mais novo instalado. Primeiro, guarde o token no cofre do seu sistema (o próprio sistema pede o token; ele não aparece na tela):</p>
-<pre>npx -y caderno-mcp login
-npx -y caderno-mcp status</pre>
-<p>Depois, o comando do seu app (o <code>npx -y caderno-mcp setup &lt;app&gt;</code> mostra cada um):</p>
-<ul>
-<li><b>Claude Code:</b> <code>claude mcp add caderno --scope user -- npx -y caderno-mcp</code></li>
-<li><b>ChatGPT desktop, Codex CLI e IDE:</b> <code>codex mcp add caderno -- npx -y caderno-mcp</code></li>
-<li><b>Gemini CLI:</b> <code>gemini mcp add --scope user caderno npx -y caderno-mcp</code></li>
-<li><b>Cursor, Windsurf, JetBrains, LM Studio, Cline, Roo e Perplexity (Mac):</b> no arquivo de MCP do app, dentro de <code>"mcpServers"</code>: <code>"caderno": { "command": "npx", "args": ["-y", "caderno-mcp"] }</code></li>
-<li><b>VS Code, Zed, Goose e Continue:</b> o <code>setup</code> mostra o formato de cada um.</li>
-</ul>
+<p>Precisam do <a href="https://nodejs.org/" rel="noopener noreferrer">Node.js</a> 18 ou mais novo instalado. Vão funcionar: Claude Code, ChatGPT desktop e Codex (CLI e IDE), Gemini CLI, Cursor, VS Code, Windsurf, Zed, JetBrains, LM Studio, Goose, Cline, Roo, Continue e Perplexity (Mac).</p>
+<div class="box warn"><p><b>Ainda não publicado.</b> Os comandos de cada app aparecem aqui quando o Caderno+ MCP for publicado. Até lá, não instale nenhum pacote chamado "caderno-mcp" de outro lugar: só a versão indicada nesta página é a nossa, e ela vai pedir o seu token.</p></div>
 
 <h3>Só pela web (ChatGPT web, Claude web, Gemini app, Le Chat, Grok)</h3>
 <p>Não funcionam: esses apps só falam com servidores na internet, e o Caderno+ MCP fica no seu computador de propósito, para o token não sair dele. No ChatGPT, use o app desktop.</p>
@@ -81,7 +74,7 @@ npx -y caderno-mcp status</pre>
 <p>"Quanto falta em cada matéria?", "o que vence esta semana?", "quais avisos novos?", "quais módulos tem em Banco de Dados?". Os números de "quanto falta" são os mesmos do painel do Caderno+, só com as notas do Canvas (as que você digita à mão na extensão não entram).</p>
 
 <h2>Parar</h2>
-<p><code>npx -y caderno-mcp logout</code> apaga o token do cofre. Revogue o token também no Canvas (Conta → Configurações) e remova o servidor do app. No Claude Desktop, desinstale a extensão em Configurações → Extensões.</p>
+<p>O comando <code>logout</code> do Caderno+ MCP apaga o token do cofre. Revogue o token também no Canvas (Conta → Configurações) e remova o servidor do app. No Claude Desktop, desinstale a extensão em Configurações → Extensões.</p>
 
 <p class="muted">Veja também a <a href="/privacidade">política de privacidade</a>. Código aberto: <a href="https://github.com/Bossmann007/Campus" rel="noopener noreferrer">github.com/Bossmann007/Campus</a>.</p>
 </main></body>
