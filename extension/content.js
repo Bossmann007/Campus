@@ -484,8 +484,8 @@
     .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
     .ask-b { margin-left:0 !important; color:var(--coral) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
-    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); overflow:hidden; }
-    .band-c { position:absolute; left:0; right:0; top:0; height:5px; background:var(--coral); } .htxt { flex:1; min-width:0; }
+    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
+    .band-c { position:absolute; left:0; right:0; top:0; height:4px; background:var(--coral); } .htxt { flex:1; min-width:0; }
     .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 21px/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .hs { margin-top:3px; color:var(--muted); font-size:12.5px; } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
     .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:12px; background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
