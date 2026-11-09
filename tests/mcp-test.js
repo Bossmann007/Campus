@@ -91,14 +91,28 @@ let n = 0; const ok = () => n++;
   ok();
 
   // vaults: each system's own store; the token never on a command line
-  const mac = vault.commands("darwin"), win = vault.commands("win32"), lin = vault.commands("linux");
+  const mac = vault.commands("darwin"), win = vault.commands("win32"), lin = vault.commands("linux", () => vault.SECRET_TOOL);
+  { // Linux: secret-tool by absolute path; fallback only to an absolute PATH folder that is not the current one, with a warning
+    const warns = [], has = set => p => set.includes(p);
+    assert.strictEqual(vault.findSecretTool({ exists: has(["/usr/bin/secret-tool"]), env: { PATH: ".:/home/a/repo" }, cwd: "/home/a/repo", warn: m => warns.push(m) }), "/usr/bin/secret-tool", "the usual place first");
+    assert.strictEqual(warns.length, 0, "no warning for the usual place");
+    assert.strictEqual(vault.findSecretTool({ exists: has(["/home/a/repo/secret-tool", "secret-tool", "bin/secret-tool", "/opt/st/bin/secret-tool"]), env: { PATH: ".:bin:/home/a/repo:/opt/st/bin" }, cwd: "/home/a/repo", warn: m => warns.push(m) }), "/opt/st/bin/secret-tool", "skips '.', relative entries and the current folder");
+    assert(warns.length === 1 && /usando \/opt\/st\/bin\/secret-tool/.test(warns[0]), "warns when it falls back");
+    assert.strictEqual(vault.findSecretTool({ exists: has(["/home/a/repo/secret-tool"]), env: { PATH: ".:/home/a/repo" }, cwd: "/home/a/repo", warn: () => {} }), null, "only one in the current folder: none");
+    assert.strictEqual(vault.commands("linux", () => null), null, "no secret-tool: no commands");
+    const ranNone = []; const r0 = await vault.readToken({ env: {}, platform: "linux", find: () => null, run: async c => { ranNone.push(c); return TOKEN; } });
+    assert(r0.token === null && /libsecret/.test(r0.from) && !ranNone.length, "no secret-tool: nothing runs, says what to install");
+    assert.strictEqual(await vault.writeToken({ platform: "linux", find: () => null, run: async () => true }), false, "login refuses without secret-tool");
+    const ran = []; await vault.readToken({ env: {}, platform: "linux", find: () => "/usr/bin/secret-tool", run: async c => { ran.push(c); return null; } });
+    assert.deepStrictEqual(ran, ["/usr/bin/secret-tool"], "runs by absolute path"); }
   assert(mac.write[0] === "/usr/bin/security" && mac.write[1][mac.write[1].length - 1] === "-w" && mac.read[1].includes("caderno-plus-canvas"), "macOS: Keychain, security prompts for the value");
   assert(/\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe$/.test(win.write[0]) && /^[A-Za-z]:\\/.test(win.write[0]) && /Read-Host -AsSecureString/.test(win.write[1].join(" ")) && /ConvertFrom-SecureString/.test(win.write[1].join(" ")) && /ConvertTo-SecureString/.test(win.read[1].join(" ")), "Windows: DPAPI through PowerShell's own prompt");
-  assert(lin.write[0] === "secret-tool" && lin.write[1][0] === "store" && lin.read[1][0] === "lookup", "Linux: Secret Service");
+  assert(lin.write[0] === "/usr/bin/secret-tool" && lin.write[1][0] === "store" && lin.read[1][0] === "lookup", "Linux: Secret Service by absolute path");
+  for (const c of [mac, win, lin]) for (const k of ["read", "write", "remove"]) assert(require("path").isAbsolute(c[k][0]) || /^[A-Za-z]:\\/.test(c[k][0]), "every vault program by absolute path: " + c[k][0]);
   for (const c of [mac, win, lin]) for (const k of ["read", "write", "remove"]) assert(!c[k][1].join(" ").includes(TOKEN), "no token in argv");
   const seenArgs = [];
   assert.strictEqual((await vault.readToken({ env: {}, platform: "darwin", run: async (cmd, args) => { seenArgs.push(cmd); return TOKEN + "\n"; } })).token, TOKEN, "read from the Keychain");
-  assert.strictEqual((await vault.readToken({ env: {}, platform: "linux", run: async () => null })).token, null, "nothing saved: null");
+  assert.strictEqual((await vault.readToken({ env: {}, platform: "linux", find: () => vault.SECRET_TOOL, run: async () => null })).token, null, "nothing saved: null");
   assert.strictEqual((await vault.readToken({ env: {}, platform: "darwin", run: async () => "not a token\n" })).token, null, "junk is not a token");
   assert.strictEqual((await vault.readToken({ env: { CANVAS_TOKEN_FILE: "/x" }, readFile: () => TOKEN + "\n", run: async () => { throw new Error("no"); } })).token, TOKEN, "OpenBot's vault file first");
   assert.strictEqual((await vault.readToken({ env: { CADERNO_MCPB_TOKEN: TOKEN }, run: async () => null })).token, TOKEN, "Claude Desktop's bundle field");
