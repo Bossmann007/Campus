@@ -102,6 +102,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     // Canvas's own card layout (262px cards in .ic-DashboardCard__box__container, canvas-lms dashboard_card.scss) is kept;
     // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
     out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:96px; } .ic-DashboardCard__header-term { display:none !important; }   /* the term repeats on every card */
+:root.cp-has-panel #DashboardCard_Container { padding-top:28px; }   /* its cards' row has a negative top margin: keep it off our panel */
 :root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 298px - 24px); margin-left:auto !important; margin-right:auto !important; }`);
     if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; height:72px !important; } .ic-DashboardCard__header_hero { opacity:1 !important; height:72px !important; }`);
     if (L) {
@@ -164,8 +165,8 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
   style.id = "cp-theme"; look.id = "cp-look";
   style.textContent = `html.cp-dark { background:#fff !important; filter:${BACK} contrast(.9); }
 html.cp-dark.cp-dim { filter:${BACK} contrast(.78) brightness(1.08); }
-html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .mobile-header, #mobile-header, .ic-DashboardCard__header_hero, [style*="background-image"]) { filter:${BACK}; }
-html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .cp-host, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) :is(img, video, picture, canvas, [style*="background-image"], .ic-DashboardCard__header_hero) { filter:none; }`;
+html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-header, .mobile-header, #mobile-header, .ic-DashboardCard__header_hero, [style*="background-image"]) { filter:${BACK}; }
+html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) :is(img, video, picture, canvas, [style*="background-image"], .ic-DashboardCard__header_hero) { filter:none; }`;
   (document.head || document.documentElement).append(style, look);
   const dark = matchMedia("(prefers-color-scheme: dark)");
   let p = cpPrefs(null);

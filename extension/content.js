@@ -328,8 +328,6 @@
       --paper:var(--cp-paper,#FBF7EF); --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
-    :host-context(html.cp-dark) { --fg:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --bg:#1B2130; --soft:#222938; --ring:#F0603F; --coral:#F0603F; --tile:#F3EDE1; --tile-c:#1D2433; --band1:#3B2220; --band2:#2A2129;
-      --paper:#141925; --track:#2A3242; --ok:#6CC59A; --warn:#E6B15C; --bad:#FF876C; --ok-s:#24493A; --warn-s:#4A3B22; --bad-s:#5A2E29; --lift:0 8px 20px -12px rgba(0,0,0,.6); }
     .box { position:relative; container:cp / inline-size; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
     .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
@@ -471,6 +469,7 @@
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
     .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
     .av img { width:100%; height:100%; object-fit:cover; display:block; }
+    :host-context(html.cp-dark) :is(img, .band-c) { filter:invert(1) hue-rotate(180deg); }   /* the panel darkens with the page (same inversion); photos and the course color stay true */
     .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .news .row > .d:first-child { min-width:96px; } .d.lt { color:var(--bad); font-weight:600; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
     .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
@@ -504,10 +503,7 @@
     .wl { display:none; }
     @container cp (max-width:760px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
-    :host-context(html.cp-dark) .ok { background:#173229; color:#8FD8B3; } :host-context(html.cp-dark) .warn { background:#33291A; color:#F0C67E; }
-    :host-context(html.cp-dark) .bad { background:#3A1F1D; color:#FFA28C; }
-    :host-context(html.cp-dark) .ev.ok { background:#173229; color:#8FD8B3; border-color:#25493A; } :host-context(html.cp-dark) .ev.wa { background:#33291A; color:#F0C67E; border-color:#4A3B22; }
-    :host-context(html.cp-dark) .ev.bd { background:#3A1F1D; color:#FFA28C; border-color:#5A2E29; } :host-context(html.cp-dark) .ev.ex { color:#1B1210; } :host-context(html.cp-dark) .trk i.ok { background:var(--ok); }`;
+    `;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const mark = () => { const m = el("span", "mk"); m.setAttribute("aria-hidden", "true"); return m; };   // the logo tile, drawn in CSS
   const wordmark = () => { const b = el("b", null, "Caderno"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Caderno+"); return b; };
