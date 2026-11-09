@@ -34,8 +34,7 @@ token no cofre do sistema e passa ao servidor quando abre.
 
 ## Instalar pelo terminal (Claude Code, Codex, Gemini CLI, Cursor, VS Code)
 
-1. Node 18 ou mais novo, e `npm install -g https://github.com/Bossmann007/Campus/releases/download/mcp-v1.0.1/caderno-mcp-1.0.1.tgz` (o pacote da release no
-   GitHub do projeto).
+1. Node 18 ou mais novo, e `npm install -g caderno-mcp` (o pacote do npm publicado por `bossmann`).
 2. No Canvas: Conta → Configurações → **+ Novo token de acesso**. Finalidade "Caderno+ MCP", expira no fim do semestre.
 3. `caderno-mcp login` e cole o token quando o cofre pedir (macOS: Keychain; Windows: DPAPI do seu usuário;
    Linux: Secret Service via `secret-tool`). O token não aparece na tela, nem no histórico, nem em arquivo de config.
@@ -61,9 +60,8 @@ O token fica no cofre do sistema para não aparecer em arquivo de texto, na tela
 fica protegido de outros programas que rodam com o seu usuário: no Mac, por exemplo, um programa seu pode pedir o item
 ao Keychain. Use um token com validade até o fim do semestre e revogue no Canvas quando parar de usar.
 
-Instale só pelos arquivos da release no GitHub do projeto (github.com/Bossmann007/Campus): o `.mcpb` e o `.tgz`. Se
-instalar pelo npm, confira antes que o pacote `caderno-mcp` é o publicado por `bossmann`. Não instale cópias com nome
-parecido: o programa vai pedir o seu token.
+Instale só o pacote `caderno-mcp` do npm (publicado por `bossmann`) ou o `.mcpb` da release no GitHub do projeto
+(github.com/Bossmann007/Campus). Não instale cópias com nome parecido: o programa vai pedir o seu token.
 
 ## Ferramentas
 
