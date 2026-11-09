@@ -544,7 +544,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
     await all(ck()).find(e => /^Apagar: /.test(e["aria-label"] || (e.getAttribute && e.getAttribute("aria-label")) || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
     assert.deepStrictEqual(np.store.checks[5], {}, "deleted: removed");
     const ins = all(cf()).filter(e => e.tag === "input"); ins[0].value = "lista 4"; ins[1].value = isoIn(2); await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
-    assert(np.store.checks[5][71306][0].date === isoIn(2) && !ins[1].value, "a day goes with the item"); }
+    assert(np.store.checks[5][71306][0].date === isoIn(2) && !ins[1].value, "a day goes with the item");
+    const r2 = np.sent.filter(m => m.type === "remind").pop();
+    assert(r2 && r2.items.some(i => i.title === "Lembrete: lista 4"), "a dated item on the course page gets its reminder at once"); }
   await tabB("Materiais").listeners.click(); await new Promise(r => setTimeout(r, 20));
   assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened");
   np.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 5));
@@ -558,6 +560,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(dsh.store.checks[5].painel[0].done === true && !dsh.store.marks, "ticked in the week: done in the checklist itself");
     const nbtn = all(dsh.header).concat(all(dsh.anchor)).find(e => e.textContent === "Anotações" && e.tag === "button");
     assert(nbtn, "Anotações in the bar");
+    const rem = dsh.sent.filter(m => m.type === "remind").pop();
+    assert(rem && rem.items.some(i => i.title === "Lembrete: refazer lista") && !rem.items.some(i => /^Entrega: (refazer lista|imprimir resumo)/.test(i.title)), "the student's own items remind as Lembrete, not Entrega");
+    dsh.winListeners.keydown({ key: "˜", code: "KeyN", altKey: true, target: { tagName: "TEXTAREA" }, preventDefault() { throw new Error("typing was blocked"); }, stopPropagation() {} }); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.notesOpen === undefined, "Alt+N inside a field is the student's typing (Option+N is the tilde on a Mac)");
     dsh.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 20));
     assert(dsh.store.notesOpen === true && nbtn["aria-pressed"] === "true", "Alt+N opens the column (kept open)");
     await nbtn.listeners.click(); await new Promise(r => setTimeout(r, 20));

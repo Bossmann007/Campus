@@ -58,7 +58,7 @@ $("refresh").addEventListener("click", async () => {
   $("status").textContent = "Atualiza ao abrir ou recarregar uma página do Canvas.";
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
-const KEEP = ["hand", "marks", "tasks", "notes", "hidden", "prefs", "fold"];
+const KEEP = ["hand", "marks", "tasks", "notes", "checks", "hidden", "prefs", "fold"];
 $("export").addEventListener("click", async () => {
   const got = await chrome.storage.local.get(KEEP), body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = "caderno-plus-backup.json"; a.click();
@@ -81,6 +81,7 @@ $("importFile").addEventListener("change", async () => {
   const str = (v, n) => typeof v === "string" && v.length <= n, iso = v => typeof v === "string" && /^\d{4}-\d\d-\d\d$/.test(v), obj = v => v && typeof v === "object" && !Array.isArray(v);
   const keepIf = (m, ok) => obj(m) ? Object.fromEntries(Object.entries(m).filter(([k, v]) => str(k, 60) && ok(v))) : {};
   const per = { hand: u => keepIf(u, v => str(v, 12)), marks: u => keepIf(u, iso), notes: u => keepIf(u, v => str(v, 5000)),
+    checks: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, l]) => /^(\d{1,15}|painel)$/.test(k) && Array.isArray(l)).map(([k, l]) => [k, l.filter(x => x && str(x.id, 40) && str(x.t, 200) && (x.date === undefined || iso(x.date))).slice(0, 50).map(x => Object.assign({ id: x.id, t: x.t, done: x.done === true }, x.date ? { date: x.date } : {}))])) : {},
     tasks: u => Array.isArray(u) ? u.filter(t => t && str(t.id, 40) && str(t.title, 140) && (t.date === null || iso(t.date))).slice(0, 100).map(t => ({ id: t.id, title: t.title, date: t.date })) : [] };
   const cur = await chrome.storage.local.get(KEEP), out = {};
   for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, per[k](v)])));

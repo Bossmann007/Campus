@@ -184,9 +184,22 @@
       edit(l => l.concat(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t, done: false }, date ? { date } : {}))); });
     cin.addEventListener("input", () => { typed = Date.now(); });   // no redraw under the student's typing
     loadChecks(cache.user).then(draw);
-    if (chrome.storage.onChanged) chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.checks && ul.isConnected !== false) loadChecks(cache.user).then(draw); });   // ticked in the week or another tab
+    watchStore(ch => {   // ticked in the week, or changed in another tab
+      if (gone(ul)) return false;
+      if (ch.checks) loadChecks(cache.user).then(draw);
+      const v = ch.notes && ch.notes.newValue && ch.notes.newValue[cache.user] && ch.notes.newValue[cache.user][key];
+      if (ch.notes && Date.now() - typed > 3000 && (ta.getRootNode ? ta.getRootNode().activeElement !== ta : true)) ta.value = typeof v === "string" ? v : "";   // never under the student's typing
+    });
     return { nodes: [pad, chk], ta, busy: () => Date.now() - typed < 30000 };
   }
+  // One chrome.storage listener per page for the blocks drawn on it; a block that left the page returns false and is dropped.
+  const onStore = new Set(); let storeHooked = false;
+  function watchStore(f) {
+    onStore.add(f);
+    if (storeHooked || !chrome.storage.onChanged) return; storeHooked = true;
+    chrome.storage.onChanged.addListener((ch, area) => { if (area === "local") for (const g of [...onStore]) if (g(ch) === false) onStore.delete(g); });
+  }
+  const gone = n => n.isConnected === false;
   async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
   async function saveTasks(user, list) {
     const { tasks } = await chrome.storage.local.get("tasks"), all = tasks && typeof tasks === "object" ? tasks : {};
@@ -326,7 +339,7 @@
     if ((prefs.remind || prefs.summary) && !cache.planner) return;
     const t = today(), end = addDays(14);
     const items = prefs.remind || prefs.summary ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
-      .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
+      .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : x.own ? "Lembrete: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
     chrome.runtime.sendMessage({ type: "remind", items, alarms: prefs.remind }).catch(() => {});   // the Monday summary reads the list too
   }
 
@@ -618,7 +631,7 @@
     let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
     for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
     const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";
-    const root = host.attachShadow({ mode: "open" }), wrap = el("div", "box head");
+    const root = host.attachShadow({ mode: "closed" }), wrap = el("div", "box head");
     styleRoot(root); wrap.appendChild(hd); root.append(wrap); at.prepend(host);
     return true;
   }
@@ -633,7 +646,7 @@
     const anchor = document.getElementById("content");
     if (document.getElementById(id) || !anchor) return null;
     const host = el("div", "cp-host"); host.id = id;
-    const root = host.attachShadow({ mode: "open" }), box = el("div", "box");
+    const root = host.attachShadow({ mode: "closed" }), box = el("div", "box");
     styleRoot(root); root.append(box); anchor.prepend(host);
     return box;
   }
@@ -939,12 +952,12 @@
     if (host) return;
     const cols = document.getElementById("DashboardCard_Container");
     host = el("div", "cp-host cp-noteshost"); host.id = "cp-notes";
-    const root = host.attachShadow({ mode: "open" }), box = el("div", "box side"), h = el("div", "side-h"), close = el("button", "mini", "Fechar ×");
+    const root = host.attachShadow({ mode: "closed" }), box = el("div", "box side"), h = el("div", "side-h"), close = el("button", "mini", "Fechar ×");
     close.type = "button"; close.setAttribute("aria-label", "Fechar as anotações"); close.addEventListener("click", () => toggleNotes(false));
     h.append(el("b", null, "Anotações"), close);
     const nb = notesBlock(cache, "painel", null, () => window.cpRedraw && window.cpRedraw());
     box.append(h, ...nb.nodes); styleRoot(root); root.append(box);
-    host.cpBusy = nb.busy;
+    host.cpBusy = nb.busy; host.cpFocus = () => nb.ta.focus && nb.ta.focus();
     if (cols && cols.parentNode) { host.style.cssText = "float:right;width:300px;max-width:32%;margin:28px 0 12px 18px;position:relative;z-index:1"; cols.parentNode.insertBefore(host, cols); }
     else { const c = document.getElementById("content"); if (!c) return; c.prepend(host); }
     fit();
@@ -952,10 +965,10 @@
   let notesCache = null;
   async function toggleNotes(on) {
     const open = on != null ? on : !document.getElementById("cp-notes");
-    await chrome.storage.local.set({ notesOpen: open });
-    if (notesCache) notesSide(notesCache, open);
+    if (notesCache) notesSide(notesCache, open);   // the page first, so a second quick click sees the new state
     const b = window.cpNotesBtn; if (b) b.setAttribute("aria-pressed", String(open));
-    if (open) { const h = document.getElementById("cp-notes"), ta = h && h.shadowRoot && h.shadowRoot.querySelector("textarea"); if (ta && on == null) ta.focus(); }
+    const h = document.getElementById("cp-notes"); if (open && on == null && h && h.cpFocus) h.cpFocus();
+    await chrome.storage.local.set({ notesOpen: open });
   }
   function dashPanel(a, cache, prefs, marks, rec, onMode) {
     const mode = prefs.mode, clean = mode === "limpo";
@@ -1154,7 +1167,8 @@
       });
       simActs.append(sb, note, save);
     }
-    const nb = notesBlock(cache, courseId, () => { if (btns.anot) btns.anot.textContent = "Anotações ✓"; });
+    const resend = async () => sendReminders(agenda(a, cache, await myMarks(cache.user)), prefs, cache);   // a tick or a dated item here changes the reminders
+    const nb = notesBlock(cache, courseId, () => { if (btns.anot) btns.anot.textContent = "Anotações ✓"; }, resend);
     const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || nb.busy();
     acts.appendChild(status);
     // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
@@ -1181,7 +1195,7 @@
     panes.avisos.appendChild(courseNews(cache, courseId));
     if (EXT) panes.anot.append(...nb.nodes);
     box.append(bar, ...tabs.map(([k]) => panes[k]));
-    if (EXT && host) host.cpOpenNotes = () => show("anot", true);
+    if (EXT && host) host.cpOpenNotes = () => { show("anot", true); if (nb.ta.scrollIntoView) nb.ta.scrollIntoView({ block: "center" }); };
     if (EXT && location.hash === "#anot") show("anot"); else chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
 
   }
@@ -1199,7 +1213,7 @@
   // Visão geral: a mini calendar of the month (a dot on each day with something: coral for exams, amber for work, green when
   // done; today ringed); clicking a day lists it on the right, which otherwise shows what comes next. Canvas deadlines of
   // this course plus every assessment of the Plano de Ensino.
-  function miniCal(courseId, c, a, cache) {
+  function miniCal(courseId, c, a, cache, prefs) {
     const t = today();
     let marks = {}, items = [];
     const build = () => {
@@ -1224,7 +1238,7 @@
         if (!x.exam && !x.done && cache.user) {
           ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(!!x.mine));
           ck.setAttribute("aria-label", (x.mine ? "Desmarcar: " : "Marcar como feito: ") + name); ck.title = x.mine ? "Desmarcar" : "Marcar como feito (só aqui, o Canvas não muda)";
-          ck.addEventListener("click", async () => { marks = await tick(cache.user, x, !x.mine); build(); draw(); });
+          ck.addEventListener("click", async () => { marks = await tick(cache.user, x, !x.mine); build(); draw(); if (prefs) sendReminders(agenda(a, cache, marks), prefs, cache); });
         }
         r.append(el("i"), when, link(name, x.url), ck); right.appendChild(r); }
     };
@@ -1246,10 +1260,11 @@
     const shift = n => { const [y, m] = cur.split("-").map(Number), d = new Date(y, m - 1 + n, 1); cur = C.localISO(d).slice(0, 7); pick = null; draw(); };
     prev.addEventListener("click", () => shift(-1)); next.addEventListener("click", () => shift(1));
     draw(); if (cache.user) myMarks(cache.user).then(m => { marks = m; build(); draw(); });
+    watchStore(ch => { if (gone(sec)) return false; if (ch.checks) loadChecks(cache.user).then(() => { build(); draw(); }); });   // a dated item added in Anotações shows here at once
     return sec;
   }
   function overview(courseId, c, a, cache, prefs) {
-    const out = [miniCal(courseId, c, a, cache)];
+    const out = [miniCal(courseId, c, a, cache, prefs)];
     const last = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
     if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
       li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
@@ -1375,7 +1390,7 @@
     if (cur) { cur.remove(); return; }   // the shortcut again closes it
     const host = el("div", "cp-host"); host.id = "cp-search";
     host.style.cssText = "position:fixed;inset:0;z-index:10000;margin:0";
-    const root = host.attachShadow({ mode: "open" }), back = el("div", "pal-back"), dlg = el("div", "pal");
+    const root = host.attachShadow({ mode: "closed" }), back = el("div", "pal-back"), dlg = el("div", "pal");
     styleRoot(root);
     dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true"); dlg.setAttribute("aria-label", "Buscar no Canvas");
     const q = el("input", "pal-q"); q.type = "text"; q.autocomplete = "off"; q.placeholder = "Buscar tarefas, módulos e matérias…"; q.setAttribute("aria-label", "Buscar");
@@ -1658,7 +1673,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     if (document.getElementById("cp-scroll") || !de || typeof window.innerHeight !== "number" || !window.scrollTo) return;
     const host = el("div", "cp-host"); host.id = "cp-scroll";
     host.style.cssText = "position:fixed;right:18px;bottom:76px;z-index:9998;margin:0;display:none";
-    const root = host.attachShadow({ mode: "open" }), style = el("style");
+    const root = host.attachShadow({ mode: "closed" }), style = el("style");
     style.textContent = `button { display:block; width:34px; height:34px; margin-top:6px; border-radius:50%; border:1px solid #ECE4D3; background:#FBF7EF; color:#1D2433; font:600 15px/1 -apple-system,BlinkMacSystemFont,sans-serif;
       cursor:pointer; box-shadow:0 6px 16px -8px rgba(29,36,51,.5); opacity:.85; } button:hover { opacity:1; } button:focus-visible { outline:2px solid #E2482B; outline-offset:2px; }`;
     const go = (txt, label, top) => { const b = el("button", null, txt); b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
@@ -1696,8 +1711,10 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     if (!window.cpKeys) { window.cpKeys = 1; addEventListener("keydown", e => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { if (window.cpSearch) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); } return; }
       if (!EXT || !e.altKey || e.ctrlKey || e.metaKey || e.code !== "KeyN") return;
+      const tg = e.composedPath ? e.composedPath()[0] : e.target;
+      if (tg && (/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || "") || tg.isContentEditable)) return;   // typing (Option+N is the tilde on a Mac): never ours
       const cp = document.getElementById("qf-panel");
-      if (cp && cp.cpOpenNotes) { e.preventDefault(); cp.cpOpenNotes(); const sh = cp.shadowRoot, t = sh && sh.querySelector("textarea"); if (t && t.scrollIntoView) t.scrollIntoView({ block: "center" }); }
+      if (cp && cp.cpOpenNotes) { e.preventDefault(); cp.cpOpenNotes(); }
       else if (notesCache && /^\/(dashboard)?\/?$/.test(location.pathname)) { e.preventDefault(); toggleNotes(); }
     }, true); }
     if (/^\/calendar\/?$/.test(location.pathname) && prefs.calendar) calendarPage(a, cache, prefs, marks);

@@ -1,7 +1,7 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "3.8.1",
+  version: "3.8.2",
   items: [
     "Fundo do Canvas com a cor do tema, ou a sua cor, e desenhos: pautado, quadriculado, pontilhado e aurora",
     "Modo escuro que mantém a cor do tema",

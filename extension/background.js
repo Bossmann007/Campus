@@ -56,8 +56,8 @@ async function summary(alarm) {
   const { upcoming = [], prefs, shown = {} } = await chrome.storage.local.get(["upcoming", "prefs", "shown"]);
   if (!cpPrefs(prefs).summary || Date.now() - alarm.scheduledTime > 12 * 36e5) return;
   const t = localISO(new Date()), end = localISO(new Date(Date.now() + 6 * 864e5)), wk = upcoming.filter(x => x.date >= t && x.date <= end);
-  const exams = wk.filter(x => /^Prova: /.test(x.title)), tasks = wk.length - exams.length, WD = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-  const parts = [tasks ? tasks + (tasks === 1 ? " entrega" : " entregas") : "", exams.length ? exams.length + (exams.length === 1 ? " prova" : " provas") : ""].filter(Boolean);
+  const exams = wk.filter(x => /^Prova: /.test(x.title)), own = wk.filter(x => /^Lembrete: /.test(x.title)).length, tasks = wk.length - exams.length - own, WD = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  const parts = [tasks ? tasks + (tasks === 1 ? " entrega" : " entregas") : "", exams.length ? exams.length + (exams.length === 1 ? " prova" : " provas") : "", own ? own + (own === 1 ? " lembrete" : " lembretes") : ""].filter(Boolean);
   const id = "w|" + Date.now(), keep = Object.entries(shown).slice(-30); keep.push([id, CANVAS + "/"]);
   await chrome.storage.local.set({ shown: Object.fromEntries(keep) });
   chrome.notifications.create(id, { type: "basic", iconUrl: "icons/icon128.png", title: "Sua semana: " + (parts.join(" e ") || "nada marcado"),
