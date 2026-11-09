@@ -123,13 +123,13 @@ function makeCanvas(token, opts = {}) {
   return { tools, whoami };
 }
 
-const TOOL_DEFS = [
-  { name: "quanto_falta", description: "Quanto falta em cada matéria do Caderno+ para chegar na meta (regras do Plano de Ensino da turma, notas do Canvas).", inputSchema: { type: "object", properties: { meta: { type: "number", minimum: 5, maximum: 10, description: "Meta de 5 a 10 (padrão 7)" } } } },
-  { name: "upcoming", description: "Entregas, provas e eventos do Canvas de 7 dias atrás até os próximos dias.", inputSchema: { type: "object", properties: { days: { type: "integer", minimum: 1, maximum: 30 } } } },
-  { name: "grades", description: "Notas lançadas no Canvas por avaliação (todas as matérias do semestre, ou uma).", inputSchema: { type: "object", properties: { course_id: { type: "string", pattern: "^\\d{1,15}$" } } } },
+const TOOL_DEFS = [   // the plain subset every client accepts (type, description, properties, required); limits are checked here
+  { name: "quanto_falta", description: "Quanto falta em cada matéria do Caderno+ para chegar na meta (regras do Plano de Ensino da turma, notas do Canvas).", inputSchema: { type: "object", properties: { meta: { type: "number", description: "Meta de 5 a 10 (padrão 7)" } } } },
+  { name: "upcoming", description: "Entregas, provas e eventos do Canvas de 7 dias atrás até os próximos dias.", inputSchema: { type: "object", properties: { days: { type: "integer", description: "Quantos dias à frente, de 1 a 30 (padrão 15)" } } } },
+  { name: "grades", description: "Notas lançadas no Canvas por avaliação (todas as matérias do semestre, ou uma). Prefira passar course_id.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" } } } },
   { name: "courses", description: "Matérias ativas do semestre no Canvas, com o course_id.", inputSchema: { type: "object", properties: {} } },
-  { name: "announcements", description: "Avisos recentes dos professores (título, matéria, data, se foi lido). Sem autor nem texto.", inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 10 } } } },
-  { name: "modules", description: "Módulos de uma matéria e os títulos dos itens, com links do Canvas.", inputSchema: { type: "object", properties: { course_id: { type: "string", pattern: "^\\d{1,15}$" } }, required: ["course_id"] } },
+  { name: "announcements", description: "Avisos recentes dos professores (título, matéria, data, se foi lido). Sem autor nem texto.", inputSchema: { type: "object", properties: { limit: { type: "integer", description: "Quantos avisos, de 1 a 10 (padrão 10)" } } } },
+  { name: "modules", description: "Módulos de uma matéria e os títulos dos itens, com links do Canvas.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" } }, required: ["course_id"] } },
 ].map(t => Object.assign(t, { annotations: { readOnlyHint: true, openWorldHint: false } }));
 
 module.exports = { BASE, ALLOW, checkUrl, guardedFetch, makeCanvas, TOOL_DEFS, clean, panelLabel };

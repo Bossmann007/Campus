@@ -77,6 +77,9 @@ let n = 0; const ok = () => n++;
   assert.strictEqual(await h({ jsonrpc: "2.0", method: "notifications/initialized" }), null, "notifications get no reply");
   const list = await h({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   assert(list.result.tools.length === 6 && list.result.tools.every(t => t.annotations.readOnlyHint === true), "six tools, all read-only");
+  { // every AI client: names of letters and _ (≤ 64), schemas in the plain subset (OpenAI, Gemini and the rest accept it)
+    const keys = new Set(["type", "description", "properties", "required"]), walk = (sch, at) => { for (const k of Object.keys(sch)) assert(keys.has(k), "schema keyword " + k + " in " + at); for (const [n, v] of Object.entries(sch.properties || {})) walk(v, at + "." + n); };
+    for (const t of list.result.tools) { assert(/^[a-z_]{1,64}$/.test(t.name), "tool name " + t.name); assert(t.inputSchema.type === "object" && typeof t.inputSchema.properties === "object", "object schema " + t.name); walk(t.inputSchema, t.name); for (const v of Object.values(t.inputSchema.properties)) assert(["string", "number", "integer"].includes(v.type), "plain type in " + t.name); } }
   const call = await h({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "quanto_falta", arguments: {} } });
   assert(!call.result.isError && JSON.parse(call.result.content[0].text).subjects.length >= 5, "tools/call");
   const bad = makeHandler(async () => ({ tools: { courses: async () => { throw new Error("falhou com Bearer " + TOKEN + " e " + TOKEN); } } }), scrubber(TOKEN));
@@ -130,5 +133,17 @@ let n = 0; const ok = () => n++;
     assert(rep.id === 1 && rep.result.isError && /login/.test(rep.result.content[0].text) && run.status === 0, "stdio: the reply is written before the server leaves");
     fs.rmSync(tmp, { recursive: true, force: true }); ok(); }
 
-  console.log("mcp ok: " + n + " groups (read-only allowlist, tools and untrusted text, panel numbers, MCP server, vaults, standalone package and stdio)");
+  { // setup: every app gets its own way in, with node and the server by absolute path; nothing is written to any app
+    const cli = require("../mcp/cli.js"), out = cli.setup(), srv = path.join(__dirname, "..", "mcp", "server.js");
+    for (const [k, [name, f]] of Object.entries(cli.APPS)) { const t = f(); assert(t.includes(k === "openbot" ? "CANVAS_TOKEN_FILE" : srv), "setup " + k + " names the server"); assert(out.includes(name), "listed: " + name); }
+    for (const k of ["claude-desktop", "cursor", "windsurf", "zed"]) { const t = cli.APPS[k][1](), j = JSON.parse(t.slice(t.indexOf("{"))); const e = j.mcpServers ? j.mcpServers.caderno : j.caderno; assert(path.isAbsolute(e.command) && e.args[0] === srv, k + ": JSON parses, node by absolute path"); }
+    const vs = JSON.parse(/'(.+)'/.exec(cli.APPS.vscode[1]())[1]); assert(vs.name === "caderno" && vs.type === "stdio", "VS Code --add-mcp JSON");
+    assert(/ChatGPT web/.test(out) && /Secure MCP Tunnel/.test(out), "says what web-only apps need");
+    assert(/desconhecido/.test(cli.setup("nope")) && cli.setup("codex").startsWith("Codex"), "one app, or the list of names");
+    const fakeFs = { realpathSync: p => ({ "/opt/homebrew/Cellar/node/26/bin/node": "/C/node", "/opt/homebrew/bin/node": "/C/node", "/usr/bin/node": "/U/node" })[p] || (() => { throw new Error("no"); })() };
+    assert.strictEqual(cli.stableNode("/opt/homebrew/Cellar/node/26/bin/node", { PATH: "/usr/bin:/opt/homebrew/bin" }, fakeFs), "/opt/homebrew/bin/node", "node: the PATH link to the same binary, not the Cellar folder");
+    assert.strictEqual(cli.stableNode("/x/node", { PATH: "/usr/bin" }, fakeFs), "/x/node", "no link: the running node");
+    ok(); }
+
+  console.log("mcp ok: " + n + " groups (read-only allowlist, tools and untrusted text, panel numbers, MCP server, vaults, standalone package and stdio, setup for every app)");
 })().catch(e => { console.error(e); process.exit(1); });
