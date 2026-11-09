@@ -40,6 +40,6 @@ function go(n) {
   const h = steps[at].querySelector("h1"); if (h) { h.tabIndex = -1; h.focus(); }
 }
 $("back").addEventListener("click", () => go(at - 1));
-$("next").addEventListener("click", async () => { if (at === steps.length - 2) await chrome.storage.local.set({ onboarded: Date.now() }); go(at + 1); });
-$("openCanvas").addEventListener("click", async () => { await chrome.storage.local.set({ onboarded: Date.now() }); location.href = "https://pucpr.instructure.com/"; });
+$("next").addEventListener("click", () => go(at + 1));
+$("openCanvas").addEventListener("click", () => { location.href = "https://pucpr.instructure.com/"; });
 go(0);

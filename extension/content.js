@@ -200,9 +200,9 @@
     // a match alone is not proof: the student confirms the turma (onboarding or the question on the dashboard). Without an
     // answer, three or more matching courses count as the turma; fewer ask first.
     const matched = C.COURSES.filter(c => courseOf[c.id]), turma = matched.length ? C.turmaOf(matched[0]) : null;
-    const confirmed = TURMA_PREF === turma, other = TURMA_PREF === "outro" || (TURMA_PREF && TURMA_PREF !== turma);
+    const confirmed = !!TURMA_PREF && matched.some(c => C.turmaOf(c) === TURMA_PREF), other = TURMA_PREF === "outro" || (!!TURMA_PREF && !confirmed);
     const askTurma = matched.length > 0 && !confirmed && !other && matched.length < 3;
-    const mine = confirmed || (!other && !askTurma) ? matched : [], expired = C.expired(t), rules = mine.length > 0 && !expired;
+    const mine = confirmed ? matched.filter(c => C.turmaOf(c) === TURMA_PREF) : !other && !askTurma ? matched : [], expired = C.expired(t), rules = mine.length > 0 && !expired;
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
     const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
@@ -814,7 +814,7 @@
   function dashPanel(a, cache, prefs, marks, rec, onMode) {
     const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
-    if (!prefs.dash) return;   // the student switched the Caderno+ panel off in the popup (the cards keep their grades)
+    if (!prefs.dash && !a.askTurma) return;   // the student switched the Caderno+ panel off in the popup (the cards keep their grades); the turma question still shows
     if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
@@ -849,6 +849,7 @@
       const answer = async v => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { turma: v }) }); location.reload(); };
       yes.type = no.type = "button"; yes.addEventListener("click", () => answer(a.turma)); no.addEventListener("click", () => answer("outro"));
     }
+    if (!prefs.dash) return;   // panel switched off: only the turma question
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
     if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
@@ -1158,6 +1159,8 @@
       status.textContent = all.length + (all.length === 1 ? " arquivo" : " arquivos") + ", " + fresh.length + (fresh.length === 1 ? " novo" : " novos") + " · vão para Downloads/" + root;
       const btns = [];
       const save = async items => {
+        const now = cpFolder(cpPrefs((await chrome.storage.local.get("prefs")).prefs).dlFolder);   // the folder may have changed since the list was made
+        if (now !== root) items = items.map(f => Object.assign({}, f, { filename: now + f.filename.slice(root.length) }));
         btns.forEach(b => { b.disabled = true; }); status.textContent = "Baixando " + items.length + "…";
         let started = 0;
         for (let i = 0; i < items.length; i += 300) {   // the service worker takes up to 300 per message
@@ -1370,12 +1373,12 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     tab.title = "Mostrar o menu da matéria"; tab.setAttribute("aria-label", tab.title); tab.appendChild(el("i"));
     const header = document.querySelector ? document.querySelector(".ic-app-header") : null;
     if (header && header.getBoundingClientRect && document.documentElement.style) document.documentElement.style.setProperty("--cp-navleft", Math.round(header.getBoundingClientRect().right) + "px");
-    const setFold = async on => { if (document.body.classList) document.body.classList.toggle("course-menu-expanded", !on); tab.style.display = on ? "block" : "none"; await chrome.storage.local.set({ navFold: on }); };
+    const setFold = async (on, save = true) => { if (document.body.classList) document.body.classList.toggle("course-menu-expanded", !on); tab.style.display = on ? "" : "none"; if (save) await chrome.storage.local.set({ navFold: on }); };
     fold.addEventListener("click", () => setFold(true)); tab.addEventListener("click", () => setFold(false));
     if (nav.parentNode) nav.parentNode.insertBefore(fold, nav); document.body.appendChild(tab);
     tab.style.display = "none";
     const { prefs: pp } = await chrome.storage.local.get("prefs");
-    if (navFold === true || (navFold !== false && cpPrefs(pp).mode === "foco")) setFold(true);   // Foco folds the course menu unless the student opened it
+    if (navFold === true) setFold(true, false); else if (navFold !== false && cpPrefs(pp).mode === "foco") setFold(true, false);   // Foco folds it without saving   // Foco folds the course menu unless the student opened it
     const li = el("li", "section"), edit = el("button"); li.id = "cp-navedit"; edit.type = "button";
     edit.style.cssText = "margin:10px 0 0 6px;padding:5px 10px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.7;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
     edit.addEventListener("click", () => { editing = !editing; paint(); });

@@ -3,6 +3,7 @@ const CP_DEFAULTS = { mode: "completo", theme: "off", look: "caderno", nav: "tem
 const cpPrefs = p => Object.assign({}, CP_DEFAULTS, p && typeof p === "object" ? p : {});
 // The downloads folder inside the browser's Downloads (Chrome cannot save elsewhere): up to 3 levels of plain names; "PUCPR" otherwise.
 const cpFolder = raw => {
-  const parts = String(raw == null ? "" : raw).split("/").map(x => x.replace(/[<>:"\\|?*\u0000-\u001f]/g, "").trim()).filter(x => x && x !== "." && x !== "..");
+  const parts = String(raw == null ? "" : raw).split("/").map(x => x.replace(/[<>:"\\|?*~\u0000-\u001f]/g, "").trim().replace(/[.\s]+$/, ""))   // no trailing dots or spaces (Windows)
+    .filter(x => x && x !== "." && x !== "..").map(x => /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(x) ? x + "_" : x);
   return parts.length && parts.length <= 3 && parts.every(x => x.length <= 60 && !/^\.+$/.test(x)) ? parts.join("/") : "PUCPR";
 };

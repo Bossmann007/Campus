@@ -49,7 +49,7 @@ assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
 const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
 assert.strictEqual(cpFolder("Faculdade/2026-2"), "Faculdade/2026-2"); assert.strictEqual(cpFolder("../etc"), "etc"); assert.strictEqual(cpFolder("a/b/c/d"), "PUCPR", "more than 3 levels: the default");
-assert.strictEqual(cpFolder('x<>:"|?*y'), "xy"); assert.strictEqual(cpFolder(""), "PUCPR");
+assert.strictEqual(cpFolder('x<>:"|?*y'), "xy"); assert.strictEqual(cpFolder(""), "PUCPR"); assert.strictEqual(cpFolder("nul/Aulas."), "nul_/Aulas", "Windows-reserved names and trailing dots fixed");
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "Faculdade/BD/a.pdf" }, "Faculdade") && !sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "PUCPR/BD/a.pdf" }, "Faculdade"), "only inside the student's folder");
 for (const bad of [{ url: "https://evil.example/a", filename: "PUCPR/a.pdf" }, { url: "https://pucpr.instructure.com/x", filename: "Documents/a.pdf" },
   { url: "https://pucpr.instructure.com/x", filename: "PUCPR/../a.pdf" }, { url: "javascript:alert(1)", filename: "PUCPR/a" }, { url: "https://pucpr.instructure.com/x", filename: "PUCPR//a" }])
@@ -683,9 +683,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const openTab = cn.body.kids.find(k => k.id === "cp-navopen");
   assert(openTab && openTab.style.display === "none", "the menu shows by default; the reopen tab waits");
   const cn2 = await runContent("/courses/71306", null, { navFold: true }, { nav: (() => { const n = fakeEl("ul"); n.querySelectorAll = () => []; return n; })() }); await new Promise(r => setTimeout(r, 30));
-  assert(cn2.body.kids.find(k => k.id === "cp-navopen").style.display === "block", "folded last time: folded, with the › tab to bring it back");
+  assert(cn2.body.kids.find(k => k.id === "cp-navopen").style.display === "", "folded last time: folded, with the › tab to bring it back");
   const cn3 = await runContent("/courses/71306", null, { prefs: { mode: "foco" } }, { nav: (() => { const n = fakeEl("ul"); n.querySelectorAll = () => []; return n; })() }); await new Promise(r => setTimeout(r, 30));
-  assert(cn3.body.kids.find(k => k.id === "cp-navopen").style.display === "block", "Foco folds the course menu by itself");
+  assert(cn3.body.kids.find(k => k.id === "cp-navopen").style.display === "" && cn3.store.navFold === undefined, "Foco folds the course menu by itself, without saving it");
 
   // modules: whole modules or single items hidden one by one per course
   const wrap = fakeEl("div"), modsEl = fakeEl("div"); wrap.append(modsEl);
