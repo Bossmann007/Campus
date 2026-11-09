@@ -109,7 +109,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       const p = cpPrefs((await chrome.storage.local.get("prefs")).prefs), text = JSON.stringify(msg.data);
       if (!p.agentFile || text.length > 96 * 1024) return reply({ ok: false });
       const id = await chrome.downloads.download({ url: "data:application/json;charset=utf-8," + encodeURIComponent(text), filename: cpFolder(p.dlFolder) + "/caderno-agente.json", conflictAction: "overwrite", saveAs: false });
-      await chrome.storage.session.set({ agentDl: id });
+      const { agentDl = [] } = await chrome.storage.session.get("agentDl");
+      await chrome.storage.session.set({ agentDl: agentDl.concat(id).slice(-10) });   // a list: two tabs at once each get their line erased
+      const [d] = chrome.downloads.search ? await chrome.downloads.search({ id }) : [];
+      if (d && d.state !== "in_progress") await agentDone(id, d.state);   // a data: download can finish before the id was kept
       reply({ ok: true });
     })().catch(() => reply({ ok: false }));
     return true;
@@ -131,12 +134,23 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
 });
+// The IA file finished: the file stays, its history line goes. Interrupted (Chrome's "ask where to save each file" is on,
+// or the student cancelled): the switch turns itself off and the popup says why, so no dialog comes back on every reading.
+async function agentDone(id, state) {
+  const { agentDl = [] } = await chrome.storage.session.get("agentDl");
+  await chrome.storage.session.set({ agentDl: agentDl.filter(x => x !== id) });
+  if (chrome.downloads.erase) chrome.downloads.erase({ id });
+  if (state === "interrupted") {
+    const { prefs } = await chrome.storage.local.get("prefs");
+    await chrome.storage.local.set({ prefs: Object.assign({}, prefs, { agentFile: false }), agentErr: "O Chrome não deixou gravar o arquivo. Desligue \"Perguntar onde salvar cada arquivo\" nas configurações de downloads do Chrome e ligue de novo." });
+  }
+}
 // A file counts as downloaded only when Chrome finishes it; cancelled or failed ones stay "new".
 chrome.downloads.onChanged.addListener(async ch => {
   const state = ch.state && ch.state.current;
   if (state !== "complete" && state !== "interrupted") return;
-  const { agentDl } = await chrome.storage.session.get("agentDl");
-  if (agentDl === ch.id) { await chrome.storage.session.remove("agentDl"); if (chrome.downloads.erase) chrome.downloads.erase({ id: ch.id }); return; }   // the file stays, its history line goes
+  const { agentDl = [] } = await chrome.storage.session.get("agentDl");
+  if (agentDl.includes(ch.id)) return agentDone(ch.id, state);
   const { pending = {} } = await chrome.storage.session.get("pending"), fileId = pending[ch.id];
   if (fileId === undefined) return;
   delete pending[ch.id]; await chrome.storage.session.set({ pending });
