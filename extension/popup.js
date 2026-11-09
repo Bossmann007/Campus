@@ -2,6 +2,14 @@
 // Opened in a tab (popup.html#tab) for the import: a file dialog closes the popup on some systems.
 const $ = id => document.getElementById(id);
 $("ver").textContent = "v" + chrome.runtime.getManifest().version;
+// Novidades (notes.js): once after an update, until "Entendi" (shared with the panel on the dashboard).
+if (typeof CP_NOTES === "object" && CP_NOTES && Array.isArray(CP_NOTES.items)) chrome.storage.local.get("notesSeen").then(({ notesSeen }) => {
+  if (notesSeen === CP_NOTES.version) return;
+  $("h-notes").textContent = "Novidades da v" + CP_NOTES.version;
+  for (const t of CP_NOTES.items) { const li = document.createElement("li"); li.textContent = t; document.querySelector(".notes-l").appendChild(li); }
+  $("notes").hidden = false;
+  $("notesOk").addEventListener("click", async () => { await chrome.storage.local.set({ notesSeen: CP_NOTES.version }); $("notes").hidden = true; });
+});
 
 // Each change writes only its own key over the latest prefs (the Canvas panel changes mode, meta and the native dashboard
 // too), and the popup follows changes made elsewhere: neither side undoes the other.

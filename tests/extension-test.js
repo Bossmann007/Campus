@@ -18,9 +18,13 @@ assert(["storage", "downloads", "alarms", "notifications", "pucpr.instructure.co
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 const ob = fs.readFileSync(path.join(dir, "onboarding.html"), "utf8");
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ob) && !/\son\w+=/.test(ob), "onboarding: no inline script or handler (MV3 CSP)");
-assert(/details\.reason === "install"\) chrome\.tabs\.create\(\{ url: chrome\.runtime\.getURL\("onboarding\.html"\) \}\)/.test(fs.readFileSync(path.join(dir, "background.js"), "utf8")), "the onboarding opens on first install");
+assert(/details\.reason === "install"\) \{ chrome\.storage\.local\.set\(\{ notesSeen: chrome\.runtime\.getManifest\(\)\.version \}\); chrome\.tabs\.create\(\{ url: chrome\.runtime\.getURL\("onboarding\.html"\) \}\)/.test(fs.readFileSync(path.join(dir, "background.js"), "utf8")), "the onboarding opens on first install");
 for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
+{ const nj = fs.readFileSync(path.join(dir, "notes.js"), "utf8"), ver = (nj.match(/version: "([\d.]+)"/) || [])[1];
+  assert.strictEqual(ver, manifest.version, "Novidades are for this version");
+  assert(manifest.content_scripts.some(c => c.js.indexOf("notes.js") >= 0 && c.js.indexOf("notes.js") < c.js.indexOf("content.js")) && /src="notes\.js"/.test(html), "notes.js loads before the panel and in the popup");
+  assert(/notes\.js/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "notes.js goes into the store zip"); }
 global.location = { href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };
 const page = (body, next) => ({ ok: true, text: async () => "while(1);" + JSON.stringify(body), headers: { get: h => h === "Link" && next ? "<" + next + '>; rel="next"' : null } });
 global.fetch = async url => {

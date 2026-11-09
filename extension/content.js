@@ -188,6 +188,17 @@
     if (items.length > 8) ul.appendChild(el("li", "muted", "+" + (items.length - 8) + " outras"));
     sec.appendChild(ul); return sec;
   }
+  // Novidades da versão (notes.js), once after an update; "Entendi" stores the version read.
+  async function notesCard() {
+    if (typeof CP_NOTES !== "object" || !CP_NOTES || !Array.isArray(CP_NOTES.items)) return null;
+    const { notesSeen } = await chrome.storage.local.get("notesSeen");
+    if (notesSeen === CP_NOTES.version) return null;
+    const sec = el("section", "card news notes"), h = el("h3", null, "Novidades da v" + CP_NOTES.version), ok = el("button", "mini", "Entendi ✓");
+    ok.type = "button"; ok.addEventListener("click", async () => { await chrome.storage.local.set({ notesSeen: CP_NOTES.version }); sec.remove(); });
+    h.appendChild(ok); sec.appendChild(h);
+    const ul = el("ul"); for (const t of CP_NOTES.items) ul.appendChild(el("li", "row nt-i", t)); sec.appendChild(ul);
+    return sec;
+  }
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
@@ -439,7 +450,7 @@
     .ck { position:absolute; top:-7px; right:-5px; z-index:3; width:20px; height:20px; padding:0; border-radius:50%; font:700 11px/18px var(--sans); text-align:center; color:var(--muted); background:var(--bg); border:1px solid var(--line);
       opacity:0; transition:opacity .12s, background-color .15s, color .15s; }
     .evw:hover .ck, .ck:focus-visible, .ck[aria-pressed="true"], .row .ck { opacity:1; } .ck[aria-pressed="true"] { background:var(--ok); border-color:var(--ok); color:var(--bg); }
-    .row .ck { position:static; margin-right:6px; } .end { display:flex; align-items:center; } .row.dn .n { color:var(--muted); text-decoration:line-through; }
+    .row .ck { position:static; margin-right:6px; } .mc-i .ck { position:static; opacity:1; } .end { display:flex; align-items:center; } .row.dn .n { color:var(--muted); text-decoration:line-through; }
     .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
     .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
@@ -455,6 +466,7 @@
     .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
     .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .notes .nt-i { display:block; padding-left:16px; position:relative; } .notes .nt-i::before { content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--coral); }
     .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
@@ -503,8 +515,8 @@
     .mc-day.today > span:first-child { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--coral); }
     .mc-dots { position:absolute; bottom:3px; left:0; right:0; display:flex; justify-content:center; gap:2px; } .mc-dots i, .mc-i > i { width:5px; height:5px; border-radius:50%; background:var(--warn); }
     .mc-dots i.ex, .mc-i.ex > i { background:var(--coral); } .mc-dots i.ok, .mc-i.ok > i { background:var(--ok); }
-    .mc-k { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:4px 0 8px; }
-    .mc-i { display:grid; grid-template-columns:8px 78px minmax(0,1fr); gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--line); } .mc-i:first-of-type { border-top:0; }
+    .mc-k { display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:4px 0 8px; }
+    .mc-i { display:grid; grid-template-columns:8px 78px minmax(0,1fr) 20px; gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--line); } .mc-i:first-of-type { border-top:0; }
     .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:12px; color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
     @container cp (max-width:620px) { .mcal { grid-template-columns:minmax(0,1fr); } }
     :host(.cp-headhost) { display:inline-block; margin:0 8px 0 0; vertical-align:middle; }
@@ -902,6 +914,7 @@
       draw();
     }
     if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
+    notesCard().then(nc => { if (nc) grid.prepend(nc); });
     if (!prefs.native && widgetDash() && !clean) {   // with Canvas's widgets hidden, every course stays one click away (extension courses too)
       const sec = el("section", "card news courses"), h = el("h3", null, "Todas as matérias"), ul = el("ul");
       for (const x of cache.ids) { const li = el("li", "row"); li.append(el("span"), mid(shortName(x.name), location.origin + "/courses/" + x.id, String(x.name).slice(0, 120)), el("span")); ul.appendChild(li); }
@@ -1099,21 +1112,33 @@
   // done; today ringed); clicking a day lists it on the right, which otherwise shows what comes next. Canvas deadlines of
   // this course plus every assessment of the Plano de Ensino.
   function miniCal(courseId, c, a, cache) {
-    const t = today(), seen = new Set(), items = [];
-    const rule = c ? c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, date: it.date, exam: it.exam, task: !it.exam, url: null, rule: true })) : [];
-    for (const x of agenda(a, cache, {}).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(rule)) {
-      const k = x.date + "|" + fold(x.title).slice(0, 24); if (seen.has(k)) continue; seen.add(k); items.push(x);
-    }
+    const t = today();
+    let marks = {}, items = [];
+    const build = () => {
+      const seen = new Set(); items = [];
+      const rule = c ? c.items.filter(it => it.date).map(it => { const key = "qf:" + C.key(c, it); return { key, mine: !!marks[key], title: it.name, date: it.date, exam: it.exam, task: !it.exam, url: null, rule: true }; }) : [];
+      for (const x of agenda(a, cache, marks).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(rule)) {
+        const k = x.date + "|" + fold(x.title).slice(0, 24); if (seen.has(k)) continue; seen.add(k); items.push(x);
+      }
+    };
+    build();
     const sec = el("section", "card mcal"), left = el("div", "mc-l"), right = el("div", "mc-r"), head = el("div", "mc-h"), prev = el("button", null, "‹"), next = el("button", null, "›"), title = el("b");
     prev.type = next.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
     head.append(prev, title, next); const grid = el("div", "mc-g"); left.append(head, grid); sec.append(left, right);
     let cur = t.slice(0, 7), pick = null;
     const tone = x => fin(x) ? "ok" : x.exam ? "ex" : "wa";
     const listOf = (list, label) => {
-      right.replaceChildren(el("div", "mc-k", label));
+      const k = el("div", "mc-k"); k.append(el("span", null, label), el("span", null, "Feito")); right.replaceChildren(k);
       if (!list.length) { right.appendChild(el("div", "muted", pick ? "Nada neste dia." : "Nada pela frente nesta matéria.")); return; }
       for (const x of list.slice(0, 5)) { const r = el("div", "mc-i " + tone(x)), when = el("span", "mc-d" + (x.late && !fin(x) && x.date < t ? " lt" : ""), x.date === t ? "hoje" : dmy(x.date) + (x.due ? " " + hhmm(x.due) : ""));
-        r.append(el("i"), when, link((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url)); right.appendChild(r); }
+        const name = (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title;
+        let ck = el("span");   // exams and work Canvas already counts as handed in get no tick
+        if (!x.exam && !x.done && cache.user) {
+          ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(!!x.mine));
+          ck.setAttribute("aria-label", (x.mine ? "Desmarcar: " : "Marcar como feito: ") + name); ck.title = x.mine ? "Desmarcar" : "Marcar como feito (só aqui, o Canvas não muda)";
+          ck.addEventListener("click", async () => { marks = await setMark(cache.user, x, !x.mine); build(); draw(); });
+        }
+        r.append(el("i"), when, link(name, x.url), ck); right.appendChild(r); }
     };
     const draw = () => {
       const [y, m] = cur.split("-").map(Number), pad = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate();
@@ -1128,11 +1153,12 @@
         grid.appendChild(b);
       }
       if (pick) listOf(items.filter(x => x.date === pick), cap(dayLabel(pick)));
-      else listOf(items.filter(x => !fin(x) && (x.date >= t || (x.late && x.date >= addDays(-7)))).sort((p, q) => p.date.localeCompare(q.date)), "A seguir");
+      else listOf(items.filter(x => !x.done && (x.date >= t || (x.late && !fin(x) && x.date >= addDays(-7)))).sort((p, q) => p.date.localeCompare(q.date)), "A seguir");   // ticked here stays (greyed) so it can be unticked
     };
     const shift = n => { const [y, m] = cur.split("-").map(Number), d = new Date(y, m - 1 + n, 1); cur = C.localISO(d).slice(0, 7); pick = null; draw(); };
     prev.addEventListener("click", () => shift(-1)); next.addEventListener("click", () => shift(1));
-    draw(); return sec;
+    draw(); if (cache.user) myMarks(cache.user).then(m => { marks = m; build(); draw(); });
+    return sec;
   }
   function overview(courseId, c, a, cache, prefs) {
     const out = [miniCal(courseId, c, a, cache)];

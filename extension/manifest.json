@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Caderno+ · PUCPR",
-  "version": "3.5.1",
+  "version": "3.6.0",
   "description": "O Canvas da PUCPR melhorado: semana, avisos, lembretes, busca, tema escuro, quanto falta e arquivos. Não oficial.",
   "action": {
     "default_popup": "popup.html",
@@ -42,6 +42,7 @@
         "collect.js",
         "core.js",
         "files.js",
+        "notes.js",
         "content.js"
       ],
       "run_at": "document_idle"
