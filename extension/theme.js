@@ -25,8 +25,9 @@
   const NAV = { tinta: "#1D2433", coral: "#B8361C", verde: "#1F5C42", azul: "#1E3A6E", roxo: "#3B3363" };
   const css = (look, nav, cards, dark) => {
     // dark modes invert the page: a cream paper would turn to mud, so under them every look paints on neutral white
-    // the student's own background color (popup) over the look's paper; dark modes keep their neutral white
-    const own = !dark && /^#[0-9a-f]{6}$/i.test(cards.bgColor || "") ? cards.bgColor : "";
+    // the student's own background color (popup) over the look's paper. Dark modes invert the page, so a light tint turns
+    // into the same hue, dark: the own color and the cool looks (Oceano, Menta, Pastel) keep it; warm papers would turn to mud
+    const own = /^#[0-9a-f]{6}$/i.test(cards.bgColor || "") ? cards.bgColor : dark && /^(oceano|menta|pastel)$/.test(look) ? LOOKS[look][0] : "";
     const L0 = LOOKS[look] && dark ? ["#FFFFFF", "#F3F3F3"].concat(LOOKS[look].slice(2, 4), ["#E0E0E0"], LOOKS[look].slice(5)) : LOOKS[look], L = L0 && own ? [own].concat(L0.slice(1)) : L0, out = [];
     // the dashboard: the Caderno+ panel takes the place of Canvas's (its widget dashboard is React with generated classes);
     // "Painel do Canvas" in our header brings the original back

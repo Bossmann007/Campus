@@ -310,16 +310,16 @@
       const id = m[1], c = a.byCanvasId[id];
       card.style.display = ctx.hidden.includes(id) ? "none" : "";
       if (ctx.hidden.includes(id) || !c || !prefs.grades || !a.rules) continue;
-      const st = a.state(c), toPct = t => t.replace(/(\d+(?:,\d+)?)\/10/g, (_, n) => Math.round(parseFloat(n.replace(",", ".")) * 10) + "%");
-      const p = pill(prefs.cardPct ? toPct(a.label(st)) : earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+      const st = a.state(c);   // with the ring, the pill says only what is still needed
+      const p = pill(prefs.cardPct ? a.label(st) : earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
       p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0);
       card.cpAdded.push(p); head.appendChild(p);
       const top = prefs.cardPct && card.querySelector(".ic-DashboardCard__header");
-      if (top) {   // what is guaranteed, as a ring on the card's picture (left of its ⋮ menu)
+      if (top) {   // what is guaranteed, as a ring on the top left of the card's picture
         const col = { ok: "#2F7D5B", warn: "#A8650F", bad: "#C2361F" }[a.tone(st)] || "#A8650F", pct = Math.floor(Math.min(10, st.earned) * 10);   // guaranteed: never rounded up
         const ring = el("div"), num = el("b", null, pct + "%");
         ring.className = "cp-card-ring"; ring.title = pct + "% garantido de 10 · " + p.title; ring.setAttribute("aria-label", pct + "% garantido");
-        ring.style.cssText = "position:absolute;top:10px;right:52px;z-index:2;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(" + col + " " + pct + "%, rgba(255,255,255,.45) 0);box-shadow:0 2px 10px rgba(0,0,0,.22)";
+        ring.style.cssText = "position:absolute;top:10px;left:12px;z-index:2;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(" + col + " " + pct + "%, rgba(255,255,255,.45) 0);box-shadow:0 2px 10px rgba(0,0,0,.22)";
         num.style.cssText = "display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#fff;color:" + col + ";font:700 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:-.02em";
         ring.appendChild(num); card.cpAdded.push(ring); top.appendChild(ring);
       }
@@ -509,7 +509,12 @@
     .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:12px; color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
     @container cp (max-width:620px) { .mcal { grid-template-columns:minmax(0,1fr); } }
     :host(.cp-headhost) { display:inline-block; margin:0 8px 0 0; vertical-align:middle; }
-    .box.head { container-type:normal; border:0; background:none; box-shadow:none; padding:0; } .box.head .hd { margin:0; padding:0; border:0; flex-wrap:wrap; }
+    .box.head { container-type:normal; border:0; background:none; box-shadow:none; padding:0; }
+    .box.head .hd { margin:0; gap:0; height:42px; box-sizing:border-box; padding:4px 4px 4px 12px; border:1px solid var(--line); border-radius:14px; background:var(--bg); box-shadow:0 1px 2px rgba(29,36,51,.06); }
+    .box.head .hd b { margin-left:8px; }
+    .box.head .seg { margin:0 10px 0 14px; } .box.head .seg button { padding:5px 12px; font-size:12.5px; }
+    .box.head .meta { margin:0; padding:0 10px; height:22px; border-left:1px solid var(--line); }
+    .box.head .pfold { margin:0; height:32px; padding:0 12px; border:0; border-left:1px solid var(--line); border-radius:0 10px 10px 0; background:none; font-size:12.5px; } .box.head .pfold:hover { background:var(--soft); color:var(--fg); transform:none; }
     .box.nohd { padding-top:14px; }
     .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
     .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold { margin-left:auto; }
