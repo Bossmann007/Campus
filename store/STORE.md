@@ -37,7 +37,7 @@ Dentro do Canvas, sem configurar nada:
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova;
 - **Tema escuro** (ou igual ao sistema);
 - **Quanto falta:** em cada card e em cada matéria, quanto você precisa tirar nas próximas avaliações;
-- **Arquivos:** baixa os arquivos da matéria organizados em Downloads/PUCPR/<matéria>/<tipo>;
+- **Arquivos:** baixa os arquivos da matéria organizados numa pasta sua dentro de Downloads (PUCPR por padrão), por matéria e tipo;
 - o número de dias até a próxima prova no ícone.
 
 Cada parte pode ser desligada no botão da extensão.
@@ -65,7 +65,7 @@ Projeto independente e não oficial, sem vínculo com a PUCPR nem com a Instruct
 - **storage:** guardar no dispositivo as escolhas do usuário, a última leitura do Canvas, os lembretes, a data da próxima prova (número no ícone), quais arquivos já foram baixados, as tarefas marcadas como feitas, as notas novas encontradas, as anotações por matéria, quais cards foram recolhidos, a lista da semana para o resumo de segunda e o fim do timer de foco. Separado por usuário do Canvas; a leitura do Canvas é apagada ao sair dele.
 - **alarms:** atualizar de hora em hora o número de dias até a próxima prova no ícone, disparar os lembretes na hora marcada, o resumo da semana na segunda às 8h e o fim do timer de foco (não lê nada).
 - **notifications:** mostrar os lembretes de entregas e provas, o aviso de nota nova, o resumo da semana e o fim do timer de foco, cada um com sua chave no botão da extensão; o texto é gerado no dispositivo.
-- **downloads:** salvar, a pedido do usuário, os arquivos das matérias em Downloads/PUCPR/<matéria>/<tipo>; só endereços do Canvas da PUCPR.
+- **downloads:** salvar, a pedido do usuário, os arquivos das matérias na pasta escolhida dentro de Downloads (PUCPR por padrão), por matéria e tipo; só endereços do Canvas da PUCPR.
 - **Código remoto:** não. Todo o código está no pacote.
 - **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma, títulos de avisos, a agenda do Canvas e os títulos dos módulos são conteúdo lido do site do Canvas; nome e foto de quem escreveu os avisos e dos professores das matérias (o botão Perguntar só abre a caixa de entrada do Canvas); das mensagens do Canvas, só as não lidas: assunto, nomes de quem participa e data, nunca o texto (marque também "Comunicações pessoais"); o número do usuário do Canvas separa os dados de cada aluno (marque "Informações de identificação pessoal"); marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.
