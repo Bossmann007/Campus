@@ -537,16 +537,23 @@
     let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
     for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
     const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";
-    const root = host.attachShadow({ mode: "open" }), wrap = el("div", "box head"), style = el("style");
-    style.textContent = CSS; wrap.appendChild(hd); root.append(style, wrap); at.prepend(host);
+    const root = host.attachShadow({ mode: "open" }), wrap = el("div", "box head");
+    styleRoot(root); wrap.appendChild(hd); root.append(wrap); at.prepend(host);
     return true;
   }
+  // Our CSS parsed once and shared by every panel (constructable stylesheet); a <style> per root where that is missing.
+  let sheet = null;
+  const styleRoot = root => {
+    try { if (!sheet && typeof CSSStyleSheet === "function" && "adoptedStyleSheets" in root) { sheet = new CSSStyleSheet(); sheet.replaceSync(CSS); } } catch (e) { sheet = null; }
+    try { if (sheet) { root.adoptedStyleSheets = [sheet]; return; } } catch (e) { sheet = null; }
+    const st = el("style"); st.textContent = CSS; root.append(st);
+  };
   function panelHost(id) {
     const anchor = document.getElementById("content");
     if (document.getElementById(id) || !anchor) return null;
     const host = el("div", "cp-host"); host.id = id;
-    const root = host.attachShadow({ mode: "open" }), box = el("div", "box"), style = el("style");
-    style.textContent = CSS; root.append(style, box); anchor.prepend(host);
+    const root = host.attachShadow({ mode: "open" }), box = el("div", "box");
+    styleRoot(root); root.append(box); anchor.prepend(host);
     return box;
   }
   // Placement: on the classic dashboard, right above its course cards (#DashboardCard_Container, outside its React root);
@@ -605,7 +612,10 @@
     const root = document.getElementById("content");
     if (!root || dashWatch || typeof MutationObserver === "undefined") return;
     let t = 0;
-    dashWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); }, 120); });
+    const ours = n => n && n.nodeType === 1 && (/^cp-|^qf-/.test(n.id || "") || (n.classList && n.classList.contains("cp-host")));
+    dashWatch = new MutationObserver(recs => {   // our own panels moving in and out do not count
+      if (recs.every(r => ours(r.target) || [...r.addedNodes, ...r.removedNodes].every(ours))) return;
+      clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); }, 120); });
     dashWatch.observe(root, { childList: true, subtree: true });
     placeDash(); enhanceGradeCards();
   }
@@ -1252,8 +1262,8 @@
     if (cur) { cur.remove(); return; }   // the shortcut again closes it
     const host = el("div", "cp-host"); host.id = "cp-search";
     host.style.cssText = "position:fixed;inset:0;z-index:10000;margin:0";
-    const root = host.attachShadow({ mode: "open" }), style = el("style"), back = el("div", "pal-back"), dlg = el("div", "pal");
-    style.textContent = CSS;
+    const root = host.attachShadow({ mode: "open" }), back = el("div", "pal-back"), dlg = el("div", "pal");
+    styleRoot(root);
     dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true"); dlg.setAttribute("aria-label", "Buscar no Canvas");
     const q = el("input", "pal-q"); q.type = "text"; q.autocomplete = "off"; q.placeholder = "Buscar tarefas, módulos e matérias…"; q.setAttribute("aria-label", "Buscar");
     const ul = el("ul", "pal-r"), note = el("div", "pal-s", "Lendo os módulos das matérias…");
@@ -1282,7 +1292,7 @@
       else if (e.key === "Escape") { e.preventDefault(); close(); }
     });
     back.addEventListener("click", close);
-    dlg.append(q, ul, note); root.append(style, back, dlg); document.body.appendChild(host);
+    dlg.append(q, ul, note); root.append(back, dlg); document.body.appendChild(host);
     if (q.focus) q.focus();
     draw();
     moduleIndex(cache).then(mods => { items = items.concat(inCanvasOnly(mods)); note.textContent = KEYS + " abre e fecha · ↑↓ escolhe · Enter abre"; draw(); },
@@ -1308,8 +1318,11 @@
   function watchTray(a, hidden) {
     if (trayWatch || typeof MutationObserver === "undefined" || !document.body) return;
     let t = 0;
-    trayWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => enhanceTray(a, hidden), 150); });
-    trayWatch.observe(document.body, { childList: true, subtree: true });
+    // only the tray portal (Cursos, Grupos...), not every change on the page; the body's own children until the portal exists
+    let onPortal = false;
+    const aim = () => { const p = document.getElementById("nav-tray-portal"); onPortal = !!p; trayWatch.disconnect(); trayWatch.observe(p || document.body, p ? { childList: true, subtree: true } : { childList: true }); };
+    trayWatch = new MutationObserver(() => { if (!onPortal && document.getElementById("nav-tray-portal")) aim(); clearTimeout(t); t = setTimeout(() => enhanceTray(a, hidden), 150); });
+    aim();
     enhanceTray(a, hidden);
   }
   // /courses (Todos os cursos): our pill per subject and, on every course, "Tirar do painel" / "Mostrar no painel".
@@ -1625,7 +1638,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
       const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { decorateCards(a, false, ctx); greet(agenda(a, cache, marks)); }, 250); });
-      watch.observe(document.body, { childList: true, subtree: true });
+      watch.observe(document.getElementById("DashboardCard_Container") || document.getElementById("content") || document.body, { childList: true, subtree: true });   // the cards, not the whole page
       setTimeout(() => watch.disconnect(), 20000);
     }
   }
