@@ -120,13 +120,14 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     if (L) {
       const [paper, card, ink, muted, line, accent, link, menu] = L;
       const B = BGS[cards.bg];   // the same fixed background on every page layer, so the nested layers line up
-      if (B) out.push(`:root.cp-look :is(body, #application, #wrapper, #main, .ic-Layout-wrapper, .ic-Layout-contentMain, #content-wrapper, #right-side-wrapper, #right-side) { background-image:${B[0]} !important; background-size:${B[1]} !important; background-attachment:fixed !important; }`);
+      if (B) out.push(`:root.cp-look :is(body, #application, #wrapper, #main, .ic-Layout-wrapper, .ic-Layout-contentMain, #content-wrapper, #right-side-wrapper, #right-side, .ic-Dashboard-header, .ic-Dashboard-header :is(div, span, header):not(.cp-host, button *, [role="button"] *)) { background-image:${B[0]} !important; background-size:${B[1]} !important; background-attachment:fixed !important; }`);
       out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent};
   --ic-brand-primary:${accent} !important; --ic-link-color:${link} !important; --ic-brand-font-color-dark:${ink} !important;
   --ic-brand-button--primary-bgd:${accent} !important; --ic-brand-button--primary-text:#FFFFFF !important;
   --ic-brand-button--secondary-bgd:${card} !important; --ic-brand-button--secondary-text:${ink} !important; --cp-menu:${menu}; }
 :root.cp-look body, :root.cp-look #application, :root.cp-look #wrapper, :root.cp-look #main, :root.cp-look .ic-Layout-wrapper,
 :root.cp-look .ic-Layout-contentMain, :root.cp-look #content-wrapper, :root.cp-look #right-side-wrapper, :root.cp-look #right-side { background-color:var(--cp-paper) !important; color:var(--cp-ink); }
+:root.cp-look :is(.ic-Dashboard-header, .ic-Dashboard-header :is(div, span, header):not(.cp-host, button *, [role="button"] *)) { background-color:var(--cp-paper) !important; }   /* its React header paints its own white box */
 :root.cp-look .ic-DashboardCard { border-radius:14px; overflow:hidden; border:1px solid var(--cp-line); background:var(--cp-card); box-shadow:0 1px 2px rgba(29,36,51,.06); transition:transform .18s, box-shadow .18s; }
 :root.cp-look .ic-DashboardCard__header_content { background:var(--cp-card) !important; }
 :root.cp-look .ic-DashboardCard:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45); }

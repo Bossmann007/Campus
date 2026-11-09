@@ -847,7 +847,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   lk.listen.change({ prefs: { newValue: { look: "oceano", bgColor: "red;}" } } }, "local");
   assert(/--cp-paper:#E2EDF9;/.test(lookCss()), "only a #RRGGBB color is taken");
   lk.listen.change({ prefs: { newValue: { bg: "quadriculado" } } }, "local");
-  assert(/#right-side\) \{ background-image:linear-gradient\(90deg/.test(lookCss()) && /background-size:24px 24px !important; background-attachment:fixed/.test(lookCss()), "a background pattern on every page layer, fixed so they line up");
+  assert(/#right-side, \.ic-Dashboard-header, [^{]*\{ background-image:linear-gradient\(90deg/.test(lookCss()) && /background-size:24px 24px !important; background-attachment:fixed/.test(lookCss()), "a background pattern on every page layer, fixed so they line up");
+  assert(/\.ic-Dashboard-header :is\(div, span, header\):not\(\.cp-host, button \*, \[role="button"\] \*\)\) \{ background-image:/.test(lookCss()), "the dashboard header (its React box paints white) carries the same background");
   lk.listen.change({ prefs: { newValue: { look: "original", bg: "quadriculado" } } }, "local");
   assert(!/background-attachment:fixed/.test(lookCss()), "Original keeps Canvas's own background");
   lk.listen.change({ prefs: { newValue: { navHide: true } } }, "local");
