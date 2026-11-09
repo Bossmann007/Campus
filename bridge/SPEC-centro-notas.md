@@ -37,6 +37,11 @@ written by hand for one turma (today only CC manhã). Rule packs stay as the fal
 - So the Centro de Notas solves "only my course" for every course whose professor set a formula (2 of Enzo's 6),
   not for all.
 
+- Imperativa, rule vs Centro (2026-11-09, real grades): both give 3,40 earned and 3,60 missing with RA2 worth 6 points.
+  The rule pack says "precisa 7,2" (the RA2 exercises, 1 point, are past due and ungraded, so it asks the 3,6 from the
+  5 future points); the Centro engine says "precisa 6,0" (the same grade on all 6 points). The hidden RA2 formula counts
+  PBL06–10, which sit in the default group: a hidden formula's members are not knowable, so its result is always approx.
+
 ## Engine (`core.js`, shared with the MCP)
 
 `centroGrade(curso, notas)`: evaluates the tree bottom-up. Leaves (`padrao`) count only with a published grade and

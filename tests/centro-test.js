@@ -63,7 +63,7 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
     return c; };
   const r = centro(hide(null, "3,40"), 7);
   assert.strictEqual(centro(hide(null, null), 7).now, 3.4, "hidden RA2 counts 0 while nothing in it has a grade: 0,4 × 8,5");
-  assert(Math.abs(r.need - 6) < 0.01 && !r.approx && r.left.sort().join() === "20,21", "same need as the full tree when the group has no grade: " + JSON.stringify(r));
+  assert(Math.abs(r.need - 6) < 0.01 && r.approx && r.left.sort().join() === "20,21", "same need as the full tree when the group has no grade, said approximate (the hidden formula may count items of other groups): " + JSON.stringify(r));
   assert.strictEqual(centro(hide("10,00", null), 7).approx, true, "part of the hidden group graded: the weights inside are unknown, say approximate");
   ok();
 }

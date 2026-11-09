@@ -1164,7 +1164,7 @@
       const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
       for (const g of Array.isArray(myCentro[courseId].grupos) ? myCentro[courseId].grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
       m.append(el("div", "t", fmt(cr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
-        el("div", "c", cr.status === "garantido" ? "meta garantida pela fórmula do professor" : cr.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "precisa " + up(cr.need, 1) + "/10 em média no que falta" + (cr.approx ? " (aproximado: parte da fórmula está escondida para o aluno)" : "")),
+        el("div", "c", cr.status === "garantido" ? "meta garantida pela fórmula do professor" : cr.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "precisa " + up(cr.need, 1) + "/10 em média no que falta" + (cr.approx ? " (aproximado: parte da fórmula está escondida para o aluno e pode contar outras atividades)" : "")),
         el("div", "c", "Falta: " + (cr.left.map(id => names.get(id)).filter(Boolean).slice(0, 8).join(", ") || "nada lançado em aberto") + " · fórmula do Centro de Notas"));
       card.append(m, el("span", "pill " + centroTone(cr), cr.status === "garantido" ? "garantido" : cr.status === "nao-da" ? "recuperação" : "precisa " + up(cr.need, 1)));
       box.appendChild(card);

@@ -1,7 +1,7 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.0.2",
+  version: "6.0.3",
   items: [
     "Quanto falta em qualquer matéria cujo professor montou a fórmula no Centro de Notas da PUCPR, de qualquer curso e turma (clique em Atualizar para permitir)",
     "Simulador na página da matéria: tirando X no que falta, com quanto você fica",

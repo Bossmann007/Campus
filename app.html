@@ -812,7 +812,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.0.2";
+  const EXT_LATEST = "6.0.3";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -899,7 +899,7 @@ const NotasCore = (() => {
   // same grade on everything left), left (leaf ids still without a grade; recovery exams and items left out of the final
   // grade excluded), approx }. curso is the tool's props.curso; never throws.
   // - The student's view hides some formula columns (a reference with its group is left): a hidden one is the mean of its
-  //   group's leaves, recovery exams out (exact for a uniform projection while nothing in it is graded, approx after).
+  //   group's leaves, recovery exams out: always approx (its real members and weights are not shown to the student).
   // - A part neither shown nor in a group: "incompleto" (no number rather than a wrong one).
   // - The tool's own final value wins: now is it, and the projection is shifted by what the visible formula misses.
   // - "total" adds raw points; the means use each leaf on 10 (a leaf not on 10 inside a mean: approx, the scale is a guess).
@@ -925,7 +925,7 @@ const NotasCore = (() => {
       const hid = new Map(), hidden = k => { const key = "h" + refId(k); if (hid.has(key)) return hid.get(key);
         const g = k && Array.isArray(k.grupos) && k.grupos[0] ? groupLeaves.get(k.grupos[0].id_grupo) : null, ls = (g || []).filter(c => !recov.has(c.id_coluna));
         const node = ls.length ? { id_coluna: key, tipo_coluna: "oculta", tipo_calculo: "media_aritmetica", colunas_associadas_pai: ls.map(c => ({ id_coluna: c.id_coluna })), h0: null, n: ls.length } : null;
-        if (node) { const graded = ls.filter(c => num(c) != null).length; if (graded && graded < ls.length) approx = true; } else lost = true;
+        if (node) approx = true; else lost = true;   // a hidden formula may count items of other groups too (real case: the RA2 exercises sit in the default group)
         hid.set(key, node); return node; };
       const kids = c => (Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []).map(k => ({ c: cols.get(refId(k)) || hidden(k), w: Number(k && k.pivot && k.pivot.peso_coluna_filho) || 0 }));   // a lost part stays, counting 0
       // value of a column; f: the fraction given to every leaf still open (the projection). raw: points, for "total"
