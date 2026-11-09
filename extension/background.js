@@ -51,6 +51,10 @@ function nextMonday8(now = new Date()) {
   let add = (8 - d.getDay()) % 7; if (add === 0 && now.getTime() >= d.getTime()) add = 7;
   d.setDate(d.getDate() + add); return d.getTime();
 }
+// The icon counts the days to the next exam: that only changes at midnight, so the worker is woken once a day for it
+// (it used to wake every hour, around the clock). Not a repeating alarm: each one schedules the next local midnight.
+const nextMidnight = (now = Date.now()) => { const d = new Date(now); d.setHours(24, 1, 0, 0); return d.getTime(); };
+const scheduleTick = () => chrome.alarms.create("tick", { when: nextMidnight() });
 const scheduleWeek = () => chrome.alarms.create("week", { when: nextMonday8(), periodInMinutes: 7 * 24 * 60 });
 async function summary(alarm) {
   const { upcoming = [], prefs, shown = {} } = await chrome.storage.local.get(["upcoming", "prefs", "shown"]);
@@ -193,9 +197,9 @@ chrome.downloads.onChanged.addListener(async ch => {
   const { dl } = await chrome.storage.local.get("dl"), have = Array.isArray(dl) ? dl : [];
   if (!have.includes(fileId)) await chrome.storage.local.set({ dl: [...have, fileId] });
 });
-chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); });
+chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); scheduleTick(); });
 chrome.runtime.onInstalled.addListener(details => {
-  chrome.alarms.create("tick", { periodInMinutes: 60 }); scheduleWeek(); showNext();
+  scheduleTick(); scheduleWeek(); showNext();   // also replaces the hourly "tick" of older versions
   if (details && details.reason === "update") {   // 6.0: the file for the AI is gone (the MCP uses a token): its keys go too
     chrome.storage.local.remove(["agentAt", "agentErr", "agentPath"]);
     chrome.storage.local.get("prefs").then(({ prefs }) => { if (prefs && "agentFile" in prefs) { const p = Object.assign({}, prefs); delete p.agentFile; chrome.storage.local.set({ prefs: p }); } });
@@ -209,7 +213,7 @@ async function focusDone(alarm) {
   chrome.notifications.create("f|" + Date.now(), { type: "basic", iconUrl: "icons/icon128.png", title: study ? "25 minutos de foco: hora da pausa" : "Pausa acabou",
     message: study ? "Levante, beba água. Abra o Caderno+ para mais uma rodada depois de 5 minutos." : "Bora voltar: mais 25 minutos de foco?", priority: 2 });
 }
-chrome.alarms.onAlarm.addListener(a => a.name.startsWith("r|") ? notify(a) : a.name === "week" ? summary(a) : a.name.startsWith("focus|") ? focusDone(a) : showNext());   // "tick": the icon counts down even when Canvas is not opened
+chrome.alarms.onAlarm.addListener(a => a.name.startsWith("r|") ? notify(a) : a.name === "week" ? summary(a) : a.name.startsWith("focus|") ? focusDone(a) : (scheduleTick(), showNext()));   // "tick": the icon counts down even when Canvas is not opened
 chrome.notifications.onClicked.addListener(async id => {
   const { shown = {} } = await chrome.storage.local.get("shown");
   if (typeof shown[id] === "string" && shown[id].startsWith(CANVAS + "/")) chrome.tabs.create({ url: shown[id] });

@@ -273,7 +273,9 @@
         getAll("/api/v1/courses/" + c.id + "/files?sort=created_at&order=desc&per_page=15", 1).then(l => { now.files[c.id] = l.map(f => [f.id, String(f.display_name || "arquivo").slice(0, 120)]); }, () => { now.files[c.id] = old && old.files[c.id]; }),
         getAll("/api/v1/courses/" + c.id + "/modules?per_page=50", 1).then(l => { now.mods[c.id] = l.map(m => [m.id, String(m.name || "módulo").slice(0, 120)]); }, () => { now.mods[c.id] = old && old.mods[c.id]; })]);
     });
-    await chrome.storage.local.set({ snap: Object.assign({}, snap, { [user]: now }) });
+    // written only when something differs: every write wakes the service worker and reaches every open tab
+    const same = old && JSON.stringify([old.netAt, old.asg, old.ann, old.files, old.mods]) === JSON.stringify([now.netAt, now.asg, now.ann, now.files, now.mods]);
+    if (!same) await chrome.storage.local.set({ snap: Object.assign({}, snap, { [user]: now }) });
     if (!old) return false;
     const items = [], t = Date.now(), byName = {};
     for (const c of cache.data.courses) {
@@ -1310,7 +1312,7 @@
       for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); btns[key].tabIndex = key === k ? 0 : -1; }
       if (k === "materiais" && !panes.materiais.cpLoaded) { panes.materiais.cpLoaded = 1; materials(courseId, panes.materiais); }
       if (k === "anot" && byClick && nb.ta.focus) nb.ta.focus();   // only when the student opens it (never on page load)
-      await chrome.storage.local.set({ ctab: k });
+      if (byClick) await chrome.storage.local.set({ ctab: k });   // the student's choice, not every page load
     };
     for (const [k, label] of tabs) {
       const b = el("button", null, label); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab"); b.addEventListener("click", () => show(k, true)); bar.appendChild(b); btns[k] = b;
@@ -1911,7 +1913,9 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       cardsFirst = !!prefs.cardsFirst; gradeA = a; watchDash(); placeDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
-      window.cpGreet = () => greet(agenda(a, cache, marks));   // again when Canvas's header renders late (the page watcher calls it)
+      // again when Canvas's header renders late (the page watcher calls it): a few tries, and nothing once the greeting is there
+      let greetTries = 0;
+      window.cpGreet = () => { if (++greetTries > 12 || (document.querySelector && document.querySelector(".cp-greet"))) { window.cpGreet = null; return; } greet(agenda(a, cache, marks)); };
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpRepaint ? window.cpRepaint() : window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop

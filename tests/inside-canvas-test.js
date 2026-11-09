@@ -44,7 +44,7 @@ const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listene
   action: { setBadgeText: async o => { local.badge = o.text; }, setTitle: async () => {}, setBadgeBackgroundColor: async () => {} },
   downloads: { onChanged: { addListener: f => { listeners.changed = f; } }, download: async o => { if (/boom/.test(o.filename)) throw new Error("Invalid filename"); swSaved.push(o); return nextId++; } } };
 const imported = [];   // importScripts("prefs.js") shares the worker's global scope: the test puts prefs.js in front instead
-const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro };")(chromeSW, f => imported.push(f));
+const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro, nextMidnight, scheduleTick };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
 const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
@@ -144,6 +144,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols, gcard };
 }
 (async () => {
+{ // the icon's day count changes at midnight: the worker wakes once a day for it, not every hour
+  const noon = new Date(2026, 10, 9, 12, 0, 0).getTime(), mid = sw.nextMidnight(noon), d = new Date(mid);
+  assert(mid > noon && mid - noon < 13 * 3600e3 && d.getDate() === 10 && d.getHours() === 0 && d.getMinutes() === 1, "the next local midnight (00:01)");
+  sw.scheduleTick(); assert(alarms.tick && alarms.tick.when > Date.now() && alarms.tick.periodInMinutes === undefined, "one alarm at the next midnight, not a repeating hourly one");
+  delete alarms.tick; await listeners.alarm({ name: "tick" }); assert(alarms.tick && alarms.tick.when > Date.now(), "after it fires the next midnight is scheduled");
+  ok();
+}
 { // Centro de Notas: the tab, the launch, PUCPR's tool only, its page data slimmed (no classmates, no student name)
   const T = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io", seen = [];
   const curso = { estudantes: [{ nome_estudante: "Colega" }], grupos: [{ id_grupo: 1, nome_grupo: "RA1", grupo_colunas: [{ coluna: { id_coluna: 5, nome_coluna: "Prova", tipo_coluna: "padrao", atividade: { pontos_possiveis: 10 }, notas: [{ nota: "8,00", id_estudante: 9 }] } }] }],
@@ -564,6 +571,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].indexOf(label)];
   assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
   assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
+  assert.strictEqual(np.store.ctab, undefined, "opening the page writes nothing: the tab is saved only when the student picks one");
   assert(/A seguir/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).filter(e => /^mc-day/.test(e.className)).length >= 28 && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
   assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
   await tabB("Anotações").listeners.click(); await new Promise(r => setTimeout(r, 5));
@@ -727,6 +735,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const again = await runContent("/", [], { snap: wc.store.snap, changes: wc.store.changes, cache: wc.store.cache }, { scripts: pageEnv });
   await new Promise(r => setTimeout(r, 40));
   assert(!again.fetches.some(u => /\/(files|modules)\?/.test(u)) && netReads === 2, "files and modules read at most once an hour (one GET each per course)");
+  assert.strictEqual(again.store.snap, wc.store.snap, "nothing changed: the snapshot is not written again (every write wakes the service worker and every open tab)");
   const noCh = await runContent("/", null, { snap: oldSnap, prefs: { changes: false } }); await new Promise(r => setTimeout(r, 40));
   assert(!all(noCh.anchor).some(e => /changes/.test(e.className)) && !noCh.fetches.some(u => /\/(files|modules)\?/.test(u)), "switched off: no card, no extra reads"); ok();
 
