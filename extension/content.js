@@ -88,6 +88,8 @@
       const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner.map(slimPlan) : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh });
       await chrome.storage.local.remove("refreshing");
+      // the Centro de Notas of the term's courses, read by the worker behind (the cards repaint when it lands)
+      if (EXT) chrome.runtime.sendMessage({ type: "centro", user, ids: (data.courses || []).map(c => c.id) }).catch(() => {});
       return fresh;
     } catch (e) { await chrome.storage.local.set({ refreshing: Date.now() }); throw e; }   // failed (throttled, Canvas down): the lock stays a minute, so each page does not read everything again
   }
@@ -136,6 +138,13 @@
   }
   // Own tasks (not from Canvas), per Canvas user in chrome.storage.local "tasks": [{ id, title, date|null }]; done = a tick.
   let myTasks = [];
+  // The Centro de Notas read by the worker, per Canvas user ("centro": { user, at, courses: { <course id>: curso | null } }).
+  let myCentro = {};
+  async function loadCentro(user) { const { centro } = await chrome.storage.local.get("centro"); myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
+  // quanto falta from the professor's formula in the Centro de Notas, for a course without our rules; null without a formula
+  const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && r.status !== "sem-formula" ? r : null; };
+  const centroText = r => fmt(r.now, 1) + "/10 · " + (r.status === "garantido" ? "garantido" : r.status === "nao-da" ? "recuperação" : "precisa " + up(r.need, 1) + "/10" + (r.approx ? " (aprox.)" : ""));
+  const centroTone = r => r.status === "garantido" ? "ok" : r.status === "nao-da" ? "bad" : r.need > 8 ? "bad" : "warn";
   // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
   // the dated ones join the week like Minhas tarefas. chrome.storage.local "checks"; 50 items of 200 chars per list.
   let myChecks = {};
@@ -473,7 +482,13 @@
       if (!m) continue;
       const id = m[1], c = a.byCanvasId[id];
       card.style.display = ctx.hidden.includes(id) ? "none" : "";
-      if (ctx.hidden.includes(id) || !c || !prefs.grades || !a.rules) continue;
+      if (ctx.hidden.includes(id) || !prefs.grades) continue;
+      if (!c || !a.rules) {   // no rules of ours for this course: the professor's formula from the Centro de Notas, when there is one
+        const r = centroOf(id); if (!r) continue;
+        const p = pill(centroText(r), centroTone(r)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+        p.title = "Caderno+ · fórmula do Centro de Notas, meta " + fmt(T, T % 1 ? 1 : 0) + (r.approx ? " · aproximado: parte da fórmula está escondida para o aluno" : "");
+        card.cpAdded.push(p); head.appendChild(p); continue;
+      }
       const st = a.state(c);   // with the ring, the pill says only what is still needed
       const p = pill(prefs.cardPct ? a.label(st) : earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
       p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0);
@@ -1156,7 +1171,8 @@
   // and grade or what it needs, and the actions (files download, open Caderno+ on this subject).
   function coursePanel(courseId, a, cache, prefs) {
     const c = prefs.grades && a.has ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
-    if (!c && !prefs.files) return;
+    const cr = !c && prefs.grades ? centroOf(courseId) : null;   // no rules of ours: the professor's formula from the Centro de Notas
+    if (!c && !cr && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
     // the course hero: its Canvas color, its name, the teacher (photo, Perguntar) and when Canvas was read
@@ -1164,6 +1180,15 @@
     title.append(mark(), el("b", null, shortName(cv ? cv.name : document.title)));
     heroSub.textContent = (c ? "meta " + fmt(T, T % 1 ? 1 : 0) + " · " : "") + "lido do Canvas " + ago(C.localISO(new Date(cache.at)));
     const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
+    if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
+      const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
+      for (const g of myCentro[courseId].grupos || []) for (const gc of g.grupo_colunas || []) if (gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
+      m.append(el("div", "t", fmt(cr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+        el("div", "c", cr.status === "garantido" ? "meta garantida pela fórmula do professor" : cr.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "precisa " + up(cr.need, 1) + "/10 em média no que falta" + (cr.approx ? " (aproximado: parte da fórmula está escondida para o aluno)" : "")),
+        el("div", "c", "Falta: " + (cr.left.map(id => names.get(id)).filter(Boolean).slice(0, 8).join(", ") || "nada lançado em aberto") + " · fórmula do Centro de Notas"));
+      card.append(m, el("span", "pill " + centroTone(cr), cr.status === "garantido" ? "garantido" : cr.status === "nao-da" ? "recuperação" : "precisa " + up(cr.need, 1)));
+      box.appendChild(card);
+    }
     courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
     teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;
       const go = el("a", "mini ask-b", "Perguntar"); go.href = location.origin + "/conversations?user_id=" + encodeURIComponent(t.id) + "&user_name=" + encodeURIComponent(t.name) + "&context_id=course_" + encodeURIComponent(t.course);
@@ -1776,7 +1801,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   let cardWatch = null;
   async function draw(cache, prefs, again) {
     T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null;
-    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user)]);   // side by side, not one after another
+    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user)]);   // side by side, not one after another
     let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
@@ -1846,6 +1871,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       cardsFirst = !!prefs.cardsFirst; gradeA = a; watchDash(); placeDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
+      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;

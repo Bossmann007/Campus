@@ -60,6 +60,7 @@ chrome.storage.local.get("cache").then(({ cache }) => {
 $("refresh").addEventListener("click", async () => {
   const { cache } = await chrome.storage.local.get("cache");
   if (cache) await chrome.storage.local.set({ cache: Object.assign({}, cache, { at: 0 }) });
+  const { centro } = await chrome.storage.local.get("centro"); if (centro) await chrome.storage.local.set({ centro: Object.assign({}, centro, { at: 0 }) });   // the Centro de Notas too
   await chrome.storage.local.remove("refreshing");
   $("status").textContent = "Atualiza na próxima página do Canvas.";
 });

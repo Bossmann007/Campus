@@ -44,7 +44,7 @@ const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listene
   action: { setBadgeText: async o => { local.badge = o.text; }, setTitle: async () => {}, setBadgeBackgroundColor: async () => {} },
   downloads: { onChanged: { addListener: f => { listeners.changed = f; } }, download: async o => { if (/boom/.test(o.filename)) throw new Error("Invalid filename"); swSaved.push(o); return nextId++; } } };
 const imported = [];   // importScripts("prefs.js") shares the worker's global scope: the test puts prefs.js in front instead
-const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone };")(chromeSW, f => imported.push(f));
+const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
 const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
@@ -144,6 +144,28 @@ async function runContent(pathname, files, preStore, opts = {}) {
   return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols, gcard };
 }
 (async () => {
+{ // Centro de Notas: the tab, the launch, PUCPR's tool only, its page data slimmed (no classmates, no student name)
+  const T = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io", seen = [];
+  const curso = { estudantes: [{ nome_estudante: "Colega" }], grupos: [{ id_grupo: 1, nome_grupo: "RA1", grupo_colunas: [{ coluna: { id_coluna: 5, nome_coluna: "Prova", tipo_coluna: "padrao", atividade: { pontos_possiveis: 10 }, notas: [{ nota: "8,00", id_estudante: 9 }] } }] }],
+    colunas: [{ id_coluna: 9, nome_coluna: "Nota Final", tipo_coluna: "final", tipo_calculo: "media_ponderada", notas: [], colunas_associadas_pai: [{ id_coluna: 5, pivot: { peso_coluna_filho: 100 } }] }] };
+  const res = (body, ok = true) => ({ ok, status: ok ? 200 : 500, text: async () => typeof body === "string" ? body : JSON.stringify(body) });
+  const fake = (action = T + "/lti") => async (u, o) => { seen.push((o && o.method || "GET") + " " + u.replace(T, "T").replace("https://pucpr.instructure.com", "C"));
+    if (/\/tabs$/.test(u)) return res([{ label: "Centro de Notas", type: "external", html_url: "/courses/7/external_tools/2157" }]);
+    if (/sessionless_launch\?id=2157$/.test(u)) return res({ url: "https://pucpr.instructure.com/courses/7/external_tools/2157?launch=1" });
+    if (/launch=1/.test(u)) return res('<form action="' + action + '" method="post"><input name="oauth_signature" value="a&amp;b"><input type="hidden" name="custom_canvas_course_id" value="7"></form>');
+    if (u === T + "/lti") return res('<div id="app" data-page="{&quot;component&quot;:&quot;UserLoading&quot;,&quot;version&quot;:&quot;v9&quot;}"></div>');
+    if (u === T + "/lti/finalize") return res({ status: "success", redirect_url: "/curso/7" });
+    if (u === T + "/curso/7") return res(o && o.headers && o.headers["X-Inertia"] === "true" && o.headers["X-Inertia-Version"] === "v9" ? { props: { curso } } : {}, true);
+    return res("", false); };
+  const got = await sw.centroCourse("7", fake());
+  assert.deepStrictEqual(seen, ["GET C/api/v1/courses/7/tabs", "GET C/api/v1/courses/7/external_tools/sessionless_launch?id=2157", "GET C/courses/7/external_tools/2157?launch=1", "POST T/lti", "GET T/lti/finalize", "GET T/curso/7"], "the launch, step by step");
+  assert(got && got.colunas[0].tipo_calculo === "media_ponderada" && got.grupos[0].grupo_colunas[0].coluna.notas[0].nota === "8,00" && !/Colega|estudante/.test(JSON.stringify(got)), "kept: the formula and the student's grade; dropped: classmates and ids");
+  assert.strictEqual(C.centro(got, 7).now, 8, "the engine reads what the worker keeps");
+  seen.length = 0; assert.strictEqual(await sw.centroCourse("7", fake("https://evil.example/lti")), null, "a form pointing anywhere else is never sent");
+  assert(!seen.some(x => /evil/.test(x)), "nothing posted to another host");
+  const all = await sw.centroAll(5, ["7"], fake()); assert(local.centro && local.centro.user === 5 && local.centro.courses["7"] && all["7"], "stored per Canvas user");
+  ok();
+}
   assert.strictEqual(await ask({ type: "download", items }, { id: "me", origin: "https://evil.example" }), "no reply", "messages from other origins are ignored");
   assert.strictEqual(await ask({ type: "download", items }, { id: "other", origin: "https://pucpr.instructure.com" }), "no reply", "messages from other extensions are ignored");
   assert.deepStrictEqual(await ask({ type: "download", items }, CANVAS_TAB), { done: [1, 4] }, "bad URL skipped, a throwing download does not stop the rest");
@@ -846,6 +868,19 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // course cards: our pill under Canvas's title (Canvas's own ⋮ menu untouched); courses unticked in the popup leave the dashboard
   const cd = await runContent("/", null, { hidden: [] });
   assert(/\d+[,\d]*\/10 · /.test(text(cd.header)) && !all(cd.header).some(e => e.tag === "button"), "a pill, and no buttons of ours on the card");
+  { // a course without rules of ours (another turma or program): the pill comes from the Centro de Notas formula
+    const curso = { grupos: [{ id_grupo: 1, grupo_colunas: [{ coluna: { id_coluna: 5, tipo_coluna: "padrao", atividade: { pontos_possiveis: 10 }, notas: [{ nota: "4,00" }] } }, { coluna: { id_coluna: 6, tipo_coluna: "padrao", atividade: { pontos_possiveis: 10 }, notas: [] } }] }],
+      colunas: [{ id_coluna: 9, tipo_coluna: "final", tipo_calculo: "media_ponderada", notas: [{ nota: "2,00" }], colunas_associadas_pai: [{ id_coluna: 5, pivot: { peso_coluna_filho: 50 } }, { id_coluna: 6, pivot: { peso_coluna_filho: 50 } }] }] };
+    const other = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+    assert(/2,0\/10 · precisa 10,0\/10/.test(text(other.header)), "no rules: the Centro de Notas formula on the card (2 + 0,5 × x ≥ 7 → x = 10): " + text(other.header));
+    assert(other.sent.some(m => m.type === "centro" && m.user === 5 && m.ids.includes(99901)), "a fresh reading asks the worker for the Centro de Notas");
+    const noF = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: { grupos: [], colunas: [{ id_coluna: 9, tipo_coluna: "final" }] } } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+    assert(!/\/10 · /.test(text(noF.header)), "no formula in the Centro de Notas: no number invented");
+    curso.grupos[0].grupo_colunas[1].coluna.nome_coluna = "Prova final";
+    const cp = await runContent("/courses/99901", [], { centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+    const cph = cp.anchor.kids[0];
+    assert(cph && /2,0 de 10 agora/.test(text(cph)) && /precisa 10,0\/10 em média no que falta/.test(text(cph)) && /Falta: Prova final/.test(text(cph)), "the course page: now, the need and what is left, from the Centro de Notas: " + (cph && text(cph)).slice(0, 200));
+  }
   const cdh = await runContent("/", null, { hidden: ["71306"] });
   assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing");
   cd.env.window.cpHiddenChanged(["71306"]); assert(!/\/10 · /.test(text(cd.header)), "unticked in the popup: off at once, no reload"); ok();

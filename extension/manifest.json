@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Caderno+ · PUCPR",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "description": "O Canvas da PUCPR melhorado: semana, avisos, lembretes, busca, tema escuro, quanto falta e arquivos. Não oficial.",
   "action": {
     "default_popup": "popup.html",
@@ -18,7 +18,8 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://pucpr.instructure.com/*"
+    "https://pucpr.instructure.com/*",
+    "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"
   ],
   "background": {
     "service_worker": "background.js"

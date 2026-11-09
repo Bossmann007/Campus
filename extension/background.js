@@ -87,6 +87,51 @@ async function grades(items) {
   await chrome.storage.local.set({ shown: Object.fromEntries(keep) });
 }
 
+// Centro de Notas (PUCPR's grade tool, an LTI tab in every course), read the way Canvas opens it, with the student's own
+// session: the course's tab -> sessionless launch -> the signed form -> the tool's session -> its page data (Inertia JSON).
+// One course at a time (the tool keeps one session per browser), only this exact host, and only what the engine needs is
+// kept: columns, formulas, weights and the student's own grades; no classmates, no student name.
+const CENTRO = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io";
+const unesc = s => s.replace(/&(amp|lt|gt|quot|#39|#x27);/g, m => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&#x27;": "'" })[m]);
+function slimCentro(cu) {
+  if (!cu || typeof cu !== "object") return null;
+  const num = x => typeof x === "number" && Number.isFinite(x) ? x : null;
+  const col = c => c && typeof c === "object" ? { id_coluna: c.id_coluna, nome_coluna: String(c.nome_coluna || "").slice(0, 120), tipo_coluna: String(c.tipo_coluna || ""), tipo_calculo: c.tipo_calculo ? String(c.tipo_calculo) : null,
+    publicacao_nota: c.publicacao_nota ? 1 : 0, atividade: c.atividade ? { pontos_possiveis: num(Number(c.atividade.pontos_possiveis)), omitir_nota_final: c.atividade.omitir_nota_final ? 1 : 0 } : null,
+    notas: (Array.isArray(c.notas) ? c.notas : []).slice(0, 1).map(n => ({ nota: n && n.nota != null ? String(n.nota).slice(0, 12) : null })),
+    colunas_associadas_pai: (Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []).slice(0, 60).map(k => ({ id_coluna: k && k.id_coluna, tipo_coluna: k && String(k.tipo_coluna || ""),
+      pivot: { peso_coluna_filho: k && k.pivot ? num(Number(k.pivot.peso_coluna_filho)) : null }, grupos: (k && Array.isArray(k.grupos) ? k.grupos : []).slice(0, 2).map(g => ({ id_grupo: g && g.id_grupo })) })) } : null;
+  return { grupos: (Array.isArray(cu.grupos) ? cu.grupos : []).slice(0, 30).map(g => ({ id_grupo: g && g.id_grupo, nome_grupo: String(g && g.nome_grupo || "").slice(0, 80),
+      grupo_colunas: (g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []).slice(0, 120).map(gc => ({ coluna: col(gc && gc.coluna) })).filter(gc => gc.coluna) })),
+    colunas: (Array.isArray(cu.colunas) ? cu.colunas : []).slice(0, 10).map(col).filter(Boolean) };
+}
+async function centroCourse(id, f = fetch) {
+  const json = async (u, o) => { const r = await f(u, o); if (!r.ok) throw new Error(String(r.status)); return JSON.parse((await r.text()).replace(/^while\(1\);/, "")); };
+  const tabs = await json(CANVAS + "/api/v1/courses/" + id + "/tabs");
+  const tab = Array.isArray(tabs) && tabs.find(t => t && t.label === "Centro de Notas" && t.type === "external"), tid = tab && /\/external_tools\/(\d+)/.exec(String(tab.html_url || ""));
+  if (!tid) return null;
+  const sl = await json(CANVAS + "/api/v1/courses/" + id + "/external_tools/sessionless_launch?id=" + tid[1]);
+  if (!sl || typeof sl.url !== "string" || !sl.url.startsWith(CANVAS + "/")) return null;
+  const page = await (await f(sl.url)).text(), form = /<form[^>]*action="([^"]+)"/.exec(page);
+  if (!form || unesc(form[1]) !== CENTRO + "/lti") return null;   // only PUCPR's tool, never another address the page names
+  const body = new URLSearchParams();
+  for (const m of page.matchAll(/<input[^>]*>/g)) { const n = /name="([^"]*)"/.exec(m[0]), v = /value="([^"]*)"/.exec(m[0]); if (n) body.append(unesc(n[1]), v ? unesc(v[1]) : ""); }
+  const lti = await f(CENTRO + "/lti", { method: "POST", body, credentials: "include" });
+  if (!lti.ok) return null;
+  const dp = /data-page="([^"]+)"/.exec(await lti.text()); let ver = ""; try { ver = dp ? String(JSON.parse(unesc(dp[1])).version || "") : ""; } catch (e) { /* no version */ }
+  const fin = await json(CENTRO + "/lti/finalize", { headers: { "X-Requested-With": "XMLHttpRequest", Accept: "application/json" }, credentials: "include" });
+  if (!fin || fin.status !== "success" || !/^\/curso\/\d{1,15}$/.test(String(fin.redirect_url))) return null;
+  const d = await json(CENTRO + fin.redirect_url, { headers: { "X-Inertia": "true", "X-Inertia-Version": ver, "X-Requested-With": "XMLHttpRequest" }, credentials: "include" });
+  return slimCentro(d && d.props && d.props.curso);
+}
+// every course of the reading, one after another; stored per Canvas user in "centro" (the panels repaint when it lands)
+async function centroAll(user, ids, f = fetch) {
+  const courses = {};
+  for (const id of ids) { try { courses[id] = await centroCourse(id, f); } catch (e) { courses[id] = null; } }
+  await chrome.storage.local.set({ centro: { user, at: Date.now(), courses } });
+  return courses;
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id || sender.origin !== CANVAS || !msg) return;
   if (msg.type === "next") {
@@ -114,6 +159,15 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       const [d] = chrome.downloads.search ? await chrome.downloads.search({ id }) : [];
       if (d && d.state !== "in_progress") await agentDone(id, d.state);   // a data: download can finish before the id was kept
       reply({ ok: true });
+    })().catch(() => reply({ ok: false }));
+    return true;
+  }
+  // read the Centro de Notas of these courses (from the panel's reading); at most once every 10 minutes per user
+  if (msg.type === "centro" && Array.isArray(msg.ids) && typeof msg.user === "number") {
+    (async () => {
+      const ids = msg.ids.map(String).filter(x => /^\d{1,15}$/.test(x)).slice(0, 15), { centro } = await chrome.storage.local.get("centro");
+      if (centro && centro.user === msg.user && Date.now() - centro.at < 10 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
+      await centroAll(msg.user, ids); reply({ ok: true });
     })().catch(() => reply({ ok: false }));
     return true;
   }

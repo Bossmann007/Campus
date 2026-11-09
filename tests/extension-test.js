@@ -5,7 +5,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "ut
 assert(manifest.description.length <= 132 && manifest.name.length <= 75, "Chrome Web Store limits: description <= 132 (" + manifest.description.length + "), name <= 75");
 assert.strictEqual(manifest.manifest_version, 3);
 assert.deepStrictEqual(manifest.permissions, ["storage", "downloads", "alarms", "notifications"], "no broad permissions");
-assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*"], "host access only to the PUCPR Canvas");
+assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*", "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"], "host access only to the PUCPR Canvas and PUCPR's Centro de Notas (its exact host)");
 assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"], ["https://pucpr.instructure.com/*"]], "page scripts only on the PUCPR Canvas");
 assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_idle"], "theme before the page paints, the rest after it loads");
 assert.strictEqual([].concat(...manifest.content_scripts.map(c => c.js)).filter(f => f === "prefs.js").length, 1, "prefs.js once: the scripts share one scope, a second copy would redeclare its consts");
