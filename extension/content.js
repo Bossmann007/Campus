@@ -934,7 +934,8 @@
   // bar's Anotações button or Alt+N, kept open ("notesOpen"). Built once per page: a redraw of the panel keeps what is typed.
   function notesSide(cache, show) {
     let host = document.getElementById("cp-notes");
-    if (!show) { if (host) host.remove(); return; }
+    const fit = () => { const r = document.documentElement; if (r && r.classList) r.classList.toggle("cp-notes-open", !!show); if (window.cpCards && gradeA) window.cpCards(gradeA); };   // the cards' columns follow the narrower box
+    if (!show) { if (host) host.remove(); fit(); return; }
     if (host) return;
     const cols = document.getElementById("DashboardCard_Container");
     host = el("div", "cp-host cp-noteshost"); host.id = "cp-notes";
@@ -944,8 +945,9 @@
     const nb = notesBlock(cache, "painel", null, () => window.cpRedraw && window.cpRedraw());
     box.append(h, ...nb.nodes); styleRoot(root); root.append(box);
     host.cpBusy = nb.busy;
-    if (cols && cols.parentNode) { host.style.cssText = "float:right;width:320px;margin:28px 0 12px 18px;position:relative;z-index:1"; cols.parentNode.insertBefore(host, cols); }
+    if (cols && cols.parentNode) { host.style.cssText = "float:right;width:300px;max-width:32%;margin:28px 0 12px 18px;position:relative;z-index:1"; cols.parentNode.insertBefore(host, cols); }
     else { const c = document.getElementById("content"); if (!c) return; c.prepend(host); }
+    fit();
   }
   let notesCache = null;
   async function toggleNotes(on) {

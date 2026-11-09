@@ -116,6 +116,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
     out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:96px; } .ic-DashboardCard__header-term { display:none !important; } .ic-DashboardCard__header { position:relative; }   /* the term repeats on every card */
 :root.cp-has-panel #DashboardCard_Container { padding-top:28px; }
+:root.cp-notes-open #DashboardCard_Container { display:flow-root; }   /* beside the Anotações column as one block: the cards do not wrap around it */
 .ic-Dashboard-header__layout .cp-off { display:none !important; }   /* the Caderno+ bar took the place of Canvas's switch to its new view */   /* its cards' row has a negative top margin: keep it off our panel */
 :root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 298px - 24px); margin-left:auto !important; margin-right:auto !important; }`);
     if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; height:72px !important; } .ic-DashboardCard__header_hero { opacity:1 !important; height:72px !important; }`);
