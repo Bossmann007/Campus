@@ -1,0 +1,10 @@
+#!/bin/sh
+# Build the Claude Desktop bundle: dist/caderno-mcp-<version>.mcpb (mcp/ with its lib/ copy; SPEC.md left out by .mcpbignore).
+# The packer is Anthropic's official CLI, pinned; it validates the manifest before packing.
+set -e
+cd "$(dirname "$0")/.."
+./scripts/sync-mcp-lib >/dev/null
+v=$(node -p 'require("./mcp/package.json").version')
+[ "$v" = "$(node -p 'require("./mcp/manifest.json").version')" ] || { echo "mcp/package.json and mcp/manifest.json versions differ"; exit 1; }
+mkdir -p dist
+npx -y @anthropic-ai/mcpb@2.1.2 pack mcp "dist/caderno-mcp-$v.mcpb"

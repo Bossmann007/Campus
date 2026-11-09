@@ -8,7 +8,10 @@ node tests/extension-test.js
 node tests/rules-test.js                                # validator on bad packs, two turmas in one core, draft without grades
 TZ=America/Sao_Paulo node tests/rules-golden.js app.html   # cc-manha numbers identical to before the rule packs
 TZ=America/Sao_Paulo node tests/inside-canvas-test.js
+cmp -s extension/core.js mcp/lib/core.js && cmp -s extension/collect.js mcp/lib/collect.js || { echo "stale mcp/lib: run scripts/sync-mcp-lib"; exit 1; }
+TZ=America/Sao_Paulo node tests/mcp-test.js                # the MCP server: read-only, token never in an output, the panel numbers
 for f in extension/*.js; do node --check "$f"; done
+for f in mcp/*.js; do node --check "$f"; done
 # generated files (rules block and turma lists, extension calculator page, core copy, bookmarklet) must match their sources
 t=$(mktemp -d); cp -R app.html index.html README.md extension scripts rules "$t"; (cd "$t" && ./scripts/sync-ext-core >/dev/null && ./scripts/sync-bookmarklet >/dev/null)
 diff -rq extension "$t/extension" && cmp -s index.html "$t/index.html" && cmp -s app.html "$t/app.html" && cmp -s README.md "$t/README.md" && echo "generated files up to date" || { echo "stale generated files: run scripts/sync-ext-core and scripts/sync-bookmarklet"; rm -rf "$t"; exit 1; }
