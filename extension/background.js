@@ -102,6 +102,18 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     grades(msg.items).then(() => reply({ ok: true }));
     return true;
   }
+  // "Arquivo para a sua IA": the panel's snapshot into <pasta>/caderno-agente.json, overwritten, then out of the
+  // download history. Only with the switch on, only a plain object, at most 96 KB.
+  if (msg.type === "agentFile" && msg.data && typeof msg.data === "object" && !Array.isArray(msg.data)) {
+    (async () => {
+      const p = cpPrefs((await chrome.storage.local.get("prefs")).prefs), text = JSON.stringify(msg.data);
+      if (!p.agentFile || text.length > 96 * 1024) return reply({ ok: false });
+      const id = await chrome.downloads.download({ url: "data:application/json;charset=utf-8," + encodeURIComponent(text), filename: cpFolder(p.dlFolder) + "/caderno-agente.json", conflictAction: "overwrite", saveAs: false });
+      await chrome.storage.session.set({ agentDl: id });
+      reply({ ok: true });
+    })().catch(() => reply({ ok: false }));
+    return true;
+  }
   if (msg.type === "download" && Array.isArray(msg.items)) {
     (async () => {
       const done = [], root = cpFolder(cpPrefs((await chrome.storage.local.get("prefs")).prefs).dlFolder);
@@ -123,6 +135,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 chrome.downloads.onChanged.addListener(async ch => {
   const state = ch.state && ch.state.current;
   if (state !== "complete" && state !== "interrupted") return;
+  const { agentDl } = await chrome.storage.session.get("agentDl");
+  if (agentDl === ch.id) { await chrome.storage.session.remove("agentDl"); if (chrome.downloads.erase) chrome.downloads.erase({ id: ch.id }); return; }   // the file stays, its history line goes
   const { pending = {} } = await chrome.storage.session.get("pending"), fileId = pending[ch.id];
   if (fileId === undefined) return;
   delete pending[ch.id]; await chrome.storage.session.set({ pending });

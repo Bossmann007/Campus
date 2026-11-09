@@ -571,6 +571,31 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(dsh.store.notesOpen === false, "the button closes it"); }
   ok();
 
+  { // "Arquivo para a sua IA": off by default; on, one snapshot per reading, written over the same file and out of the history
+    const off = await runContent("/", null, {}); await new Promise(r => setTimeout(r, 20));
+    assert(!off.sent.some(m => m.type === "agentFile"), "switched off by default: no file");
+    const af = await runContent("/", null, { prefs: { agentFile: true } }); await new Promise(r => setTimeout(r, 30));
+    const m = af.sent.find(x => x.type === "agentFile"), d = m && m.data, js = JSON.stringify(d || {});
+    assert(d && d.version === 1 && d.app === "caderno-plus" && typeof d.read_at === "string" && Array.isArray(d.subjects) && Array.isArray(d.upcoming) && Array.isArray(d.announcements) && Array.isArray(d.grades), "the snapshot");
+    assert(!/"author"|"avatar"|"user"|"message"|"url"/.test(js), "no author, photo, user id, message body or links");
+    assert(d.upcoming.concat(d.announcements).every(x => x.untrusted_canvas_text && typeof x.untrusted_canvas_text.title === "string") && d.grades.every(g => g.untrusted_canvas_text && g.assignments.every(x => x.untrusted_canvas_text)), "every Canvas string inside untrusted_canvas_text");
+    assert(d.subjects.every(x => typeof x.label === "string" && x.untrusted_canvas_text === undefined) && js.length < 96 * 1024, "quanto falta as the panel's labels, under 96 KB");
+    assert(d.subjects.length >= 1 && d.upcoming.length >= 1 && d.announcements.length >= 1 && d.grades.length >= 1 && d.turma_confirmed === true, "every part filled from the reading");
+    assert(typeof af.store.agentAt === "number", "the reading written is remembered (one file per reading)");
+    local.prefs = { agentFile: false }; let r = await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB);
+    assert(r && r.ok === false, "the worker refuses when the switch is off");
+    local.prefs = { agentFile: true, dlFolder: "Minha Pasta" }; const n0 = swSaved.length;
+    r = await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB);
+    const w = swSaved[swSaved.length - 1];
+    assert(r.ok && swSaved.length === n0 + 1 && w.filename === "Minha Pasta/caderno-agente.json" && w.conflictAction === "overwrite" && w.saveAs === false && /^data:application\/json;charset=utf-8,/.test(w.url), "written over <pasta>/caderno-agente.json");
+    assert(typeof session.agentDl === "number", "its id kept to clear the history line");
+    await listeners.changed({ id: session.agentDl, state: { current: "complete" } });
+    assert.strictEqual(session.agentDl, undefined, "finished: out of the download history");
+    assert.strictEqual((await ask({ type: "agentFile", data: { x: "a".repeat(100 * 1024) } }, CANVAS_TAB)).ok, false, "over 96 KB refused");
+    assert.strictEqual(await ask({ type: "agentFile", data: [1] }, CANVAS_TAB), "no reply", "not a plain object: ignored");
+    assert.strictEqual(await ask({ type: "agentFile", data: { a: 1 } }, { id: "other", origin: "https://pucpr.instructure.com" }), "no reply", "another extension: ignored");
+    local.prefs = {}; ok(); }
+
   // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
   const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
   const ibx = all(ib.anchor).find(e => /card news inbox/.test(e.className));
