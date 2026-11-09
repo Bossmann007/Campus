@@ -7,11 +7,13 @@ replaces phase B of `bridge/SPEC.md` (the native-messaging bridge); the JSON fil
 ## Update (2026-11-09, later): no token by default
 
 The default source is now the extension's file (`bridge/SPEC.md`, "Arquivo para a sua IA"): `mcp/file.js` reads
-`<Downloads>/<pasta>/caderno-agente.json` (or `CADERNO_FILE`), checks it like any input (ours, version 1, ≤ 200 KB,
-every string cleaned again) and serves `quanto_falta` (with hand grades), `upcoming`, `grades`, `courses` and
+`Downloads/PUCPR/caderno-agente.json` or `CADERNO_FILE` only (never a scan of Downloads: an unzipped download could
+plant one), opens it as a regular file only (no symlink, FIFO or device; size checked on the open file), refuses a
+future `read_at`, and treats every value as untrusted (the format check is not proof of origin): enums and patterns
+for status, id, label and kind, every free string cleaned and inside `untrusted_canvas_text`. It serves `quanto_falta` (with hand grades), `upcoming`, `grades`, `courses` and
 `announcements` from it; `modules` needs the token. With the file the MCP never calls Canvas and holds no credential,
-which also takes it out of Instructure API Policy §3(i)'s "MCP servers" (only the extension reads Canvas, as it already
-does). The token mode below stays as the optional way for fresh data and modules. The file wins when both exist.
+which, in file mode, keeps the MCP from reaching Canvas at all (only the extension reads Canvas, as it already does);
+the same package still ships the token mode, which does reach Canvas. The token mode below stays as the optional way for fresh data and modules. The file wins when both exist.
 
 ## Prior art (2026-11-09)
 

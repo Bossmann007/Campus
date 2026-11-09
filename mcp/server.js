@@ -40,9 +40,9 @@ async function main() {
   let secret = null, canvas = null;
   const scrub = s => scrubber(secret)(s);
   const getCanvas = async () => {
-    if (canvas) return canvas;
-    const f = makeFileSource();   // first the extension's file: no token, and quanto falta with the grades typed by hand
+    const f = makeFileSource();   // first the extension's file, on every call (it may appear or go): no token, hand grades in
     if (f.ok) return f;
+    if (canvas) return canvas;
     const { token, from } = await vault.readToken();
     if (!token) return { error: "Sem dados do Caderno+. Sem token: na extensão, ligue \"Arquivo para a sua IA\" e abra o Canvas uma vez. Ou com um token do Canvas (" + from + "): node \"" + require("path").join(__dirname, "cli.js") + "\" login" };   // never "npx caderno-mcp": that npm name is not ours yet
     secret = token; canvas = makeCanvas(token); return canvas;

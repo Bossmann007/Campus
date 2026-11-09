@@ -22,7 +22,7 @@ trabalho, não responde quiz, não manda mensagem, não marca nada.
   "quanto falta" inclui as notas que você digitou. Os dados são os da última vez que você abriu o Canvas; módulos não vêm.
 - **Com token (opcional):** dado na hora e módulos das matérias, mas o token dá acesso total à sua conta (veja abaixo).
 
-Se os dois existem, vale o arquivo. Outro lugar para o arquivo: `CADERNO_FILE=/caminho/absoluto/caderno-agente.json`.
+O MCP procura só em `Downloads/PUCPR/caderno-agente.json` (a pasta padrão da extensão). Se você escolheu outra pasta, diga onde está: `CADERNO_FILE=/caminho/absoluto/caderno-agente.json`. Ele não procura em outras pastas de propósito: um arquivo baixado de um site poderia se passar pelo seu. Se os dois jeitos existem, vale o arquivo.
 
 ## Instalar no Claude Desktop (mais fácil)
 
