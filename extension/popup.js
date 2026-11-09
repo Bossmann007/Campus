@@ -2,11 +2,6 @@
 // Opened in a tab (popup.html#tab) for the import: a file dialog closes the popup on some systems.
 const $ = id => document.getElementById(id);
 $("ver").textContent = "v" + chrome.runtime.getManifest().version;
-// "Arquivo para a sua IA" turned itself off (Chrome asked where to save): say why; turning it on again clears it.
-// where the last file went (the worker keeps Chrome's absolute path): what the student gives the MCP if it is not the default
-chrome.storage.local.get("agentPath").then(({ agentPath }) => { if (typeof agentPath === "string" && agentPath) { $("agentPath").textContent = "Gravado em: " + agentPath; $("agentPath").hidden = false; } });
-chrome.storage.local.get("agentErr").then(({ agentErr }) => { if (typeof agentErr === "string" && agentErr) { $("agentErr").textContent = agentErr; $("agentErr").hidden = false; } });
-for (const b of document.querySelectorAll('[data-pref="agentFile"]')) b.addEventListener("change", () => { if (b.checked) { chrome.storage.local.remove("agentErr"); $("agentErr").hidden = true; } });
 // Novidades (notes.js): once after an update, until "Entendi" (shared with the panel on the dashboard).
 if (typeof CP_NOTES === "object" && CP_NOTES && Array.isArray(CP_NOTES.items)) chrome.storage.local.get("notesSeen").then(({ notesSeen }) => {
   if (notesSeen === CP_NOTES.version) return;
@@ -139,6 +134,25 @@ $("f25").addEventListener("click", () => startFocus("foco", 25));
 $("f5").addEventListener("click", () => startFocus("pausa", 5));
 $("fstop").addEventListener("click", async () => { for (const k of ["foco", "pausa"]) await chrome.alarms.clear("focus|" + k); await chrome.storage.local.remove("focus"); showFocus(); });
 showFocus(); setInterval(showFocus, 1000);
+
+// A seguir: the next three deadlines and exams the worker keeps for the reminders (chrome.storage.local "upcoming").
+chrome.storage.local.get("upcoming").then(({ upcoming }) => {
+  if (!Array.isArray(upcoming)) return;
+  const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const t = iso(new Date()), tm = iso(new Date(Date.now() + 864e5)), list = upcoming.filter(x => x && x.date >= t).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  if (!list.length) return;
+  for (const x of list) { const li = document.createElement("li"), d = document.createElement("span"), n = document.createElement("span");
+    d.className = "d"; d.textContent = x.date === t ? "hoje" : x.date === tm ? "amanhã" : x.date.slice(8, 10) + "/" + x.date.slice(5, 7); n.textContent = x.title;
+    li.append(d, n); $("nextList").appendChild(li); }
+  $("nextBox").hidden = false;
+});
+// The last error (kept by the Canvas pages, no data): shown for a day, with its details to paste in a bug report.
+chrome.storage.local.get("lastError").then(({ lastError: e }) => {
+  if (!e || typeof e !== "object" || !(Date.now() - e.at < 864e5)) return;
+  $("errText").textContent = "Último erro: " + String(e.where || "") + " — " + String(e.msg || "");
+  $("errLine").hidden = false;
+  $("errCopy").addEventListener("click", () => navigator.clipboard.writeText(JSON.stringify(e)).then(() => { $("errCopy").textContent = "Copiado ✓"; }, () => {}));
+});
 
 // Tabs: Visual, Painel, Avisos, Mais; the last one opened comes back (this extension's localStorage). Novidades stay above them.
 const tabs = [...document.querySelectorAll("[role=tab]")];

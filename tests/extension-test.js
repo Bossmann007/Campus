@@ -19,19 +19,20 @@ assert(["storage", "downloads", "alarms", "notifications", "pucpr.instructure.co
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 const ob = fs.readFileSync(path.join(dir, "onboarding.html"), "utf8");
 { const ai = fs.readFileSync(path.join(dir, "ai.html"), "utf8"), pk = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
-  assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ai) && !/\son\w+=/.test(ai) && /id="agentFile"/.test(ai) && /ai\.html ai\.css ai\.js/.test(pk), "Sua IA page: no inline script (MV3 CSP), the switch, shipped in the zip"); }
+  assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ai) && !/\son\w+=/.test(ai) && /Novo token de acesso/.test(ai) && !/caderno-agente|agentFile/.test(ai) && /ai\.html ai\.css ai\.js/.test(pk), "Sua IA page: no inline script (MV3 CSP), the token steps, no file, shipped in the zip"); }
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ob) && !/\son\w+=/.test(ob), "onboarding: no inline script or handler (MV3 CSP)");
 assert(/details\.reason === "install"\) \{ chrome\.storage\.local\.set\(\{ notesSeen: chrome\.runtime\.getManifest\(\)\.version \}\); chrome\.tabs\.create\(\{ url: chrome\.runtime\.getURL\("onboarding\.html"\) \}\)/.test(fs.readFileSync(path.join(dir, "background.js"), "utf8")), "the onboarding opens on first install");
-for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst", "agentFile"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
+for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
-assert(/id="agentErr"/.test(html) && /Perguntar onde salvar cada arquivo/.test(html), "popup: the file switch says Chrome must not ask where to save, and shows why it turned off");
+assert(!/agentErr|agentFile|caderno-agente/.test(html), "popup: no AI file switch (6.0: the MCP uses a token)");
 { // "Conectar sua IA": the popup only links to the site page; the page and the privacy text carry the warnings
   const root = path.join(__dirname, ".."), ia = fs.readFileSync(path.join(root, "ia.html"), "utf8"), pv = fs.readFileSync(path.join(root, "privacidade.html"), "utf8");
   assert(/<a id="ia" href="https:\/\/falta-quanto\.vercel\.app\/ia" target="_blank" rel="noopener noreferrer">/.test(html), "popup: one link to the site's /ia page");
   assert(!/mcp|caderno-mcp/i.test(fs.readdirSync(dir).join(" ")), "no MCP code inside the extension");
   assert(/^!ia\.html$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")) && !/<script/i.test(ia), "the /ia page is published, with no scripts");
   assert(!/npx|caderno-mcp (login|status|setup)/.test(ia.replace(/<!--[\s\S]*?-->/g, "")) && /Ainda não publicado/.test(ia), "no runnable install command before the npm name is ours");
-  assert(/não usa token nenhum/.test(ia) && /Ligue o arquivo na extensão \(sem token\)/.test(ia) && /<details><summary>Opcional: com token/.test(ia), "the /ia page leads with the no-token way; the token is optional");
+  assert(/<h2>1\. Crie um token no Canvas<\/h2>/.test(ia) && /\+ Novo token de acesso/.test(ia) && /Nunca cole o token/.test(ia) && /revogar o token a qualquer momento/.test(ia), "the /ia page: the token path in steps, never paste it in a chat, revoke any time");
+  assert(!/caderno-agente|Arquivo para a sua IA/.test(ia + pv), "the removed AI file is gone from the site");
   for (const w of [/nuvem da empresa da IA/, /acesso <b>total<\/b>/, /3\(i\)/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
   assert(/Caderno\+ MCP: conectar sua IA/.test(pv) && /aqui os dados saem do computador/.test(pv) && /única exceção é opcional/.test(pv), "privacy page: the MCP section and the exception in the summary"); }
 assert(/const KEEP = \[[^\]]*"checks"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /checks: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "the backup carries the checklists, validated on import");

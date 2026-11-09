@@ -226,7 +226,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "4.1.0";
+  const EXT_LATEST = "6.0.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -317,7 +317,8 @@ const NotasCore = (() => {
   // - A part neither shown nor in a group: "incompleto" (no number rather than a wrong one).
   // - The tool's own final value wins: now is it, and the projection is shifted by what the visible formula misses.
   // - "total" adds raw points; the means use each leaf on 10 (a leaf not on 10 inside a mean: approx, the scale is a guess).
-  function centro(curso, meta) {
+  // fill (optional, 0-10): also returns projected, the final with that grade on everything left (the course page simulator).
+  function centro(curso, meta, fill) {
     const none = st => ({ status: st, now: 0, need: null, left: [], approx: false });
     try {
       if (!curso || typeof curso !== "object") return none("sem-formula");
@@ -373,10 +374,11 @@ const NotasCore = (() => {
       }
       const base = val(fin, 0, new Set()), shift = shown != null ? shown - base : 0, at = f => val(fin, f, new Set()) + shift;
       const now = Math.round(at(0) * 100) / 100, T = Number(meta) || 7, left = [...open];
-      if (at(0) >= T - 1e-9) return { status: "garantido", now, need: 0, left, approx };
-      if (!left.length || at(1) < T - 1e-9) return { status: "nao-da", now, need: null, left, approx };
+      const extra = fill != null && Number.isFinite(Number(fill)) ? { projected: Math.round(Math.min(10, at(Math.min(10, Math.max(0, Number(fill))) / 10)) * 100) / 100 } : {};
+      if (at(0) >= T - 1e-9) return Object.assign({ status: "garantido", now, need: 0, left, approx }, extra);
+      if (!left.length || at(1) < T - 1e-9) return Object.assign({ status: "nao-da", now, need: null, left, approx }, extra);
       let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (at(mid) >= T - 1e-9) hi = mid; else lo = mid; }
-      return { status: "precisa", now, need: Math.round(hi * 1000) / 100, left, approx };
+      return Object.assign({ status: "precisa", now, need: Math.round(hi * 1000) / 100, left, approx }, extra);
     } catch (e) { return none("sem-formula"); }
   }
   return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,

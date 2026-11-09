@@ -6,13 +6,15 @@
     <header><b class="wm">Caderno<i>+</i></b><span class="tagl">Sua IA</span></header>
 
     <h1>Sua IA, com o seu Canvas.</h1>
-    <p class="lead">O Caderno+ grava o que o painel mostra num arquivo no seu computador. O Caderno+ MCP lê esse arquivo e a sua IA (Claude, ChatGPT, Gemini, Codex) responde sem token e sem acessar o Canvas.</p>
+    <p class="lead">O Caderno+ MCP é um programinha que roda no seu computador e deixa o Claude, o ChatGPT desktop, o Gemini ou o Codex lerem o seu Canvas: quanto falta (com a fórmula do Centro de Notas), a semana, as notas, os avisos, os módulos e os professores. Sem servidor e sem arquivo: ele usa um token do seu Canvas guardado no cofre do sistema.</p>
 
-    <div class="state" id="state">
-      <span class="dot" aria-hidden="true"></span>
-      <span class="what"><b id="stTitle">Desligado</b><small id="stSub">Ligue para gravar o arquivo na próxima página do Canvas.</small><small id="agentErr" class="err" hidden></small></span>
-      <label class="sw"><span class="sr">Arquivo para a sua IA</span><input type="checkbox" role="switch" id="agentFile"></label>
-    </div>
+    <ol class="steps3 big">
+      <li><b>Crie um token no Canvas</b><span>Conta → Configurações → "+ Novo token de acesso". Finalidade: "Caderno+ MCP"; validade: o fim do semestre. Copie o token (ele só aparece uma vez).</span><span class="acts"><a class="btn" id="tokenPage" href="https://pucpr.instructure.com/profile/settings" target="_blank" rel="noopener noreferrer">Abrir configurações do Canvas ↗</a></span></li>
+      <li><b>Instale o Caderno+ MCP no app da sua IA</b><span>Claude Desktop: abra o arquivo .mcpb e cole o token na janela. Claude Code, Codex, Gemini CLI: <code>caderno-mcp login</code> guarda o token no cofre (Keychain, Windows, Linux). <em class="soon">em breve</em></span><span class="acts"><a class="btn" id="howto" href="https://falta-quanto.vercel.app/ia" target="_blank" rel="noopener noreferrer">Passo a passo por app ↗</a></span></li>
+      <li><b>Pergunte</b><span>Use as perguntas abaixo, ou as suas. A IA consulta o Canvas na hora, só leitura.</span></li>
+    </ol>
+
+    <div class="warn"><b>Cuidado com o token.</b> Ele dá acesso à sua conta do Canvas: nunca cole em chat nem mande para ninguém. O Caderno+ MCP só lê, e só fala com o Canvas da PUCPR e o Centro de Notas. Para cancelar, apague o token nas configurações do Canvas.</div>
 
     <h2>O que ela sabe responder</h2>
     <p class="fine">Clique numa pergunta para copiar.</p>
@@ -21,24 +23,15 @@
       <button type="button" data-q="O que vence nos próximos 7 dias? Separe provas e entregas."><b>Próximos dias</b><span>O que vence nos próximos 7 dias?</span></button>
       <button type="button" data-q="Quais notas já saíram em Banco de Dados?"><b>Notas</b><span>Quais notas já saíram em Banco de Dados?</span></button>
       <button type="button" data-q="Tem aviso novo de algum professor?"><b>Avisos</b><span>Tem aviso novo de algum professor?</span></button>
-      <button type="button" data-q="O que ainda falta nos meus checklists? Comece pelo que tem dia."><b>Seus checklists</b><span>O que ainda falta nos meus checklists?</span></button>
-      <button type="button" data-q="O que mudou no Canvas desde a minha última visita?"><b>O que mudou</b><span>O que mudou no Canvas desde a última visita?</span></button>
       <button type="button" data-q="Quem é o professor de cada matéria?"><b>Professores</b><span>Quem é o professor de cada matéria?</span></button>
       <button type="button" data-q="Em que módulo está o material de JOIN?"><b>Módulos</b><span>Em que módulo está o material de JOIN?</span></button>
-      <button type="button" data-q="Monte um plano de estudo para esta semana com as minhas entregas, provas e checklists."><b>Plano da semana</b><span>Monte um plano de estudo para esta semana.</span></button>
+      <button type="button" data-q="Se eu tirar 7 na prova que falta de Imperativa, com quanto eu fico? E quanto preciso para passar com 7?"><b>Simular</b><span>Se eu tirar 7 na prova que falta, fico com quanto?</span></button>
+      <button type="button" data-q="Monte um plano de estudo para esta semana com as minhas entregas e provas, começando pelo que vale mais nota."><b>Plano da semana</b><span>Monte um plano de estudo para esta semana.</span></button>
     </div>
     <p class="fine" id="copied" role="status"></p>
 
-    <h2>Conectar em três passos</h2>
-    <ol class="steps3">
-      <li><b>Ligue o arquivo</b><span>No botão acima. Precisa de "Perguntar onde salvar cada arquivo" desligado nas configurações de downloads do Chrome.</span></li>
-      <li><b>Instale o Caderno+ MCP</b><span>No app da sua IA (Claude, ChatGPT desktop, Gemini CLI, Codex, Claude Code). <a id="howto" href="https://falta-quanto.vercel.app/ia" target="_blank" rel="noopener noreferrer">Passo a passo para cada app</a></span></li>
-      <li><b>Pergunte</b><span>Abra o Canvas uma vez para gravar o arquivo e use as perguntas acima.</span></li>
-    </ol>
-
-    <p class="fine">O arquivo fica só no seu computador: quanto falta, a semana, os avisos (só o título), as notas, seus checklists e tarefas, o que mudou, os títulos dos módulos e o nome dos professores. Sem autor, sem texto de mensagens, sem o seu número no Canvas. A sua IA recebe o que você perguntar: veja a privacidade do app dela.</p>
+    <p class="fine">A sua IA recebe o que ela consultar para responder: veja a privacidade do app dela. O Caderno+ (a extensão) não envia nada para servidor nenhum.</p>
   </main>
-  <script src="prefs.js"></script>
   <script src="ai.js"></script>
 </body>
 </html>

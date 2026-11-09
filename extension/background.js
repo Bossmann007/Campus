@@ -154,21 +154,6 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     grades(msg.items).then(() => reply({ ok: true }));
     return true;
   }
-  // "Arquivo para a sua IA": the panel's snapshot into <pasta>/caderno-agente.json, overwritten, then out of the
-  // download history. Only with the switch on, only a plain object, at most 96 KB.
-  if (msg.type === "agentFile" && msg.data && typeof msg.data === "object" && !Array.isArray(msg.data)) {
-    (async () => {
-      const p = cpPrefs((await chrome.storage.local.get("prefs")).prefs), text = JSON.stringify(msg.data);
-      if (!p.agentFile || text.length > 96 * 1024) return reply({ ok: false });
-      const id = await chrome.downloads.download({ url: "data:application/json;charset=utf-8," + encodeURIComponent(text), filename: cpFolder(p.dlFolder) + "/caderno-agente.json", conflictAction: "overwrite", saveAs: false });
-      const { agentDl = [] } = await chrome.storage.session.get("agentDl");
-      await chrome.storage.session.set({ agentDl: agentDl.concat(id).slice(-10) });   // a list: two tabs at once each get their line erased
-      const [d] = chrome.downloads.search ? await chrome.downloads.search({ id }) : [];
-      if (d && d.state !== "in_progress") await agentDone(id, d.state);   // a data: download can finish before the id was kept
-      reply({ ok: true });
-    })().catch(() => reply({ ok: false }));
-    return true;
-  }
   // read the Centro de Notas of these courses (from the panel's reading); at most once every 10 minutes per user
   if (msg.type === "centro" && Array.isArray(msg.ids) && typeof msg.user === "number") {
     (async () => {
@@ -196,27 +181,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
 });
-// The IA file finished: the file stays, its history line goes. Interrupted (Chrome's "ask where to save each file" is on,
-// or the student cancelled): the switch turns itself off and the popup says why, so no dialog comes back on every reading.
-async function agentDone(id, state) {
-  const { agentDl = [] } = await chrome.storage.session.get("agentDl");
-  await chrome.storage.session.set({ agentDl: agentDl.filter(x => x !== id) });
-  if (state === "complete" && chrome.downloads.search) {   // the absolute path, shown in the popup so the student can give it to the MCP
-    const [d] = await chrome.downloads.search({ id });
-    if (d && typeof d.filename === "string" && /caderno-agente\.json$/.test(d.filename)) await chrome.storage.local.set({ agentPath: d.filename });
-  }
-  if (chrome.downloads.erase) chrome.downloads.erase({ id });
-  if (state === "interrupted") {
-    const { prefs } = await chrome.storage.local.get("prefs");
-    await chrome.storage.local.set({ prefs: Object.assign({}, prefs, { agentFile: false }), agentErr: "O Chrome não deixou gravar o arquivo. Desligue \"Perguntar onde salvar cada arquivo\" nas configurações de downloads do Chrome e ligue de novo." });
-  }
-}
 // A file counts as downloaded only when Chrome finishes it; cancelled or failed ones stay "new".
 chrome.downloads.onChanged.addListener(async ch => {
   const state = ch.state && ch.state.current;
   if (state !== "complete" && state !== "interrupted") return;
-  const { agentDl = [] } = await chrome.storage.session.get("agentDl");
-  if (agentDl.includes(ch.id)) return agentDone(ch.id, state);
   const { pending = {} } = await chrome.storage.session.get("pending"), fileId = pending[ch.id];
   if (fileId === undefined) return;
   delete pending[ch.id]; await chrome.storage.session.set({ pending });
@@ -227,6 +195,10 @@ chrome.downloads.onChanged.addListener(async ch => {
 chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); });
 chrome.runtime.onInstalled.addListener(details => {
   chrome.alarms.create("tick", { periodInMinutes: 60 }); scheduleWeek(); showNext();
+  if (details && details.reason === "update") {   // 6.0: the file for the AI is gone (the MCP uses a token): its keys go too
+    chrome.storage.local.remove(["agentAt", "agentErr", "agentPath"]);
+    chrome.storage.local.get("prefs").then(({ prefs }) => { if (prefs && "agentFile" in prefs) { const p = Object.assign({}, prefs); delete p.agentFile; chrome.storage.local.set({ prefs: p }); } });
+  }
   if (details && details.reason === "install") { chrome.storage.local.set({ notesSeen: chrome.runtime.getManifest().version }); chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }); }   // first install: the onboarding, not the Novidades
 });
 // Foco (started in the popup): the end of a study block or a break.

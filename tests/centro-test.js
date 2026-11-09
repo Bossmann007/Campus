@@ -31,6 +31,10 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.deepStrictEqual(r.left.sort(), [20, 21], "left: the RA2 work and exam, not the recovery");
   ok();
 }
+{ // the simulator: the final with a given grade on everything left (3,4 + 0,6 × 8 = 8,2)
+  assert.strictEqual(centro(imp(null, null, "3,40"), 7, 8).projected, 8.2); assert.strictEqual(centro(imp(null, null, "3,40"), 7).projected, undefined);
+  ok();
+}
 { // partly graded and the extremes
   const half = centro(imp("10,00", null, null), 7);   // 3,4 + 0,6 × (0,3 × 10 + 0,7 × x) ≥ 7 → x = 4,29
   assert(Math.abs(half.need - 4.29) < 0.01, "one RA2 part graded: " + half.need);

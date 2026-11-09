@@ -614,49 +614,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(dsh.store.notesOpen === false, "the button closes it"); }
   ok();
 
-  { // "Arquivo para a sua IA": off by default; on, one snapshot per reading, written over the same file and out of the history
-    const off = await runContent("/", null, {}); await new Promise(r => setTimeout(r, 20));
-    assert(!off.sent.some(m => m.type === "agentFile"), "switched off by default: no file");
-    const af = await runContent("/", null, { prefs: { agentFile: true } }); await new Promise(r => setTimeout(r, 30));
-    const m = af.sent.find(x => x.type === "agentFile"), d = m && m.data, js = JSON.stringify(d || {});
-    assert(d && d.version === 2 && ["checklists", "tasks", "changes", "modules", "teachers"].every(k => Array.isArray(d[k])) && d.app === "caderno-plus" && typeof d.read_at === "string" && Array.isArray(d.subjects) && Array.isArray(d.upcoming) && Array.isArray(d.announcements) && Array.isArray(d.grades), "the snapshot");
-    assert(!/"author"|"avatar"|"user"|"message"|"url"/.test(js), "no author, photo, user id, message body or links");
-    assert(d.upcoming.concat(d.announcements).every(x => x.untrusted_canvas_text && typeof x.untrusted_canvas_text.title === "string") && d.grades.every(g => g.untrusted_canvas_text && g.assignments.every(x => x.untrusted_canvas_text)), "every Canvas string inside untrusted_canvas_text");
-    assert(d.subjects.every(x => typeof x.label === "string" && x.untrusted_canvas_text === undefined) && js.length < 96 * 1024, "quanto falta as the panel's labels, under 96 KB");
-    assert(d.subjects.length >= 1 && d.upcoming.length >= 1 && d.announcements.length >= 1 && d.grades.length >= 1 && d.turma_confirmed === true, "every part filled from the reading");
-    { // version 2 with the student's own items: checklists, tasks (done from the ticks), module titles without links, teachers
-      const big = "x".repeat(200), lists = {}; for (let i = 1; i <= 13; i++) lists[String(i)] = Array.from({ length: 50 }, (_, j) => ({ id: "c" + j, t: big, done: j % 2 === 0 }));
-      const own = await runContent("/", null, { prefs: { agentFile: true }, checks: { 5: Object.assign({ painel: [{ id: "p1", t: "revisar JOIN", done: false, date: "2026-12-01" }] }, lists) },
-        tasks: { 5: [{ id: "t1", title: "imprimir resumo", date: null }] }, marks: { 5: { "own:t1": "2026-11-01" } },
-        search: { user: 5, at: Date.now(), items: [{ t: "Lista JOIN", c: "BD · Semana 5", u: "https://pucpr.instructure.com/courses/71306/modules/items/9", k: "tarefa" }] },
-        teachers: { user: 5, at: Date.now(), list: [{ id: 7, name: "Prof. Ana Lima", avatar: "https://x/y.png", course: 71306, courseName: "BD" }] } });
-      await new Promise(r => setTimeout(r, 40));
-      const d2 = own.sent.filter(x => x.type === "agentFile").pop().data, j2 = JSON.stringify(d2), bytes = Buffer.byteLength(j2);
-      assert(bytes <= 90 * 1024, "13 full checklists still fit: trimmed to 90 KB (" + bytes + " bytes)");
-      assert(d2.checklists.some(c => c.items.some(x => x.untrusted_canvas_text.text === "revisar JOIN" && x.date === "2026-12-01")) && d2.tasks[0].done === true, "checklists kept with their day, tasks done from the ticks");
-      assert(!/instructure\.com\/courses|"avatar"|"u":|y\.png/.test(j2) && d2.teachers[0].untrusted_canvas_text.name === "Prof. Ana Lima", "no module link, no photo; teacher by name"); }
-    assert(/^\d+\|PUCPR\|[0-9a-z]+$/.test(af.store.agentAt), "the reading, folder and own items written are remembered (one file per reading, folder and own items)");
-    local.prefs = { agentFile: false }; let r = await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB);
-    assert(r && r.ok === false, "the worker refuses when the switch is off");
-    local.prefs = { agentFile: true, dlFolder: "Minha Pasta" }; const n0 = swSaved.length;
-    r = await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB);
-    const w = swSaved[swSaved.length - 1];
-    assert(r.ok && swSaved.length === n0 + 1 && w.filename === "Minha Pasta/caderno-agente.json" && w.conflictAction === "overwrite" && w.saveAs === false && /^data:application\/json;charset=utf-8,/.test(w.url), "written over <pasta>/caderno-agente.json");
-    const did = session.agentDl[session.agentDl.length - 1];
-    assert(typeof did === "number", "its id kept to clear the history line");
-    chromeSW.downloads.search = async q => [{ id: q.id, state: "complete", filename: "/Users/aluno/Downloads/Minha Pasta/caderno-agente.json" }];
-    await listeners.changed({ id: did, state: { current: "complete" } });
-    assert.strictEqual(local.agentPath, "/Users/aluno/Downloads/Minha Pasta/caderno-agente.json", "the absolute path kept for the popup");
-    delete chromeSW.downloads.search;
-    assert(!session.agentDl.includes(did) && local.prefs.agentFile === true, "finished: out of the download history, switch still on");
-    await ask({ type: "agentFile", data: { a: 2 } }, CANVAS_TAB); const did2 = session.agentDl[session.agentDl.length - 1];
-    await listeners.changed({ id: did2, state: { current: "interrupted" } });
-    assert(local.prefs.agentFile === false && /Perguntar onde salvar/.test(local.agentErr), "interrupted (Chrome asks where to save): the switch turns itself off and says why");
-    delete local.agentErr; local.prefs = { agentFile: true, dlFolder: "Minha Pasta" };
-    assert.strictEqual((await ask({ type: "agentFile", data: { x: "a".repeat(100 * 1024) } }, CANVAS_TAB)).ok, false, "over 96 KB refused");
-    assert.strictEqual(await ask({ type: "agentFile", data: [1] }, CANVAS_TAB), "no reply", "not a plain object: ignored");
-    assert.strictEqual(await ask({ type: "agentFile", data: { a: 1 } }, { id: "other", origin: "https://pucpr.instructure.com" }), "no reply", "another extension: ignored");
-    local.prefs = {}; ok(); }
+  { // 6.0: no file for the AI any more (the MCP reads Canvas with the student's token): nothing written, nothing asked
+    const run = await runContent("/", null, { prefs: { agentFile: true } }); await new Promise(r => setTimeout(r, 30));
+    assert(!run.sent.some(m => m.type === "agentFile") && !JSON.stringify(run.store).includes("caderno-agente"), "no AI file, even with the old switch saved");
+    assert.strictEqual(await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB), "no reply", "the worker no longer writes it");
+    ok(); }
 
   // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
   const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
@@ -882,12 +844,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const other = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
     assert(/2,0\/10 · precisa 10,0\/10/.test(text(other.header)), "no rules: the Centro de Notas formula on the card (2 + 0,5 × x ≥ 7 → x = 10): " + text(other.header));
     assert(other.sent.some(m => m.type === "centro" && m.user === 5 && m.ids.includes(99901)), "a fresh reading asks the worker for the Centro de Notas");
+    assert(all(other.anchor).some(e => /card centro/.test(e.className || "")), "no rules: the dashboard lists quanto falta from the Centro de Notas");
     const noF = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: { grupos: [], colunas: [{ id_coluna: 9, tipo_coluna: "final" }] } } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
     assert(!/\/10 · /.test(text(noF.header)), "no formula in the Centro de Notas: no number invented");
     curso.grupos[0].grupo_colunas[1].coluna.nome_coluna = "Prova final";
     const cp = await runContent("/courses/99901", [], { centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
     const cph = cp.anchor.kids[0];
     assert(cph && /2,0 de 10 agora/.test(text(cph)) && /precisa 10,0\/10 em média no que falta/.test(text(cph)) && /Falta: Prova final/.test(text(cph)), "the course page: now, the need and what is left, from the Centro de Notas: " + (cph && text(cph)).slice(0, 200));
+    const rng = all(cph).find(e => e.tag === "input" && e.type === "range"), simOut = all(cph).find(e => e.className === "t" && /tirando/.test(e.textContent));
+    assert(rng && simOut && /tirando 10,0 no que falta, você fica com 7,0 ✓/.test(simOut.textContent), "the simulator starts at the need and shows the final: " + (simOut && simOut.textContent));
   }
   const cdh = await runContent("/", null, { hidden: ["71306"] });
   assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing");
@@ -909,9 +874,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(reads(freed).length, 6, "a lock left by a closed tab expires after a minute"); assert.strictEqual(freed.store.refreshing, undefined, "lock released");
   // SSO or cookie switch: no user id in the page, a fresh reading of A, but the session is B → nothing of A is drawn
   const toB = await runContent("/", null, Object.assign({}, cold.store, { who: { id: 5, at: Date.now() } }), { selfId: 8, failCourses: true });
-  assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert.strictEqual(toB.anchor.kids.length, 0, "nothing of A drawn"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");
+  assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert(!all(toB.anchor).some(e => /kpi|week|cring/.test(e.className || "")) && all(toB.anchor).some(e => /trouble/.test(e.className || "")), "nothing of A drawn, only why Canvas could not be read"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");
   const lockB = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 5000 }), { selfId: 8, failCourses: true });
-  assert(lockB.store.cache === undefined && lockB.anchor.kids.length === 0, "the other-tab lock path does not show A's reading to B either");
+  assert(lockB.store.cache === undefined && !/Banco de Dados|Arquitetura/.test(text(lockB.anchor)), "the other-tab lock path does not show A's reading to B either");
   const fromPage = await runContent("/", null, {}, { scripts: [{ textContent: 'ENV = {"current_user_id":"5","x":1}' }] });
   assert(!fromPage.fetches.includes("/api/v1/users/self") && fromPage.store.cache.user === 5, "user id printed in the page: no /users/self");
   const switched = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"8"}' }] });

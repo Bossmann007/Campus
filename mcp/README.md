@@ -5,7 +5,7 @@ trabalho, não responde quiz, não manda mensagem, não marca nada.
 
 ## Antes de instalar: para onde vão os seus dados
 
-- O que as ferramentas devolvem (notas, prazos, títulos de avisos e de módulos, nomes das matérias) vai para o app de IA
+- O que as ferramentas devolvem (notas, prazos, títulos de avisos e de módulos, nomes das matérias e dos professores) vai para o app de IA
   que você conectar e, por ele, para a nuvem do provedor (por exemplo, a Anthropic, no Claude). Fica no histórico da
   conversa e pode ficar nos logs do app.
 - Títulos escritos no Canvas podem ter nomes de professores ou colegas (ex.: "Grupo da Ana").
@@ -15,18 +15,21 @@ trabalho, não responde quiz, não manda mensagem, não marca nada.
 - O cofre do sistema protege o token de arquivos e de outras contas do computador, mas **não** de programas que rodam
   com o seu próprio usuário. Não instale coisas desconhecidas na mesma conta.
 
-## Dois jeitos de ler o Canvas
+## Como ele lê o Canvas
 
-- **Sem token (recomendado):** na extensão Caderno+, ligue "Arquivo para a sua IA" e abra o Canvas. A extensão grava
-  `caderno-agente.json` na sua pasta de downloads, e o Caderno+ MCP lê esse arquivo. O MCP nunca fala com o Canvas, e o
-  "quanto falta" inclui as notas que você digitou. Os dados são os da última vez que você abriu o Canvas; módulos não vêm.
-- **Com token (opcional):** dado na hora e módulos das matérias, mas o token dá acesso total à sua conta (veja abaixo).
+Só com **o seu token** do Canvas, guardado no cofre do sistema (`caderno-mcp login`) ou no campo protegido do Claude
+Desktop. Para criar: Canvas → Conta → Configurações → **+ Novo token de acesso**, finalidade "Caderno+ MCP", validade até
+o fim do semestre. **Nunca cole o token no chat**, nem com a IA.
 
-O MCP procura só em `Downloads/PUCPR/caderno-agente.json` (a pasta padrão da extensão). Se você escolheu outra pasta, diga onde está: `CADERNO_FILE=/caminho/absoluto/caderno-agente.json`. Ele não procura em outras pastas de propósito: um arquivo baixado de um site poderia se passar pelo seu. Se os dois jeitos existem, vale o arquivo.
+**Centro de Notas:** para as matérias sem as regras do Caderno+, o `quanto_falta` usa a fórmula que o professor pôs no
+Centro de Notas (a ferramenta de notas da PUCPR no Canvas). O MCP abre o Centro de Notas como o Canvas abre: pede ao
+Canvas um lançamento (com o token), lê a página de lançamento **sem** o token, manda ao Centro de Notas só os campos
+daquele formulário e guarda só os cookies que ele mesmo pôs. O token nunca vai para o Centro de Notas. Uma matéria por
+vez. Matérias em que o professor não pôs fórmula aparecem como "sem fórmula".
 
 ## Instalar no Claude Desktop (mais fácil)
 
-Abra `caderno-mcp-<versão>.mcpb` com dois cliques. Deixe o token vazio para usar o arquivo da extensão, ou cole um token do Canvas. Ele guarda o
+Abra `caderno-mcp-<versão>.mcpb` com dois cliques e cole o token do Canvas no campo pedido. O Claude Desktop guarda o
 token no cofre do sistema e passa ao servidor quando abre.
 
 ## Instalar pelo terminal (Claude Code ou Claude Desktop)
@@ -53,11 +56,25 @@ Pergunte: "quanto falta em cada matéria?", "o que vence esta semana?", "quais a
 
 ## Ferramentas
 
-`quanto_falta` (regras do Plano de Ensino, só notas do Canvas), `upcoming`, `grades`, `courses`, `announcements` (sem
-autor nem texto), `modules`. Só com o arquivo da extensão (Caderno+ 4.0): `my_items` (seus checklists e tarefas),
-`whats_new` (o que mudou desde a última visita e quantas mensagens não lidas) e `teachers` (nome dos professores); sem
-token, `modules` devolve os títulos que a busca da extensão já leu. Textos do Canvas chegam marcados como `untrusted_canvas_text`: a IA deve tratá-los como
-dados, nunca como instruções.
+- `quanto_falta`: quanto falta em cada matéria para a meta (padrão 7). Regras do Plano de Ensino da turma quando o
+  Caderno+ as tem; senão, a fórmula do Centro de Notas (nota de agora, a nota que precisa em tudo o que falta, o que
+  ainda não tem nota). Só notas do Canvas.
+- `upcoming`: entregas, provas e eventos que vêm.
+- `grades`: notas lançadas no Canvas por avaliação.
+- `courses`: matérias do semestre, com o `course_id`.
+- `announcements`: avisos recentes (título, matéria, data, se foi lido); sem autor nem texto.
+- `modules`: módulos de uma matéria e os títulos dos itens.
+- `teachers`: o nome dos professores de cada matéria.
+
+## Segurança
+
+- Só leitura: o servidor só faz GET no Canvas, por uma lista fechada de caminhos (ids só com dígitos); qualquer outro
+  endereço é recusado antes de sair do computador. A única exceção é o formulário de lançamento do Centro de Notas,
+  enviado só para o endereço dele.
+- Até 400 leituras a cada 5 minutos, para um laço da IA não martelar o Canvas.
+- Textos do Canvas chegam marcados como `untrusted_canvas_text`, sem caracteres invisíveis: a IA deve tratá-los como
+  dados, nunca como instruções.
+- O token fica no cofre do sistema e nunca aparece em resposta, erro ou log.
 
 ## Parar
 

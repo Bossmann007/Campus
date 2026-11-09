@@ -3,14 +3,16 @@
 <head><meta charset="UTF-8"><title>Caderno+</title><link rel="stylesheet" href="popup.css"></head>
 <body>
   <header><svg class="logo" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><b class="wm">Caderno<i>+</i></b><span class="tag">Canvas PUCPR</span></header>
-  <div class="bar" id="bar"><span class="dot" aria-hidden="true"></span><span id="status" role="status">Abra o Canvas da PUCPR uma vez para ler suas notas.</span><button id="refresh" type="button" title="Lê tudo de novo na próxima página do Canvas">↻ Atualizar</button></div>
+  <div class="bar" id="bar"><span class="dot" aria-hidden="true"></span><span id="status" role="status">Abra o Canvas da PUCPR uma vez para ler suas notas.</span><button id="refresh" type="button" title="Lê tudo de novo na próxima página do Canvas (e o Centro de Notas)">↻ Atualizar</button></div>
+  <p class="err-line" id="errLine" hidden><span id="errText"></span> <button type="button" id="errCopy">Copiar detalhes</button></p>
+  <section class="next" id="nextBox" hidden aria-labelledby="h-next"><h2 id="h-next">A seguir</h2><ul id="nextList"></ul></section>
   <section id="notes" aria-labelledby="h-notes" hidden>
     <h2 id="h-notes"></h2>
     <ul class="notes-l"></ul>
     <button type="button" id="notesOk">Entendi ✓</button>
   </section>
   <nav class="tabs" role="tablist" aria-label="Configurações">
-    <button type="button" role="tab" id="t-look" aria-controls="p-look" data-tab="look">Visual</button><button type="button" role="tab" id="t-canvas" aria-controls="p-canvas" data-tab="canvas">Painel</button><button type="button" role="tab" id="t-alerts" aria-controls="p-alerts" data-tab="alerts">Avisos</button><button type="button" role="tab" id="t-more" aria-controls="p-more" data-tab="more">Mais</button>
+    <button type="button" role="tab" id="t-look" aria-controls="p-look" data-tab="look"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.5a6.5 6.5 0 1 0 0 13c.9 0 1.3-.6 1.3-1.2 0-.8-.6-1.1-.6-1.8 0-.6.5-1 1.1-1H11a3.5 3.5 0 0 0 3.5-3.5C14.5 4 11.6 1.5 8 1.5ZM4.5 8.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm2-3a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm3 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>Visual</button><button type="button" role="tab" id="t-canvas" aria-controls="p-canvas" data-tab="canvas"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 2.5h5v5H2zM9 2.5h5v3H9zM9 7.5h5v6H9zM2 9.5h5v4H2z"/></svg>Painel</button><button type="button" role="tab" id="t-alerts" aria-controls="p-alerts" data-tab="alerts"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.5a4.5 4.5 0 0 0-4.5 4.5v2.7L2 11v1h12v-1l-1.5-2.3V6A4.5 4.5 0 0 0 8 1.5ZM6.3 13a1.8 1.8 0 0 0 3.4 0Z"/></svg>Avisos</button><button type="button" role="tab" id="t-more" aria-controls="p-more" data-tab="more"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 6.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm5 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm5 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z"/></svg>Mais</button>
   </nav>
   <section role="tabpanel" id="p-look" aria-labelledby="t-look">
     <div class="modes" role="radiogroup" aria-label="Modo">
@@ -87,9 +89,8 @@
         <label class="row"><span>Botões ↑ ↓ em páginas longas</span><input type="checkbox" role="switch" data-pref="scroll"></label>
       </div>
     <h2>Sua IA <small class="beta">beta</small></h2>
-    <div class="list"><label class="row"><span>Arquivo para a sua IA <small>caderno-agente.json na sua pasta de downloads, para o Caderno+ MCP ler sem token. Precisa de "Perguntar onde salvar cada arquivo" desligado no Chrome.</small><small id="agentErr" class="err" hidden></small><small id="agentPath" hidden></small></span><input type="checkbox" role="switch" data-pref="agentFile"></label></div>
-    <div class="acts"><button id="aiPage" type="button">Abrir Sua IA: o que ela sabe e como conectar</button></div>
-    <p class="fine"><a id="ia" href="https://falta-quanto.vercel.app/ia" target="_blank" rel="noopener noreferrer">Conectar sua IA ao Canvas</a>: Claude, ChatGPT, Gemini e outros.</p>
+    <div class="acts"><button id="aiPage" type="button">Conectar sua IA (Claude, ChatGPT, Gemini…)</button></div>
+    <p class="fine">Pelo Caderno+ MCP, com um token do seu Canvas guardado no cofre do sistema. <a id="ia" href="https://falta-quanto.vercel.app/ia" target="_blank" rel="noopener noreferrer">Passo a passo</a></p>
     <h2>Seus dados</h2>
     <details class="grp"><summary>Backup</summary>
       <div class="acts two">

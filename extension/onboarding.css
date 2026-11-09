@@ -50,3 +50,4 @@ button { font:inherit; } .foot button, .big { padding:10px 18px; border-radius:1
 :is(button, input, select):focus-visible { outline:2px solid var(--coral); outline-offset:2px; }
 [hidden] { display:none !important; }
 h1:focus { outline:none; }
+.link { padding:0; border:0; background:none; color:var(--txt); font:inherit; font-weight:600; text-decoration:underline; text-decoration-color:var(--coral); text-underline-offset:2px; cursor:pointer; }

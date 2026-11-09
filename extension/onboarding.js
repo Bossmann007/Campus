@@ -38,11 +38,12 @@ dark.addEventListener("change", accent);
 function summary(p) {
   const pick = k => { const b = document.querySelector('[data-set="' + k + '"][aria-checked="true"]'); return b ? (b.querySelector("b") || b).textContent.trim() : "—"; };
   const on = ["remind", "newgrades", "summary"].filter(k => p[k]).map(k => document.querySelector('[data-pref="' + k + '"]').closest("label").firstElementChild.firstChild.textContent.trim());
-  const rows = [["Turma", pick("turma")], ["Painel", pick("mode")], ["Visual", pick("look")], ["Avisos", on.join(", ") || "nenhum"], ["Arquivos", "Downloads/" + cpFolder(p.dlFolder)], ["IA", p.agentFile ? "arquivo ligado" : "desligado"]];
+  const rows = [["Turma", pick("turma")], ["Painel", pick("mode")], ["Visual", pick("look")], ["Avisos", on.join(", ") || "nenhum"], ["Arquivos", "Downloads/" + cpFolder(p.dlFolder)]];
   $("sum").replaceChildren(...rows.flatMap(([k, v]) => { const dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = k; dd.textContent = v; return [dt, dd]; }));
 }
 for (const b of document.querySelectorAll("[data-set]")) b.addEventListener("click", () => setPref(b.dataset.set, b.dataset.value));
-for (const x of document.querySelectorAll("[data-pref]")) x.addEventListener("change", () => { if (x.dataset.pref === "agentFile" && x.checked) chrome.storage.local.remove("agentErr"); setPref(x.dataset.pref, x.checked); });
+for (const x of document.querySelectorAll("[data-pref]")) x.addEventListener("change", () => setPref(x.dataset.pref, x.checked));
+$("aiOpen").addEventListener("click", () => window.open(chrome.runtime.getURL("ai.html"), "_blank"));
 for (const x of document.querySelectorAll("[data-sel]")) x.addEventListener("change", () => setPref(x.dataset.sel, x.value));
 $("dlFolder").addEventListener("input", () => { $("dlPreview").textContent = "Exemplo: Downloads/" + cpFolder($("dlFolder").value) + "/Banco de Dados/Slides/Aula 3.pdf"; });
 $("dlFolder").addEventListener("change", () => { const v = cpFolder($("dlFolder").value); $("dlFolder").value = v; setPref("dlFolder", v); });

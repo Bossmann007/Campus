@@ -2,8 +2,8 @@
   "manifest_version": "0.3",
   "name": "caderno-mcp",
   "display_name": "Caderno+ · Canvas PUCPR",
-  "version": "0.3.0",
-  "description": "O seu Canvas da PUCPR para o Claude: quanto falta, prazos, notas, avisos e módulos. Só leitura. Não oficial.",
+  "version": "1.0.0",
+  "description": "O seu Canvas da PUCPR para o Claude: quanto falta (com o Centro de Notas), prazos, notas, avisos, módulos e professores. Só leitura, com o seu token. Não oficial.",
   "author": {
     "name": "Enzo Bossmann"
   },
@@ -24,28 +24,16 @@
   "user_config": {
     "canvas_token": {
       "type": "string",
-      "title": "Token do Canvas (opcional)",
-      "description": "Deixe vazio para usar o arquivo da extensão Caderno+ (\"Arquivo para a sua IA\"), sem token. Com token: Canvas → Conta → Configurações → Novo token de acesso, validade até o fim do semestre.",
+      "title": "Token do Canvas",
+      "description": "No Canvas: Conta → Configurações → \"+ Novo token de acesso\" (finalidade: Caderno+ MCP; validade até o fim do semestre). Cole aqui: fica no cofre do sistema. Nunca cole o token em chat, nem com a IA.",
       "sensitive": true,
-      "required": false
+      "required": true
     }
   },
   "tools": [
     {
-      "name": "my_items",
-      "description": "Seus checklists e tarefas do Caderno+"
-    },
-    {
-      "name": "whats_new",
-      "description": "O que mudou desde a última visita"
-    },
-    {
-      "name": "teachers",
-      "description": "Professores de cada matéria"
-    },
-    {
       "name": "quanto_falta",
-      "description": "Quanto falta em cada matéria"
+      "description": "Quanto falta em cada matéria (regras do Plano de Ensino ou Centro de Notas)"
     },
     {
       "name": "upcoming",
@@ -66,6 +54,10 @@
     {
       "name": "modules",
       "description": "Módulos de uma matéria"
+    },
+    {
+      "name": "teachers",
+      "description": "Professores de cada matéria"
     }
   ]
 }
