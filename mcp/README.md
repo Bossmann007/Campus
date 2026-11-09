@@ -33,7 +33,8 @@ token no cofre do sistema e passa ao servidor quando abre.
 
 Apps que rodam o servidor no seu computador: Claude Desktop e Claude Code, Codex (CLI, IDE e o ChatGPT desktop),
 Gemini CLI, Cursor, VS Code (Copilot), Windsurf, Zed, JetBrains AI, LM Studio, Goose, Cline, Roo, Continue e
-Perplexity (Mac). `node mcp/cli.js setup <app>` mostra o comando ou o trecho de config de cada um (ex.: `setup codex`,
+Perplexity (Mac). Testados de verdade aqui: Claude Code, Codex, Gemini CLI e o inspetor oficial do MCP; nos outros, o
+formato segue a documentação de cada app. `node mcp/cli.js setup <app>` mostra o comando ou o trecho de config de cada um (ex.: `setup codex`,
 `setup gemini`, `setup cursor`, `setup vscode`); nada é gravado nos seus apps.
 
 Só pela web (ChatGPT web, Claude web, Le Chat, Grok, Gemini app): esses só falam com servidores na internet, e este fica

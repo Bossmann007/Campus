@@ -130,7 +130,10 @@ let n = 0; const ok = () => n++;
     const { spawnSync } = require("child_process");
     const run = spawnSync(process.execPath, [path.join(tmp, "mcp", "cli.js")], { input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "courses" } }) + "\n", env: { PATH: process.env.PATH, CANVAS_TOKEN_FILE: path.join(tmp, "none") }, encoding: "utf8", timeout: 10000 });
     const rep = JSON.parse(run.stdout.trim());
-    assert(rep.id === 1 && rep.result.isError && /login/.test(rep.result.content[0].text) && run.status === 0, "stdio: the reply is written before the server leaves");
+    assert(rep.id === 1 && rep.result.isError && /cli\.js" login/.test(rep.result.content[0].text) && !/npx/.test(rep.result.content[0].text) && run.status === 0, "stdio: the reply is written before the server leaves; the login hint is the local cli, never npx");
+    const many = Array.from({ length: 3000 }, (_, i) => JSON.stringify({ jsonrpc: "2.0", id: i, method: "tools/list" })).join("\n") + "\n";
+    const big = spawnSync(process.execPath, [path.join(tmp, "mcp", "server.js")], { input: many, env: { PATH: process.env.PATH }, encoding: "utf8", timeout: 30000, maxBuffer: 1 << 30 });
+    assert.strictEqual(big.stdout.trim().split("\n").length, 3000, "3000 requests then end of input: 3000 replies");
     fs.rmSync(tmp, { recursive: true, force: true }); ok(); }
 
   { // setup: every app gets its own way in, with node and the server by absolute path; nothing is written to any app
@@ -139,6 +142,11 @@ let n = 0; const ok = () => n++;
     for (const k of ["claude-desktop", "cursor", "windsurf", "zed"]) { const t = cli.APPS[k][1](), j = JSON.parse(t.slice(t.indexOf("{"))); const e = j.mcpServers ? j.mcpServers.caderno : j.caderno; assert(path.isAbsolute(e.command) && e.args[0] === srv, k + ": JSON parses, node by absolute path"); }
     const vs = JSON.parse(/'(.+)'/.exec(cli.APPS.vscode[1]())[1]); assert(vs.name === "caderno" && vs.type === "stdio", "VS Code --add-mcp JSON");
     assert(/ChatGPT web/.test(out) && /Secure MCP Tunnel/.test(out), "says what web-only apps need");
+    { const { execFileSync } = require("child_process");
+      for (const x of ["/tmp/o'brien dir/server.js", 'C:\\Users\\a "b"\\x', "$HOME `id` ;rm"]) assert.strictEqual(execFileSync("/bin/sh", ["-c", "printf %s " + cli.q(x, false)], { encoding: "utf8" }), x, "POSIX quoting keeps " + x); }
+    assert.strictEqual(cli.q('a "b"', true), '"a \\"b\\""', "Windows: inner quotes escaped");
+    assert(/^gemini mcp add --scope user caderno /.test(cli.APPS.gemini[1]()), "Gemini: user scope (its default is the current folder)");
+    assert(/source": "custom"/.test(cli.APPS.zed[1]()) && /name: caderno/.test(cli.APPS.goose[1]()) && /type: stdio/.test(cli.APPS.continue[1]()), "Zed, Goose and Continue in their own formats");
     assert(/desconhecido/.test(cli.setup("nope")) && cli.setup("codex").startsWith("Codex"), "one app, or the list of names");
     const fakeFs = { realpathSync: p => ({ "/opt/homebrew/Cellar/node/26/bin/node": "/C/node", "/opt/homebrew/bin/node": "/C/node", "/usr/bin/node": "/U/node" })[p] || (() => { throw new Error("no"); })() };
     assert.strictEqual(cli.stableNode("/opt/homebrew/Cellar/node/26/bin/node", { PATH: "/usr/bin:/opt/homebrew/bin" }, fakeFs), "/opt/homebrew/bin/node", "node: the PATH link to the same binary, not the Cellar folder");

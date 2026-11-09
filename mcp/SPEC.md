@@ -29,7 +29,7 @@ run); the token never goes on a command line (`ps`), in shell history, in a conf
 var exception: Claude Desktop passes the `.mcpb` field as `CADERNO_MCPB_TOKEN`, deleted from the process env on read.
 The stores protect against files and other OS accounts, not against programs of the same user (macOS trusts
 `/usr/bin/security`, the creator of the item, so any same-user process can read it with no prompt; an unlocked Secret
-Service and DPAPI behave the same): said in the README. `npx caderno-mcp login` asks for it with hidden input and hands it to the
+Service and DPAPI behave the same): said in the README. `node mcp/cli.js login` asks for it (`npx caderno-mcp login` only after the npm name is published by us) with hidden input and hands it to the
 store through **stdin** of the store's own tool.
 
 | OS | Store | Write / read / delete |

@@ -42,12 +42,12 @@ async function main() {
   const getCanvas = async () => {
     if (canvas) return canvas;
     const { token, from } = await vault.readToken();
-    if (!token) return { error: "Sem token do Canvas (" + from + "). No terminal: npx caderno-mcp login  (ou node mcp/cli.js login)" };
+    if (!token) return { error: "Sem token do Canvas (" + from + "). No terminal: node \"" + require("path").join(__dirname, "cli.js") + "\" login" };   // never "npx caderno-mcp": that npm name is not ours yet
     secret = token; canvas = makeCanvas(token); return canvas;
   };
   const handle = makeHandler(getCanvas, scrub);
   let buf = "", pending = 0, ended = false;
-  const done = () => { if (ended && !pending) process.exit(0); };   // replies still on their way are written before leaving
+  const done = () => { if (ended && !pending) process.stdout.write("", () => process.exit(0)); };   // leave after every reply reached the pipe
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", chunk => {
     buf += chunk; let i;

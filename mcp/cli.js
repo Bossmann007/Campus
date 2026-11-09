@@ -29,17 +29,21 @@ function stableNode(exec = process.execPath, env = process.env, fsx = require("f
 }
 const NODE = stableNode(), J = x => JSON.stringify(x, null, 2);
 const ENTRY = { command: NODE, args: [SERVER] };
+// Quoted for the student's shell: POSIX single quotes (an apostrophe as '\''), Windows double quotes (an inner " as \").
+const q = (x, win = process.platform === "win32") => win ? "\"" + String(x).replace(/"/g, "\\\"") + "\"" : "'" + String(x).replace(/'/g, "'\\''") + "'";
+const RUN = () => q(NODE) + " " + q(SERVER);
 const APPS = {
-  "claude-code": ["Claude Code", () => "claude mcp add caderno --scope user -- \"" + NODE + "\" \"" + SERVER + "\""],
+  "claude-code": ["Claude Code", () => "claude mcp add caderno --scope user -- " + RUN()],
   "claude-desktop": ["Claude Desktop", () => "Mais fácil: abra o arquivo caderno-mcp-<versão>.mcpb. Ou em claude_desktop_config.json (Configurações → Desenvolvedor → Editar config), dentro de \"mcpServers\":\n" + J({ caderno: ENTRY })],
-  codex: ["Codex (CLI, IDE e o ChatGPT desktop, que leem ~/.codex/config.toml)", () => "codex mcp add caderno -- \"" + NODE + "\" \"" + SERVER + "\""],
-  gemini: ["Gemini CLI", () => "gemini mcp add caderno \"" + NODE + "\" \"" + SERVER + "\""],
+  codex: ["Codex (CLI, IDE e o ChatGPT desktop, que leem ~/.codex/config.toml)", () => "codex mcp add caderno -- " + RUN()],
+  gemini: ["Gemini CLI", () => "gemini mcp add --scope user caderno " + RUN()],
   cursor: ["Cursor", () => "~/.cursor/mcp.json, dentro de \"mcpServers\":\n" + J({ caderno: Object.assign({ type: "stdio" }, ENTRY) })],
-  vscode: ["VS Code (Copilot)", () => "code --add-mcp '" + JSON.stringify(Object.assign({ name: "caderno", type: "stdio" }, ENTRY)) + "'"],
+  vscode: ["VS Code (Copilot)", () => "code --add-mcp " + q(JSON.stringify(Object.assign({ name: "caderno", type: "stdio" }, ENTRY)))],
+  continue: ["Continue (modo agente)", () => ".continue/mcpServers/caderno.yaml:\nname: Caderno+\nversion: 0.0.1\nschema: v1\nmcpServers:\n  - name: caderno\n    type: stdio\n    command: " + JSON.stringify(NODE) + "\n    args: [" + JSON.stringify(SERVER) + "]"],
   windsurf: ["Windsurf, JetBrains AI, LM Studio, Cline, Roo, Perplexity (Mac) e outros com \"mcpServers\"", () => J({ mcpServers: { caderno: ENTRY } })],
-  zed: ["Zed", () => "settings.json (zed: open settings file), dentro de \"context_servers\":\n" + J({ caderno: ENTRY })],
-  goose: ["Goose", () => "~/.config/goose/config.yaml:\nextensions:\n  caderno:\n    type: stdio\n    cmd: " + JSON.stringify(NODE) + "\n    args: [" + JSON.stringify(SERVER) + "]\n    enabled: true"],
-  openbot: ["OpenBot", () => "Salve o token no Vault como CANVAS_API_TOKEN e rode o servidor com CANVAS_TOKEN_FILE=<o caminho que o OpenBot dá> " + NODE + " " + SERVER],
+  zed: ["Zed", () => "settings.json (zed: open settings file), dentro de \"context_servers\":\n" + J({ caderno: Object.assign({ source: "custom" }, ENTRY) })],
+  goose: ["Goose", () => "~/.config/goose/config.yaml:\nextensions:\n  caderno:\n    name: caderno\n    description: Canvas PUCPR (Caderno+)\n    type: stdio\n    cmd: " + JSON.stringify(NODE) + "\n    args: [" + JSON.stringify(SERVER) + "]\n    enabled: true\n    timeout: 300"],
+  openbot: ["OpenBot", () => "Salve o token no Vault como CANVAS_API_TOKEN e rode: CANVAS_TOKEN_FILE=<o caminho que o OpenBot dá> " + RUN()],
 };
 const WEB = "Só pela web (ChatGPT web, Claude web, Le Chat, Grok, Gemini): esses apps só falam com servidores na internet, e este fica no seu computador de propósito (o token não sai dele). No ChatGPT, use o desktop (via Codex) ou o Secure MCP Tunnel oficial da OpenAI, que roda este servidor na sua máquina.";
 function setup(app) {
@@ -62,4 +66,4 @@ async function cli(cmd) {
   require("./server.js").main();
 }
 if (require.main === module) cli(process.argv[2]);
-module.exports = { cli, setup, APPS, stableNode };
+module.exports = { cli, setup, APPS, stableNode, q };
