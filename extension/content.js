@@ -1446,7 +1446,11 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       hint.textContent = editing ? "Clique no olho para esconder um módulo inteiro ou um item." : "";
     };
     edit.addEventListener("click", () => { editing = !editing; paint(); });
-    bar.append(edit, hint); root.parentNode.insertBefore(bar, root); paint();
+    // on the line of Canvas's "Recolher tudo / Exportar" bar (.header-bar, a flex row) when there is one, else above the modules
+    const hb = root.parentNode.querySelector ? root.parentNode.querySelector(".header-bar") : null;
+    bar.append(edit, hint);
+    if (hb) { bar.style.margin = "0 auto 0 0"; hb.prepend(bar); } else root.parentNode.insertBefore(bar, root);
+    paint();
   }
 
   // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas

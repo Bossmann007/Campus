@@ -133,6 +133,8 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look :is(.ic-app-nav-toggle-and-crumbs, #breadcrumbs, .header-bar, #context_modules_sortable_container, .item-group-container) { background-color:transparent !important; border-color:var(--cp-line) !important; }
 :root.cp-look :is(.context_module, .item-group-condensed .ig-row, .context_module_item) { background-color:var(--cp-card) !important; border-color:var(--cp-line) !important; }
 :root.cp-look .item-group-condensed .ig-header { background-color:color-mix(in srgb, var(--cp-card) 70%, var(--cp-paper)) !important; border-color:var(--cp-line) !important; }   /* modules: Canvas paints them white and #f2f4f4; here they take the look (and its dark tint) */
+:root.cp-look #context_modules .context_module.item-group-condensed { padding:0 !important; }
+:root.cp-look #context_modules .context_module .ig-header { margin-top:0 !important; }   /* its 15px top margin showed as a dark strip over each module */
 :root.cp-look .ic-DashboardCard { border-radius:14px; overflow:hidden; border:1px solid var(--cp-line); background:var(--cp-card); box-shadow:0 1px 2px rgba(29,36,51,.06); transition:transform .18s, box-shadow .18s; }
 :root.cp-look .ic-DashboardCard__header_content { background:var(--cp-card) !important; }
 :root.cp-look .ic-DashboardCard:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45); }
