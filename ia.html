@@ -36,7 +36,7 @@
 <h1>Conectar sua IA ao Canvas</h1>
 <p class="muted">Beta · Caderno+ MCP, um programa separado da extensão · não oficial</p>
 
-<p>Com o Caderno+ MCP, a sua IA (Claude, ChatGPT desktop, Gemini, Cursor e outras) consegue responder "quanto falta em cada matéria?", "o que vence esta semana?" e "quais avisos novos?" com os seus dados do Canvas da PUCPR. Ele roda <b>no seu computador</b>, com <b>o seu token</b>, guardado <b>no cofre do seu sistema</b> (Keychain no Mac, cofre do usuário no Windows, Secret Service no Linux). Só lê: não entrega trabalho, não responde quiz, não manda mensagem, não marca nada.</p>
+<p>Com o Caderno+ MCP, a sua IA (Claude, ChatGPT desktop, Gemini, Cursor e outras) consegue responder "quanto falta em cada matéria?", "o que vence esta semana?" e "quais avisos novos?" com os seus dados do Canvas da PUCPR. Ele roda <b>no seu computador</b> e, no jeito recomendado, <b>não usa token nenhum</b>: lê um arquivo que a extensão Caderno+ grava com o que o painel mostra. Só lê: não entrega trabalho, não responde quiz, não manda mensagem, não marca nada.</p>
 
 <div class="box warn">
 <p><b>Antes de conectar, saiba:</b></p>
@@ -45,23 +45,31 @@
 <li>A IA consulta sozinha durante a conversa, sem pedir a cada vez (as consultas só leem). Também entram os títulos das avaliações e os links do Canvas.</li>
 <li>Títulos escritos no Canvas podem ter nomes de professores ou colegas.</li>
 <li>O cofre protege o token de arquivos e de outras contas do computador, mas não de programas que rodam com o seu próprio usuário.</li>
-<li>O token do Canvas dá acesso <b>total</b> à sua conta. Quem limita a leitura é o Caderno+ MCP, não o token. Crie com validade até o fim do semestre e revogue quando parar de usar.</li>
-<li>A política de API da Instructure (dona do Canvas), item 3(i), proíbe acessar o Canvas por servidores MCP que ela não aprovou. Este não é aprovado pela Instructure nem pela PUCPR, e elas podem bloquear tokens de alunos. Use por sua conta.</li>
+<li>Só se você escolher o jeito com token: o token do Canvas dá acesso <b>total</b> à sua conta. Quem limita a leitura é o Caderno+ MCP, não o token. Crie com validade até o fim do semestre e revogue quando parar de usar.</li>
+<li>A política de API da Instructure (dona do Canvas), item 3(i), proíbe acessar o Canvas por servidores MCP que ela não aprovou. Sem token, o Caderno+ MCP não fala com o Canvas (só a extensão lê, como já faz); com token, ele fala. Não é aprovado pela Instructure nem pela PUCPR. Use por sua conta.</li>
 </ul>
 </div>
 
-<h2>1. Crie o token no Canvas</h2>
+<h2>1. Ligue o arquivo na extensão (sem token)</h2>
+<ol>
+<li>No botão da extensão Caderno+, ligue <b>Arquivo para a sua IA</b>.</li>
+<li>No Chrome, deixe desligado "Perguntar onde salvar cada arquivo" (Configurações → Downloads). Se estiver ligado, a extensão desliga o arquivo e avisa.</li>
+<li>Abra o Canvas uma vez. A extensão grava <code>caderno-agente.json</code> na pasta PUCPR dos seus Downloads e atualiza a cada leitura.</li>
+</ol>
+<p>Sem token, os dados são os da última vez que você abriu o Canvas, e o "quanto falta" inclui as notas que você digitou. Os módulos das matérias só vêm com token.</p>
+<details><summary>Opcional: com token (dado na hora e módulos)</summary>
 <ol>
 <li>No Canvas da PUCPR: <b>Conta → Configurações</b>.</li>
 <li>Na página de configurações, clique em <b>+ Novo token de acesso</b>.</li>
 <li>Finalidade: <code>Caderno+ MCP</code>. Expira: o último dia do semestre.</li>
-<li>Copie o token. Ele aparece uma vez só; não mande para ninguém.</li>
+<li>Copie o token. Ele aparece uma vez só; não mande para ninguém. O Caderno+ MCP guarda ele no cofre do seu sistema (Keychain no Mac, cofre do usuário no Windows, Secret Service no Linux).</li>
 </ol>
+</details>
 
 <h2>2. Escolha o seu app</h2>
 
 <h3>Claude Desktop (Mac e Windows) <span class="soon">em breve</span></h3>
-<p>O mais fácil, sem instalar nada além do Claude: baixe o arquivo <code>caderno-mcp.mcpb</code>, abra com dois cliques e cole o token quando o Claude pedir. O Claude guarda o token no cofre do sistema e já traz o que precisa para rodar.</p>
+<p>O mais fácil, sem instalar nada além do Claude: baixe o arquivo <code>caderno-mcp.mcpb</code> e abra com dois cliques. Deixe o campo do token vazio para usar o arquivo da extensão (ou cole um token, se escolheu esse jeito). O Claude já traz o que precisa para rodar.</p>
 
 <h3>Outros apps <span class="soon">em breve</span></h3>
 <p>Precisam do <a href="https://nodejs.org/" rel="noopener noreferrer">Node.js</a> 18 ou mais novo instalado. Vão funcionar: Claude Code, ChatGPT desktop e Codex (CLI e IDE), Gemini CLI, Cursor, VS Code, Windsurf, Zed, JetBrains, LM Studio, Goose, Cline, Roo, Continue e Perplexity (Mac).</p>

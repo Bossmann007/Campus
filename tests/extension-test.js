@@ -28,6 +28,7 @@ assert(/id="agentErr"/.test(html) && /Perguntar onde salvar cada arquivo/.test(h
   assert(!/mcp|caderno-mcp/i.test(fs.readdirSync(dir).join(" ")), "no MCP code inside the extension");
   assert(/^!ia\.html$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")) && !/<script/i.test(ia), "the /ia page is published, with no scripts");
   assert(!/npx|caderno-mcp (login|status|setup)/.test(ia.replace(/<!--[\s\S]*?-->/g, "")) && /Ainda não publicado/.test(ia), "no runnable install command before the npm name is ours");
+  assert(/não usa token nenhum/.test(ia) && /Ligue o arquivo na extensão \(sem token\)/.test(ia) && /<details><summary>Opcional: com token/.test(ia), "the /ia page leads with the no-token way; the token is optional");
   for (const w of [/nuvem da empresa da IA/, /acesso <b>total<\/b>/, /3\(i\)/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
   assert(/Caderno\+ MCP: conectar sua IA/.test(pv) && /aqui os dados saem do computador/.test(pv) && /única exceção é opcional/.test(pv), "privacy page: the MCP section and the exception in the summary"); }
 assert(/const KEEP = \[[^\]]*"checks"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /checks: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "the backup carries the checklists, validated on import");
