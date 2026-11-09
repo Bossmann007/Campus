@@ -519,11 +519,14 @@
   // the widget dashboard is on screen: its ENV flag, and not the classic dashboard (whose cards container is in the page
   // HTML; the flag stays true after the student switches back to the old view)
   const widgetDash = () => widgets != null ? widgets : (widgets = !document.getElementById("DashboardCard_Container") && [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));
+  let cardsFirst = false;   // prefs.cardsFirst: Canvas's course cards above our panel
   function placeDash() {
     const host = document.getElementById("cp-dash"), q = sel => document.querySelector ? document.querySelector(sel) : null;
-    const cols = q("#DashboardCard_Container");   // the classic dashboard: right above its cards (outside its React root); the widget dashboard keeps ours at the top of #content
-    if (!host || !cols || !cols.parentNode || host.nextSibling === cols) return;
-    cols.parentNode.insertBefore(host, cols);
+    const cols = q("#DashboardCard_Container");   // the classic dashboard: next to its cards (outside its React root); the widget dashboard keeps ours at the top of #content
+    if (!host || !cols || !cols.parentNode) return;
+    host.style.marginTop = cardsFirst ? "8px" : "";
+    if (cardsFirst) { if (cols.nextSibling !== host) cols.parentNode.insertBefore(host, cols.nextSibling); }
+    else if (host.nextSibling !== cols) cols.parentNode.insertBefore(host, cols);
   }
   // Its "Notas do curso" widget shows Canvas's current score (only what is graded, without the Plano de Ensino weights, so
   // 92% halfway through the term). On our subjects the card keeps its picture and gets our numbers instead: points
@@ -1534,6 +1537,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       // the popup changes the mode, the meta or the native dashboard: the panel follows at once (one listener per page)
       window.cpPrefsChanged = async next => {
         const p2 = cpPrefs(next);
+        if (!!p2.cardsFirst !== cardsFirst) { cardsFirst = !!p2.cardsFirst; placeDash(); }
         if (p2.mode === prefs.mode && p2.meta === prefs.meta && p2.native === prefs.native) return;
         const metaN = Math.min(10, Math.max(5, Number(String(p2.meta).replace(",", ".")) || 7));
         prefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
@@ -1549,7 +1553,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       const { hidden } = await chrome.storage.local.get("hidden");
       const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
-      gradeA = a; watchDash(); enhanceGradeCards();
+      cardsFirst = !!prefs.cardsFirst; gradeA = a; watchDash(); placeDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       // the cards render late (React): watch the page for 20 seconds, then stop

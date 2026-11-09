@@ -629,6 +629,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(clHost && cl.cols.parent.kids.indexOf(clHost) === cl.cols.parent.kids.indexOf(cl.cols) - 1, "between the header and Canvas's course cards");
   assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
   assert(!all(clHost).some(e => /^Esconder|^Mostrar|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes and the meta");
+  const clTop = await runContent("/", null, { prefs: { cardsFirst: true } }, { classic: true }); await new Promise(r => setTimeout(r, 30));
+  const topHost = clTop.cols.parent.kids.find(k => k.id === "cp-dash");
+  assert(topHost && clTop.cols.parent.kids.indexOf(topHost) === clTop.cols.parent.kids.indexOf(clTop.cols) + 1, "cards first: our panel right below Canvas's cards");
+  await clTop.env.window.cpPrefsChanged({ cardsFirst: false }); await new Promise(r => setTimeout(r, 20));
+  assert(clTop.cols.parent.kids.indexOf(topHost) === clTop.cols.parent.kids.indexOf(clTop.cols) - 1, "switched off in the popup: back above the cards, at once");
   const clW = await runContent("/", null, {}, { classic: true, scripts: [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }] });
   assert(/Prova adiada/.test(text(clW.anchor)), "back on the classic dashboard (the widget flag stays true): our announcements show");
   // the Cursos tray (left menu): our pill on our subjects, courses taken off the dashboard left out
