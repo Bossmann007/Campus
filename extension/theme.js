@@ -94,7 +94,7 @@ ${RS} .event-details > * { margin-top:2px; } ${RS} .event-details :is(b, strong)
     const D = ":root.cp-dash-page";
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${D} :is(#right-side-wrapper, #right-side, #footer, .recent_activity, #dashboard-activity, .ic-DashboardCard__action-container) { display:none !important; }
 ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; margin-right:auto !important; }`);
-    if (cards.mode === "foco") out.push(`${D}.cp-has-panel :is(#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, #cp-scroll) { display:none !important; }`);
+    if (cards.mode === "foco") out.push(`${D}.cp-has-panel #cp-scroll { display:none !important; }`);   // Foco keeps the course cards (with their grades)
     // the whole Canvas follows the mode: Limpo and Foco drop footers everywhere and, on a course's home and modules pages, the
     // side column (our course panel has what comes next and the announcements); Foco also folds the course menu (content.js)
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`:root :is(#footer, .ic-app-footer) { display:none !important; }

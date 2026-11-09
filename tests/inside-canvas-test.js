@@ -857,7 +857,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!quizPage.cls.has("cp-dash-page"), "a quiz page keeps its side column (timer, questions)");
   lk.listen.change({ prefs: { newValue: { mode: "foco" } } }, "local");
   assert(/:root\.cp-course-page #right-side-wrapper \{ display:none/.test(lookCss()) && /#footer, \.ic-app-footer/.test(lookCss()), "Limpo/Foco reach the course pages: no side column on home/modules, no footers");
-  assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && /cp-dash-page\.cp-has-panel :is\(#DashboardCard_Container/.test(lookCss()), "foco: the cards go too, only once our panel is drawn");
+  assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && !/#DashboardCard_Container[^{]*\{ display:none/.test(lookCss()), "foco: the course cards stay");
   lk.listen.change({ prefs: { newValue: { cardImg: false } } }, "local");
   assert(/__header_image \{ background-image:none/.test(lookCss()), "cards without pictures");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "original" } } }, "local");
