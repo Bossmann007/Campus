@@ -25,6 +25,18 @@ written by hand for one turma (today only CC manhã). Rule packs stay as the fal
   tool's session cookie is stored and sent back (Chrome for Testing 156 and Brave 157 against a stand-in Canvas and
   tool, `/tmp/swck`). Not checked against the real Canvas session.
 
+## Ground truth (Enzo's courses, 2026-11-09)
+
+- Formula columns carry the value the Centro de Notas computed in their own `notas[]`. Imperativa: Exercícios (mean)
+  10,00; Nota do RA (RA1) = 0,75 × 8 + 0,25 × 10 = 8,50; Nota Final = 0,40 × 8,50 + 0,60 × 0 = 3,40: weights are
+  percentages and a part without a grade counts as 0. RPND: Nota do RA 1,43, Recuperação 0,50, Nota Final do RA
+  (`maximo`) 1,43, Nota Final 1,08.
+- Without a formula (BD, Web, Ética, Conectividade) the `final` column has no value: the Centro de Notas computes
+  nothing there, and the points do not add up to a grade (Conectividade: 9,97 of grades on 3,00 graded points, from
+  0-point items with grades). For these courses the rule pack (when it exists) or Canvas stays the source.
+- So the Centro de Notas solves "only my course" for every course whose professor set a formula (2 of Enzo's 6),
+  not for all.
+
 ## Engine (`core.js`, shared with the MCP)
 
 `centroGrade(curso, notas)`: evaluates the tree bottom-up. Leaves (`padrao`) count only with a published grade and
@@ -33,7 +45,7 @@ without a grade that brings the `final` column to the meta (bisection); "garanti
 
 ## Open (must be settled with real numbers before shipping)
 
-- Scale: a leaf's value inside a mean (raw points, or nota/pontos × 10?). A `final` without a formula: sum of points
+- Scale of a leaf inside a mean when its points are not 10 (Imperativa and RPND leaves are all 10 points). A `final` without a formula: sum of points
   as the grade only when the planned total is 10? Ética (40) and Conectividade (16) say no: compare with what the
   Centro de Notas shows the student (Enzo's screenshot of each course).
 - `recuperacao_grupo` and `final_grupo` semantics (replace, maximum, or mean with the RA grade).
