@@ -309,41 +309,48 @@ const NotasCore = (() => {
   }
   // Centro de Notas (PUCPR's grade tool, an LTI in every course): its formula tree, evaluated the way the tool does it
   // (weights are percentages, a part without a grade counts 0; checked against the tool's own values, bridge/SPEC-centro-notas.md).
-  // centro(curso, meta) -> { status: "garantido" | "precisa" | "nao-da" | "sem-formula", now, need (0-10 on what is left),
-  // left (leaf ids still without a grade, recovery exams excluded), approx }. curso is the tool's props.curso; never throws.
-  // The student's view hides some formula columns (only a reference with its group is left): a hidden one is the mean of its
-  // group's leaves, recovery exams out. With nothing in the group graded the weights inside do not matter for a uniform
-  // projection; once part of it is graded they do, and the answer says approx.
+  // centro(curso, meta) -> { status: "garantido" | "precisa" | "nao-da" | "sem-formula" | "incompleto", now, need (0-10, the
+  // same grade on everything left), left (leaf ids still without a grade; recovery exams and items left out of the final
+  // grade excluded), approx }. curso is the tool's props.curso; never throws.
+  // - The student's view hides some formula columns (a reference with its group is left): a hidden one is the mean of its
+  //   group's leaves, recovery exams out (exact for a uniform projection while nothing in it is graded, approx after).
+  // - A part neither shown nor in a group: "incompleto" (no number rather than a wrong one).
+  // - The tool's own final value wins: now is it, and the projection is shifted by what the visible formula misses.
+  // - "total" adds raw points; the means use each leaf on 10 (a leaf not on 10 inside a mean: approx, the scale is a guess).
   function centro(curso, meta) {
-    const none = { status: "sem-formula", now: 0, need: null, left: [] };
+    const none = st => ({ status: st, now: 0, need: null, left: [], approx: false });
     try {
-      if (!curso || typeof curso !== "object") return none;
-      const cols = new Map(), groupLeaves = new Map();
+      if (!curso || typeof curso !== "object") return none("sem-formula");
+      const cols = new Map(), groupLeaves = new Map(), CALC = ["minimo", "maximo", "media_aritmetica", "media_ponderada", "total"];
       for (const g of Array.isArray(curso.grupos) ? curso.grupos : []) for (const gc of Array.isArray(g && g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna && gc.coluna.id_coluna != null) {
         cols.set(gc.coluna.id_coluna, gc.coluna);
         if (g.id_grupo != null && gc.coluna.tipo_coluna === "padrao") groupLeaves.set(g.id_grupo, (groupLeaves.get(g.id_grupo) || []).concat(gc.coluna));
       }
       for (const c of Array.isArray(curso.colunas) ? curso.colunas : []) if (c && c.id_coluna != null) cols.set(c.id_coluna, c);
       const fin = [...cols.values()].find(c => c.tipo_coluna === "final");
-      const CALC = ["minimo", "maximo", "media_aritmetica", "media_ponderada", "total"];
-      if (!fin || !CALC.includes(fin.tipo_calculo)) return none;
-      const recov = new Set(); for (const c of cols.values()) if (c.tipo_coluna === "recuperacao_grupo") for (const k of Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []) recov.add(k && (k.id_coluna != null ? k.id_coluna : k.pivot && k.pivot.id_coluna_filho));
-      let approx = false;
+      if (!fin || !CALC.includes(fin.tipo_calculo)) return none("sem-formula");
+      const refId = k => k && (k.id_coluna != null ? k.id_coluna : k.pivot && k.pivot.id_coluna_filho);
+      const recov = new Set(); for (const c of cols.values()) if (c.tipo_coluna === "recuperacao_grupo") for (const k of Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []) recov.add(refId(k));
       const num = c => { const v = c && Array.isArray(c.notas) && c.notas[0] ? parseFloat(String(c.notas[0].nota).replace(",", ".")) : NaN; return Number.isFinite(v) ? v : null; };
-      const hid = new Map(), hidden = k => { const key = "h" + (k && k.id_coluna != null ? k.id_coluna : JSON.stringify(k && k.grupos)); if (hid.has(key)) return hid.get(key);
+      const pts = c => { const p = c.atividade && Number(c.atividade.pontos_possiveis); return p > 0 ? p : 10; };
+      const isLeaf = c => c.tipo_coluna === "padrao";
+      let approx = false, lost = false;
+      const hid = new Map(), hidden = k => { const key = "h" + refId(k); if (hid.has(key)) return hid.get(key);
         const g = k && Array.isArray(k.grupos) && k.grupos[0] ? groupLeaves.get(k.grupos[0].id_grupo) : null, ls = (g || []).filter(c => !recov.has(c.id_coluna));
         const node = ls.length ? { id_coluna: key, tipo_coluna: "oculta", tipo_calculo: "media_aritmetica", colunas_associadas_pai: ls.map(c => ({ id_coluna: c.id_coluna })), h0: null, n: ls.length } : null;
-        if (node) { const graded = ls.filter(c => num(c) != null).length; if (graded && graded < ls.length) approx = true; }
+        if (node) { const graded = ls.filter(c => num(c) != null).length; if (graded && graded < ls.length) approx = true; } else lost = true;
         hid.set(key, node); return node; };
-      const kids = c => (Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []).map(k => ({ c: cols.get(k && (k.id_coluna != null ? k.id_coluna : k.pivot && k.pivot.id_coluna_filho)) || hidden(k), w: Number(k && k.pivot && k.pivot.peso_coluna_filho) || 0 })).filter(k => k.c);
-      const pts = c => { const p = c.atividade && Number(c.atividade.pontos_possiveis); return p > 0 ? p : 10; };
-      // value of a column, 0-10; extra: values for the leaves still without a grade (the projection)
-      const val = (c, extra, seen) => {
+      const kids = c => (Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []).map(k => ({ c: cols.get(refId(k)) || hidden(k), w: Number(k && k.pivot && k.pivot.peso_coluna_filho) || 0 }));   // a lost part stays, counting 0
+      // value of a column; f: the fraction given to every leaf still open (the projection). raw: points, for "total"
+      const val = (c, f, seen, raw) => {
+        if (!c) return 0;
         if (seen.has(c.id_coluna)) return 0; seen = new Set(seen).add(c.id_coluna);
+        if (isLeaf(c)) { const v = num(c), p = pts(c); return v != null ? (raw ? v : v * 10 / p) : open.has(c.id_coluna) ? (raw ? f * p : f * 10) : 0; }
         const ks = kids(c);
-        if (c.tipo_coluna === "oculta" && c.h0 != null) return c.h0 + ks.reduce((s, k) => s + (num(k.c) == null && extra.has(k.c.id_coluna) ? extra.get(k.c.id_coluna) : 0), 0) / c.n;   // calibrated: what is graded inside = h0
-        if (!ks.length || !CALC.includes(c.tipo_calculo)) { const v = num(c); return v != null ? v * 10 / pts(c) : extra.has(c.id_coluna) ? extra.get(c.id_coluna) : 0; }
-        const vs = ks.map(k => val(k.c, extra, seen)), sw = ks.reduce((s, k) => s + k.w, 0);
+        if (c.tipo_coluna === "oculta" && c.h0 != null) return c.h0 + ks.reduce((s, k) => s + (k.c && open.has(k.c.id_coluna) ? f * 10 : 0), 0) / c.n;   // calibrated: what is graded inside = h0
+        if (!ks.length || !CALC.includes(c.tipo_calculo)) { const v = num(c); return v != null ? v : 0; }
+        if (c.tipo_calculo !== "total" && ks.some(k => k.c && isLeaf(k.c) && pts(k.c) !== 10)) approx = true;
+        const vs = ks.map(k => val(k.c, f, seen, c.tipo_calculo === "total")), sw = ks.reduce((s, k) => s + k.w, 0);
         switch (c.tipo_calculo) {
           case "minimo": return Math.min(...vs);
           case "maximo": return Math.max(...vs);
@@ -352,24 +359,25 @@ const NotasCore = (() => {
           default: return vs.reduce((s, v) => s + v, 0);
         }
       };
-      // the leaves under the final still without a grade, not under a recovery column
-      const left = [], walk = (c, rec, seen) => { if (seen.has(c.id_coluna)) return; seen.add(c.id_coluna); const ks = kids(c);
-        if (!ks.length || !CALC.includes(c.tipo_calculo)) { if (!rec && num(c) == null && !left.includes(c.id_coluna)) left.push(c.id_coluna); return; }
-        for (const k of ks) walk(k.c, rec || c.tipo_coluna === "recuperacao_grupo", seen); };
+      // the leaves under the final still without a grade: not under a recovery column, not left out of the final grade
+      const open = new Set(), walk = (c, rec, seen) => { if (!c || seen.has(c.id_coluna)) return; seen.add(c.id_coluna);
+        if (isLeaf(c)) { if (!rec && num(c) == null && !(c.atividade && c.atividade.omitir_nota_final)) open.add(c.id_coluna); return; }
+        for (const k of kids(c)) walk(k.c, rec || c.tipo_coluna === "recuperacao_grupo", seen); };
       walk(fin, false, new Set());
+      if (lost) return none("incompleto");
       // one hidden part of a weighted final with the tool's value shown: its current value is what that value leaves over
-      const fks = kids(fin), hs = fks.filter(k => k.c.tipo_coluna === "oculta");
-      if (num(fin) != null && fin.tipo_calculo === "media_ponderada" && hs.length === 1 && hs[0].w > 0) {
-        const sw = fks.reduce((s, k) => s + k.w, 0), rest = fks.filter(k => k !== hs[0]).reduce((s, k) => s + k.w * val(k.c, new Map(), new Set()), 0);
-        hs[0].c.h0 = Math.min(10, Math.max(0, (num(fin) * sw - rest) / hs[0].w));
+      const fks = kids(fin), hs = fks.filter(k => k.c && k.c.tipo_coluna === "oculta"), shown = num(fin);
+      if (shown != null && fin.tipo_calculo === "media_ponderada" && hs.length === 1 && hs[0].w > 0) {
+        const sw = fks.reduce((s, k) => s + k.w, 0), rest = fks.filter(k => k !== hs[0]).reduce((s, k) => s + k.w * val(k.c, 0, new Set()), 0);
+        hs[0].c.h0 = Math.min(10, Math.max(0, (shown * sw - rest) / hs[0].w));
       }
-      const at = f => val(fin, new Map(left.map(id => [id, f * 10])), new Set());
-      const shown = num(fin), now = Math.round((shown != null ? shown : at(0)) * 100) / 100, T = Number(meta) || 7;
+      const base = val(fin, 0, new Set()), shift = shown != null ? shown - base : 0, at = f => val(fin, f, new Set()) + shift;
+      const now = Math.round(at(0) * 100) / 100, T = Number(meta) || 7, left = [...open];
       if (at(0) >= T - 1e-9) return { status: "garantido", now, need: 0, left, approx };
       if (!left.length || at(1) < T - 1e-9) return { status: "nao-da", now, need: null, left, approx };
       let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (at(mid) >= T - 1e-9) hi = mid; else lo = mid; }
       return { status: "precisa", now, need: Math.round(hi * 1000) / 100, left, approx };
-    } catch (e) { return none; }
+    } catch (e) { return none("sem-formula"); }
   }
   return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };

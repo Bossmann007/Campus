@@ -58,6 +58,8 @@ chrome.storage.local.get("cache").then(({ cache }) => {
 });
 // Atualizar agora: the last reading counts as old (and no tab holds the read lock), so the next Canvas page reads everything.
 $("refresh").addEventListener("click", async () => {
+  // reloading the grades also reads the Centro de Notas: its host is asked once, here (a click is needed to ask)
+  if (chrome.permissions) chrome.permissions.request({ origins: ["https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"] }).catch(() => {});
   const { cache } = await chrome.storage.local.get("cache");
   if (cache) await chrome.storage.local.set({ cache: Object.assign({}, cache, { at: 0 }) });
   const { centro } = await chrome.storage.local.get("centro"); if (centro) await chrome.storage.local.set({ centro: Object.assign({}, centro, { at: 0 }) });   // the Centro de Notas too

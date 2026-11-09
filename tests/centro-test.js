@@ -74,6 +74,20 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert(Math.abs(r.need - 8) < 0.01, "calibrated need: " + r.need);
   ok();
 }
+{ // review fixes: a lost part keeps its weight (no false garantido), total sums raw points, now and status agree
+  const lost = imp(null, null, "3,40"); lost.grupos[2].grupo_colunas = []; lost.colunas[0].colunas_associadas_pai[1] = { id_coluna: 25, pivot: { id_coluna_filho: 25, peso_coluna_filho: 60 } };
+  assert.strictEqual(centro(lost, 7).status, "incompleto", "a part neither shown nor in a group: no number, never a false garantido");
+  const tot = curso([[1, 2, 3, 4].map(i => col(i, "padrao", null, 2.5, i < 4 ? "2,50" : null))], [col(9, "final", "total", null, null, [[1], [2], [3], [4]])]);
+  const rt = centro(tot, 7); assert.strictEqual(rt.status, "garantido", "7,5 of 10 raw points, not 30 of 40"); assert.strictEqual(rt.now, 7.5);
+  const rt2 = centro(tot, 9); assert(rt2.status === "precisa" && Math.abs(rt2.need - 6) < 0.01, "9 − 7,5 = 1,5 of 2,5 → 6,0/10: " + JSON.stringify(rt2));
+  const off = imp(null, null, "4,00");   // the tool shows 4,00 where the visible formula gives 3,40: status and need follow the tool
+  const ro = centro(off, 7); assert(ro.now === 4 && Math.abs(ro.need - 5) < 0.01, "need shifted by the tool's own value (4 + 0,6 × x ≥ 7 → 5): " + JSON.stringify(ro));
+  const odd = imp(null, null, null); odd.grupos[0].grupo_colunas[0].coluna.atividade.pontos_possiveis = 5; odd.grupos[0].grupo_colunas[0].coluna.notas = [{ nota: "5,00" }];
+  assert.strictEqual(centro(odd, 7).approx, true, "a leaf not on 10 inside a mean: the scale is a guess, say approximate");
+  const om = imp(null, null, "3,40"); om.grupos[2].grupo_colunas[0].coluna.atividade.omitir_nota_final = 1;
+  assert.deepStrictEqual(centro(om, 7).left, [21], "an item left out of the final grade is not asked for");
+  ok();
+}
 { // no formula (BD, Web, Ética, Conectividade): nothing invented
   const bd = curso([[col(1, "padrao", null, 1.25, "1,10"), col(2, "padrao", null, 3, "3,00")]], [col(9, "final", null, null, null)]);
   assert.strictEqual(centro(bd, 7).status, "sem-formula"); assert.strictEqual(centro(null, 7).status, "sem-formula");
@@ -82,7 +96,7 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
 { // odd input never throws: unknown calc, a missing child, a loop, a grade that is not a number
   const bad = curso([[col(1, "padrao", null, 10, "abc"), col(2, "grupo", "estranho", null, null, [[1], [404]]), col(3, "grupo", "media_ponderada", null, null, [[4, 50]]), col(4, "grupo", "media_ponderada", null, null, [[3, 50]])]],
     [col(9, "final", "media_ponderada", null, null, [[2, 50], [3, 50]])]);
-  const r = centro(bad, 7); assert(["precisa", "nao-da", "garantido", "sem-formula"].includes(r.status) && Number.isFinite(r.now), "safe on odd input: " + JSON.stringify(r));
+  const r = centro(bad, 7); assert(["precisa", "nao-da", "garantido", "sem-formula", "incompleto"].includes(r.status) && Number.isFinite(r.now), "safe on odd input: " + JSON.stringify(r));
   ok();
 }
 console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");

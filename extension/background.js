@@ -112,10 +112,10 @@ async function centroCourse(id, f = fetch) {
   if (!tid) return null;
   const sl = await json(CANVAS + "/api/v1/courses/" + id + "/external_tools/sessionless_launch?id=" + tid[1]);
   if (!sl || typeof sl.url !== "string" || !sl.url.startsWith(CANVAS + "/")) return null;
-  const page = await (await f(sl.url)).text(), form = /<form[^>]*action="([^"]+)"/.exec(page);
+  const page = await (await f(sl.url)).text(), form = /<form\b[^>]*\saction="([^"]+)"[^>]*>([\s\S]*?)<\/form>/.exec(page);
   if (!form || unesc(form[1]) !== CENTRO + "/lti") return null;   // only PUCPR's tool, never another address the page names
-  const body = new URLSearchParams();
-  for (const m of page.matchAll(/<input[^>]*>/g)) { const n = /name="([^"]*)"/.exec(m[0]), v = /value="([^"]*)"/.exec(m[0]); if (n) body.append(unesc(n[1]), v ? unesc(v[1]) : ""); }
+  const body = new URLSearchParams();   // only the inputs of that form (never Canvas's own tokens elsewhere on the page)
+  for (const m of form[2].matchAll(/<input\b[^>]*>/g)) { const n = /\sname="([^"]*)"/.exec(m[0]), v = /\svalue="([^"]*)"/.exec(m[0]); if (n) body.append(unesc(n[1]), v ? unesc(v[1]) : ""); }
   const lti = await f(CENTRO + "/lti", { method: "POST", body, credentials: "include" });
   if (!lti.ok) return null;
   const dp = /data-page="([^"]+)"/.exec(await lti.text()); let ver = ""; try { ver = dp ? String(JSON.parse(unesc(dp[1])).version || "") : ""; } catch (e) { /* no version */ }
@@ -124,12 +124,19 @@ async function centroCourse(id, f = fetch) {
   const d = await json(CENTRO + fin.redirect_url, { headers: { "X-Inertia": "true", "X-Inertia-Version": ver, "X-Requested-With": "XMLHttpRequest" }, credentials: "include" });
   return slimCentro(d && d.props && d.props.curso);
 }
-// every course of the reading, one after another; stored per Canvas user in "centro" (the panels repaint when it lands)
+// every course of the reading, one after another; stored per Canvas user in "centro" (the panels repaint when it lands).
+// A course that failed this time (network, the tool asleep) keeps what was read before; one run at a time (one tool session).
+let centroRun = null;
 async function centroAll(user, ids, f = fetch) {
-  const courses = {};
-  for (const id of ids) { try { courses[id] = await centroCourse(id, f); } catch (e) { courses[id] = null; } }
-  await chrome.storage.local.set({ centro: { user, at: Date.now(), courses } });
-  return courses;
+  if (centroRun) return centroRun;
+  centroRun = (async () => {
+    const { centro } = await chrome.storage.local.get("centro"), old = centro && centro.user === user && centro.courses ? centro.courses : {}, courses = {};
+    for (const id of ids) { try { courses[id] = await centroCourse(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
+    for (const id of Object.keys(courses)) if (courses[id] === undefined) delete courses[id];
+    await chrome.storage.local.set({ centro: { user, at: Date.now(), courses } });
+    return courses;
+  })();
+  try { return await centroRun; } finally { centroRun = null; }
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -166,6 +173,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === "centro" && Array.isArray(msg.ids) && typeof msg.user === "number") {
     (async () => {
       const ids = msg.ids.map(String).filter(x => /^\d{1,15}$/.test(x)).slice(0, 15), { centro } = await chrome.storage.local.get("centro");
+      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return reply({ ok: false, permission: false });   // asked once, from Atualizar in the popup
       if (centro && centro.user === msg.user && Date.now() - centro.at < 10 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
       await centroAll(msg.user, ids); reply({ ok: true });
     })().catch(() => reply({ ok: false }));

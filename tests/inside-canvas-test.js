@@ -164,6 +164,14 @@ async function runContent(pathname, files, preStore, opts = {}) {
   seen.length = 0; assert.strictEqual(await sw.centroCourse("7", fake("https://evil.example/lti")), null, "a form pointing anywhere else is never sent");
   assert(!seen.some(x => /evil/.test(x)), "nothing posted to another host");
   const all = await sw.centroAll(5, ["7"], fake()); assert(local.centro && local.centro.user === 5 && local.centro.courses["7"] && all["7"], "stored per Canvas user");
+  { // only the validated form's inputs go to the tool (never Canvas's own token elsewhere on the page); a failure keeps the last read
+    let posted = null; const page = '<input name="authenticity_token" value="CANVAS-CSRF"><form action="' + T + '/lti" method="post"><input data-value="x" name="a" value="1"></form>';
+    const f2 = async (u, o) => /launch=1/.test(u) ? res(page) : u === T + "/lti" ? (posted = String(o.body), res('<div data-page="{}"></div>')) : fake()(u, o);
+    await sw.centroCourse("7", f2);
+    assert(posted === "a=1", "posted only the form's own fields: " + posted);
+    const broken = async u => { throw new Error("offline " + u); };
+    await sw.centroAll(5, ["7"], broken); assert(local.centro.courses["7"] && local.centro.courses["7"].colunas.length, "a failed read keeps the course's last Centro de Notas");
+  }
   ok();
 }
   assert.strictEqual(await ask({ type: "download", items }, { id: "me", origin: "https://evil.example" }), "no reply", "messages from other origins are ignored");

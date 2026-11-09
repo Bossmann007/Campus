@@ -18,7 +18,9 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://pucpr.instructure.com/*",
+    "https://pucpr.instructure.com/*"
+  ],
+  "optional_host_permissions": [
     "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"
   ],
   "background": {
