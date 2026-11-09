@@ -1149,12 +1149,13 @@
   async function listFiles(id, canvasName, acts, btn, status) {
     btn.disabled = true; status.textContent = "Listando arquivos…";
     try {
+      const root = cpFolder(cpPrefs((await chrome.storage.local.get("prefs")).prefs).dlFolder);   // the student's folder inside Downloads
       const all = (await courseFiles(id)).filter(f => f && f.url && !f.locked_for_user)
-        .map(f => ({ id: f.id, url: new URL(f.url, location.href).href, filename: F.target(canvasName, f, C.COURSES, C.CANVAS, id) })).filter(f => f.filename);
+        .map(f => ({ id: f.id, url: new URL(f.url, location.href).href, filename: F.target(canvasName, f, C.COURSES, C.CANVAS, id, root) })).filter(f => f.filename);
       const { dl } = await chrome.storage.local.get("dl"), have = new Set(Array.isArray(dl) ? dl : []);
       const fresh = all.filter(f => !have.has(f.id));
       btn.remove();
-      status.textContent = all.length + (all.length === 1 ? " arquivo" : " arquivos") + ", " + fresh.length + (fresh.length === 1 ? " novo" : " novos") + " · vão para Downloads/PUCPR";
+      status.textContent = all.length + (all.length === 1 ? " arquivo" : " arquivos") + ", " + fresh.length + (fresh.length === 1 ? " novo" : " novos") + " · vão para Downloads/" + root;
       const btns = [];
       const save = async items => {
         btns.forEach(b => { b.disabled = true; }); status.textContent = "Baixando " + items.length + "…";
@@ -1163,7 +1164,7 @@
           const res = await chrome.runtime.sendMessage({ type: "download", items: items.slice(i, i + 300) });
           started += res && Array.isArray(res.done) ? res.done.length : 0;
         }
-        status.textContent = started + " de " + items.length + " enviados para Downloads/PUCPR";
+        status.textContent = started + " de " + items.length + " enviados para Downloads/" + root;
         btns.forEach(b => { b.disabled = false; });
       };
       if (fresh.length) { const b = el("button", "primary", "Baixar " + fresh.length + (fresh.length === 1 ? " novo" : " novos")); b.addEventListener("click", () => save(fresh)); acts.prepend(b); btns.push(b); }

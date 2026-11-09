@@ -47,6 +47,10 @@ const imported = [];   // importScripts("prefs.js") shares the worker's global s
 const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
+const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
+assert.strictEqual(cpFolder("Faculdade/2026-2"), "Faculdade/2026-2"); assert.strictEqual(cpFolder("../etc"), "etc"); assert.strictEqual(cpFolder("a/b/c/d"), "PUCPR", "more than 3 levels: the default");
+assert.strictEqual(cpFolder('x<>:"|?*y'), "xy"); assert.strictEqual(cpFolder(""), "PUCPR");
+assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "Faculdade/BD/a.pdf" }, "Faculdade") && !sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "PUCPR/BD/a.pdf" }, "Faculdade"), "only inside the student's folder");
 for (const bad of [{ url: "https://evil.example/a", filename: "PUCPR/a.pdf" }, { url: "https://pucpr.instructure.com/x", filename: "Documents/a.pdf" },
   { url: "https://pucpr.instructure.com/x", filename: "PUCPR/../a.pdf" }, { url: "javascript:alert(1)", filename: "PUCPR/a" }, { url: "https://pucpr.instructure.com/x", filename: "PUCPR//a" }])
   assert(!sw.okDownload(bad), JSON.stringify(bad));
@@ -174,7 +178,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await newBtn.listeners.click(); await new Promise(r => setTimeout(r, 20));
   const dl = course.sent.find(m => m.type === "download");
   assert.deepStrictEqual(dl.items, [{ id: 1, url: "https://pucpr.instructure.com/files/1/download?verifier=a", filename: "PUCPR/Arquitetura de Banco de Dados/Slides/Aula 1.pdf" }]);
-  assert.strictEqual(course.store.cache.user, 5, "cache tagged with the Canvas user"); ok();
+  assert.strictEqual(course.store.cache.user, 5, "cache tagged with the Canvas user");
+  const own = await runContent("/courses/71306", [{ id: 1, display_name: "Aula 1.pdf", url: "/files/1/download?verifier=a", size: 5 }], { prefs: { dlFolder: "Faculdade/2026-2" } });
+  const ownHost = own.anchor.kids.find(k => k.id === "qf-panel");
+  await all(ownHost).find(e => e.textContent === "Baixar arquivos da matéria").listeners.click(); await new Promise(r => setTimeout(r, 20));
+  assert.match(text(ownHost), /vão para Downloads\/Faculdade\/2026-2/);
+  await all(ownHost).find(e => /^Baixar 1 novo$/.test(e.textContent)).listeners.click(); await new Promise(r => setTimeout(r, 20));
+  assert.strictEqual(own.sent.find(m => m.type === "download").items[0].filename, "Faculdade/2026-2/Arquitetura de Banco de Dados/Slides/Aula 1.pdf", "into the student's own folder"); ok();
 
   const hidden = await runContent("/courses/71306/modules", null);   // Files tab hidden: module files
   const b2 = all(hidden.anchor).find(e => e.textContent === "Baixar arquivos da matéria");

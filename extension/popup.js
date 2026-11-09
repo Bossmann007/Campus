@@ -9,6 +9,7 @@ const setPref = async (k, v) => { const { prefs } = await chrome.storage.local.g
 const looks = [...document.querySelectorAll("[data-look]")], modes = [...document.querySelectorAll("[data-mode]")];
 function showPrefs(prefs) {
   const p = cpPrefs(prefs);
+  if (document.activeElement !== $("dlFolder")) $("dlFolder").value = cpFolder(p.dlFolder);
   $("theme").value = p.theme;
   for (const sel of document.querySelectorAll("[data-sel]")) sel.value = p[sel.dataset.sel];
   looks.forEach(b => { b.setAttribute("aria-checked", String(b.dataset.look === p.look)); b.tabIndex = b.dataset.look === p.look ? 0 : -1; });
@@ -16,6 +17,7 @@ function showPrefs(prefs) {
   for (const box of document.querySelectorAll("[data-pref]")) box.checked = p[box.dataset.pref];
 }
 $("theme").addEventListener("change", () => setPref("theme", $("theme").value));
+$("dlFolder").addEventListener("change", () => { const v = cpFolder($("dlFolder").value); $("dlFolder").value = v; setPref("dlFolder", v); });
 for (const sel of document.querySelectorAll("[data-sel]")) sel.addEventListener("change", () => setPref(sel.dataset.sel, sel.value));
 for (const b of looks) b.addEventListener("click", () => setPref("look", b.dataset.look));
 for (const b of modes) b.addEventListener("click", () => setPref("mode", b.dataset.mode));

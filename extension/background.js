@@ -5,11 +5,11 @@ const CANVAS = "https://pucpr.instructure.com";
 const localISO = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const daysTo = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(localISO(new Date()) + "T00:00:00Z")) / 864e5);
 
-// Only Canvas file links, only into Downloads/PUCPR/..., never outside it.
-function okDownload(it) {
+// Only Canvas file links, only into the student's folder inside Downloads (prefs.dlFolder, "PUCPR" by default), never outside it.
+function okDownload(it, root = "PUCPR") {
   if (!it || typeof it.url !== "string" || typeof it.filename !== "string") return false;
   let u; try { u = new URL(it.url); } catch (e) { return false; }
-  return u.origin === CANVAS && /^PUCPR\/[^/]/.test(it.filename) && !it.filename.split("/").some(p => p === "" || p === "." || p === "..");
+  return u.origin === CANVAS && it.filename.startsWith(root + "/") && it.filename.length > root.length + 1 && !it.filename.split("/").some(p => p === "" || p === "." || p === "..");
 }
 
 async function showNext() {
@@ -104,9 +104,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   if (msg.type === "download" && Array.isArray(msg.items)) {
     (async () => {
-      const done = [];
+      const done = [], root = cpFolder(cpPrefs((await chrome.storage.local.get("prefs")).prefs).dlFolder);
       for (const it of msg.items.slice(0, 300)) {
-        if (!okDownload(it)) continue;
+        if (!okDownload(it, root)) continue;
         try {
           const did = await chrome.downloads.download({ url: it.url, filename: it.filename, conflictAction: "uniquify", saveAs: false });
           const { pending = {} } = await chrome.storage.session.get("pending");
