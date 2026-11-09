@@ -88,7 +88,7 @@ let n = 0; const ok = () => n++;
   assert(list.result.tools.length === 7 && list.result.tools.every(t => t.annotations.readOnlyHint === true), "seven tools, all read-only");
   assert.deepStrictEqual(list.result.tools.map(t => t.name).sort(), require("../mcp/manifest.json").tools.map(t => t.name).sort(), "manifest lists the same tools");
   { const mf = require("../mcp/manifest.json"), pk = require("../mcp/package.json"), tk = mf.user_config.canvas_token;
-    assert(mf.version === "1.0.0" && pk.version === "1.0.0" && tk.required === true && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.0.0, token required and sensitive, no file.js shipped"); }
+    assert(mf.version === "1.0.1" && pk.version === "1.0.1" && tk.required === true && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.0.0, token required and sensitive, no file.js shipped"); }
   { // every AI client: names of letters and _ (≤ 64), schemas in the plain subset (OpenAI, Gemini and the rest accept it)
     const keys = new Set(["type", "description", "properties", "required"]), walk = (sch, at) => { for (const k of Object.keys(sch)) assert(keys.has(k), "schema keyword " + k + " in " + at); for (const [n, v] of Object.entries(sch.properties || {})) walk(v, at + "." + n); };
     for (const t of list.result.tools) { assert(/^[a-z_]{1,64}$/.test(t.name), "tool name " + t.name); assert(t.inputSchema.type === "object" && typeof t.inputSchema.properties === "object", "object schema " + t.name); walk(t.inputSchema, t.name); for (const v of Object.values(t.inputSchema.properties)) assert(["string", "number", "integer"].includes(v.type), "plain type in " + t.name); } }
@@ -143,6 +143,11 @@ let n = 0; const ok = () => n++;
     const run = spawnSync(process.execPath, [path.join(tmp, "mcp", "cli.js")], { input: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "courses" } }) + "\n", env: { PATH: process.env.PATH, CANVAS_TOKEN_FILE: path.join(tmp, "none"), CADERNO_FILE: path.join(tmp, "none.json") }, encoding: "utf8", timeout: 10000 });
     const rep = JSON.parse(run.stdout.trim());
     assert(rep.id === 1 && rep.result.isError && /cli\.js" login/.test(rep.result.content[0].text) && /Novo token de acesso/.test(rep.result.content[0].text) && !/npx|Arquivo para/.test(rep.result.content[0].text) && run.status === 0, "stdio: the reply is written before the server leaves; the login hint is the local cli, never npx, no file mode");
+    // Claude Desktop's built-in Node does not run "node server.js": its host sets process.argv = [node, entry] and loads the
+    // entry with import(). The server must start that way too (found on the real app, 2026-11-09: it never answered initialize).
+    const hostJs = 'const [entry] = process.argv.slice(1); process.argv = ["node", entry]; import(require("url").pathToFileURL(entry).toString());';
+    const hosted = spawnSync(process.execPath, ["-e", hostJs, path.join(tmp, "mcp", "server.js")], { input: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18" } }) + "\n", env: { PATH: process.env.PATH, CANVAS_TOKEN_FILE: path.join(tmp, "none") }, encoding: "utf8", timeout: 15000 });
+    assert(hosted.stdout.trim() && JSON.parse(hosted.stdout.trim()).result.serverInfo.name === "caderno-plus", "loaded by import() as the entry (Claude Desktop's node host): initialize with id 0 is answered: " + JSON.stringify(hosted.stdout).slice(0, 80));
     const many = Array.from({ length: 3000 }, (_, i) => JSON.stringify({ jsonrpc: "2.0", id: i, method: "tools/list" })).join("\n") + "\n";
     const big = spawnSync(process.execPath, [path.join(tmp, "mcp", "server.js")], { input: many, env: { PATH: process.env.PATH, CADERNO_FILE: path.join(tmp, "none.json") }, encoding: "utf8", timeout: 30000, maxBuffer: 1 << 30 });
     assert.strictEqual(big.stdout.trim().split("\n").length, 3000, "3000 requests then end of input: 3000 replies");

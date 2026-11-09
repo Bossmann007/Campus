@@ -65,5 +65,9 @@ async function main() {
   process.stdin.on("end", () => { ended = true; done(); });
 }
 
-if (require.main === module) main();
+// Started when run directly (node server.js) and also when a host loads this file as its entry with import() or require()
+// (Claude Desktop's built-in Node sets process.argv[1] to the entry and imports it: require.main is then the host, not us).
+const isEntry = () => { if (require.main === module) return true;
+  try { const fs = require("fs"); return !!process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(__filename); } catch (e) { return false; } };
+if (isEntry()) main();
 module.exports = { makeHandler, scrubber, main };
