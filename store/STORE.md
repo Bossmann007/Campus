@@ -10,8 +10,8 @@ Upload: `./scripts/package-extension` gera `dist/quanto-falta-extension-<versão
 - **Idioma:** Português (Brasil)
 - **Ícone:** `extension/icons/icon128.png`
 - **Capturas (1280x800):** `store/screenshot-1280x800.png`, `store/screenshot-2-1280x800.png`
-- **Site:** https://falta-quanto.vercel.app/
-- **Política de privacidade:** https://falta-quanto.vercel.app/privacidade.html
+- **Site:** https://caderno-plus.vercel.app/
+- **Política de privacidade:** https://caderno-plus.vercel.app/privacidade.html
 - **Suporte:** https://github.com/Bossmann007/Campus/issues
 
 ## Descrição

@@ -26,11 +26,11 @@ Caderno+ é uma extensão do Chrome, Brave e Edge que roda dentro do Canvas da P
 - **Página de cada matéria (3.0):** cabeçalho com a cor da matéria, o professor (foto e Perguntar) e a nota; abas Visão geral (o que vem a seguir, último aviso, atalhos), Notas (tabela e simulador), Materiais (módulos com filtro e download de arquivos), Avisos e Anotações. Menu da matéria e módulos do Canvas no visual do Caderno+.
 - **Calculadora dentro do Canvas:** meta no painel; na página de cada matéria, o quanto falta por avaliação, o simulador e as notas lançadas à mão (onde o Canvas não tem); backup no botão da extensão.
 
-Cada parte pode ser desligada no botão da extensão; o botão "Atualizar agora" faz a próxima página do Canvas ler tudo de novo. Num computador compartilhado, as notas da calculadora ficam separadas por usuário do Canvas. O Feedback abre uma issue pública no GitHub: não escreva nome, RA nem notas. Sem senha, sem token e sem servidor: tudo fica no seu navegador ([privacidade](https://falta-quanto.vercel.app/privacidade.html)).
+Cada parte pode ser desligada no botão da extensão; o botão "Atualizar agora" faz a próxima página do Canvas ler tudo de novo. Num computador compartilhado, as notas da calculadora ficam separadas por usuário do Canvas. O Feedback abre uma issue pública no GitHub: não escreva nome, RA nem notas. Sem senha, sem token e sem servidor: tudo fica no seu navegador ([privacidade](https://caderno-plus.vercel.app/privacidade.html)).
 
-**Instalar:** baixe o zip em https://falta-quanto.vercel.app, descompacte, abra `chrome://extensions`, ligue o modo do desenvolvedor e use "Carregar sem compactação" na pasta.
+**Instalar:** baixe o zip em https://caderno-plus.vercel.app, descompacte, abra `chrome://extensions`, ligue o modo do desenvolvedor e use "Carregar sem compactação" na pasta.
 
-**Sem extensão?** O [favorito](https://falta-quanto.vercel.app/#favorito) mostra a semana, os avisos e quanto falta na página do Canvas. O site serve só para baixar a extensão ou o favorito.
+**Sem extensão?** O [favorito](https://caderno-plus.vercel.app/#favorito) mostra a semana, os avisos e quanto falta na página do Canvas. O site serve só para baixar a extensão ou o favorito.
 
 - Quer ajudar? Veja [CONTRIBUTING.md](CONTRIBUTING.md). Falha de segurança: [SECURITY.md](SECURITY.md).
 - Projeto de aluno, sem vínculo oficial com a PUCPR ou com a Instructure (Canvas). Confira pesos e datas no Canvas.
@@ -61,4 +61,4 @@ Caderno+ for PUCPR 2026/2: a Chrome MV3 extension that runs on the PUCPR Canvas,
 - `video/scene.html` + `scripts/render-video`: render `media/demo.mp4` frame by frame with headless virtual time (needs ffmpeg); the scene is a mock Canvas tab running the real `content.js` (dashboard panel, then the "Caderno+" menu item opening the real `app.html`, then a course page) on stubbed `chrome.*` and Canvas API with made-up data, served over localhost. `FRAMES="ms …"` renders single review frames; `STILL=1` renders the store screenshots.
 - `referencias/`: design reference links (`README.md`, `links.html`); not deployed.
 
-Deploy: Vercel project `faltaquanto`, domain https://falta-quanto.vercel.app, serves only `index.html`, `privacidade.html` and `media/` (`cleanUrls`) with the headers in `vercel.json` (`.vercelignore` whitelist); `/app` and `/calendario` redirect to `/`. Production deploys need Enzo's approval each time.
+Deploy: Vercel project `faltaquanto`, domain https://caderno-plus.vercel.app, serves only `index.html`, `privacidade.html` and `media/` (`cleanUrls`) with the headers in `vercel.json` (`.vercelignore` whitelist); `/app` and `/calendario` redirect to `/`. Production deploys need Enzo's approval each time.
