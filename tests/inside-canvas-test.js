@@ -101,7 +101,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   Object.defineProperty(gname, "parentNode", { get() { return this.parent; } }); Object.defineProperty(gname, "nextSibling", { get() { return this.parent.kids[this.parent.kids.indexOf(this) + 1] || null; } });
   gcard.querySelector = sel => sel === "[data-cp-grade]" ? all(gcard).find(e => e["data-cp-grade"]) || null : /-name"\]$/.test(sel) ? gname : null;
   const tabContent = fakeEl("div"), cols = fakeEl("div"); if (opts.widgetCols || opts.classic) { tabContent.append(cols); anchor.append(tabContent); }
-  tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); };
+  tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); if (c.id) byId[c.id] = c; };   // found by id like any element of the page
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
     querySelector: sel => sel === ".ic-Dashboard-header__layout" ? (opts.header || null) : (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
@@ -138,8 +138,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   if (opts.tall) Object.assign(env.window, { innerHeight: 800, scrollTo(o) { this.scrolled = o; } });
   const history = { replaceState: (a, b, url) => { env.location.hash = ""; } };
   const src = opts.src || read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
-  new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
-    class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
+  new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", "sessionStorage", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
+    class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date, opts.session);   // each run is a new tab: no session storage unless the test hands one
   await new Promise(r => setTimeout(r, 30));
   return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols, gcard };
 }
@@ -614,6 +614,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(dsh.store.notesOpen === false, "the button closes it"); }
   ok();
 
+  { // the service worker is not woken for nothing: the same reminders and next exam are sent once per tab session
+    const mem = {}, session = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };
+    {
+      const one = await runContent("/", null, {}, { session }); await new Promise(r => setTimeout(r, 20));
+      assert(one.sent.some(m => m.type === "remind") && one.sent.some(m => m.type === "next"), "the first page of the tab sends both");
+      const two = await runContent("/", null, one.store, { session }); await new Promise(r => setTimeout(r, 20));
+      assert(!two.sent.some(m => m.type === "remind" || m.type === "next"), "the next page, nothing changed: no message (the worker stays asleep)");
+      const three = await runContent("/", null, Object.assign({}, one.store, { tasks: { 5: [{ id: "t9", title: "novo lembrete", date: isoIn(2) }] } }), { session }); await new Promise(r => setTimeout(r, 20));
+      assert(three.sent.some(m => m.type === "remind" && m.items.some(i => /novo lembrete/.test(i.title))), "something changed: sent again");
+    }
+    ok(); }
   { // the narrow week list is built only when it is shown (a wide panel never pays for it)
     const cbs = []; let disp = "none";
     global.ResizeObserver = class { constructor(f) { cbs.push(f); } observe() {} disconnect() {} }; global.getComputedStyle = () => ({ display: disp });
@@ -735,6 +746,24 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(clHost && cl.cols.parent.kids.indexOf(clHost) === cl.cols.parent.kids.indexOf(cl.cols) - 1, "between the header and Canvas's course cards");
   assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
   assert(!all(clHost).some(e => /^Esconder \d|^Mostrar \d|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes, the meta and the fold");
+  { // Anotações on the classic dashboard: always above, beside our panel, whatever the order of clicks; the panel keeps
+    // the column's height so Canvas's cards start below it (they used to wrap around the column after a mode switch)
+    const ids = r => r.cols.parent.kids.filter(k => !k.removed).map(k => k.id || "cards").filter(x => /cp-notes|cp-dash|cards/.test(x)).join(" ");
+    const nt = await runContent("/", null, {}, { classic: true }); await new Promise(r => setTimeout(r, 30));
+    nt.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 30));
+    assert.strictEqual(ids(nt), "cp-notes cp-dash cards", "opened after the panel: the column goes before the panel, not between it and the cards");
+    await nt.env.window.cpPrefsChanged({ mode: "foco" }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(nt), "cp-notes cp-dash cards", "after a mode switch (the panel is rebuilt): the same order, one column, one panel");
+    const dashNow = nt.cols.parent.kids.find(k => k.id === "cp-dash" && !k.removed);
+    assert(/px$/.test(String(dashNow.style.minHeight || "")), "the rebuilt panel keeps room for the column: " + dashNow.style.minHeight);
+    await nt.env.window.cpPrefsChanged({ mode: "completo" }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(nt), "cp-notes cp-dash cards", "and back");
+    const pre = await runContent("/", null, { notesOpen: true }, { classic: true }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(pre), "cp-notes cp-dash cards", "open from the start: the same order");
+    const cf = await runContent("/", null, { notesOpen: true, prefs: { cardsFirst: true } }, { classic: true }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(cf), "cp-notes cards cp-dash", "cards first: the column beside the cards, the panel below");
+    assert(!cf.cols.parent.kids.find(k => k.id === "cp-dash").style.minHeight, "cards first: no reserved height on the panel");
+    ok(); }
   const pf = await runContent("/", null); await new Promise(r => setTimeout(r, 20));
   const pfBox = () => all(pf.anchor).find(e => /^box/.test(e.className)), pfB = all(pf.anchor).find(e => /^pfold/.test(e.className) && !/pnotes/.test(e.className));
   assert(pfB && pfB.textContent === "Esconder ▴" && !/pfolded/.test(pfBox().className), "the panel open, with Esconder");
@@ -970,7 +999,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   lk.listen.change({ prefs: { newValue: {} } }, "local");
   assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
   assert(/#right-side \.button-sidebar-wide \{ display:flex/.test(lookCss()) && /ToDoSidebarItem, \.to-do-list > li, \.group_list > li, \.event/.test(lookCss()) && /context-course_"\] #right-side :is\(\.ToDoSidebarItem__Title \+ span/.test(lookCss()), "the course page's right column: buttons and items as cards, the repeated course name hidden");
-  assert(/#section-tabs a\.announcements::before \{ -webkit-mask-image:url\("data:image\/svg\+xml/.test(lookCss()) && /a\[class\*="context_external_tool"\]::before/.test(lookCss()), "an icon per course menu item (tools too)");
+  { const css = lookCss(), svgs = new Set(css.match(/url\("data:image\/svg\+xml[^"]*"\)/g) || []);
+    assert(/#section-tabs a\.announcements::before \{ -webkit-mask-position:-32px 0; mask-position:-32px 0; \}/.test(css) && /a\[class\*="context_external_tool"\]::before \{ -webkit-mask-position:-240px 0/.test(css), "an icon per course menu item (tools too), each a cell of the sprite");
+    assert(svgs.size === 1 && /viewBox='0 0 256 16'/.test([...svgs][0]) && ([...svgs][0].match(/<path /g) || []).length === 16, "one SVG image for the whole menu (each SVG image in CSS is a document for the browser): " + svgs.size); }
   assert(/:is\(#my_courses_table, #past_enrollments_table/.test(lookCss()) && /#nav-tray-portal li \{/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
   lk.listen.change({ prefs: { newValue: { native: false } } }, "local"); assert(/cp-has-panel \[data-testid="widget-columns"\] \{ display:none/.test(lookCss()), "Canvas's widgets off: hidden");

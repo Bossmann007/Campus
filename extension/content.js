@@ -65,6 +65,7 @@
   // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
   const forget = async () => {
     await chrome.storage.local.remove(["cache", "search", "teachers", "ccolors"]);
+    try { if (typeof sessionStorage !== "undefined") { sessionStorage.removeItem("cp-sent-remind"); sessionStorage.removeItem("cp-sent-next"); } } catch (e) { /* no storage */ }
     chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
     chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
   };
@@ -336,9 +337,22 @@
   }
 
   // The icon number: days to the next exam that still matters.
+  // A message to the service worker wakes its whole process, so the same thing is not sent twice from a tab: the last
+  // payload of each kind is remembered for the tab's session (and the day), and only a change is sent. A new tab sends
+  // once again, which also covers alarms the browser dropped on a restart.
+  const fresh = (kind, payload) => {
+    try {
+      if (typeof sessionStorage === "undefined") return true;
+      let h = 5381; const str = today() + JSON.stringify(payload); for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) | 0;
+      const key = "cp-sent-" + kind, v = String(h >>> 0);
+      if (sessionStorage.getItem(key) === v) return false;
+      sessionStorage.setItem(key, v);
+    } catch (e) { /* no storage: send */ }
+    return true;
+  };
   function sendNext(a) {
-    const u = a.upcoming.find(x => x.item.exam && x.st.status !== "garantido");
-    chrome.runtime.sendMessage({ type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" }).catch(() => {});
+    const u = a.upcoming.find(x => x.item.exam && x.st.status !== "garantido"), msg = { type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" };
+    if (fresh("next", msg)) chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   // Deadlines from the Canvas planner (every course) plus our exams that are not in Canvas, from today on. marks: what the
@@ -379,7 +393,8 @@
     const t = today(), end = addDays(14);
     const items = prefs.remind || prefs.summary ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
       .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : x.own ? "Lembrete: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
-    chrome.runtime.sendMessage({ type: "remind", items, alarms: prefs.remind }).catch(() => {});   // the Monday summary reads the list too
+    const msg = { type: "remind", items, alarms: prefs.remind };
+    if (fresh("remind", msg)) chrome.runtime.sendMessage(msg).catch(() => {});   // the Monday summary reads the list too
   }
 
   // The deadlines and exams from today on as a calendar file (.ics) for Google Agenda, Outlook or the phone.
@@ -721,6 +736,14 @@
     host.style.marginTop = cardsFirst ? "8px" : "";
     if (cardsFirst) { if (cols.nextSibling !== host) cols.parentNode.insertBefore(host, cols.nextSibling); }
     else if (host.nextSibling !== cols) cols.parentNode.insertBefore(host, cols);
+    fitNotes();
+  }
+  // The Anotações column floats at the top right, beside our panel: the panel keeps at least the column's height, so
+  // Canvas's cards always start below it at full width (a short panel, as in Foco, used to let the cards wrap around it).
+  // Cards first: the column is beside the cards and the panel, below them, needs no room.
+  function fitNotes() {
+    const n = document.getElementById("cp-notes"), d = document.getElementById("cp-dash");
+    if (d && d.style) d.style.minHeight = n && !cardsFirst ? ((n.offsetHeight || 420) + 44) + "px" : "";
   }
   // Its "Notas do curso" widget shows Canvas's current score (only what is graded, without the Plano de Ensino weights, so
   // 92% halfway through the term). On our subjects the card keeps its picture and gets our numbers instead: points
@@ -1013,9 +1036,9 @@
   function notesSide(cache, show) {
     let host = document.getElementById("cp-notes");
     const fit = () => { const r = document.documentElement; if (r && r.classList) r.classList.toggle("cp-notes-open", !!show); if (window.cpCards && gradeA) window.cpCards(gradeA); };   // the cards' columns follow the narrower box
-    if (!show) { if (host) host.remove(); fit(); return; }
-    if (host) return;
-    const cols = document.getElementById("DashboardCard_Container");
+    if (!show) { if (host) host.remove(); fit(); fitNotes(); return; }
+    if (host) { fitNotes(); return; }
+    const cols = document.querySelector ? document.querySelector("#DashboardCard_Container") : null;   // as placeDash finds it
     host = el("div", "cp-host cp-noteshost"); host.id = "cp-notes";
     const root = shadow(host), box = el("div", "box side"), h = el("div", "side-h"), close = el("button", "mini", "Fechar ×");
     close.type = "button"; close.setAttribute("aria-label", "Fechar as anotações"); close.addEventListener("click", () => toggleNotes(false));
@@ -1023,9 +1046,13 @@
     const nb = notesBlock(cache, "painel", null, () => window.cpRedraw && window.cpRedraw());
     box.append(h, ...nb.nodes); styleRoot(root); root.append(box);
     host.cpBusy = nb.busy; host.cpFocus = () => nb.ta.focus && nb.ta.focus();
-    if (cols && cols.parentNode) { host.style.cssText = "float:right;width:300px;max-width:32%;margin:28px 0 12px 18px;position:relative;z-index:1"; cols.parentNode.insertBefore(host, cols); }
+    if (cols && cols.parentNode) {   // always before our panel when it sits above the cards (never between the panel and the cards)
+      const dash = document.getElementById("cp-dash"), ref = !cardsFirst && dash && (dash.parentNode || dash.parent) === cols.parentNode ? dash : cols;
+      host.style.cssText = "float:right;width:300px;max-width:32%;margin:28px 0 12px 18px;position:relative;z-index:1"; cols.parentNode.insertBefore(host, ref);
+      if (typeof ResizeObserver === "function") new ResizeObserver(() => { if (gone(host)) return; fitNotes(); }).observe(host);   // the checklist grows: the panel follows
+    }
     else { const c = document.getElementById("content"); if (!c) return; c.prepend(host); }
-    fit();
+    fit(); fitNotes();
   }
   let notesCache = null;
   async function toggleNotes(on) {
