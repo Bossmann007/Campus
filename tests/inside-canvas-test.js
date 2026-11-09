@@ -614,6 +614,16 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(dsh.store.notesOpen === false, "the button closes it"); }
   ok();
 
+  { // the narrow week list is built only when it is shown (a wide panel never pays for it)
+    const cbs = []; let disp = "none";
+    global.ResizeObserver = class { constructor(f) { cbs.push(f); } observe() {} disconnect() {} }; global.getComputedStyle = () => ({ display: disp });
+    try {
+      const lazy = await runContent("/", null, {}), wl = all(lazy.anchor).find(e => e.className === "wl");
+      assert(wl && wl.kids.length === 0, "wide: the hidden list stays empty");
+      disp = "block"; for (const f of cbs) { try { f([]); } catch (e) { /* another observer of the page */ } }
+      assert(wl.kids.length > 0 && all(wl).some(e => e.className === "dh"), "narrow: filled when it shows, grouped by day");
+    } finally { delete global.ResizeObserver; delete global.getComputedStyle; }
+    ok(); }
   { // 6.0: no file for the AI any more (the MCP reads Canvas with the student's token): nothing written, nothing asked
     const run = await runContent("/", null, { prefs: { agentFile: true } }); await new Promise(r => setTimeout(r, 30));
     assert(!run.sent.some(m => m.type === "agentFile") && !JSON.stringify(run.store).includes("caderno-agente"), "no AI file, even with the old switch saved");

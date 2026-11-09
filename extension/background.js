@@ -154,12 +154,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     grades(msg.items).then(() => reply({ ok: true }));
     return true;
   }
-  // read the Centro de Notas of these courses (from the panel's reading); at most once every 10 minutes per user
+  // read the Centro de Notas of these courses (from the panel's reading); at most once an hour per user (formulas change
+  // rarely and each read is six requests per course); Atualizar in the popup forces it
   if (msg.type === "centro" && Array.isArray(msg.ids) && typeof msg.user === "number") {
     (async () => {
       const ids = msg.ids.map(String).filter(x => /^\d{1,15}$/.test(x)).slice(0, 15), { centro } = await chrome.storage.local.get("centro");
       if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return reply({ ok: false, permission: false });   // asked once, from Atualizar in the popup
-      if (centro && centro.user === msg.user && Date.now() - centro.at < 10 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
+      if (centro && centro.user === msg.user && Date.now() - centro.at < 60 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
       await centroAll(msg.user, ids); reply({ ok: true });
     })().catch(() => reply({ ok: false }));
     return true;

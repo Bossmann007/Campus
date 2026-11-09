@@ -1,8 +1,9 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.0.3",
+  version: "6.1.0",
   items: [
+    "Mais rápido: o painel aparece assim que a página do Canvas chega, a leitura das notas faz uma ida a menos ao Canvas e o Centro de Notas é lido de hora em hora",
     "Quanto falta em qualquer matéria cujo professor montou a fórmula no Centro de Notas da PUCPR, de qualquer curso e turma (clique em Atualizar para permitir)",
     "Simulador na página da matéria: tirando X no que falta, com quanto você fica",
     "Sua IA pelo Caderno+ MCP (beta, já dá para instalar) com um token do Canvas no cofre do sistema: sem arquivo nenhum (pode apagar o caderno-agente.json antigo da pasta de downloads)",

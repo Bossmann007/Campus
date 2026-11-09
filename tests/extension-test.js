@@ -8,7 +8,7 @@ assert.deepStrictEqual(manifest.permissions, ["storage", "downloads", "alarms", 
 assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*"], "host access only to the PUCPR Canvas");
 assert.deepStrictEqual(manifest.optional_host_permissions, ["https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"], "the Centro de Notas host only on request (an update never disables the extension)");
 assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"], ["https://pucpr.instructure.com/*"]], "page scripts only on the PUCPR Canvas");
-assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_idle"], "theme before the page paints, the rest after it loads");
+assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_end"], "theme before the page paints, the rest after it loads");
 assert.strictEqual([].concat(...manifest.content_scripts.map(c => c.js)).filter(f => f === "prefs.js").length, 1, "prefs.js once: the scripts share one scope, a second copy would redeclare its consts");
 const pack = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
 for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.background.service_worker, "popup.js", "popup.html", "popup.css", "onboarding.html", "onboarding.css", "onboarding.js", "ai.html", "ai.css", "ai.js"]) {
@@ -64,6 +64,20 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert.deepStrictEqual(out, { v: 1, courses: [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
     { name: "Avaliação somativa -  Prova", points: 10, url: "https://pucpr.instructure.com/courses/7/assignments/70", score: 7, due: null, missing: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, url: null, score: null, due: "2026-11-11T02:59:59Z", missing: true, submitted: false, online: false, stats: null }] }],
     announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", courseId: 7, title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1", author: "Prof. Ana", avatar: "https://pucpr.instructure.com/images/thumbnails/1/ana.png" }] });
+  { // known courses (the last reading's): their assignments are asked together with the course list, not after it; same result
+    const base = global.fetch, order = []; let release;
+    const gate = new Promise(r => { release = r; });
+    global.fetch = async url => { order.push(url.split("?")[0].replace("https://pucpr.instructure.com", "")); if (url.startsWith("/api/v1/courses?")) await gate; if (url.startsWith("/api/v1/courses/9/")) return page([]); return base(url); };
+    const p = collect({}, [7, 9, "x", 7]);   // 9 left the term (dropped), "x" is ignored, 7 only once
+    await new Promise(r => setTimeout(r, 20));
+    assert(order.includes("/api/v1/courses/7/assignments") && order.includes("/api/v1/courses/9/assignments") && !order.includes("/api/v1/announcements"), "assignments of the known courses start while the course list is still loading: " + order.join(" "));
+    release(); const out2 = await p;
+    assert.deepStrictEqual(out2, out, "the same reading as without the head start");
+    assert.strictEqual(order.filter(u => u === "/api/v1/courses/7/assignments").length, 1, "a known course is not asked twice");
+    global.fetch = async url => { if (url.startsWith("/api/v1/courses/7/assignments") && !global.failedOnce) { global.failedOnce = 1; return { ok: false, status: 503, text: async () => "", headers: { get: () => null } }; } return base(url); };
+    assert.deepStrictEqual(await collect({}, [7]), out, "a head start that failed is asked again the normal way");
+    global.fetch = base;
+  }
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });

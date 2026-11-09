@@ -79,8 +79,9 @@
     const mine = cache && cache.user === user && cache.data && cache.data.v === 1, now = mine && cache.v === VERSION;
     if (now && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
-    if (mine && onFresh) { refresh(user).then(onFresh, () => {}); return cache; }
-    return refresh(user);
+    const known = mine ? cache.data.courses.map(c => c.id) : [];   // the head start for the assignments (collect.js)
+    if (mine && onFresh) { refresh(user, known).then(onFresh, () => {}); return cache; }
+    return refresh(user, known);
   }
   // A planner item kept with only what agenda() reads: the raw Canvas object carries the whole assignment (about a third
   // of the stored reading), copied to every tab on each change and held in memory by each page.
@@ -88,13 +89,13 @@
     plannable: p.plannable ? { title: p.plannable.title } : null, html_url: p.html_url, course_id: p.course_id, context_name: p.context_name,
     submissions: p.submissions ? { submitted: !!p.submissions.submitted, graded: !!p.submissions.graded, excused: !!p.submissions.excused, missing: !!p.submissions.missing } : p.submissions,
     planner_override: p.planner_override ? { marked_complete: !!p.planner_override.marked_complete } : null };
-  async function refresh(user) {
+  async function refresh(user, known) {
     await chrome.storage.local.set({ refreshing: Date.now() });
     try {
       const inbox = getAll("/api/v1/conversations?scope=unread&per_page=5", 1).then(list => list.slice(0, 5).map(m => ({ subject: String(m.subject || "(sem assunto)").slice(0, 140),
         from: (Array.isArray(m.participants) ? m.participants : []).filter(x => x && x.name && x.id !== user).map(x => x.name).slice(0, 2).join(", ").slice(0, 80), at: m.last_message_at || null })), () => null);   // unread messages (subject and who), read alongside
       const plan = getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders, read alongside the grades
-      const got = {}, data = await collectCanvasGrades(got);
+      const got = {}, data = await collectCanvasGrades(got, known);
       if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
       const planner = await plan;
@@ -874,18 +875,27 @@
     tl.className = "tl" + (runs.length ? " banded" : "");
     tl.append(heads, rules, lanes);
 
-    const wl = el("ul", "wl");   // the narrow fallback: grouped by day
-    let group = null, rows = null;
-    for (const x of next) {
-      const g = cap(dayLabel(x.date));
-      if (g !== group) { group = g; const day = el("li", "day"); rows = el("ul"); day.append(el("div", "dh", g), rows); wl.appendChild(day); }
-      const right = el("span", "end"), ck = check(x);
-      if (ck) right.appendChild(ck);
-      right.appendChild(x.done ? el("span", "pill ok", "entregue") : x.mine ? el("span", "pill ok", "feito") : x.exam ? el("span", "pill " + (prefs.grades ? needTone(x.exam) : "nt"), prefs.grades ? need(x.exam) : "prova") : el("span"));
-      const li = el("li", "row" + (fin(x) ? " dn" : ""));
-      li.append(el("span", "d", x.due ? hhmm(x.due) : "–"), mid(name(x), x.url, x.course), right);
-      rows.appendChild(li);
-    }
+    // the narrow fallback, grouped by day: built only when it is shown (on a wide panel it stays an empty, hidden list:
+    // a third of the panel's elements were this list, never seen)
+    const wl = el("ul", "wl"); let filled = false;
+    const fill = () => {
+      if (filled) return; filled = true;
+      let group = null, rows = null;
+      for (const x of next) {
+        const g = cap(dayLabel(x.date));
+        if (g !== group) { group = g; const day = el("li", "day"); rows = el("ul"); day.append(el("div", "dh", g), rows); wl.appendChild(day); }
+        const right = el("span", "end"), ck = check(x);
+        if (ck) right.appendChild(ck);
+        right.appendChild(x.done ? el("span", "pill ok", "entregue") : x.mine ? el("span", "pill ok", "feito") : x.exam ? el("span", "pill " + (prefs.grades ? needTone(x.exam) : "nt"), prefs.grades ? need(x.exam) : "prova") : el("span"));
+        const li = el("li", "row" + (fin(x) ? " dn" : ""));
+        li.append(el("span", "d", x.due ? hhmm(x.due) : "–"), mid(name(x), x.url, x.course), right);
+        rows.appendChild(li);
+      }
+    };
+    if (typeof ResizeObserver === "function" && typeof getComputedStyle === "function") {
+      const ro = new ResizeObserver(() => { if (getComputedStyle(wl).display !== "none") { fill(); ro.disconnect(); } });   // after layout, and again when the panel narrows
+      ro.observe(sec);
+    } else fill();
     sec.append(tl, wl);
     return sec;
   }

@@ -1,8 +1,9 @@
 // Reads the student's own Canvas data on the Canvas page (content script, or the bookmarklet): same-origin, read-only GETs.
 // Returns { v:1, courses:[{ id, name, assignments:[{ name, points, url, score, due, missing, submitted, online, stats }] }], announcements } for the
 // courses of the term (NotasCore.TERM), or { error } (never rejects). seen.courses gets every active course ({ id, name }), so the caller
-// does not fetch the list again.
-async function collectCanvasGrades(seen) {
+// does not fetch the list again. known: course ids of the last reading; their assignments are asked together with the course
+// list (one trip to Canvas less), and used only for the courses still in the term.
+async function collectCanvasGrades(seen, known) {
   // one GET: 20 s for the whole answer; a throttle (429, 403 with no quota left) or a gateway error is tried twice more
   const once = async url => {
     for (let i = 0; ; i++) {
@@ -29,6 +30,9 @@ async function collectCanvasGrades(seen) {
     return out;
   };
   try {
+  const asgUrl = id => "/api/v1/courses/" + id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100";
+  const early = new Map();   // the head start: never an error here (a failed one is asked again below)
+  for (const id of [...new Set((Array.isArray(known) ? known : []).map(String).filter(x => /^\d{1,15}$/.test(x)))].slice(0, 12)) early.set(id, get(asgUrl(id)).catch(() => null));
   const active = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string");
   if (seen) seen.courses = active.map(c => ({ id: c.id, name: c.name }));
   const cs = active.filter(c => c.name.includes(NotasCore.TERM));
@@ -37,7 +41,7 @@ async function collectCanvasGrades(seen) {
   const anP = cs.length ? get("/api/v1/announcements?" + cs.map(c => "context_codes[]=course_" + c.id).join("&") + "&start_date=" + since + "&end_date=" + until + "&per_page=50").catch(() => null) : Promise.resolve([]);
   // every course at once (the order of the list is kept)
   const courses = await Promise.all(cs.map(async c => {
-    const as = await get("/api/v1/courses/" + c.id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100");
+    const as = (early.has(String(c.id)) && await early.get(String(c.id))) || await get(asgUrl(c.id));
     return ({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null,
       score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
       due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
