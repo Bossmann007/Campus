@@ -40,10 +40,9 @@
     for (const sc of (document.scripts || [])) { const m = /"current_user_id":"?(\d+)/.exec(sc.textContent || ""); if (m) return Number(m[1]); }
     return null;
   }
-  async function whoAmI() {
+  async function whoAmI(cache) {   // cache: the stored reading, already read by the caller
     let id = pageUser();
     if (!id) { try { id = (await getAll("/api/v1/users/self")).id; } catch (e) { await forget(); throw e; } }
-    const { cache } = await chrome.storage.local.get("cache");
     if (cache && cache.user !== id) await forget();
     return id;
   }
@@ -56,9 +55,9 @@
   // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
   // time: while another tab is reading (lock under a minute old), this one uses the last reading. An older reading of the same
   // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas).
-  async function load(onFresh) {
-    const user = await whoAmI();
-    const { cache, refreshing } = await chrome.storage.local.get(["cache", "refreshing"]);
+  async function load(onFresh, pre) {   // pre: { cache, refreshing } read with the prefs (the reading, often large, is read once)
+    const got = pre || await chrome.storage.local.get(["cache", "refreshing"]), user = await whoAmI(got.cache);
+    const cache = got.cache && got.cache.user === user ? got.cache : null, refreshing = got.refreshing;
     const mine = cache && cache.v === VERSION && cache.user === user;
     if (mine && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
@@ -1318,9 +1317,9 @@
   function watchTray(a, hidden) {
     if (trayWatch || typeof MutationObserver === "undefined" || !document.body) return;
     let t = 0;
-    // only the tray portal (Cursos, Grupos...), not every change on the page; the body's own children until the portal exists
+    // only the tray portal (Cursos, Grupos...), not every change on the page; the whole page only until the portal exists
     let onPortal = false;
-    const aim = () => { const p = document.getElementById("nav-tray-portal"); onPortal = !!p; trayWatch.disconnect(); trayWatch.observe(p || document.body, p ? { childList: true, subtree: true } : { childList: true }); };
+    const aim = () => { const p = document.getElementById("nav-tray-portal"); onPortal = !!p; trayWatch.disconnect(); trayWatch.observe(p || document.body, { childList: true, subtree: true }); };
     trayWatch = new MutationObserver(() => { if (!onPortal && document.getElementById("nav-tray-portal")) aim(); clearTimeout(t); t = setTimeout(() => enhanceTray(a, hidden), 150); });
     aim();
     enhanceTray(a, hidden);
@@ -1559,20 +1558,20 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
 
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
-    const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
+    const first = await chrome.storage.local.get(["prefs", "cache", "refreshing"]), prefs = cpPrefs(first.prefs);
     if (prefs.scroll) scrollButtons();
     let cache;
     let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
     const paintAll = (c, again) => (queue = queue.then(() => draw(c, prefs, again)).catch(() => {}));
-    try { cache = await load(fresh => { if (fresh.at !== cache.at) paintAll(fresh, true); }); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    try { cache = await load(fresh => { if (fresh.at !== cache.at) paintAll(fresh, true); }, first); } catch (e) { return; }   // logged out or Canvas down: stay quiet
     await paintAll(cache, false);
   }
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
   let cardWatch = null;
   async function draw(cache, prefs, again) {
     T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null;
-    let a = analyse(cache, await myHand(cache.user)); const marks = await myMarks(cache.user);
-    await loadTasks(cache.user); await loadChanges(cache.user);
+    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user)]);   // side by side, not one after another
+    let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
