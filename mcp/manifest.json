@@ -4,22 +4,56 @@
   "display_name": "Caderno+ · Canvas PUCPR",
   "version": "0.1.0",
   "description": "O seu Canvas da PUCPR para o Claude: quanto falta, prazos, notas, avisos e módulos. Só leitura. Não oficial.",
-  "author": { "name": "Enzo Bossmann" },
+  "author": {
+    "name": "Enzo Bossmann"
+  },
   "license": "MIT",
   "server": {
     "type": "node",
     "entry_point": "server.js",
-    "mcp_config": { "command": "node", "args": ["${__dirname}/server.js"], "env": { "CADERNO_MCPB_TOKEN": "${user_config.canvas_token}" } }
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server.js"
+      ],
+      "env": {
+        "CADERNO_MCPB_TOKEN": "${user_config.canvas_token}"
+      }
+    }
   },
   "user_config": {
-    "canvas_token": { "type": "string", "title": "Token do Canvas", "description": "Canvas → Conta → Configurações → Novo token de acesso (expira no fim do semestre).", "sensitive": true, "required": true }
+    "canvas_token": {
+      "type": "string",
+      "title": "Token do Canvas (opcional)",
+      "description": "Deixe vazio para usar o arquivo da extensão Caderno+ (\"Arquivo para a sua IA\"), sem token. Com token: Canvas → Conta → Configurações → Novo token de acesso, validade até o fim do semestre.",
+      "sensitive": true,
+      "required": false
+    }
   },
   "tools": [
-    { "name": "quanto_falta", "description": "Quanto falta em cada matéria" },
-    { "name": "upcoming", "description": "Entregas e provas que vêm" },
-    { "name": "grades", "description": "Notas do Canvas" },
-    { "name": "courses", "description": "Matérias do semestre" },
-    { "name": "announcements", "description": "Avisos recentes" },
-    { "name": "modules", "description": "Módulos de uma matéria" }
+    {
+      "name": "quanto_falta",
+      "description": "Quanto falta em cada matéria"
+    },
+    {
+      "name": "upcoming",
+      "description": "Entregas e provas que vêm"
+    },
+    {
+      "name": "grades",
+      "description": "Notas do Canvas"
+    },
+    {
+      "name": "courses",
+      "description": "Matérias do semestre"
+    },
+    {
+      "name": "announcements",
+      "description": "Avisos recentes"
+    },
+    {
+      "name": "modules",
+      "description": "Módulos de uma matéria"
+    }
   ]
 }

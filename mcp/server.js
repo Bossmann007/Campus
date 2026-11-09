@@ -2,7 +2,7 @@
 // Caderno+ MCP server over stdio (newline-delimited JSON-RPC 2.0), read-only, no dependencies. Logs go to stderr and pass
 // the scrubber, so the token never appears in any output.
 "use strict";
-const { makeCanvas, TOOL_DEFS } = require("./canvas"), vault = require("./vault"), VERSION = require("./package.json").version;
+const { makeCanvas, TOOL_DEFS } = require("./canvas"), { makeFileSource } = require("./file"), vault = require("./vault"), VERSION = require("./package.json").version;
 
 const MAX_REPLY = 48 * 1024, MAX_LINE = 1 << 20;
 const VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"];   // answered as asked when known, else the one we were built against
@@ -41,8 +41,10 @@ async function main() {
   const scrub = s => scrubber(secret)(s);
   const getCanvas = async () => {
     if (canvas) return canvas;
+    const f = makeFileSource();   // first the extension's file: no token, and quanto falta with the grades typed by hand
+    if (f.ok) return f;
     const { token, from } = await vault.readToken();
-    if (!token) return { error: "Sem token do Canvas (" + from + "). No terminal: node \"" + require("path").join(__dirname, "cli.js") + "\" login" };   // never "npx caderno-mcp": that npm name is not ours yet
+    if (!token) return { error: "Sem dados do Caderno+. Sem token: na extensão, ligue \"Arquivo para a sua IA\" e abra o Canvas uma vez. Ou com um token do Canvas (" + from + "): node \"" + require("path").join(__dirname, "cli.js") + "\" login" };   // never "npx caderno-mcp": that npm name is not ours yet
     secret = token; canvas = makeCanvas(token); return canvas;
   };
   const handle = makeHandler(getCanvas, scrub);

@@ -15,9 +15,18 @@ trabalho, não responde quiz, não manda mensagem, não marca nada.
 - O cofre do sistema protege o token de arquivos e de outras contas do computador, mas **não** de programas que rodam
   com o seu próprio usuário. Não instale coisas desconhecidas na mesma conta.
 
+## Dois jeitos de ler o Canvas
+
+- **Sem token (recomendado):** na extensão Caderno+, ligue "Arquivo para a sua IA" e abra o Canvas. A extensão grava
+  `caderno-agente.json` na sua pasta de downloads, e o Caderno+ MCP lê esse arquivo. O MCP nunca fala com o Canvas, e o
+  "quanto falta" inclui as notas que você digitou. Os dados são os da última vez que você abriu o Canvas; módulos não vêm.
+- **Com token (opcional):** dado na hora e módulos das matérias, mas o token dá acesso total à sua conta (veja abaixo).
+
+Se os dois existem, vale o arquivo. Outro lugar para o arquivo: `CADERNO_FILE=/caminho/absoluto/caderno-agente.json`.
+
 ## Instalar no Claude Desktop (mais fácil)
 
-Abra `caderno-mcp-<versão>.mcpb` com dois cliques, cole o token do Canvas quando o Claude Desktop pedir. Ele guarda o
+Abra `caderno-mcp-<versão>.mcpb` com dois cliques. Deixe o token vazio para usar o arquivo da extensão, ou cole um token do Canvas. Ele guarda o
 token no cofre do sistema e passa ao servidor quando abre.
 
 ## Instalar pelo terminal (Claude Code ou Claude Desktop)

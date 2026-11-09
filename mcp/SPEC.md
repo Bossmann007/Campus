@@ -4,6 +4,15 @@ Goal (2026-11-09, Enzo): connect the student's AI (Claude Code, Claude Desktop, 
 if needed, with the Canvas token kept on the student's machine in the OS vault (Keychain style), never in a file. This
 replaces phase B of `bridge/SPEC.md` (the native-messaging bridge); the JSON file of phase A stays optional.
 
+## Update (2026-11-09, later): no token by default
+
+The default source is now the extension's file (`bridge/SPEC.md`, "Arquivo para a sua IA"): `mcp/file.js` reads
+`<Downloads>/<pasta>/caderno-agente.json` (or `CADERNO_FILE`), checks it like any input (ours, version 1, ≤ 200 KB,
+every string cleaned again) and serves `quanto_falta` (with hand grades), `upcoming`, `grades`, `courses` and
+`announcements` from it; `modules` needs the token. With the file the MCP never calls Canvas and holds no credential,
+which also takes it out of Instructure API Policy §3(i)'s "MCP servers" (only the extension reads Canvas, as it already
+does). The token mode below stays as the optional way for fresh data and modules. The file wins when both exist.
+
 ## Prior art (2026-11-09)
 
 | Candidate | What | Verdict |

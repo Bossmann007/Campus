@@ -10,7 +10,10 @@ const say = s => process.stdout.write(s + "\n");
 const SERVER = path.join(__dirname, "server.js");
 
 async function check() {
+  const f = require("./file").makeFileSource();
+  say(f.ok ? "Arquivo do Caderno+ encontrado (" + f.file + "): a IA usa ele, sem token." : "Sem arquivo do Caderno+ (na extensão: \"Arquivo para a sua IA\").");
   const { token, from } = await vault.readToken();
+  if (!token && f.ok) return true;
   if (!token) { say("Sem token salvo (" + from + "). Rode: caderno-mcp login"); return false; }
   try { const r = await require("./canvas").makeCanvas(token).whoami(); say(r.ok ? "Token salvo (" + from + ") e aceito pelo Canvas da PUCPR." : "Token salvo, mas o Canvas não respondeu como esperado."); return r.ok; }
   catch (e) { say("Token salvo (" + from + "), mas o Canvas recusou: " + String(e && e.message || e).split(token).join("[token]")); return false; }
