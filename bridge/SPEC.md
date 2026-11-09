@@ -64,7 +64,7 @@ file that the bot reads. The live bridge (native messaging) is phase B, only if 
 
 Adds `checklists` (per course or the dashboard: done, date, the student's text), `tasks` (own tasks: date, title),
 `changes` (what changed since the last visit: kind from a fixed list, time, title, course), `modules` (titles the search
-already read, ≤ 300, trimmed first), `teachers` (name and course, ≤ 30) and `unread_messages` (a count). Every string
+already read, ≤ 300, trimmed first; then grades, changes, checklists, tasks, upcoming, step by step to ≤ 90 KB in UTF-8, else `agentErr` and no write), `teachers` (name and course, ≤ 30) and `unread_messages` (a count, 5 at most: `unread_more` when there may be more). Every string
 is still inside `untrusted_canvas_text`. The file is written again when a checklist or task changes (1.5 s after the
 last edit), not only per reading. This drops the earlier "no names of people" rule for the teachers' names only (shown
 on every course page to the whole class); no student names, no authors, no message bodies. The MCP accepts versions 1

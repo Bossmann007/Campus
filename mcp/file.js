@@ -70,8 +70,9 @@ function makeFileSource(opts = {}) {
     },
     async modules(args = {}) {   // the titles the extension already read for its search (Ctrl+K); by course name when course_id is given
       const s = snap(), c = args.course_id != null ? list(s.grades, 12).find(g => String(g.course_id) === String(args.course_id)) : null, nm = c ? str(ut(c).name, 120) : "";
-      const items = list(s.modules, 300).map(x => ({ title: str(ut(x).title, 160), where: str(ut(x).where, 160) })).filter(x => x.title && (!nm || x.where.startsWith(nm)));
-      if (!items.length && !list(s.modules, 1).length) throw new Error("O Caderno+ ainda não leu os módulos: abra a busca (Ctrl+K) no Canvas uma vez, ou conecte com um token (caderno-mcp login).");
+      if (!list(s.modules, 1).length) throw new Error("O Caderno+ ainda não leu os módulos: abra a busca (Ctrl+K) no Canvas uma vez, ou conecte com um token (caderno-mcp login).");
+      if (args.course_id != null && !nm) throw new Error("Matéria não encontrada no arquivo do Caderno+: veja os ids na ferramenta courses.");
+      const items = list(s.modules, 300).map(x => ({ title: str(ut(x).title, 160), where: str(ut(x).where, 160) })).filter(x => x.title && (!nm || x.where.startsWith(nm + " · ")));   // "X" never takes "X II"
       return Object.assign(age(s), { note: NOTE, items: items.map(x => ({ untrusted_canvas_text: x })) });
     },
     async my_items() {
@@ -79,11 +80,11 @@ function makeFileSource(opts = {}) {
       return Object.assign(age(s), { note: NOTE,
         checklists: list(s.checklists, 60).map(c => Object.assign({ course_id: /^\d{1,15}$/.test(String(c.course_id)) ? Number(c.course_id) : null }, U({ course: ut(c).course }, 120), {
           items: list(c.items, 50).map(x => Object.assign({ done: x.done === true, date: day(x.date) }, U({ text: ut(x).text }))) })),
-        tasks: list(s.tasks, 100).map(x => Object.assign({ date: day(x.date) }, U({ title: ut(x).title }, 140))) });
+        tasks: list(s.tasks, 100).map(x => Object.assign({ done: x.done === true, date: day(x.date) }, U({ title: ut(x).title }, 140))) });
     },
     async whats_new() {
       const s = snap(), K = ["tarefa", "arquivo", "módulo", "aviso"];
-      return Object.assign(age(s), { note: NOTE, unread_messages: Number.isInteger(s.unread_messages) && s.unread_messages >= 0 ? Math.min(s.unread_messages, 99) : null,
+      return Object.assign(age(s), { note: NOTE, unread_messages: Number.isInteger(s.unread_messages) && s.unread_messages >= 0 ? (s.unread_more === true || s.unread_messages >= 5 ? "5 ou mais" : s.unread_messages) : null,
         changes: list(s.changes, 40).map(x => Object.assign({ kind: K.includes(x.kind) ? x.kind : null, at: typeof x.at === "string" && !Number.isNaN(Date.parse(x.at)) ? x.at : null }, U({ text: ut(x).text, course: ut(x).course }, 160))) });
     },
     async teachers() {

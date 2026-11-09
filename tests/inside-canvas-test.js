@@ -592,6 +592,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(d.upcoming.concat(d.announcements).every(x => x.untrusted_canvas_text && typeof x.untrusted_canvas_text.title === "string") && d.grades.every(g => g.untrusted_canvas_text && g.assignments.every(x => x.untrusted_canvas_text)), "every Canvas string inside untrusted_canvas_text");
     assert(d.subjects.every(x => typeof x.label === "string" && x.untrusted_canvas_text === undefined) && js.length < 96 * 1024, "quanto falta as the panel's labels, under 96 KB");
     assert(d.subjects.length >= 1 && d.upcoming.length >= 1 && d.announcements.length >= 1 && d.grades.length >= 1 && d.turma_confirmed === true, "every part filled from the reading");
+    { // version 2 with the student's own items: checklists, tasks (done from the ticks), module titles without links, teachers
+      const big = "x".repeat(200), lists = {}; for (let i = 1; i <= 13; i++) lists[String(i)] = Array.from({ length: 50 }, (_, j) => ({ id: "c" + j, t: big, done: j % 2 === 0 }));
+      const own = await runContent("/", null, { prefs: { agentFile: true }, checks: { 5: Object.assign({ painel: [{ id: "p1", t: "revisar JOIN", done: false, date: "2026-12-01" }] }, lists) },
+        tasks: { 5: [{ id: "t1", title: "imprimir resumo", date: null }] }, marks: { 5: { "own:t1": "2026-11-01" } },
+        search: { user: 5, at: Date.now(), items: [{ t: "Lista JOIN", c: "BD · Semana 5", u: "https://pucpr.instructure.com/courses/71306/modules/items/9", k: "tarefa" }] },
+        teachers: { user: 5, at: Date.now(), list: [{ id: 7, name: "Prof. Ana Lima", avatar: "https://x/y.png", course: 71306, courseName: "BD" }] } });
+      await new Promise(r => setTimeout(r, 40));
+      const d2 = own.sent.filter(x => x.type === "agentFile").pop().data, j2 = JSON.stringify(d2), bytes = Buffer.byteLength(j2);
+      assert(bytes <= 90 * 1024, "13 full checklists still fit: trimmed to 90 KB (" + bytes + " bytes)");
+      assert(d2.checklists.some(c => c.items.some(x => x.untrusted_canvas_text.text === "revisar JOIN" && x.date === "2026-12-01")) && d2.tasks[0].done === true, "checklists kept with their day, tasks done from the ticks");
+      assert(!/instructure\.com\/courses|"avatar"|"u":|y\.png/.test(j2) && d2.teachers[0].untrusted_canvas_text.name === "Prof. Ana Lima", "no module link, no photo; teacher by name"); }
     assert(/^\d+\|PUCPR\|[0-9a-z]+$/.test(af.store.agentAt), "the reading, folder and own items written are remembered (one file per reading, folder and own items)");
     local.prefs = { agentFile: false }; let r = await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB);
     assert(r && r.ok === false, "the worker refuses when the switch is off");

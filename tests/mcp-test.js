@@ -173,14 +173,15 @@ let n = 0; const ok = () => n++;
     // version 2 (Caderno+ 4.0): own items, what changed, module titles, teachers; every text cleaned and marked again
     fs.writeFileSync(f, JSON.stringify(Object.assign({}, snap, { version: 2, unread_messages: 3,
       checklists: [{ course_id: 71306, untrusted_canvas_text: { course: "BD" }, items: [{ done: true, date: iso(1), untrusted_canvas_text: { text: "revisar JOIN\u202e" } }, { done: "sim", date: "amanhã", untrusted_canvas_text: { text: "x" } }] }],
-      tasks: [{ date: null, untrusted_canvas_text: { title: "imprimir resumo" } }],
+      tasks: [{ done: true, date: null, untrusted_canvas_text: { title: "imprimir resumo" } }],
       changes: [{ kind: "arquivo", at: new Date().toISOString(), untrusted_canvas_text: { text: "Aula 5.pdf", course: "BD" } }, { kind: "virus", untrusted_canvas_text: { text: "y" } }],
-      modules: [{ untrusted_canvas_text: { title: "Lista JOIN", where: "BD · Semana 5" } }, { untrusted_canvas_text: { title: "Outro", where: "Web · Semana 1" } }],
+      modules: [{ untrusted_canvas_text: { title: "Lista JOIN", where: "BD · Semana 5" } }, { untrusted_canvas_text: { title: "De outra", where: "BD II · Semana 1" } }, { untrusted_canvas_text: { title: "Outro", where: "Web · Semana 1" } }],
       teachers: [{ course_id: 71306, untrusted_canvas_text: { name: "Prof. Ana Lima", course: "BD" } }] })));
     const v2 = makeFileSource({ file: f }), mi = await v2.tools.my_items();
-    assert(v2.ok && mi.checklists[0].items[0].done === true && mi.checklists[0].items[0].untrusted_canvas_text.text === "revisar JOIN" && mi.checklists[0].items[1].done === false && mi.checklists[0].items[1].date === null && mi.tasks[0].untrusted_canvas_text.title === "imprimir resumo", "my_items: checklists and tasks, values checked, text cleaned");
+    assert(v2.ok && mi.checklists[0].items[0].done === true && mi.checklists[0].items[0].untrusted_canvas_text.text === "revisar JOIN" && mi.checklists[0].items[1].done === false && mi.checklists[0].items[1].date === null && mi.tasks[0].done === true && mi.tasks[0].untrusted_canvas_text.title === "imprimir resumo", "my_items: checklists and tasks, values checked, text cleaned");
     const wn = await v2.tools.whats_new(); assert(wn.unread_messages === 3 && wn.changes[0].kind === "arquivo" && wn.changes[1].kind === null, "whats_new: kinds from a fixed list");
     const md = await v2.tools.modules({ course_id: "71306" }); assert(md.items.length === 1 && md.items[0].untrusted_canvas_text.title === "Lista JOIN", "modules from the file, by the course's name");
+    await assert.rejects(v2.tools.modules({ course_id: "999" }), /não encontrada/, "an unknown course is said, not every course's modules");
     assert((await v2.tools.teachers()).teachers[0].untrusted_canvas_text.name === "Prof. Ana Lima", "teachers by name only");
     fs.writeFileSync(f, JSON.stringify(Object.assign({}, snap, { version: 3 }))); assert(!makeFileSource({ file: f }).ok, "an unknown version is refused");
     fs.writeFileSync(f, JSON.stringify(Object.assign({}, snap, { read_at: new Date(Date.now() - 3 * 864e5).toISOString() })));
