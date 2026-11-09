@@ -563,6 +563,8 @@
     :is(a, button):focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:6px; }
     .grid { display:grid; gap:10px; }
     @container cp (min-width:760px) { .news > ul { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:32px; } }
+    @container cp (min-width:1240px) { .news > ul { grid-template-columns:repeat(3, minmax(0,1fr)); column-gap:24px; } }   /* wide screens: the date stays near its line */
+    .news .row { margin:0 -8px; padding:5px 8px; border-radius:10px; transition:background-color .15s; } .news .row:hover { background:var(--soft); }
     .empty { padding:14px 12px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); font:italic 14px/1.4 var(--serif); text-align:center; }
     .late { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:4px 0 12px; }
     .late .ev { max-width:240px; } .late .evw { flex:none; }
