@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "caderno-mcp",
   "display_name": "Caderno+ · Canvas PUCPR",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "O seu Canvas da PUCPR para o Claude: quanto falta, prazos, notas, avisos e módulos. Só leitura. Não oficial.",
   "author": {
     "name": "Enzo Bossmann"
