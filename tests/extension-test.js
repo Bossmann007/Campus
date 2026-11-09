@@ -80,6 +80,15 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
     assert.strictEqual(asked7, 2, "the head start tries once (no retries while Canvas is busy); the normal request follows");
     global.fetch = base;
   }
+  { // one course that does not answer does not take the reading down: it comes back empty and marked
+    const base = global.fetch;
+    global.fetch = async url => { if (url.startsWith("/api/v1/courses?")) return page([{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 11, name: "Cálculo - 2026 / 2º Sem" }]);
+      if (url.startsWith("/api/v1/courses/11/assignments")) return { ok: false, status: 403, text: async () => "", headers: { get: () => null } };
+      if (url.startsWith("/api/v1/announcements")) return page([]); return base(url); };
+    const part = await collect();
+    assert(!part.error && part.courses.length === 2 && part.courses[0].assignments.length === 2 && part.courses[1].failed === true && part.courses[1].assignments.length === 0, "the course that failed is marked, the other keeps its assignments");
+    global.fetch = base;
+  }
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });

@@ -1,8 +1,9 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.1.2",
+  version: "6.1.3",
   items: [
+    "Correções da revisão: os lembretes voltam sozinhos depois de uma atualização, o modo e a meta não voltam atrás quando chega uma leitura nova, e a lista de tarefas do Canvas só some quando a nossa semana aparece",
     "Anotações do painel arrumadas: a coluna fica sempre no topo, ao lado do painel, e os cards não se espalham mais em volta dela ao trocar de modo",
     "Menos memória e bateria: os ícones do menu da matéria viraram uma imagem só, e o processo de fundo acorda uma vez por dia (era de hora em hora) e só quando algo muda",
     "Mais rápido: o painel aparece assim que a página do Canvas chega, a leitura das notas faz uma ida a menos ao Canvas e o Centro de Notas é lido de hora em hora",

@@ -55,6 +55,14 @@ function nextMonday8(now = new Date()) {
 // (it used to wake every hour, around the clock). Not a repeating alarm: each one schedules the next local midnight.
 const nextMidnight = (now = Date.now()) => { const d = new Date(now); d.setHours(24, 1, 0, 0); return d.getTime(); };
 const scheduleTick = () => chrome.alarms.create("tick", { when: nextMidnight() });
+// Chrome drops alarms on an extension update (and may on a restart): the reminders come back from the stored list, whose
+// names carry their time ("r|<key>|<when>"). A Canvas page sends the list again only when it changes.
+async function restoreAlarms() {
+  const { reminders, prefs } = await chrome.storage.local.get(["reminders", "prefs"]);
+  if (!reminders || typeof reminders !== "object" || !cpPrefs(prefs).remind) return;
+  const now = Date.now(), have = new Set((await chrome.alarms.getAll()).map(a => a.name));
+  for (const name of Object.keys(reminders).slice(0, 200)) { const when = Number(name.split("|").pop()); if (name.startsWith("r|") && Number.isFinite(when) && when > now && !have.has(name)) await chrome.alarms.create(name, { when }); }
+}
 const scheduleWeek = () => chrome.alarms.create("week", { when: nextMonday8(), periodInMinutes: 7 * 24 * 60 });
 async function summary(alarm) {
   const { upcoming = [], prefs, shown = {} } = await chrome.storage.local.get(["upcoming", "prefs", "shown"]);
@@ -197,9 +205,9 @@ chrome.downloads.onChanged.addListener(async ch => {
   const { dl } = await chrome.storage.local.get("dl"), have = Array.isArray(dl) ? dl : [];
   if (!have.includes(fileId)) await chrome.storage.local.set({ dl: [...have, fileId] });
 });
-chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); scheduleTick(); });
+chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); scheduleTick(); restoreAlarms(); });
 chrome.runtime.onInstalled.addListener(details => {
-  scheduleTick(); scheduleWeek(); showNext();   // also replaces the hourly "tick" of older versions
+  scheduleTick(); scheduleWeek(); showNext(); restoreAlarms();   // also replaces the hourly "tick" of older versions
   if (details && details.reason === "update") {   // 6.0: the file for the AI is gone (the MCP uses a token): its keys go too
     chrome.storage.local.remove(["agentAt", "agentErr", "agentPath"]);
     chrome.storage.local.get("prefs").then(({ prefs }) => { if (prefs && "agentFile" in prefs) { const p = Object.assign({}, prefs); delete p.agentFile; chrome.storage.local.set({ prefs: p }); } });

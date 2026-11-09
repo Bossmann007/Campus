@@ -59,7 +59,7 @@
     const W = ":root.cp-dash-page";
     if (!cards.native || cards.mode === "foco") out.push(`${W}.cp-has-panel [data-testid="widget-columns"] { display:none !important; }`);
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${W} [data-testid="switch-to-old-dashboard-button"] { display:none !important; }`);
-    if (cards.week && cards.mode !== "foco") out.push(`${W}.cp-has-panel [data-testid="widget-container-course-work-combined-widget"] { display:none !important; }`);   // our 7 days show the same work
+    if (cards.week && cards.mode !== "foco") out.push(`${W}.cp-has-week [data-testid="widget-container-course-work-combined-widget"] { display:none !important; }`);   // our 7 days show the same work
     // /calendar: ours in place of Canvas's (its calendar, mini month and calendar list), unless the student keeps Canvas's
     if (!cards.nativeCal) out.push(`:root.cp-cal-page.cp-has-cal #content > :not(#cp-cal), :root.cp-cal-page.cp-has-cal #right-side-wrapper { display:none !important; }`);
     // Cursos and Grupos (Canvas tables): our cards' look
@@ -122,7 +122,7 @@ ${RS} .event-details > * { margin-top:2px; } ${RS} .event-details :is(b, strong)
 :root.cp-look .course-list-term-column, :root.cp-look .course-list-group-column { color:var(--cp-muted) !important; font-size:13px; }`);
     // the classic dashboard: our panel sits between its header and the course cards; its side column (to do, coming up:
     // our week shows them) goes away while our panel is there
-    out.push(`${W}.cp-has-panel #right-side-wrapper { display:none !important; } ${W}.cp-has-panel #DashboardCard_Container { margin-top:6px; }`);
+    out.push(`${W}.cp-has-week #right-side-wrapper { display:none !important; } ${W}.cp-has-panel #DashboardCard_Container { margin-top:6px; }`);
     // Only on the dashboard (quizzes, grades and assignments keep their side column: timers, totals and submissions live there).
     // limpo: the side column, footer, activity stream and card icons go; foco: also the course cards, once our panel is drawn
     const D = ":root.cp-dash-page";

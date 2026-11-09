@@ -25,22 +25,21 @@ written by hand for one turma (today only CC manhã). Rule packs stay as the fal
   tool's session cookie is stored and sent back (Chrome for Testing 156 and Brave 157 against a stand-in Canvas and
   tool, `/tmp/swck`). Not checked against the real Canvas session.
 
-## Ground truth (Enzo's courses, 2026-11-09)
+## Ground truth (checked on a real account on 2026-11-09; the numbers below are made up)
 
-- Formula columns carry the value the Centro de Notas computed in their own `notas[]`. Imperativa: Exercícios (mean)
-  10,00; Nota do RA (RA1) = 0,75 × 8 + 0,25 × 10 = 8,50; Nota Final = 0,40 × 8,50 + 0,60 × 0 = 3,40: weights are
-  percentages and a part without a grade counts as 0. RPND: Nota do RA 1,43, Recuperação 0,50, Nota Final do RA
-  (`maximo`) 1,43, Nota Final 1,08.
-- Without a formula (BD, Web, Ética, Conectividade) the `final` column has no value: the Centro de Notas computes
-  nothing there, and the points do not add up to a grade (Conectividade: 9,97 of grades on 3,00 graded points, from
-  0-point items with grades). For these courses the rule pack (when it exists) or Canvas stays the source.
-- So the Centro de Notas solves "only my course" for every course whose professor set a formula (2 of Enzo's 6),
-  not for all.
-
-- Imperativa, rule vs Centro (2026-11-09, real grades): both give 3,40 earned and 3,60 missing with RA2 worth 6 points.
-  The rule pack says "precisa 7,2" (the RA2 exercises, 1 point, are past due and ungraded, so it asks the 3,6 from the
-  5 future points); the Centro engine says "precisa 6,0" (the same grade on all 6 points). The hidden RA2 formula counts
-  PBL06–10, which sit in the default group: a hidden formula's members are not knowable, so its result is always approx.
+- Formula columns carry the value the Centro de Notas computed in their own `notas[]`. Example with made-up grades:
+  exercises (mean) 9,00; RA1 = 0,75 × 7 + 0,25 × 9 = 7,50; final = 0,40 × 7,50 + 0,60 × 0 = 3,00: weights are
+  percentages and a part without a grade counts as 0. A recovery group uses `maximo` over the RA grade and the recovery.
+- Without a formula the `final` column has no value: the Centro de Notas computes nothing there, and the points do not
+  add up to a grade (0-point items can carry grades). For these courses the rule pack (when it exists) or Canvas stays
+  the source.
+- So the Centro de Notas solves "only my course" for every course whose professor set a formula (2 of the 6 courses
+  checked), not for all.
+- Rule pack vs Centro on the same course: both agreed on what was earned and what was missing. They differed on what
+  to ask: the rule pack leaves out exercises that are past due and ungraded (it asks the missing points from the
+  future items only), the Centro engine asks the same grade on everything without a grade. A hidden formula can count
+  items that sit in another group (seen: an RA's exercises in the default group), so a hidden formula's members are
+  not knowable and its result is always approx.
 
 ## Engine (`core.js`, shared with the MCP)
 

@@ -151,7 +151,7 @@ function makeCanvas(token, opts = {}) {
   const reading = async () => {
     if (cached && Date.now() - cached.at < 5 * 60e3) return cached.data;
     const seen = {}, data = await box.collect(seen);
-    if (data.error) throw new Error(data.error);
+    if (data.error) throw new Error(/ 401$/.test(data.error) ? "o Canvas recusou o token (vencido ou revogado). Crie outro no Canvas (Conta → Configurações → \"+ Novo token de acesso\"), salve de novo (no Claude Desktop: nas configurações da extensão Caderno+; nos outros apps: caderno-mcp login) e reinicie o app de IA." : data.error);
     cached = { at: Date.now(), data, seen }; return data;
   };
   const getAll = async (url, max = 5) => {

@@ -1,6 +1,6 @@
 {
   "name": "caderno-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Caderno+ · o seu Canvas da PUCPR para a sua IA (Claude e outros apps MCP). Só leitura, token no cofre do seu sistema. Não oficial.",
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/Bossmann007/Campus.git", "directory": "mcp" },

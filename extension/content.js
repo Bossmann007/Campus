@@ -81,7 +81,7 @@
     if (now && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
     const known = mine && Array.isArray(cache.data.courses) ? cache.data.courses.map(c => c.id) : [];   // the head start for the assignments (collect.js)
-    if (mine && onFresh) { refresh(user, known).then(onFresh, () => {}); return cache; }
+    if (mine && onFresh) { refresh(user, known).then(onFresh, e => oops("atualizar a leitura", e)); return cache; }   // the old reading stays; the failure is kept for the popup
     return refresh(user, known);
   }
   // A planner item kept with only what agenda() reads: the raw Canvas object carries the whole assignment (about a third
@@ -97,7 +97,15 @@
         from: (Array.isArray(m.participants) ? m.participants : []).filter(x => x && x.name && x.id !== user).map(x => x.name).slice(0, 2).join(", ").slice(0, 80), at: m.last_message_at || null })), () => null);   // unread messages (subject and who), read alongside
       const plan = getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders, read alongside the grades
       const got = {}, data = await collectCanvasGrades(got, known);
-      if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
+      if (data.error) {   // a 401 on one request can be "not allowed": the reading is forgotten only when /users/self says logged out
+        if (/ 401$/.test(data.error)) { let out = false; try { await getAll("/api/v1/users/self"); } catch (e) { out = / 401$/.test(String(e && e.message)); } if (out) await forget(); }
+        throw new Error(data.error);
+      }
+      if (data.courses.some(c => c.failed)) {   // one course did not answer: its last assignments stay (no false "new" items, no lost grades)
+        const { cache: old } = await chrome.storage.local.get("cache");
+        for (const c of data.courses) if (c.failed) { const o = old && old.user === user && old.data && Array.isArray(old.data.courses) ? old.data.courses.find(x => x.id === c.id) : null; if (o && Array.isArray(o.assignments)) c.assignments = o.assignments; }
+        oops("ler uma matéria", new Error(data.courses.filter(c => c.failed).length + " matéria(s) sem resposta do Canvas"));
+      }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
       const planner = await plan;
       await newGrades(user, data);
@@ -240,11 +248,13 @@
   }
   const gone = n => n.isConnected === false;
   async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
-  async function saveTasks(user, list) {
+  // f: the change, applied to what is stored now (another tab may have added a task since this page loaded)
+  async function saveTasks(user, f) {
     const { tasks } = await chrome.storage.local.get("tasks"), all = tasks && typeof tasks === "object" ? tasks : {};
-    myTasks = list.slice(0, 100); await chrome.storage.local.set({ tasks: Object.assign({}, all, { [user]: myTasks }) });
+    const cur = Array.isArray(all[user]) ? all[user].filter(t => t && t.id && t.title) : [];
+    myTasks = f(cur).slice(0, 100); await chrome.storage.local.set({ tasks: Object.assign({}, all, { [user]: myTasks }) });
   }
-  const addTask = (user, title, date) => saveTasks(user, myTasks.concat([{ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(title).trim().slice(0, 140), date: date || null }]));
+  const addTask = (user, title, date) => saveTasks(user, l => l.concat([{ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(title).trim().slice(0, 140), date: date || null }]));
   // "estudar cap 5 sex" -> title + the next friday; also hoje, amanhã, segunda..domingo, dd/mm
   function parseWhen(text) {
     const words = String(text).trim().split(/\s+/), last = (words[words.length - 1] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -1025,7 +1035,7 @@
       const ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(done)); ck.setAttribute("aria-label", (done ? "Desmarcar: " : "Marcar como feito: ") + t.title);
       ck.addEventListener("click", async () => { await setMark(cache.user, { key: "own:" + t.id, date: t.date || addDays(0) }, !done); redraw(); });
       const del = el("button", "ck del", "×"); del.type = "button"; del.setAttribute("aria-label", "Apagar: " + t.title);
-      del.addEventListener("click", async () => { await saveTasks(cache.user, myTasks.filter(x => x.id !== t.id)); redraw(); });
+      del.addEventListener("click", async () => { await saveTasks(cache.user, l => l.filter(x => x.id !== t.id)); redraw(); });
       end.append(ck, del);
       li.append(el("span", "d", t.date ? cap(dayLabel(t.date)) : "sem dia"), mid(t.title, null, done ? "feita" : t.date && t.date < today() ? "atrasada" : "minha tarefa"), end);
       ul.appendChild(li);
@@ -1072,7 +1082,14 @@
     if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
-    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
+    if (document.documentElement && document.documentElement.classList) {
+      document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
+      // Canvas's own deadlines (its side column, its work widget) go away only when ours are really on screen: with the
+      // week switched off, or the planner unread, the student would see no deadlines at all
+      document.documentElement.classList.toggle("cp-has-week", !!cache.planner && (!!prefs.week || mode === "foco"));
+    }
+    // a panel the student is typing in (a new task) is not rebuilt under the cursor by a reading that lands
+    { const hostEl = document.getElementById("cp-dash"); if (hostEl) hostEl.cpBusy = () => { const ae = hostEl.cpRoot && hostEl.cpRoot.activeElement; return !!ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName || "") && !!ae.value; }; }
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
     const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
@@ -1128,6 +1145,7 @@
       } else box.append(el("div", "muted why", why));
     }
     box.appendChild(grid);
+    if (prefs.week && !cache.planner) grid.appendChild(el("div", "muted why", "Não consegui ler os prazos do Canvas agora. A lista de tarefas do próprio Canvas continua ao lado; tento de novo na próxima leitura."));
     if (week) {
       let sec = null;
       const draw = () => { const nx = weekView(agenda(a, cache, marks), prefs, mark); if (sec) { grid.insertBefore(nx, sec); sec.remove(); } else grid.appendChild(nx); sec = nx; };
@@ -1835,14 +1853,15 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     if (prefs.scroll) scrollButtons();
     let cache;
     let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
-    const paintAll = (c, again) => (queue = queue.then(() => draw(c, prefs, again)).catch(e => oops("desenhar o painel", e)));
+    livePrefs = prefs;   // the panel changes the mode and the meta: a later redraw (a new reading, the Centro de Notas) uses those, not the ones of the page load
+    const paintAll = (c, again) => (queue = queue.then(() => draw(c, livePrefs, again)).catch(e => oops("desenhar o painel", e)));
     try { cache = await load(fresh => { if (fresh.at !== cache.at) { cache = fresh; paintAll(fresh, true); } }, first); }
     catch (e) { oops("ler o Canvas", e); if (!/ 401$/.test(String(e && e.message))) troubleBanner(e); return; }   // logged out: quiet (Canvas asks to log in)
     window.cpRepaint = () => paintAll(cache, true);   // the latest reading drawn again (the Centro de Notas landed)
     await paintAll(cache, false);
   }
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
-  let cardWatch = null;
+  let cardWatch = null, livePrefs = null;
   async function draw(cache, prefs, again) {
     T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null;
     const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user)]);   // side by side, not one after another
@@ -1883,7 +1902,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
         if (meta != null) T = meta;
         const { prefs: saved } = await chrome.storage.local.get("prefs"), was = cpPrefs(saved);
         if (was.mode !== k || (meta != null && Number(was.meta) !== meta) || (native != null && was.native !== native)) {
-          const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next);
+          const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); livePrefs = prefs;
         }
         if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); gradeA = a; for (const b of (document.querySelectorAll ? document.querySelectorAll("[data-cp-grade]") : [])) b.remove(); enhanceGradeCards(); }
         const [m2] = await Promise.all([myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user)]);
@@ -1898,7 +1917,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
         if (!!p2.cardsFirst !== cardsFirst) { cardsFirst = !!p2.cardsFirst; placeDash(); }
         if (p2.mode === prefs.mode && p2.meta === prefs.meta && p2.native === prefs.native) return;
         const metaN = Math.min(10, Math.max(5, Number(String(p2.meta).replace(",", ".")) || 7));
-        prefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
+        prefs = p2; livePrefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
         onMode(p2.mode);
       };
       window.cpHiddenChanged = list => { ctx.hidden = (Array.isArray(list) ? list : []).map(String); decorateCards(a, true, ctx); hideGradeCards(ctx.hidden); };   // unticked in the popup: off at once

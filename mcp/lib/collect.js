@@ -41,7 +41,9 @@ async function collectCanvasGrades(seen, known) {
   const anP = cs.length ? get("/api/v1/announcements?" + cs.map(c => "context_codes[]=course_" + c.id).join("&") + "&start_date=" + since + "&end_date=" + until + "&per_page=50").catch(() => null) : Promise.resolve([]);
   // every course at once (the order of the list is kept)
   const courses = await Promise.all(cs.map(async c => {
-    const as = (early.has(String(c.id)) && await early.get(String(c.id))) || await get(asgUrl(c.id));
+    let as;   // one course that does not answer (403, 5xx) does not take the others down: it comes back empty and marked
+    try { as = (early.has(String(c.id)) && await early.get(String(c.id))) || await get(asgUrl(c.id)); }
+    catch (e) { if (/ 401$/.test(String(e && e.message)) || cs.length === 1) throw e; return { id: c.id, name: c.name, assignments: [], failed: true }; }
     return ({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null,
       score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
       due: a.due_at || null, missing: !!(a.submission && a.submission.missing),

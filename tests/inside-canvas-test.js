@@ -44,7 +44,7 @@ const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listene
   action: { setBadgeText: async o => { local.badge = o.text; }, setTitle: async () => {}, setBadgeBackgroundColor: async () => {} },
   downloads: { onChanged: { addListener: f => { listeners.changed = f; } }, download: async o => { if (/boom/.test(o.filename)) throw new Error("Invalid filename"); swSaved.push(o); return nextId++; } } };
 const imported = [];   // importScripts("prefs.js") shares the worker's global scope: the test puts prefs.js in front instead
-const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro, nextMidnight, scheduleTick };")(chromeSW, f => imported.push(f));
+const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro, nextMidnight, scheduleTick, restoreAlarms };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
 const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
@@ -144,6 +144,18 @@ async function runContent(pathname, files, preStore, opts = {}) {
   return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols, gcard };
 }
 (async () => {
+{ // an update or a browser restart drops the alarms: the worker puts the reminders back from what it stored, without
+  // waiting for a Canvas page to send the list again (a tab that already sent it does not resend the same list)
+  const soon = Date.now() + 3600e3, past = Date.now() - 3600e3;
+  local.reminders = { ["r|assignment:1|" + soon]: { title: "Entrega: Lista 3", body: "BD · em 1 hora", url: "https://pucpr.instructure.com/" }, ["r|assignment:2|" + past]: { title: "velho", body: "", url: "" }, "r|bad|x": { title: "x" } };
+  for (const k of Object.keys(alarms)) delete alarms[k];
+  await sw.restoreAlarms();
+  assert(alarms["r|assignment:1|" + soon] && alarms["r|assignment:1|" + soon].when === soon, "a reminder still to come gets its alarm back");
+  assert(!alarms["r|assignment:2|" + past] && !alarms["r|bad|x"], "past or malformed ones are not scheduled");
+  local.prefs = { remind: false }; for (const k of Object.keys(alarms)) delete alarms[k]; await sw.restoreAlarms();
+  assert.strictEqual(Object.keys(alarms).length, 0, "reminders switched off: nothing restored"); local.prefs = {}; delete local.reminders;
+  ok();
+}
 { // the icon's day count changes at midnight: the worker wakes once a day for it, not every hour
   const noon = new Date(2026, 10, 9, 12, 0, 0).getTime(), mid = sw.nextMidnight(noon), d = new Date(mid);
   assert(mid > noon && mid - noon < 13 * 3600e3 && d.getDate() === 10 && d.getHours() === 0 && d.getMinutes() === 1, "the next local midnight (00:01)");
@@ -959,6 +971,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   plannerFails = true;
   const noPlan = await runContent("/", null); plannerFails = false;
   assert.doesNotMatch(text(noPlan.anchor), /Próximos 7 dias/, "planner down: no week");
+  assert.match(text(noPlan.anchor), /Não consegui ler os prazos do Canvas agora/, "planner down: the panel says so (Canvas's own list is not hidden then: the class that hides it needs our week)");
   assert(!noPlan.sent.some(m => m.type === "remind"), "planner down: the reminders already set are kept"); assert.match(text(noPlan.anchor), /Prova adiada/, "announcements still shown"); ok();
 
   // theme.js: class on <html> from the setting, live when the popup changes it
@@ -1006,7 +1019,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   lk.listen.change({ prefs: { newValue: { navHide: true } } }, "local");
   assert(/\.ic-app-header \{ transform:translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()) && /\.ic-app-header:is\(:hover, :focus-within\) \{ transform:none/.test(lookCss()) && /\.ic-Layout-wrapper \{ margin-left:10px !important/.test(lookCss()) && /:has\(#nav-tray-portal \[role="dialog"\]\) \.ic-app-header \{ transform:none/.test(lookCss()), "menu hidden: a strip that opens on hover or focus, the page takes the room");
   lk.listen.change({ prefs: { newValue: {} } }, "local");
-  assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
+  assert(/cp-has-week \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
   assert(/#right-side \.button-sidebar-wide \{ display:flex/.test(lookCss()) && /ToDoSidebarItem, \.to-do-list > li, \.group_list > li, \.event/.test(lookCss()) && /context-course_"\] #right-side :is\(\.ToDoSidebarItem__Title \+ span/.test(lookCss()), "the course page's right column: buttons and items as cards, the repeated course name hidden");
   { const css = lookCss(), svgs = new Set(css.match(/url\("data:image\/svg\+xml[^"]*"\)/g) || []);
     assert(/#section-tabs a\.announcements::before \{ -webkit-mask-position:-32px 0; mask-position:-32px 0; \}/.test(css) && /a\[class\*="context_external_tool"\]::before \{ -webkit-mask-position:-240px 0/.test(css), "an icon per course menu item (tools too), each a cell of the sprite");
