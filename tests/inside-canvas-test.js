@@ -837,8 +837,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!/font-family/.test(lookCss()) && !/Fraunces/.test(lookCss()), "no font forced on Canvas (InstUI sets its own; mixed families looked broken)");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()), "cards rounded");
   assert(/\.ic-DashboardCard__box__container \{ text-align:center/.test(lookCss()) && !/\.ic-DashboardCard \{ display:flex/.test(lookCss()) && !/__header_hero, \.ic-DashboardCard__header_image \{ height/.test(lookCss()), "Canvas's own card layout kept, rows only centered (no forced sizes)");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false, navHide: false }), "kept for the next first paint");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", bg: "liso", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false, navHide: false }), "kept for the next first paint");
   assert(!/translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()), "the left menu stays by default");
+  assert(!/background-attachment:fixed/.test(lookCss()), "plain background by default");
+  lk.listen.change({ prefs: { newValue: { bg: "quadriculado" } } }, "local");
+  assert(/#right-side\) \{ background-image:linear-gradient\(90deg/.test(lookCss()) && /background-size:24px 24px !important; background-attachment:fixed/.test(lookCss()), "a background pattern on every page layer, fixed so they line up");
+  lk.listen.change({ prefs: { newValue: { look: "original", bg: "quadriculado" } } }, "local");
+  assert(!/background-attachment:fixed/.test(lookCss()), "Original keeps Canvas's own background");
   lk.listen.change({ prefs: { newValue: { navHide: true } } }, "local");
   assert(/\.ic-app-header \{ transform:translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()) && /\.ic-app-header:is\(:hover, :focus-within\) \{ transform:none/.test(lookCss()) && /\.ic-Layout-wrapper \{ margin-left:10px !important/.test(lookCss()) && /:has\(#nav-tray-portal \[role="dialog"\]\) \.ic-app-header \{ transform:none/.test(lookCss()), "menu hidden: a strip that opens on hover or focus, the page takes the room");
   lk.listen.change({ prefs: { newValue: {} } }, "local");

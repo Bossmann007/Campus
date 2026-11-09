@@ -14,6 +14,14 @@
     grafite: ["#F7F7F5", "#FFFFFF", "#111111", "#666666", "#E6E6E3", "#111111", "#111111", "#111111"],
     contraste: ["#FFFFFF", "#FFFFFF", "#000000", "#1F1F1F", "#000000", "#0040C1", "#0033A0", "#000000"]
   };
+  // the page background under any look (pure CSS, faint ink so every look and the dark modes keep it quiet)
+  const INK = "color-mix(in srgb, var(--cp-ink) 7%, transparent)", TINT = n => `color-mix(in srgb, var(--cp-accent) ${n}%, transparent)`;
+  const BGS = {
+    pautado: [`repeating-linear-gradient(180deg, transparent 0 27px, ${INK} 27px 28px)`, "auto"],
+    quadriculado: [`linear-gradient(90deg, ${INK} 1px, transparent 1px), linear-gradient(180deg, ${INK} 1px, transparent 1px)`, "24px 24px"],
+    pontilhado: [`radial-gradient(color-mix(in srgb, var(--cp-ink) 16%, transparent) 1.3px, transparent 1.7px)`, "20px 20px"],
+    aurora: [`radial-gradient(1100px 620px at 0% 0%, ${TINT(11)}, transparent 70%), radial-gradient(900px 620px at 100% 100%, ${TINT(8)}, transparent 70%)`, "auto"]
+  };
   const NAV = { tinta: "#1D2433", coral: "#B8361C", verde: "#1F5C42", azul: "#1E3A6E", roxo: "#3B3363" };
   const css = (look, nav, cards, dark) => {
     // dark modes invert the page: a cream paper would turn to mud, so under them every look paints on neutral white
@@ -102,11 +110,14 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     // Canvas's own card layout (262px cards in .ic-DashboardCard__box__container, canvas-lms dashboard_card.scss) is kept;
     // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
     out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:96px; } .ic-DashboardCard__header-term { display:none !important; }   /* the term repeats on every card */
-:root.cp-has-panel #DashboardCard_Container { padding-top:28px; }   /* its cards' row has a negative top margin: keep it off our panel */
+:root.cp-has-panel #DashboardCard_Container { padding-top:28px; }
+.ic-Dashboard-header__layout .cp-off { display:none !important; }   /* the Caderno+ bar took the place of Canvas's switch to its new view */   /* its cards' row has a negative top margin: keep it off our panel */
 :root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 298px - 24px); margin-left:auto !important; margin-right:auto !important; }`);
     if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; height:72px !important; } .ic-DashboardCard__header_hero { opacity:1 !important; height:72px !important; }`);
     if (L) {
       const [paper, card, ink, muted, line, accent, link, menu] = L;
+      const B = BGS[cards.bg];   // the same fixed background on every page layer, so the nested layers line up
+      if (B) out.push(`:root.cp-look :is(body, #application, #wrapper, #main, .ic-Layout-wrapper, .ic-Layout-contentMain, #content-wrapper, #right-side-wrapper, #right-side) { background-image:${B[0]} !important; background-size:${B[1]} !important; background-attachment:fixed !important; }`);
       out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent};
   --ic-brand-primary:${accent} !important; --ic-link-color:${link} !important; --ic-brand-font-color-dark:${ink} !important;
   --ic-brand-button--primary-bgd:${accent} !important; --ic-brand-button--primary-text:#FFFFFF !important;
@@ -183,7 +194,7 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-hea
   };
   const take = prefs => {
     p = cpPrefs(prefs); apply();
-    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal, navHide: p.navHide })); } catch (e) { /* no storage */ }
+    try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, bg: p.bg, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal, navHide: p.navHide })); } catch (e) { /* no storage */ }
   };
   apply();
   setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);

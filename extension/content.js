@@ -310,7 +310,8 @@
       const id = m[1], c = a.byCanvasId[id];
       card.style.display = ctx.hidden.includes(id) ? "none" : "";
       if (ctx.hidden.includes(id) || !c || !prefs.grades || !a.rules) continue;
-      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+      const st = a.state(c), txt = earnedText(st) + "/10 · " + a.label(st);
+      const p = pill(prefs.cardPct ? txt.replace(/(\d+(?:,\d+)?)\/10/g, (_, n) => Math.round(parseFloat(n.replace(",", ".")) * 10) + "%") : txt, a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
       p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0);
       card.cpAdded.push(p); head.appendChild(p);
     }
@@ -498,6 +499,9 @@
     .mc-i { display:grid; grid-template-columns:8px 78px minmax(0,1fr); gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--line); } .mc-i:first-of-type { border-top:0; }
     .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:12px; color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
     @container cp (max-width:620px) { .mcal { grid-template-columns:minmax(0,1fr); } }
+    :host(.cp-headhost) { display:inline-block; margin:0 8px 0 0; vertical-align:middle; }
+    .box.head { container-type:normal; border:0; background:none; box-shadow:none; padding:0; } .box.head .hd { margin:0; padding:0; border:0; flex-wrap:wrap; }
+    .box.nohd { padding-top:14px; }
     .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
     .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold { margin-left:auto; }
     .wl { display:none; }
@@ -509,6 +513,19 @@
   const wordmark = () => { const b = el("b", null, "Caderno"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Caderno+"); return b; };
 
   // A panel in a shadow root at the top of the page content; null when it is already there or the page has no content area.
+  // the Caderno+ bar in the classic dashboard header (title item, actions): in front of Canvas's buttons, its switch to the
+  // new view hidden (the ⋮ menu stays)
+  function headBar(hd) {
+    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null, row = layout && layout.firstElementChild;
+    const acts = row && row.tagName !== "H1" && row.children && row.children.length > 1 ? row.lastElementChild : null;
+    if (!acts || document.getElementById("cp-head")) return false;
+    let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
+    for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
+    const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";
+    const root = host.attachShadow({ mode: "open" }), wrap = el("div", "box head"), style = el("style");
+    style.textContent = CSS; wrap.appendChild(hd); root.append(style, wrap); at.prepend(host);
+    return true;
+  }
   function panelHost(id) {
     const anchor = document.getElementById("content");
     if (document.getElementById(id) || !anchor) return null;
@@ -827,6 +844,7 @@
     // fold: the panel shrinks to this bar (kept in chrome.storage.local "panelFold") and opens again
     const foldB = el("button", "pfold"); foldB.type = "button";
     const setFold = async (on, save) => { box.classList ? box.classList.toggle("pfolded", on) : (box.className = box.className.replace(/ pfolded/, "") + (on ? " pfolded" : ""));
+      if (/nohd/.test(box.className) && box.getRootNode && box.getRootNode().host) box.getRootNode().host.style.display = on ? "none" : "";
       foldB.textContent = on ? "Mostrar ▾" : "Esconder ▴"; foldB.setAttribute("aria-expanded", String(!on)); foldB.title = on ? "Abrir o painel do Caderno+" : "Recolher o painel do Caderno+";
       if (save) await chrome.storage.local.set({ panelFold: on }); };
     foldB.addEventListener("click", () => setFold(!/pfolded/.test(box.className), true));
@@ -837,7 +855,9 @@
     const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };   // onMode sets T before any wait, so quick clicks add up
     dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
     meta.append(el("span", null, "Meta"), dn, mv, upb); hd.append(meta, foldB);
-    box.append(hd);
+    // on the classic dashboard the bar sits in Canvas's header, next to the greeting, where "Alternar para a nova
+    // visualização" was; folding then hides the whole panel. Elsewhere (widget dashboard) it stays on top of the panel.
+    if (!headBar(hd)) box.append(hd); else box.classList.add("nohd");
     if (a.askTurma) {   // a shared course matched: ask before using another turma's weights
       const q = el("section", "card news ask-turma"), yes = el("button", "primary", "Sim, sou dessa turma"), no = el("button", null, "Não, sou de outro curso");
       q.append(el("h3", null, "Você é da turma " + a.turma + "?"), el("div", "muted", "O Caderno+ tem os pesos do Plano de Ensino dessa turma. Se você é de outro curso, ele mostra a semana, os avisos e os arquivos, sem calcular notas."));
