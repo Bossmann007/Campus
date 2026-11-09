@@ -684,6 +684,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(openTab && openTab.style.display === "none", "the menu shows by default; the reopen tab waits");
   const cn2 = await runContent("/courses/71306", null, { navFold: true }, { nav: (() => { const n = fakeEl("ul"); n.querySelectorAll = () => []; return n; })() }); await new Promise(r => setTimeout(r, 30));
   assert(cn2.body.kids.find(k => k.id === "cp-navopen").style.display === "block", "folded last time: folded, with the › tab to bring it back");
+  const cn3 = await runContent("/courses/71306", null, { prefs: { mode: "foco" } }, { nav: (() => { const n = fakeEl("ul"); n.querySelectorAll = () => []; return n; })() }); await new Promise(r => setTimeout(r, 30));
+  assert(cn3.body.kids.find(k => k.id === "cp-navopen").style.display === "block", "Foco folds the course menu by itself");
 
   // modules: whole modules or single items hidden one by one per course
   const wrap = fakeEl("div"), modsEl = fakeEl("div"); wrap.append(modsEl);
@@ -854,6 +856,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const quizPage = theme("off", false, undefined, undefined, { path: "/courses/1/quizzes/2/take", mode: "limpo" }); await new Promise(r => setTimeout(r, 5));
   assert(!quizPage.cls.has("cp-dash-page"), "a quiz page keeps its side column (timer, questions)");
   lk.listen.change({ prefs: { newValue: { mode: "foco" } } }, "local");
+  assert(/:root\.cp-course-page #right-side-wrapper \{ display:none/.test(lookCss()) && /#footer, \.ic-app-footer/.test(lookCss()), "Limpo/Foco reach the course pages: no side column on home/modules, no footers");
   assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && /cp-dash-page\.cp-has-panel :is\(#DashboardCard_Container/.test(lookCss()), "foco: the cards go too, only once our panel is drawn");
   lk.listen.change({ prefs: { newValue: { cardImg: false } } }, "local");
   assert(/__header_image \{ background-image:none/.test(lookCss()), "cards without pictures");

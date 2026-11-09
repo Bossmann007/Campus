@@ -95,6 +95,10 @@ ${RS} .event-details > * { margin-top:2px; } ${RS} .event-details :is(b, strong)
     if (cards.mode === "limpo" || cards.mode === "foco") out.push(`${D} :is(#right-side-wrapper, #right-side, #footer, .recent_activity, #dashboard-activity, .ic-DashboardCard__action-container) { display:none !important; }
 ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; margin-right:auto !important; }`);
     if (cards.mode === "foco") out.push(`${D}.cp-has-panel :is(#DashboardCard_Container, .ic-DashboardCard, .ic-Dashboard-header, #cp-scroll) { display:none !important; }`);
+    // the whole Canvas follows the mode: Limpo and Foco drop footers everywhere and, on a course's home and modules pages, the
+    // side column (our course panel has what comes next and the announcements); Foco also folds the course menu (content.js)
+    if (cards.mode === "limpo" || cards.mode === "foco") out.push(`:root :is(#footer, .ic-app-footer) { display:none !important; }
+:root.cp-course-page #right-side-wrapper { display:none !important; }`);
     // Canvas's own card layout (262px cards in .ic-DashboardCard__box__container, canvas-lms dashboard_card.scss) is kept;
     // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
     out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:96px; } .ic-DashboardCard__header-term { display:none !important; }   /* the term repeats on every card */
@@ -154,6 +158,8 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
   };
   if (typeof location !== "undefined" && /^\/(dashboard)?\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-dash-page", true);
   if (typeof location !== "undefined" && /^\/calendar\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-cal-page", true);
+  // a course's home or modules page (not quizzes, assignments or grades, where the side column holds timers and totals)
+  if (typeof location !== "undefined" && /^\/courses\/\d+(\/modules)?\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-course-page", true);
   const style = document.createElement("style"), look = document.createElement("style");
   style.id = "cp-theme"; look.id = "cp-look";
   style.textContent = `html.cp-dark { background:#fff !important; filter:${BACK} contrast(.9); }

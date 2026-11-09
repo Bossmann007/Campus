@@ -1373,7 +1373,9 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     const setFold = async on => { if (document.body.classList) document.body.classList.toggle("course-menu-expanded", !on); tab.style.display = on ? "block" : "none"; await chrome.storage.local.set({ navFold: on }); };
     fold.addEventListener("click", () => setFold(true)); tab.addEventListener("click", () => setFold(false));
     if (nav.parentNode) nav.parentNode.insertBefore(fold, nav); document.body.appendChild(tab);
-    tab.style.display = "none"; if (navFold === true) setFold(true);
+    tab.style.display = "none";
+    const { prefs: pp } = await chrome.storage.local.get("prefs");
+    if (navFold === true || (navFold !== false && cpPrefs(pp).mode === "foco")) setFold(true);   // Foco folds the course menu unless the student opened it
     const li = el("li", "section"), edit = el("button"); li.id = "cp-navedit"; edit.type = "button";
     edit.style.cssText = "margin:10px 0 0 6px;padding:5px 10px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.7;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
     edit.addEventListener("click", () => { editing = !editing; paint(); });
