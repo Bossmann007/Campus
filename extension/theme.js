@@ -130,6 +130,9 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look body, :root.cp-look #application, :root.cp-look #wrapper, :root.cp-look #main, :root.cp-look .ic-Layout-wrapper,
 :root.cp-look .ic-Layout-contentMain, :root.cp-look #content-wrapper, :root.cp-look #right-side-wrapper, :root.cp-look #right-side { background-color:var(--cp-paper) !important; color:var(--cp-ink); }
 :root.cp-look :is(.ic-Dashboard-header, .ic-Dashboard-header :is(div, span, header):not(.cp-host, button *, [role="button"] *)) { background-color:var(--cp-paper) !important; }   /* its React header paints its own white box */
+:root.cp-look :is(.ic-app-nav-toggle-and-crumbs, #breadcrumbs, .header-bar, #context_modules_sortable_container, .item-group-container) { background-color:transparent !important; border-color:var(--cp-line) !important; }
+:root.cp-look :is(.context_module, .item-group-condensed .ig-row, .context_module_item) { background-color:var(--cp-card) !important; border-color:var(--cp-line) !important; }
+:root.cp-look .item-group-condensed .ig-header { background-color:color-mix(in srgb, var(--cp-card) 70%, var(--cp-paper)) !important; border-color:var(--cp-line) !important; }   /* modules: Canvas paints them white and #f2f4f4; here they take the look (and its dark tint) */
 :root.cp-look .ic-DashboardCard { border-radius:14px; overflow:hidden; border:1px solid var(--cp-line); background:var(--cp-card); box-shadow:0 1px 2px rgba(29,36,51,.06); transition:transform .18s, box-shadow .18s; }
 :root.cp-look .ic-DashboardCard__header_content { background:var(--cp-card) !important; }
 :root.cp-look .ic-DashboardCard:hover { transform:translateY(-2px); box-shadow:0 10px 24px -14px rgba(29,36,51,.45); }
