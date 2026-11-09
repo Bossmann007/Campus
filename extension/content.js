@@ -310,10 +310,19 @@
       const id = m[1], c = a.byCanvasId[id];
       card.style.display = ctx.hidden.includes(id) ? "none" : "";
       if (ctx.hidden.includes(id) || !c || !prefs.grades || !a.rules) continue;
-      const st = a.state(c), txt = earnedText(st) + "/10 · " + a.label(st);
-      const p = pill(prefs.cardPct ? txt.replace(/(\d+(?:,\d+)?)\/10/g, (_, n) => Math.round(parseFloat(n.replace(",", ".")) * 10) + "%") : txt, a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+      const st = a.state(c), toPct = t => t.replace(/(\d+(?:,\d+)?)\/10/g, (_, n) => Math.round(parseFloat(n.replace(",", ".")) * 10) + "%");
+      const p = pill(prefs.cardPct ? toPct(a.label(st)) : earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
       p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0);
       card.cpAdded.push(p); head.appendChild(p);
+      const top = prefs.cardPct && card.querySelector(".ic-DashboardCard__header");
+      if (top) {   // what is guaranteed, as a ring on the card's picture (left of its ⋮ menu)
+        const col = { ok: "#2F7D5B", warn: "#A8650F", bad: "#C2361F" }[a.tone(st)] || "#A8650F", pct = Math.floor(Math.min(10, st.earned) * 10);   // guaranteed: never rounded up
+        const ring = el("div"), num = el("b", null, pct + "%");
+        ring.className = "cp-card-ring"; ring.title = pct + "% garantido de 10 · " + p.title; ring.setAttribute("aria-label", pct + "% garantido");
+        ring.style.cssText = "position:absolute;top:10px;right:52px;z-index:2;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(" + col + " " + pct + "%, rgba(255,255,255,.45) 0);box-shadow:0 2px 10px rgba(0,0,0,.22)";
+        num.style.cssText = "display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#fff;color:" + col + ";font:700 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:-.02em";
+        ring.appendChild(num); card.cpAdded.push(ring); top.appendChild(ring);
+      }
     }
     const shown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length, root = document.documentElement;
     const box = document.getElementById("DashboardCard_Container"), fit = box && box.clientWidth ? Math.max(1, Math.floor((box.clientWidth + 24) / 298)) : 4;
@@ -518,7 +527,8 @@
   function headBar(hd) {
     const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null, row = layout && layout.firstElementChild;
     const acts = row && row.tagName !== "H1" && row.children && row.children.length > 1 ? row.lastElementChild : null;
-    if (!acts || document.getElementById("cp-head")) return false;
+    if (!acts) return false;
+    const old = document.getElementById("cp-head"); if (old) old.remove();   // a redraw builds a new panel: one bar, the live one
     let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
     for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
     const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";

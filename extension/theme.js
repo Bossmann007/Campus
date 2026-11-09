@@ -109,7 +109,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-course-page #right-side-wrapper { display:none !important; }`);
     // Canvas's own card layout (262px cards in .ic-DashboardCard__box__container, canvas-lms dashboard_card.scss) is kept;
     // the rows are only centered and balanced (2 side by side, 4 as 2+2, 5-6 as 3+3) by the width of the box
-    out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:96px; } .ic-DashboardCard__header-term { display:none !important; }   /* the term repeats on every card */
+    out.push(`.ic-DashboardCard__box__container { text-align:center; } .ic-DashboardCard__box__container > * { text-align:left; } .ic-DashboardCard__header_content { min-height:96px; } .ic-DashboardCard__header-term { display:none !important; } .ic-DashboardCard__header { position:relative; }   /* the term repeats on every card */
 :root.cp-has-panel #DashboardCard_Container { padding-top:28px; }
 .ic-Dashboard-header__layout .cp-off { display:none !important; }   /* the Caderno+ bar took the place of Canvas's switch to its new view */   /* its cards' row has a negative top margin: keep it off our panel */
 :root.cp-dash-page .ic-DashboardCard__box { max-width:calc(var(--cp-cols, 4) * 298px - 24px); margin-left:auto !important; margin-right:auto !important; }`);
