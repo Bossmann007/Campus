@@ -9,6 +9,7 @@
   const VERSION = chrome.runtime.getManifest().version;
   const EXT = !!chrome.runtime.getURL;   // the extension (the bookmarklet keeps nothing after a reload)
   let T = 7;   // the meta (goal), from the popup or the dashboard; 7 by default
+  let TURMA_PREF = null;   // prefs.turma: the turma the student confirmed, "outro" for another program, null when not asked yet
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
   const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -195,12 +196,18 @@
   function analyse(cache, hand) {
     const canvas = C.fromCanvas(cache.data).grades, grades = Object.assign({}, hand || {}, canvas), t = today(), byCanvasId = {};
     for (const x of cache.ids) { const c = C.subjectOf(x, true); if (c) { byCanvasId[x.id] = c; courseOf[c.id] = String(x.id); } }
-    const mine = C.COURSES.filter(c => courseOf[c.id]), expired = C.expired(t), rules = mine.length > 0 && !expired;
+    // Our rules are for one turma. Canvas courses shared with other programs (Ética, for example) carry the same course id, so
+    // a match alone is not proof: the student confirms the turma (onboarding or the question on the dashboard). Without an
+    // answer, three or more matching courses count as the turma; fewer ask first.
+    const matched = C.COURSES.filter(c => courseOf[c.id]), turma = matched.length ? C.turmaOf(matched[0]) : null;
+    const confirmed = TURMA_PREF === turma, other = TURMA_PREF === "outro" || (TURMA_PREF && TURMA_PREF !== turma);
+    const askTurma = matched.length > 0 && !confirmed && !other && matched.length < 3;
+    const mine = confirmed || (!other && !askTurma) ? matched : [], expired = C.expired(t), rules = mine.length > 0 && !expired;
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
     const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
     const has = rules && Object.keys(grades).length > 0;   // no matched course, term over or no grade read: no grade parts
-    return { grades, canvas, hand: hand || {}, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
+    return { askTurma, turma, grades, canvas, hand: hand || {}, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
   }
 
   // The icon number: days to the next exam that still matters.
@@ -835,6 +842,13 @@
     dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
     meta.append(el("span", null, "Meta"), dn, mv, upb); hd.append(meta, foldB);
     box.append(hd);
+    if (a.askTurma) {   // a shared course matched: ask before using another turma's weights
+      const q = el("section", "card news ask-turma"), yes = el("button", "primary", "Sim, sou dessa turma"), no = el("button", null, "Não, sou de outro curso");
+      q.append(el("h3", null, "Você é da turma " + a.turma + "?"), el("div", "muted", "O Caderno+ tem os pesos do Plano de Ensino dessa turma. Se você é de outro curso, ele mostra a semana, os avisos e os arquivos, sem calcular notas."));
+      const acts = el("div", "acts"); acts.append(yes, no); q.appendChild(acts); box.appendChild(q);
+      const answer = async v => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { turma: v }) }); location.reload(); };
+      yes.type = no.type = "button"; yes.addEventListener("click", () => answer(a.turma)); no.addEventListener("click", () => answer("outro"));
+    }
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
     if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
@@ -1502,7 +1516,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
   let cardWatch = null;
   async function draw(cache, prefs, again) {
-    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7));
+    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null;
     let a = analyse(cache, await myHand(cache.user)); const marks = await myMarks(cache.user);
     await loadTasks(cache.user); await loadChanges(cache.user);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student

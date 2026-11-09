@@ -81,6 +81,7 @@ const PLANNER = [
   { plannable_type: "announcement", plannable_id: 4, plannable: { title: "Aviso" }, plannable_date: isoIn(0) + "T13:00:00Z", context_name: BD, course_id: 71306, submissions: false }];
 async function runContent(pathname, files, preStore, opts = {}) {
   const header = fakeEl("div"), card = fakeEl("div"), anchor = fakeEl("div"), sent = [], store = Object.assign({}, preStore);
+  if (!opts.askTurma) store.prefs = Object.assign({ turma: "Ciência da Computação, manhã" }, store.prefs);   // the student confirmed the turma (its own tests below)
   anchor.prepend = function (c) { c.parent = this; this.kids.unshift(c); byId[c.id] = c; };
   const menu = fakeEl("ul"), body = fakeEl("body"), winListeners = {}, alerts = [];
   const byId = { content: anchor, menu };
@@ -693,6 +694,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await modEye.listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
   assert.deepStrictEqual(mh.store.modHide[71306].sort(), ["context_module_7", "context_module_item_70"], "a whole module hidden too, saved per course");
 
+  // the turma: a shared course (one or two matches) is not proof; ask, and use the rules only after a yes
+  const ask1 = await runContent("/", null, {}, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
+  assert(/Você é da turma Ciência da Computação, manhã\?/.test(text(ask1.anchor)) && !/\/10 · /.test(text(ask1.header)), "one matching course: ask, no grades yet");
+  const askOther = await runContent("/", null, { prefs: { turma: "outro" } }, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
+  assert(!/Você é da turma/.test(text(askOther.anchor)) && !/\/10 · /.test(text(askOther.header)) && /ainda não tem as regras da sua turma/.test(text(askOther.anchor)), "another program: no question, no grades, the week and announcements stay");
+  const MORE6 = [{ id: 72009, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem" }, { id: 72011, name: "Conectividade (Turma 2º B) - 2026 / 2º Sem" }];
+  const ask3 = await runContent("/", null, {}, { askTurma: true, more: MORE6 }); await new Promise(r => setTimeout(r, 20));
+  assert(!/Você é da turma/.test(text(ask3.anchor)) && /\/10 · /.test(text(ask3.header)), "three or more matching courses: the turma, no question");
+
   // the classic dashboard header: a greeting with the first name, the date and what is coming (the title stays for screen readers)
   const lay = fakeEl("div"), flex = fakeEl("div"), titleItem = fakeEl("span"); titleItem.append(fakeEl("span")); flex.append(titleItem, fakeEl("span")); lay.append(flex);
   lay.firstElementChild = flex; flex.firstElementChild = titleItem; titleItem.prepend = function (c) { c.parent = this; this.kids.unshift(c); };
@@ -864,7 +874,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.match(text(bmDash.anchor), /Próximos 7 dias/); assert.match(text(bmDash.anchor), /Prova adiada/);
   assert(!bmDash.menu.kids.length, "no menu item in the bookmarklet");
   const bmCourse = await runContent("/courses/71306", [], {}, { src: bm });
-  assert.match(text(bmCourse.anchor), /garantidos de 10/);
+  assert(!/garantidos de 10/.test(text(bmCourse.anchor)), "the bookmarklet keeps no turma answer: no grades from another turma");
   assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no Caderno|^Anotações/.test(e.textContent)), "no downloads, no calculator page and no notes in the bookmarklet");
   const bmOther = await runContent("/profile", null, {}, { src: bm });
   assert.strictEqual(bmOther.alerts.length, 1, "elsewhere it asks for the dashboard or a course"); ok();
