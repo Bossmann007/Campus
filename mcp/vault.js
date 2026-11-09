@@ -44,7 +44,7 @@ function commands(platform, find = findSecretTool) {
 const runOut = (cmd, args) => new Promise(res => execFile(cmd, args, { timeout: 60000, windowsHide: true }, (err, out) => res(err ? null : String(out))));
 const runTty = (cmd, args) => new Promise(res => { const p = spawn(cmd, args, { stdio: "inherit" }); p.on("error", () => res(false)); p.on("exit", c => res(c === 0)); });
 const tidy = s => typeof s === "string" ? s.replace(/[\r\n]+$/, "").trim() : "";
-const looks = s => /^[\x21-\x7e]{20,200}$/.test(s);   // Canvas tokens: printable ASCII, no spaces
+const looks = s => /^[\x21-\x7e]{20,200}$/.test(s) && !s.startsWith("${");   // Canvas tokens: printable ASCII, no spaces; never an unfilled "${user_config...}"
 
 const NO_STORE = "Secret Service sem secret-tool: instale libsecret-tools (Debian/Ubuntu) ou libsecret (Fedora, Arch)";
 async function readToken({ env = process.env, platform = process.platform, run = runOut, readFile = fs.readFileSync, find } = {}) {

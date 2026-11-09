@@ -226,7 +226,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.0.1";
+  const EXT_LATEST = "6.0.2";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -343,8 +343,10 @@ const NotasCore = (() => {
         hid.set(key, node); return node; };
       const kids = c => (Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []).map(k => ({ c: cols.get(refId(k)) || hidden(k), w: Number(k && k.pivot && k.pivot.peso_coluna_filho) || 0 }));   // a lost part stays, counting 0
       // value of a column; f: the fraction given to every leaf still open (the projection). raw: points, for "total"
+      let visits = 0;   // a hostile tree (layers of columns sharing children) must not hang the page or the MCP
       const val = (c, f, seen, raw) => {
         if (!c) return 0;
+        if (++visits > 20000) throw new Error("fórmula grande demais");
         if (seen.has(c.id_coluna)) return 0; seen = new Set(seen).add(c.id_coluna);
         if (isLeaf(c)) { const v = num(c), p = pts(c); return v != null ? (raw ? v : v * 10 / p) : open.has(c.id_coluna) ? (raw ? f * p : f * 10) : 0; }
         const ks = kids(c);
@@ -372,7 +374,8 @@ const NotasCore = (() => {
         const sw = fks.reduce((s, k) => s + k.w, 0), rest = fks.filter(k => k !== hs[0]).reduce((s, k) => s + k.w * val(k.c, 0, new Set()), 0);
         hs[0].c.h0 = Math.min(10, Math.max(0, (shown * sw - rest) / hs[0].w));
       }
-      const base = val(fin, 0, new Set()), shift = shown != null ? shown - base : 0, at = f => val(fin, f, new Set()) + shift;
+      if (cols.size > 600) return none("incompleto");
+      const base = val(fin, 0, new Set()), shift = shown != null ? shown - base : 0, at = f => { visits = 0; return val(fin, f, new Set()) + shift; };
       const now = Math.round(at(0) * 100) / 100, T = Number(meta) || 7, left = [...open];
       const extra = fill != null && Number.isFinite(Number(fill)) ? { projected: Math.round(Math.min(10, at(Math.min(10, Math.max(0, Number(fill))) / 10)) * 100) / 100 } : {};
       if (at(0) >= T - 1e-9) return Object.assign({ status: "garantido", now, need: 0, left, approx }, extra);

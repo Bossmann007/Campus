@@ -54,6 +54,15 @@ no seu computador de propósito. No ChatGPT, use o app desktop (via Codex) ou o 
 
 Pergunte: "quanto falta em cada matéria?", "o que vence esta semana?", "quais avisos novos?".
 
+## O que o cofre protege (e o que não)
+
+O token fica no cofre do sistema para não aparecer em arquivo de texto, na tela ou no histórico do terminal. Ele não
+fica protegido de outros programas que rodam com o seu usuário: no Mac, por exemplo, um programa seu pode pedir o item
+ao Keychain. Use um token com validade até o fim do semestre e revogue no Canvas quando parar de usar.
+
+Instale só pelos links da página do projeto (o `.mcpb` e o `.tgz` da release no GitHub). O nome `caderno-mcp` no npm
+não é nosso: não use `npx caderno-mcp` nem `npm install caderno-mcp`.
+
 ## Ferramentas
 
 - `quanto_falta`: quanto falta em cada matéria para a meta (padrão 7). Regras do Plano de Ensino da turma quando o

@@ -27,9 +27,9 @@ function makeHandler(getCanvas, scrub) {
       try {
         const cv = await getCanvas();
         if (cv.error) return fail(cv.error);
-        let text = JSON.stringify(await cv.tools[name](params.arguments && typeof params.arguments === "object" ? params.arguments : {}));
-        if (text.length > MAX_REPLY) text = text.slice(0, MAX_REPLY) + "…(cortado)";
-        return ok({ content: [{ type: "text", text: scrub(text) }] });
+        let text = scrub(JSON.stringify(await cv.tools[name](params.arguments && typeof params.arguments === "object" ? params.arguments : {})));   // scrubbed whole, then cut
+        if (text.length > MAX_REPLY) text = text.slice(0, MAX_REPLY) + "…(cortado: peça uma matéria por vez, com course_id)";
+        return ok({ content: [{ type: "text", text }] });
       } catch (e) { return fail("Erro: " + (e && e.message || e)); }
     }
     return { jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } };
@@ -39,7 +39,9 @@ function makeHandler(getCanvas, scrub) {
 async function main() {
   let secret = null, canvas = null;
   const scrub = s => scrubber(secret)(s);
-  const getCanvas = async () => {
+  let reading = null;   // one read of the token for calls that arrive together (the bundle's env token is read once, then deleted)
+  const getCanvas = () => canvas || (reading = reading || readOnce().finally(() => { reading = null; }));
+  const readOnce = async () => {
     if (canvas) return canvas;
     const { token, from } = await vault.readToken();
     if (!token) return { error: "Sem token do Canvas (" + from + "). Crie um no Canvas (Conta → Configurações → \"+ Novo token de acesso\", validade até o fim do semestre) e salve no cofre do sistema: node \"" + require("path").join(__dirname, "cli.js") + "\" login. No Claude Desktop: preencha o campo do token na extensão Caderno+. Nunca cole o token no chat." };   // never "npx caderno-mcp": that npm name is not ours yet

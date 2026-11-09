@@ -30,7 +30,8 @@ assert(!/agentErr|agentFile|caderno-agente/.test(html), "popup: no AI file switc
   assert(/<a id="ia" href="https:\/\/caderno-plus\.vercel\.app\/ia" target="_blank" rel="noopener noreferrer">/.test(html), "popup: one link to the site's /ia page");
   assert(!/mcp|caderno-mcp/i.test(fs.readdirSync(dir).join(" ")), "no MCP code inside the extension");
   assert(/^!ia\.html$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")) && !/<script/i.test(ia), "the /ia page is published, with no scripts");
-  assert(!/npx|caderno-mcp (login|status|setup)/.test(ia.replace(/<!--[\s\S]*?-->/g, "")) && /Ainda não publicado/.test(ia), "no runnable install command before the npm name is ours");
+  // beta: installed only from our own GitHub release (never by npm name, which is not ours: no npx, no bare "npm install caderno-mcp")
+  assert(!/npx|npm (i|install)( -g)? caderno-mcp/.test(ia.replace(/<!--[\s\S]*?-->/g, "")) && /npm install -g https:\/\/github\.com\/Bossmann007\/Campus\/releases\/download\/mcp-v[\d.]+\/caderno-mcp-[\d.]+\.tgz/.test(ia) && /caderno-mcp-[\d.]+\.mcpb/.test(ia) && /só a versão desta página/.test(ia), "the install comes only from our GitHub release, and the page says so");
   assert(/<h2>1\. Crie um token no Canvas<\/h2>/.test(ia) && /\+ Novo token de acesso/.test(ia) && /Nunca cole o token/.test(ia) && /revogar o token a qualquer momento/.test(ia), "the /ia page: the token path in steps, never paste it in a chat, revoke any time");
   assert(!/caderno-agente|Arquivo para a sua IA/.test(ia + pv), "the removed AI file is gone from the site");
   for (const w of [/nuvem da empresa da IA/, /acesso <b>total<\/b>/, /3\(i\)/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);

@@ -34,7 +34,7 @@
 <body><main>
 <a class="home" href="/"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><span>Caderno<i>+</i></span></a>
 <h1>Conectar sua IA ao Canvas</h1>
-<p class="muted">Caderno+ MCP · um programa separado da extensão · não oficial · <span class="soon">em breve</span></p>
+<p class="muted">Caderno+ MCP · um programa separado da extensão · não oficial · <span class="soon">beta</span></p>
 
 <p>Com o Caderno+ MCP, a sua IA (Claude, ChatGPT desktop, Gemini CLI, Codex, Claude Code e outras) consegue responder "quanto falta em cada matéria?", "o que vence esta semana?" e "quais avisos novos?" com os seus dados do Canvas da PUCPR. Ele roda <b>no seu computador</b>, com um token do Canvas que <b>só você</b> cria, guardado no cofre do seu sistema. Não tem arquivo extra nem servidor nosso no meio. Só lê: não entrega trabalho, não responde quiz, não manda mensagem, não marca nada.</p>
 
@@ -59,14 +59,18 @@
 <li>Copie o token. Ele aparece uma vez só; não mande para ninguém.</li>
 </ol>
 
-<h2>2. Instale o Caderno+ MCP no app da IA <span class="soon">em breve</span></h2>
-<div class="box warn"><p><b>Ainda não publicado.</b> O arquivo e os comandos de cada app aparecem aqui quando o Caderno+ MCP for publicado. Até lá, não instale nenhum pacote com esse nome de outro lugar: só a versão indicada nesta página é a nossa, e ela vai pedir o seu token.</p></div>
+<h2>2. Instale o Caderno+ MCP no app da IA <span class="soon">beta</span></h2>
+<div class="box warn"><p><b>Versão beta, só por estes links.</b> O Caderno+ MCP vai pedir o seu token: instale só a versão desta página (ela está no GitHub do projeto). Não instale pacotes com esse nome de outro lugar, nem pelo npm.</p></div>
 
 <h3>Claude Desktop (Mac e Windows)</h3>
-<p>O mais fácil: baixe o arquivo <code>.mcpb</code> do Caderno+ MCP e abra com dois cliques. O Claude pede o token numa janela e guarda no cofre do sistema. O Claude já traz o que precisa para rodar.</p>
+<p>O mais fácil: baixe <a href="https://github.com/Bossmann007/Campus/releases/download/mcp-v1.0.0/caderno-mcp-1.0.0.mcpb" rel="noopener noreferrer">caderno-mcp-1.0.0.mcpb</a> e abra com dois cliques. O Claude pede o token numa janela e guarda no cofre do sistema. O Claude já traz o que precisa para rodar.</p>
 
-<h3>Outros apps (ChatGPT desktop, Codex, Gemini CLI, Claude Code e outros)</h3>
-<p>Precisam do <a href="https://nodejs.org/" rel="noopener noreferrer">Node.js</a> 18 ou mais novo. No terminal, o comando de login do Caderno+ MCP pede o token e guarda no cofre do sistema (Keychain no Mac, cofre do usuário no Windows, Secret Service no Linux): o token não aparece na tela, no histórico nem em arquivo de configuração. Depois, cada app ganha uma linha de configuração.</p>
+<h3>Outros apps (ChatGPT desktop, Codex, Gemini CLI, Claude Code, Cursor, VS Code)</h3>
+<p>Precisam do <a href="https://nodejs.org/" rel="noopener noreferrer">Node.js</a> 18 ou mais novo. No terminal:</p>
+<pre><code>npm install -g https://github.com/Bossmann007/Campus/releases/download/mcp-v1.0.0/caderno-mcp-1.0.0.tgz
+caderno-mcp login
+caderno-mcp setup</code></pre>
+<p>O <code>login</code> pede o token e guarda no cofre do sistema (Keychain no Mac, cofre do usuário no Windows, Secret Service no Linux): o token não aparece na tela, no histórico nem em arquivo de configuração. O <code>setup</code> mostra a linha de configuração pronta para cada app; cole a do seu. <code>caderno-mcp status</code> diz se o token está guardado.</p>
 
 <h3>Só pela web (ChatGPT web, Claude web, Gemini app)</h3>
 <p>Não funcionam: esses apps só falam com servidores na internet, e o Caderno+ MCP fica no seu computador de propósito, para o token não sair dele. No ChatGPT, use o app desktop.</p>
@@ -75,7 +79,7 @@
 <p>"Quanto falta em cada matéria?", "o que vence esta semana?", "quais avisos novos?", "quais módulos tem em Banco de Dados?". O Caderno+ MCP lê só o Canvas da PUCPR (pucpr.instructure.com) e o Centro de Notas, e os números de "quanto falta" seguem as mesmas regras do painel do Caderno+.</p>
 
 <h2>Parar</h2>
-<p>Revogue o token no Canvas (Conta → Configurações) e remova o Caderno+ MCP do app (no Claude Desktop, em Configurações → Extensões). O comando de logout do Caderno+ MCP apaga o token do cofre.</p>
+<p>Revogue o token no Canvas (Conta → Configurações) e remova o Caderno+ MCP do app (no Claude Desktop, em Configurações → Extensões). <code>caderno-mcp logout</code> apaga o token do cofre.</p>
 
 <p class="muted">Veja também a <a href="/privacidade">política de privacidade</a>. Código aberto: <a href="https://github.com/Bossmann007/Campus" rel="noopener noreferrer">github.com/Bossmann007/Campus</a>.</p>
 </main></body>

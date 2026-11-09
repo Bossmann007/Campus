@@ -97,6 +97,14 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.strictEqual(centro(bd, 7).status, "sem-formula"); assert.strictEqual(centro(null, 7).status, "sem-formula");
   ok();
 }
+{ // a hostile tree: 30 layers of two columns each pointing at both of the next layer (2^30 paths) answers at once, with no number
+  const layers = []; let idn = 100;
+  for (let l = 0; l < 30; l++) layers.push([idn++, idn++]);
+  const cs = []; layers.forEach((pair, l) => pair.forEach(id => cs.push(col(id, l === 29 ? "padrao" : "grupo", l === 29 ? null : "media_ponderada", l === 29 ? 10 : null, null, l === 29 ? [] : layers[l + 1].map(k => [k, 50])))));
+  const t0 = Date.now(), r = centro(curso([cs], [col(9, "final", "media_ponderada", null, null, layers[0].map(k => [k, 50]))]), 7);
+  assert(Date.now() - t0 < 2000 && ["sem-formula", "incompleto"].includes(r.status), "bounded work on a hostile tree: " + (Date.now() - t0) + " ms, " + r.status);
+  ok();
+}
 { // odd input never throws: unknown calc, a missing child, a loop, a grade that is not a number
   const bad = curso([[col(1, "padrao", null, 10, "abc"), col(2, "grupo", "estranho", null, null, [[1], [404]]), col(3, "grupo", "media_ponderada", null, null, [[4, 50]]), col(4, "grupo", "media_ponderada", null, null, [[3, 50]])]],
     [col(9, "final", "media_ponderada", null, null, [[2, 50], [3, 50]])]);
