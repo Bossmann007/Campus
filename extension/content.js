@@ -320,7 +320,7 @@
         const ring = el("div"), num = el("b", null, pct + "%");
         ring.className = "cp-card-ring"; ring.title = pct + "% garantido de 10 · " + p.title; ring.setAttribute("aria-label", pct + "% garantido");
         ring.style.cssText = "position:absolute;top:10px;left:12px;z-index:2;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(" + col + " " + pct + "%, rgba(255,255,255,.45) 0);box-shadow:0 2px 10px rgba(0,0,0,.22)";
-        num.style.cssText = "display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#fff;color:" + col + ";font:700 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:-.02em";
+        num.style.cssText = "display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--cp-card,#fff);color:" + col + ";font:700 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:-.02em";
         ring.appendChild(num); card.cpAdded.push(ring); top.appendChild(ring);
       }
     }
@@ -334,8 +334,8 @@
 
   const CSS = `
     :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
-      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, #fff); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, #fff);
-      --paper:var(--cp-paper,#FBF7EF); --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
+      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, var(--cp-card,#fff)); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, var(--cp-card,#fff));
+      --paper:var(--cp-paper,#FBF7EF); --track:color-mix(in srgb, var(--cp-line,#ECE4D3) 75%, var(--cp-paper,#FBF7EF)); --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
     .box { position:relative; container:cp / inline-size; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }

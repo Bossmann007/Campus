@@ -846,6 +846,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(/--cp-paper:#FBE6EC;/.test(lookCss()), "the student's own background color wins over the look's");
   lk.listen.change({ prefs: { newValue: { look: "oceano", bgColor: "red;}" } } }, "local");
   assert(/--cp-paper:#E2EDF9;/.test(lookCss()), "only a #RRGGBB color is taken");
+  const dkT = theme("dark", false); await new Promise(r => setTimeout(r, 5)); dkT.listen.change({ prefs: { newValue: { theme: "dark", look: "oceano" } } }, "local");
+  const dkCss = dkT.styles.find(x => x.id === "cp-look").textContent;
+  assert(/--cp-paper:#E2EDF9; --cp-card:color-mix\(in srgb, #E2EDF9 93%, #000\);/.test(dkCss), "dark Oceano: page and cards from the same blue, not neutral gray");
   lk.listen.change({ prefs: { newValue: { bg: "quadriculado" } } }, "local");
   assert(/#right-side, \.ic-Dashboard-header, [^{]*\{ background-image:linear-gradient\(90deg/.test(lookCss()) && /background-size:24px 24px !important; background-attachment:fixed/.test(lookCss()), "a background pattern on every page layer, fixed so they line up");
   assert(/\.ic-Dashboard-header :is\(div, span, header\):not\(\.cp-host, button \*, \[role="button"\] \*\)\) \{ background-image:/.test(lookCss()), "the dashboard header (its React box paints white) carries the same background");
