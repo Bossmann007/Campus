@@ -1,6 +1,6 @@
 // Extension: manifest and permissions, collectCanvasGrades against a mocked Canvas, the generated calculator page, the site's download links.
 const assert = require("assert"), fs = require("fs"), path = require("path");
-const dir = path.join(__dirname, "..", "extension");
+const dir = process.env.EXT_DIR || path.join(__dirname, "..", "extension");   // EXT_DIR: the packaged (compacted) copy
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert(manifest.description.length <= 132 && manifest.name.length <= 75, "Chrome Web Store limits: description <= 132 (" + manifest.description.length + "), name <= 75");
 assert.strictEqual(manifest.manifest_version, 3);

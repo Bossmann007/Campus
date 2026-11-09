@@ -1,14 +1,14 @@
 // Extension inside Canvas: core.js is app.html's core, file routing, the service worker's download guard, and content.js
 // run against a mocked Canvas (dashboard pill, course panel, files download through the service worker).
 const assert = require("assert"), fs = require("fs"), path = require("path");
-const root = path.join(__dirname, ".."), dir = path.join(root, "extension");
+const root = path.join(__dirname, ".."), dir = process.env.EXT_DIR || path.join(root, "extension");   // EXT_DIR: the packaged (compacted) copy
 const read = f => fs.readFileSync(path.join(dir, f), "utf8");
 let n = 0; const ok = s => { n++; };
 const f1 = x => x.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), up1 = x => f1(Math.ceil(x * 10 - 1e-9) / 10);
 
 // core.js is a copy of app.html's core block
 const core = fs.readFileSync(path.join(root, "app.html"), "utf8").match(/<script id="core">([\s\S]*?)<\/script>/)[1].replace(/^\n+|\n+$/g, "");
-assert.strictEqual(read("core.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), core, "extension/core.js is stale: run scripts/sync-ext-core"); ok();
+if (!process.env.EXT_DIR) assert.strictEqual(read("core.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), core, "extension/core.js is stale: run scripts/sync-ext-core"); ok();
 assert(!["app.html", "app-ui.js", "app-boot.js"].some(f => fs.existsSync(path.join(dir, f))), "no separate calculator page in the extension: it lives in Canvas");
 const C = new Function(read("core.js") + "\nreturn NotasCore;")();
 assert.strictEqual(C.EXT_LATEST, JSON.parse(read("manifest.json")).version, "EXT_LATEST matches the manifest"); ok();
@@ -991,7 +991,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the bookmarklet on the site: the extension's page scripts, bundled with an in-memory chrome stand-in
   const lit = fs.readFileSync(path.join(root, "index.html"), "utf8").match(/\/\*CP-BM\*\/("(?:[^"\\]|\\.)*")\/\*CP-BM\*\//);
   assert(lit, "bookmarklet source on index.html"); const bm = JSON.parse(lit[1]);
-  let at = 0; for (const f of ["prefs.js", "collect.js", "core.js", "files.js", "content.js"]) { const i = bm.indexOf(read(f), at); assert(i > at, f + " bundled as is, in order: run scripts/sync-bookmarklet"); at = i; }
+  let at = 0; if (!process.env.EXT_DIR) for (const f of ["prefs.js", "collect.js", "core.js", "files.js", "content.js"]) { const i = bm.indexOf(read(f), at); assert(i > at, f + " bundled as is, in order: run scripts/sync-bookmarklet"); at = i; }
   new Function(bm);   // valid code
   const bmDash = await runContent("/", null, {}, { src: bm });
   assert.match(text(bmDash.anchor), /Próximos 7 dias/); assert.match(text(bmDash.anchor), /Prova adiada/);
