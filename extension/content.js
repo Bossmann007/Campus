@@ -79,7 +79,7 @@
     const mine = cache && cache.user === user && cache.data && cache.data.v === 1, now = mine && cache.v === VERSION;
     if (now && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
-    const known = mine ? cache.data.courses.map(c => c.id) : [];   // the head start for the assignments (collect.js)
+    const known = mine && Array.isArray(cache.data.courses) ? cache.data.courses.map(c => c.id) : [];   // the head start for the assignments (collect.js)
     if (mine && onFresh) { refresh(user, known).then(onFresh, () => {}); return cache; }
     return refresh(user, known);
   }
@@ -765,7 +765,7 @@
     const ours = n => n && n.nodeType === 1 && (/^cp-|^qf-/.test(n.id || "") || (n.classList && n.classList.contains("cp-host")));
     dashWatch = new MutationObserver(recs => {   // our own panels moving in and out do not count
       if (recs.every(r => ours(r.target) || [...r.addedNodes, ...r.removedNodes].every(ours))) return;
-      clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); }, 120); });
+      clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); if (window.cpHeadRetry) window.cpHeadRetry(); if (window.cpGreet) window.cpGreet(); }, 120); });
     dashWatch.observe(root, { childList: true, subtree: true });
     placeDash(); enhanceGradeCards();
   }
@@ -1073,7 +1073,8 @@
     meta.append(el("span", null, "Meta"), dn, mv, upb); hd.append(meta); if (EXT) hd.appendChild(notesB); hd.appendChild(foldB);
     // on the classic dashboard the bar sits in Canvas's header, next to the greeting, where "Alternar para a nova
     // visualização" was; folding then hides the whole panel. Elsewhere (widget dashboard) it stays on top of the panel.
-    if (!headBar(hd)) box.append(hd); else box.classList.add("nohd");
+    // Canvas's header may render after us (we run at document end): the bar waits in the panel and moves up when it appears
+    if (!headBar(hd)) { box.append(hd); window.cpHeadRetry = () => { if (!gone(hd) && headBar(hd)) { box.classList.add("nohd"); window.cpHeadRetry = null; } }; } else { box.classList.add("nohd"); window.cpHeadRetry = null; }
     if (a.askTurma) {   // a shared course matched: ask before using another turma's weights
       const q = el("section", "card news ask-turma"), yes = el("button", "primary", "Sim, sou dessa turma"), no = el("button", null, "Não, sou de outro curso");
       q.append(el("h3", null, "Você é da turma " + a.turma + "?"), el("div", "muted", "O Caderno+ tem os pesos do Plano de Ensino dessa turma. Se você é de outro curso, ele mostra a semana, os avisos e os arquivos, sem calcular notas."));
@@ -1883,6 +1884,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       cardsFirst = !!prefs.cardsFirst; gradeA = a; watchDash(); placeDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
+      window.cpGreet = () => greet(agenda(a, cache, marks));   // again when Canvas's header renders late (the page watcher calls it)
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpRepaint ? window.cpRepaint() : window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop

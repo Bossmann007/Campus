@@ -74,8 +74,10 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
     release(); const out2 = await p;
     assert.deepStrictEqual(out2, out, "the same reading as without the head start");
     assert.strictEqual(order.filter(u => u === "/api/v1/courses/7/assignments").length, 1, "a known course is not asked twice");
-    global.fetch = async url => { if (url.startsWith("/api/v1/courses/7/assignments") && !global.failedOnce) { global.failedOnce = 1; return { ok: false, status: 503, text: async () => "", headers: { get: () => null } }; } return base(url); };
+    let asked7 = 0;
+    global.fetch = async url => { if (url.startsWith("/api/v1/courses/7/assignments") && ++asked7 === 1) return { ok: false, status: 503, text: async () => "", headers: { get: () => null } }; return base(url); };
     assert.deepStrictEqual(await collect({}, [7]), out, "a head start that failed is asked again the normal way");
+    assert.strictEqual(asked7, 2, "the head start tries once (no retries while Canvas is busy); the normal request follows");
     global.fetch = base;
   }
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");

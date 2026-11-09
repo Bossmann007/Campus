@@ -46,7 +46,7 @@ Caderno+ for PUCPR 2026/2: a Chrome MV3 extension that runs on the PUCPR Canvas,
 - `scripts/verify`: exit 0 = the test files and `scripts/check-rules` pass, generated files are current, every extension file and the UI script parse.
 - `scripts/snapshot`: copy `app.html` into `old/` before any redesign.
 - `extension/`: the Caderno+ extension. Load unpacked from `chrome://extensions` for testing. Files:
-  - `prefs.js` (settings defaults) and `theme.js` (dark theme) run at `document_start`; `collect.js`, `core.js`, `files.js`, `content.js` at `document_idle`. Both groups share one content-script scope, so no top-level name may repeat.
+  - `prefs.js` (settings defaults) and `theme.js` (dark theme) run at `document_start`; `collect.js`, `core.js`, `files.js`, `content.js` at `document_end`. Both groups share one content-script scope, so no top-level name may repeat.
   - `content.js`: dashboard panel (week from `/api/v1/planner/items` plus our exams; announcements), card pills, course panel, files download, reminders list. Panels are shadow-DOM, built with `textContent` only.
   - `background.js`: downloads (Canvas URLs only, into the student's folder inside Downloads, `PUCPR` by default), reminder alarms and notifications, the icon badge.
   - `popup.*`: settings per module, the last reading time, buttons to open the calculator or Canvas, and "Atualizar agora" (marks the last reading old; the next Canvas page reads again).

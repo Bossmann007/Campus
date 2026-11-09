@@ -5,22 +5,22 @@
 // list (one trip to Canvas less), and used only for the courses still in the term.
 async function collectCanvasGrades(seen, known) {
   // one GET: 20 s for the whole answer; a throttle (429, 403 with no quota left) or a gateway error is tried twice more
-  const once = async url => {
+  const once = async (url, tries = 3) => {
     for (let i = 0; ; i++) {
       const ctl = typeof AbortController === "function" ? new AbortController() : null, t = ctl ? setTimeout(() => ctl.abort(), 20000) : 0;
       try {
         const r = await fetch(url, Object.assign({ credentials: "same-origin", headers: { Accept: "application/json" } }, ctl ? { signal: ctl.signal } : {}));
         const left = r.headers && r.headers.get ? parseFloat(r.headers.get("X-Rate-Limit-Remaining")) : NaN;
-        if ((r.status === 429 || [502, 503, 504].includes(r.status) || (r.status === 403 && left <= 0)) && i < 2) { if (r.body && r.body.cancel) r.body.cancel().catch(() => {}); await new Promise(res => setTimeout(res, 1200 * (i + 1))); continue; }
+        if ((r.status === 429 || [502, 503, 504].includes(r.status) || (r.status === 403 && left <= 0)) && i < tries - 1) { if (r.body && r.body.cancel) r.body.cancel().catch(() => {}); await new Promise(res => setTimeout(res, 1200 * (i + 1))); continue; }
         return { ok: r.ok, status: r.status, link: r.headers && r.headers.get ? r.headers.get("Link") : null, body: await r.text() };
-      } catch (e) { if (i < 2) { await new Promise(res => setTimeout(res, 800 * (i + 1))); continue; } throw new Error(e && e.name === "AbortError" ? "o Canvas demorou demais" : "sem conexão com o Canvas"); }
+      } catch (e) { if (i < tries - 1) { await new Promise(res => setTimeout(res, 800 * (i + 1))); continue; } throw new Error(e && e.name === "AbortError" ? "o Canvas demorou demais" : "sem conexão com o Canvas"); }
       finally { clearTimeout(t); }
     }
   };
-  const get = async url => {
+  const get = async (url, tries) => {
     const out = [];
     while (url) {
-      const r = await once(url);
+      const r = await once(url, tries);
       if (!r.ok) throw new Error("o Canvas respondeu " + r.status);
       out.push(...JSON.parse(r.body.replace(/^while\(1\);/, "")));
       const m = /<([^>]+)>;\s*rel="next"/.exec(r.link || "");
@@ -32,7 +32,7 @@ async function collectCanvasGrades(seen, known) {
   try {
   const asgUrl = id => "/api/v1/courses/" + id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100";
   const early = new Map();   // the head start: never an error here (a failed one is asked again below)
-  for (const id of [...new Set((Array.isArray(known) ? known : []).map(String).filter(x => /^\d{1,15}$/.test(x)))].slice(0, 12)) early.set(id, get(asgUrl(id)).catch(() => null));
+  for (const id of [...new Set((Array.isArray(known) ? known : []).map(String).filter(x => /^\d{1,15}$/.test(x)))].slice(0, 12)) early.set(id, get(asgUrl(id), 1).catch(() => null));   // one try each: when Canvas is throttling, the head start must not multiply the requests
   const active = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string");
   if (seen) seen.courses = active.map(c => ({ id: c.id, name: c.name }));
   const cs = active.filter(c => c.name.includes(NotasCore.TERM));
