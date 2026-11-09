@@ -193,7 +193,7 @@
     if (typeof CP_NOTES !== "object" || !CP_NOTES || !Array.isArray(CP_NOTES.items)) return null;
     const { notesSeen } = await chrome.storage.local.get("notesSeen");
     if (notesSeen === CP_NOTES.version) return null;
-    const sec = el("section", "card news notes"), h = el("h3", null, "Novidades da v" + CP_NOTES.version), ok = el("button", "mini", "Entendi ✓");
+    const sec = el("section", "card news wnew"), h = el("h3", null, "Novidades da v" + CP_NOTES.version), ok = el("button", "mini", "Entendi ✓");
     ok.type = "button"; ok.addEventListener("click", async () => { await chrome.storage.local.set({ notesSeen: CP_NOTES.version }); sec.remove(); });
     h.appendChild(ok); sec.appendChild(h);
     const ul = el("ul"); for (const t of CP_NOTES.items) ul.appendChild(el("li", "row nt-i", t)); sec.appendChild(ul);
@@ -466,7 +466,7 @@
     .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
     .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
-    .notes .nt-i { display:block; padding-left:16px; position:relative; } .notes .nt-i::before { content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--coral); }
+    .wnew .nt-i { display:block; padding-left:16px; position:relative; } .wnew .nt-i::before { content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--coral); }
     .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
@@ -476,6 +476,7 @@
     .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }
+    .chk h3 { margin:0 0 6px; } .chk .add { grid-template-columns:minmax(0,1fr) auto; } .chk ul { list-style:none; margin:0; padding:0; } .chk .row { grid-template-columns:minmax(0,1fr) auto; border-top:1px solid var(--line); padding:5px 0; } .chk .row:first-child { border-top:0; }
     .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
@@ -1070,6 +1071,34 @@
       const v = notes && notes[cache.user] && notes[cache.user][courseId];
       if (typeof v === "string" && v) { ta.value = v; if (btns.anot) btns.anot.textContent = "Anotações ✓"; }
     });
+    // Checklist: the student's own list for this course, below the note (chrome.storage.local "checks", per Canvas user and
+    // course; up to 50 items of 200 chars; only on this computer).
+    const chk = el("div", "card notes chk"), cform = el("form", "add"), cin = el("input"), cadd = el("button", "primary", "Adicionar"), cul = el("ul");
+    cin.type = "text"; cin.placeholder = "Novo item (ex.: refazer a lista 3)"; cin.setAttribute("aria-label", "Novo item do checklist"); cin.maxLength = 200; cadd.type = "submit";
+    cform.append(cin, cadd); chk.append(el("h3", null, "Meu checklist"), cform, cul);
+    let items = [];
+    const readChecks = async () => { const { checks } = await chrome.storage.local.get("checks"), all = checks && typeof checks === "object" ? checks : {}, mine = all[cache.user];
+      return { all, list: mine && Array.isArray(mine[courseId]) ? mine[courseId].filter(x => x && typeof x.t === "string" && x.id) : [] }; };
+    const editChecks = async f => {   // read, change, write: another tab's edits are kept
+      const { all, list } = await readChecks(), next = f(list).slice(0, 50), mine = Object.assign({}, all[cache.user]);
+      if (next.length) mine[courseId] = next; else delete mine[courseId];
+      await chrome.storage.local.set({ checks: Object.assign({}, all, { [cache.user]: mine }) }); items = next; drawChecks();
+    };
+    const drawChecks = () => {
+      cul.replaceChildren();
+      if (!items.length) { cul.appendChild(el("li", "muted", "Nada ainda: o que você quer conferir nesta matéria.")); return; }
+      for (const x of items.slice().sort((p, q) => !!p.done - !!q.done)) {
+        const li = el("li", "row" + (x.done ? " dn" : "")), end = el("span", "end"), ck = el("button", "ck", "✓"), del = el("button", "ck del", "×");
+        ck.type = del.type = "button"; ck.setAttribute("aria-pressed", String(!!x.done)); ck.setAttribute("aria-label", (x.done ? "Desmarcar: " : "Marcar: ") + x.t); del.setAttribute("aria-label", "Apagar: " + x.t);
+        ck.addEventListener("click", () => editChecks(l => l.map(y => y.id === x.id ? Object.assign({}, y, { done: !y.done }) : y)));
+        del.addEventListener("click", () => editChecks(l => l.filter(y => y.id !== x.id)));
+        end.append(ck, del); li.append(el("span", "n", x.t), end); cul.appendChild(li);
+      }
+    };
+    cform.addEventListener("submit", e => { e.preventDefault(); const t = String(cin.value || "").trim().slice(0, 200); if (!t) return; cin.value = "";
+      editChecks(l => l.concat({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t, done: false })); });
+    cin.addEventListener("input", () => { typed = Date.now(); });   // no redraw under the student's typing
+    readChecks().then(r => { items = r.list; drawChecks(); });
     acts.appendChild(status);
     // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
     const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
@@ -1093,7 +1122,7 @@
     if (c) panes.notas.append(...parts.notas, simActs);
     panes.materiais.appendChild(acts);
     panes.avisos.appendChild(courseNews(cache, courseId));
-    if (EXT) panes.anot.appendChild(pad);
+    if (EXT) panes.anot.append(pad, chk);
     box.append(bar, ...tabs.map(([k]) => panes[k]));
     chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
   }

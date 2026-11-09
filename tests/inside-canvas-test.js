@@ -532,6 +532,16 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!pane2.hidden && all(pane2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, on the same tab");
   ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed");
+  { const ck = () => all(paneOf("Anotações")).find(e => /card notes chk/.test(e.className)), cf = () => all(ck()).find(e => e.tag === "form");
+    assert(ck() && /Meu checklist/.test(text(ck())), "a checklist under the note");
+    all(cf()).find(e => e.tag === "input").value = "  refazer a lista 3 "; await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+    all(cf()).find(e => e.tag === "input").value = "   "; await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+    const mine = np.store.checks[5][71306];
+    assert(mine.length === 1 && mine[0].t === "refazer a lista 3" && !mine[0].done && /refazer a lista 3/.test(text(ck())), "added, trimmed, blank ignored, saved per user and course");
+    await all(ck()).find(e => /^Marcar: /.test(e["aria-label"] || (e.getAttribute && e.getAttribute("aria-label")) || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
+    assert(np.store.checks[5][71306][0].done === true, "ticked");
+    await all(ck()).find(e => /^Apagar: /.test(e["aria-label"] || (e.getAttribute && e.getAttribute("aria-label")) || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
+    assert.deepStrictEqual(np.store.checks[5], {}, "deleted: removed"); }
   await tabB("Materiais").listeners.click(); await new Promise(r => setTimeout(r, 20));
   assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened"); ok();
 
