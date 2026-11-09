@@ -394,6 +394,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const reads = r => r.fetches.filter(u => !/\/(files|modules)\?|\/users\?enrollment_type/.test(u));   // what changed (hourly) and the teachers (daily) have their own tests   // "what changed" reads files and modules at most once an hour (its own test)
   const cold = await runContent("/", null);
   assert.deepStrictEqual(reads(cold).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 6 calls, /courses once");
+  const KEEP_P = ["plannable_type", "plannable_id", "plannable_date", "plannable", "html_url", "course_id", "context_name", "submissions", "planner_override"];
+  assert(cold.store.cache.planner.length && cold.store.cache.planner.every(p => Object.keys(p).every(k => KEEP_P.includes(k)) && (!p.plannable || Object.keys(p.plannable).join() === "title")), "the stored planner keeps only what the week reads");
   const warm = await runContent("/", null, cold.store);
   assert.deepStrictEqual(reads(warm), ["/api/v1/users/self"], "warm, no user id in the page: only the user is confirmed (1 call)");
   const warmEnv = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"5"}' }] });

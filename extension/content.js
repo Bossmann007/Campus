@@ -68,6 +68,12 @@
     if (mine && onFresh) { refresh(user).then(onFresh, () => {}); return cache; }
     return refresh(user);
   }
+  // A planner item kept with only what agenda() reads: the raw Canvas object carries the whole assignment (about a third
+  // of the stored reading), copied to every tab on each change and held in memory by each page.
+  const slimPlan = p => !p || typeof p !== "object" ? null : { plannable_type: p.plannable_type, plannable_id: p.plannable_id, plannable_date: p.plannable_date,
+    plannable: p.plannable ? { title: p.plannable.title } : null, html_url: p.html_url, course_id: p.course_id, context_name: p.context_name,
+    submissions: p.submissions ? { submitted: !!p.submissions.submitted, graded: !!p.submissions.graded, excused: !!p.submissions.excused, missing: !!p.submissions.missing } : p.submissions,
+    planner_override: p.planner_override ? { marked_complete: !!p.planner_override.marked_complete } : null };
   async function refresh(user) {
     await chrome.storage.local.set({ refreshing: Date.now() });
     try {
@@ -79,7 +85,7 @@
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
       const planner = await plan;
       await newGrades(user, data);
-      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null, inbox: await inbox };
+      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner.map(slimPlan) : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh });
       await chrome.storage.local.remove("refreshing");
       return fresh;
