@@ -21,6 +21,13 @@ assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ob) && !/\son\w+=/.test(ob), "onboar
 assert(/details\.reason === "install"\) \{ chrome\.storage\.local\.set\(\{ notesSeen: chrome\.runtime\.getManifest\(\)\.version \}\); chrome\.tabs\.create\(\{ url: chrome\.runtime\.getURL\("onboarding\.html"\) \}\)/.test(fs.readFileSync(path.join(dir, "background.js"), "utf8")), "the onboarding opens on first install");
 for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
+{ // "Conectar sua IA": the popup only links to the site page; the page and the privacy text carry the warnings
+  const root = path.join(__dirname, ".."), ia = fs.readFileSync(path.join(root, "ia.html"), "utf8"), pv = fs.readFileSync(path.join(root, "privacidade.html"), "utf8");
+  assert(/<a id="ia" href="https:\/\/falta-quanto\.vercel\.app\/ia" target="_blank" rel="noopener noreferrer">/.test(html), "popup: one link to the site's /ia page");
+  assert(!/mcp|caderno-mcp/i.test(fs.readdirSync(dir).join(" ")), "no MCP code inside the extension");
+  assert(/^!ia\.html$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")) && !/<script/i.test(ia), "the /ia page is published, with no scripts");
+  for (const w of [/nuvem da empresa da IA/, /acesso <b>total<\/b>/, /3\(i\)/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
+  assert(/Caderno\+ MCP: conectar sua IA/.test(pv) && /aqui os dados saem do computador/.test(pv) && /única exceção é opcional/.test(pv), "privacy page: the MCP section and the exception in the summary"); }
 assert(/const KEEP = \[[^\]]*"checks"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /checks: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "the backup carries the checklists, validated on import");
 { const nj = fs.readFileSync(path.join(dir, "notes.js"), "utf8"), ver = (nj.match(/version: "([\d.]+)"/) || [])[1];
   assert.strictEqual(ver, manifest.version, "Novidades are for this version");
