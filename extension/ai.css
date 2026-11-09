@@ -1,0 +1,21 @@
+/* "Sua IA": the onboarding card, wider, with the file's state on top and the questions as a grid. */
+.ai { width:min(720px, calc(100vw - 32px)); margin:32px 0; }
+.tagl { color:var(--muted); font-weight:600; font-size:13px; }
+h2 { margin:26px 0 4px; font:500 19px/1.2 var(--serif); }
+.state { display:flex; align-items:center; gap:12px; margin:18px 0 0; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--bg); }
+.state .dot { flex:none; width:10px; height:10px; border-radius:50%; background:var(--off); }
+.state.on .dot { background:#2F7D5B; box-shadow:0 0 0 4px rgba(47,125,91,.18); } .state.bad .dot { background:var(--coral); }
+.state .what { flex:1; min-width:0; display:grid; gap:2px; } .state small { color:var(--muted); font-size:12.5px; overflow-wrap:anywhere; } .state .err { color:var(--coral); }
+.sw input { appearance:none; position:relative; width:40px; height:23px; margin:0; border-radius:99px; background:var(--off); cursor:pointer; transition:background .18s; }
+.sw input::after { content:""; position:absolute; top:2px; left:2px; width:19px; height:19px; border-radius:50%; background:#fff; transition:transform .2s; }
+.sw input:checked { background:var(--coral); } .sw input:checked::after { transform:translateX(17px); }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+.asks { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:10px; }
+.asks button { display:grid; gap:4px; align-content:start; text-align:left; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--bg); color:var(--txt); cursor:pointer; transition:border-color .15s, transform .15s; }
+.asks button:hover { border-color:var(--coral); transform:translateY(-1px); } .asks b { font-size:13px; } .asks span { font-size:12.5px; color:var(--muted); line-height:1.35; }
+.steps3 { display:grid; gap:10px; margin:10px 0 0; padding:0; list-style:none; counter-reset:s; }
+.steps3 li { display:grid; grid-template-columns:28px 1fr; gap:2px 10px; counter-increment:s; }
+.steps3 li::before { content:counter(s); grid-row:span 2; display:grid; place-items:center; width:26px; height:26px; border-radius:50%; background:var(--txt); color:var(--bg); font-weight:700; font-size:13px; }
+.steps3 span { color:var(--muted); font-size:13.5px; } a { color:var(--txt); text-decoration-color:var(--coral); text-underline-offset:2px; }
+@media (max-width:640px) { .asks { grid-template-columns:1fr 1fr; } }
+@media (prefers-reduced-motion:reduce) { .asks button { transition:none; } }

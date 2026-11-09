@@ -119,6 +119,7 @@ function makeCanvas(token, opts = {}) {
         items: (m.items || []).slice(0, 60).map(i => ({ type: i.type, url: canvasLink(i.html_url), untrusted_canvas_text: { title: clean(i.title, 200) } })) })) };
     },
   };
+  for (const n of ["my_items", "whats_new", "teachers"]) tools[n] = async () => { throw new Error("Isto vem do arquivo do Caderno+: na extensão, ligue \"Arquivo para a sua IA\" e abra o Canvas."); };
   const whoami = async () => { const me = await getAll("/api/v1/users/self", 1); return me && typeof me.id === "number" ? { ok: true } : { ok: false }; };
   return { tools, whoami };
 }
@@ -129,6 +130,9 @@ const TOOL_DEFS = [   // the plain subset every client accepts (type, descriptio
   { name: "grades", description: "Notas lançadas no Canvas por avaliação (todas as matérias do semestre, ou uma). Prefira passar course_id.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" } } } },
   { name: "courses", description: "Matérias ativas do semestre no Canvas, com o course_id.", inputSchema: { type: "object", properties: {} } },
   { name: "announcements", description: "Avisos recentes dos professores (título, matéria, data, se foi lido). Sem autor nem texto.", inputSchema: { type: "object", properties: { limit: { type: "integer", description: "Quantos avisos, de 1 a 10 (padrão 10)" } } } },
+  { name: "my_items", description: "O que o aluno anotou no Caderno+: checklists de cada matéria e do painel (feito, dia) e as tarefas próprias.", inputSchema: { type: "object", properties: {} } },
+  { name: "whats_new", description: "O que mudou desde a última visita ao Canvas (tarefas, arquivos, módulos e avisos novos) e quantas mensagens não lidas.", inputSchema: { type: "object", properties: {} } },
+  { name: "teachers", description: "Professores de cada matéria (nome), para saber com quem falar.", inputSchema: { type: "object", properties: {} } },
   { name: "modules", description: "Módulos de uma matéria e os títulos dos itens, com links do Canvas.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" } }, required: ["course_id"] } },
 ].map(t => Object.assign(t, { annotations: { readOnlyHint: true, openWorldHint: false } }));
 

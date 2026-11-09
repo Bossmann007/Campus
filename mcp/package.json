@@ -1,6 +1,6 @@
 {
   "name": "caderno-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Caderno+ · o seu Canvas da PUCPR para a sua IA (Claude e outros apps MCP). Só leitura, token no cofre do seu sistema. Não oficial.",
   "license": "MIT",
   "bin": { "caderno-mcp": "cli.js" },

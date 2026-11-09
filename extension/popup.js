@@ -116,6 +116,8 @@ $("importFile").addEventListener("change", async () => {
   await chrome.storage.local.set(set);
 })();
 
+$("aiPage").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("ai.html") }));
+
 // Foco: 25 minutes of study or 5 of break; the service worker shows a notification when the alarm fires.
 const showFocus = async () => {
   const { focus } = await chrome.storage.local.get("focus"), left = focus && focus.end - Date.now();

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Caderno+ · Sua IA</title><link rel="stylesheet" href="onboarding.css"><link rel="stylesheet" href="ai.css"></head>
+<body>
+  <main class="ob ai">
+    <header><b class="wm">Caderno<i>+</i></b><span class="tagl">Sua IA</span></header>
+
+    <h1>Sua IA, com o seu Canvas.</h1>
+    <p class="lead">O Caderno+ grava o que o painel mostra num arquivo no seu computador. O Caderno+ MCP lê esse arquivo e a sua IA (Claude, ChatGPT, Gemini, Codex) responde sem token e sem acessar o Canvas.</p>
+
+    <div class="state" id="state">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="what"><b id="stTitle">Desligado</b><small id="stSub">Ligue para gravar o arquivo na próxima página do Canvas.</small><small id="agentErr" class="err" hidden></small></span>
+      <label class="sw"><span class="sr">Arquivo para a sua IA</span><input type="checkbox" role="switch" id="agentFile"></label>
+    </div>
+
+    <h2>O que ela sabe responder</h2>
+    <p class="fine">Clique numa pergunta para copiar.</p>
+    <div class="asks" id="asks">
+      <button type="button" data-q="Quanto eu preciso tirar em cada matéria para passar?"><b>Quanto falta</b><span>Quanto eu preciso tirar em cada matéria para passar?</span></button>
+      <button type="button" data-q="O que vence nos próximos 7 dias? Separe provas e entregas."><b>Próximos dias</b><span>O que vence nos próximos 7 dias?</span></button>
+      <button type="button" data-q="Quais notas já saíram em Banco de Dados?"><b>Notas</b><span>Quais notas já saíram em Banco de Dados?</span></button>
+      <button type="button" data-q="Tem aviso novo de algum professor?"><b>Avisos</b><span>Tem aviso novo de algum professor?</span></button>
+      <button type="button" data-q="O que ainda falta nos meus checklists? Comece pelo que tem dia."><b>Seus checklists</b><span>O que ainda falta nos meus checklists?</span></button>
+      <button type="button" data-q="O que mudou no Canvas desde a minha última visita?"><b>O que mudou</b><span>O que mudou no Canvas desde a última visita?</span></button>
+      <button type="button" data-q="Quem é o professor de cada matéria?"><b>Professores</b><span>Quem é o professor de cada matéria?</span></button>
+      <button type="button" data-q="Em que módulo está o material de JOIN?"><b>Módulos</b><span>Em que módulo está o material de JOIN?</span></button>
+      <button type="button" data-q="Monte um plano de estudo para esta semana com as minhas entregas, provas e checklists."><b>Plano da semana</b><span>Monte um plano de estudo para esta semana.</span></button>
+    </div>
+    <p class="fine" id="copied" role="status"></p>
+
+    <h2>Conectar em três passos</h2>
+    <ol class="steps3">
+      <li><b>Ligue o arquivo</b><span>No botão acima. Precisa de "Perguntar onde salvar cada arquivo" desligado nas configurações de downloads do Chrome.</span></li>
+      <li><b>Instale o Caderno+ MCP</b><span>No app da sua IA (Claude, ChatGPT desktop, Gemini CLI, Codex, Claude Code). <a id="howto" href="https://falta-quanto.vercel.app/ia" target="_blank" rel="noopener noreferrer">Passo a passo para cada app</a></span></li>
+      <li><b>Pergunte</b><span>Abra o Canvas uma vez para gravar o arquivo e use as perguntas acima.</span></li>
+    </ol>
+
+    <p class="fine">O arquivo fica só no seu computador: quanto falta, a semana, os avisos (só o título), as notas, seus checklists e tarefas, o que mudou, os títulos dos módulos e o nome dos professores. Sem autor, sem texto de mensagens, sem o seu número no Canvas. A sua IA recebe o que você perguntar: veja a privacidade do app dela.</p>
+  </main>
+  <script src="prefs.js"></script>
+  <script src="ai.js"></script>
+</body>
+</html>

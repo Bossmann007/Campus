@@ -60,6 +60,16 @@ file that the bot reads. The live bridge (native messaging) is phase B, only if 
 - `subjects` empty with `turma_confirmed: false` when the turma is not confirmed (same rule as the panel: no grades
   from another turma's weights).
 
+### Version 2 (Caderno+ 4.0, MCP 0.3.0)
+
+Adds `checklists` (per course or the dashboard: done, date, the student's text), `tasks` (own tasks: date, title),
+`changes` (what changed since the last visit: kind from a fixed list, time, title, course), `modules` (titles the search
+already read, ≤ 300, trimmed first), `teachers` (name and course, ≤ 30) and `unread_messages` (a count). Every string
+is still inside `untrusted_canvas_text`. The file is written again when a checklist or task changes (1.5 s after the
+last edit), not only per reading. This drops the earlier "no names of people" rule for the teachers' names only (shown
+on every course page to the whole class); no student names, no authors, no message bodies. The MCP accepts versions 1
+and 2 and adds the file-only tools `my_items`, `whats_new` and `teachers`; with a token they point to the file.
+
 ## Safety
 
 - The file sits in the user's Downloads folder; any program of the macOS user can read it (accepted: read-only data

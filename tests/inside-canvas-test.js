@@ -587,12 +587,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(!off.sent.some(m => m.type === "agentFile"), "switched off by default: no file");
     const af = await runContent("/", null, { prefs: { agentFile: true } }); await new Promise(r => setTimeout(r, 30));
     const m = af.sent.find(x => x.type === "agentFile"), d = m && m.data, js = JSON.stringify(d || {});
-    assert(d && d.version === 1 && d.app === "caderno-plus" && typeof d.read_at === "string" && Array.isArray(d.subjects) && Array.isArray(d.upcoming) && Array.isArray(d.announcements) && Array.isArray(d.grades), "the snapshot");
+    assert(d && d.version === 2 && ["checklists", "tasks", "changes", "modules", "teachers"].every(k => Array.isArray(d[k])) && d.app === "caderno-plus" && typeof d.read_at === "string" && Array.isArray(d.subjects) && Array.isArray(d.upcoming) && Array.isArray(d.announcements) && Array.isArray(d.grades), "the snapshot");
     assert(!/"author"|"avatar"|"user"|"message"|"url"/.test(js), "no author, photo, user id, message body or links");
     assert(d.upcoming.concat(d.announcements).every(x => x.untrusted_canvas_text && typeof x.untrusted_canvas_text.title === "string") && d.grades.every(g => g.untrusted_canvas_text && g.assignments.every(x => x.untrusted_canvas_text)), "every Canvas string inside untrusted_canvas_text");
     assert(d.subjects.every(x => typeof x.label === "string" && x.untrusted_canvas_text === undefined) && js.length < 96 * 1024, "quanto falta as the panel's labels, under 96 KB");
     assert(d.subjects.length >= 1 && d.upcoming.length >= 1 && d.announcements.length >= 1 && d.grades.length >= 1 && d.turma_confirmed === true, "every part filled from the reading");
-    assert(/^\d+\|PUCPR$/.test(af.store.agentAt), "the reading and folder written are remembered (one file per reading and folder)");
+    assert(/^\d+\|PUCPR\|[0-9a-z]+$/.test(af.store.agentAt), "the reading, folder and own items written are remembered (one file per reading, folder and own items)");
     local.prefs = { agentFile: false }; let r = await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB);
     assert(r && r.ok === false, "the worker refuses when the switch is off");
     local.prefs = { agentFile: true, dlFolder: "Minha Pasta" }; const n0 = swSaved.length;

@@ -79,3 +79,4 @@ a { color:var(--txt); text-decoration-color:var(--coral); text-underline-offset:
 .looks i { width:22px; height:16px; border-radius:4px; } .looks i::after { right:3px; top:4px; width:6px; height:6px; }
 .modes small { line-height:1.25; }
 .looks button { white-space:nowrap; font-size:11px; }
+.list + .acts { margin-top:8px; }

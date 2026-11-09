@@ -32,7 +32,7 @@ function readSnapshot(file, fsx = fs) {
     const buf = Buffer.alloc(MAX + 1), n = fsx.readSync(fd, buf, 0, MAX + 1, 0); if (n > MAX) return null;   // grew after the check: refused
     raw = JSON.parse(buf.subarray(0, n).toString("utf8"));
   } catch (e) { return null; } finally { if (fd !== null) try { fsx.closeSync(fd); } catch (e) {} }
-  if (!raw || raw.app !== "caderno-plus" || raw.version !== 1 || typeof raw.read_at !== "string") return null;
+  if (!raw || raw.app !== "caderno-plus" || (raw.version !== 1 && raw.version !== 2) || typeof raw.read_at !== "string") return null;   // 2 (Caderno+ 4.0) adds own items, changes, modules, teachers
   const at = Date.parse(raw.read_at); if (Number.isNaN(at) || at > Date.now() + 10 * 60e3) return null;
   return raw;
 }
@@ -68,7 +68,28 @@ function makeFileSource(opts = {}) {
       const s = snap(), n = Math.min(10, Math.max(1, Number(args.limit) || 10));
       return Object.assign(age(s), { note: NOTE, announcements: list(s.announcements, n).map(x => Object.assign({ at: typeof x.at === "string" && !Number.isNaN(Date.parse(x.at)) ? x.at : null, unread: x.unread === true }, U({ title: ut(x).title, course: ut(x).course }))) });
     },
-    async modules() { throw new Error("Os módulos não vêm no arquivo do Caderno+. Para lê-los, conecte com um token (caderno-mcp login)."); },
+    async modules(args = {}) {   // the titles the extension already read for its search (Ctrl+K); by course name when course_id is given
+      const s = snap(), c = args.course_id != null ? list(s.grades, 12).find(g => String(g.course_id) === String(args.course_id)) : null, nm = c ? str(ut(c).name, 120) : "";
+      const items = list(s.modules, 300).map(x => ({ title: str(ut(x).title, 160), where: str(ut(x).where, 160) })).filter(x => x.title && (!nm || x.where.startsWith(nm)));
+      if (!items.length && !list(s.modules, 1).length) throw new Error("O Caderno+ ainda não leu os módulos: abra a busca (Ctrl+K) no Canvas uma vez, ou conecte com um token (caderno-mcp login).");
+      return Object.assign(age(s), { note: NOTE, items: items.map(x => ({ untrusted_canvas_text: x })) });
+    },
+    async my_items() {
+      const s = snap();
+      return Object.assign(age(s), { note: NOTE,
+        checklists: list(s.checklists, 60).map(c => Object.assign({ course_id: /^\d{1,15}$/.test(String(c.course_id)) ? Number(c.course_id) : null }, U({ course: ut(c).course }, 120), {
+          items: list(c.items, 50).map(x => Object.assign({ done: x.done === true, date: day(x.date) }, U({ text: ut(x).text }))) })),
+        tasks: list(s.tasks, 100).map(x => Object.assign({ date: day(x.date) }, U({ title: ut(x).title }, 140))) });
+    },
+    async whats_new() {
+      const s = snap(), K = ["tarefa", "arquivo", "módulo", "aviso"];
+      return Object.assign(age(s), { note: NOTE, unread_messages: Number.isInteger(s.unread_messages) && s.unread_messages >= 0 ? Math.min(s.unread_messages, 99) : null,
+        changes: list(s.changes, 40).map(x => Object.assign({ kind: K.includes(x.kind) ? x.kind : null, at: typeof x.at === "string" && !Number.isNaN(Date.parse(x.at)) ? x.at : null }, U({ text: ut(x).text, course: ut(x).course }, 160))) });
+    },
+    async teachers() {
+      const s = snap();
+      return Object.assign(age(s), { note: NOTE, teachers: list(s.teachers, 30).map(x => Object.assign({ course_id: /^\d{1,15}$/.test(String(x.course_id)) ? Number(x.course_id) : null }, U({ name: ut(x).name, course: ut(x).course }, 120))) });
+    },
   };
   return { file, ok: !!readSnapshot(file, fsx), tools };
 }

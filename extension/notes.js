@@ -1,20 +1,14 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "3.12.0",
+  version: "4.0.0",
   items: [
-    "Fundo do Canvas com a cor do tema, ou a sua cor, e desenhos: pautado, quadriculado, pontilhado e aurora",
-    "Modo escuro que mantém a cor do tema",
-    "Porcentagem garantida num círculo em cada card de matéria, com quanto ainda falta embaixo",
-    "Barra do Caderno+ ao lado do Boa noite, no lugar do botão de visualização",
-    "Páginas das matérias com o tema: módulos, cabeçalhos e Plano de Ensino",
-    "Marque como feito direto na lista A seguir de cada matéria",
-    "Anotações com checklist em cada matéria e no painel, ao lado dos cards (Alt+N abre)",
-    "Item do checklist com dia aparece nos próximos 7 dias",
-    "Arquivo para a sua IA (beta, desligado de início): o Caderno+ MCP lê o que o painel mostra, sem token",
-    "Boas-vindas nova: passos com nome, Pular a qualquer hora, a cor do tema ao vivo e retoma de onde parou",
+    "Sua IA integrada: página nova (botão da extensão, Mais) com o estado do arquivo, perguntas prontas e como conectar",
+    "A sua IA agora sabe também seus checklists e tarefas, o que mudou no Canvas, os módulos e os professores",
+    "O arquivo para a IA se atualiza sozinho quando você muda um checklist ou uma tarefa",
     "Botão da extensão em abas (Visual, Painel, Avisos, Mais), com a última leitura e o Atualizar no topo",
-    "Depois de uma atualização, o painel abre na hora com a última leitura e lê o Canvas por trás",
-    "Mais rápido: o painel abre com uma leitura só e menos trabalho na página",
+    "Mais rápido: depois de uma atualização o painel abre na hora, e o Canvas é lido em menos idas",
+    "Boas-vindas nova: passos com nome, Pular a qualquer hora e retoma de onde parou",
+    "Anotações com checklist em cada matéria e no painel (Alt+N abre); item com dia entra nos próximos 7 dias",
   ],
 };
