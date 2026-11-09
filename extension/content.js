@@ -20,6 +20,8 @@
   const addDays = n => C.localISO(new Date(Date.now() + n * 864e5));
   const days = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(today() + "T00:00:00Z")) / 864e5);
 
+  // f over xs, at most n at a time, results in order: Canvas throttles a burst of requests (403), so side reads stay small
+  const pool = (xs, n, f) => { let i = 0; const out = []; return Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => { while (i < xs.length) { const k = i++; out[k] = await f(xs[k], k); } })).then(() => out); };
   async function getAll(url, pages = Infinity) {   // pages: stop after that many (the inbox reads only the first)
     const out = [];
     while (url && pages-- > 0) {
@@ -79,8 +81,9 @@
       await newGrades(user, data);
       const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh });
+      await chrome.storage.local.remove("refreshing");
       return fresh;
-    } finally { await chrome.storage.local.remove("refreshing"); }
+    } catch (e) { await chrome.storage.local.set({ refreshing: Date.now() }); throw e; }   // failed (throttled, Canvas down): the lock stays a minute, so each page does not read everything again
   }
   // Ticked as done, per Canvas user: { <user>: { <planner key>: <due day> } } in chrome.storage.local "marks"; kept 30 days.
   async function myMarks(user) {
@@ -233,11 +236,12 @@
     const now = { at: Date.now(), netAt: hourOld ? Date.now() : old.netAt, asg: {}, ann: [], files: {}, mods: {} };
     for (const c of cache.data.courses) now.asg[c.id] = c.assignments.map(x => x.name);
     now.ann = (cache.data.announcements || []).map(x => x.url || x.title);
-    for (const c of cache.data.courses) {
-      if (!hourOld) { now.files[c.id] = old.files[c.id]; now.mods[c.id] = old.mods[c.id]; continue; }
-      try { now.files[c.id] = (await getAll("/api/v1/courses/" + c.id + "/files?sort=created_at&order=desc&per_page=15", 1)).map(f => [f.id, String(f.display_name || "arquivo").slice(0, 120)]); } catch (e) { now.files[c.id] = old && old.files[c.id]; }
-      try { now.mods[c.id] = (await getAll("/api/v1/courses/" + c.id + "/modules?per_page=50", 1)).map(m => [m.id, String(m.name || "módulo").slice(0, 120)]); } catch (e) { now.mods[c.id] = old && old.mods[c.id]; }
-    }
+    await pool(cache.data.courses, 3, async c => {   // three courses at a time, both lists together, not 2 x 6 calls in a row
+      if (!hourOld) { now.files[c.id] = old.files[c.id]; now.mods[c.id] = old.mods[c.id]; return; }
+      await Promise.all([
+        getAll("/api/v1/courses/" + c.id + "/files?sort=created_at&order=desc&per_page=15", 1).then(l => { now.files[c.id] = l.map(f => [f.id, String(f.display_name || "arquivo").slice(0, 120)]); }, () => { now.files[c.id] = old && old.files[c.id]; }),
+        getAll("/api/v1/courses/" + c.id + "/modules?per_page=50", 1).then(l => { now.mods[c.id] = l.map(m => [m.id, String(m.name || "módulo").slice(0, 120)]); }, () => { now.mods[c.id] = old && old.mods[c.id]; })]);
+    });
     await chrome.storage.local.set({ snap: Object.assign({}, snap, { [user]: now }) });
     if (!old) return false;
     const items = [], t = Date.now(), byName = {};
@@ -419,6 +423,13 @@
   // Course cards: the status pill on our subjects (inside Canvas's card content, under its title) and courses the student took
   // off the dashboard (popup). Canvas's own card menu (⋮, color, nickname) stays untouched. ctx: { prefs, hidden }.
   const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
+  // the card columns from the cards shown (cpShown) and the box width (cpBoxW, kept by a ResizeObserver: reading clientWidth
+  // right after drawing forced a layout of the whole page)
+  const setCols = () => {
+    const shown = window.cpShown || 0, root = document.documentElement, fit = window.cpBoxW ? Math.max(1, Math.floor((window.cpBoxW + 24) / 298)) : 4;
+    const rows = shown ? Math.ceil(shown / Math.min(colsFor(shown), fit)) : 1, cols = shown ? Math.ceil(shown / rows) : 1;   // never one card alone on the last row
+    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(cols));
+  };
   function decorateCards(a, again, ctx) {
     const prefs = ctx.prefs;
     if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); delete card.dataset.qf; }
@@ -443,11 +454,12 @@
         ring.appendChild(num); card.cpAdded.push(ring); top.appendChild(ring);
       }
     }
-    const shown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length, root = document.documentElement;
-    const box = document.getElementById("DashboardCard_Container"), fit = box && box.clientWidth ? Math.max(1, Math.floor((box.clientWidth + 24) / 298)) : 4;
-    const rows = shown ? Math.ceil(shown / Math.min(colsFor(shown), fit)) : 1, cols = shown ? Math.ceil(shown / rows) : 1;   // never one card alone on the last row
-    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(cols));
-    if (!window.cpColsResize && typeof window.addEventListener === "function") { window.cpColsResize = 1; let t = 0; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => window.cpCards && window.cpCards(gradeA), 200); }); }
+    window.cpShown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length;
+    const box = document.getElementById("DashboardCard_Container"), RO = typeof ResizeObserver === "function";
+    if (box && RO && window.cpBoxObs !== box) { window.cpBoxObs = box; new ResizeObserver(es => { const w = es[0].target.clientWidth; if (w) { window.cpBoxW = w; setCols(); } }).observe(box); }   // read after layout: free
+    else if (!RO) window.cpBoxW = box ? box.clientWidth : 0;
+    setCols();
+    if (!RO && !window.cpColsResize && typeof window.addEventListener === "function") { window.cpColsResize = 1; let t = 0; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => window.cpCards && window.cpCards(gradeA), 200); }); }
   }
 
 
@@ -1507,14 +1519,13 @@
   async function teachersOf(cache) {
     const { teachers } = await chrome.storage.local.get("teachers");
     if (teachers && teachers.user === cache.user && Date.now() - teachers.at < 864e5 && Array.isArray(teachers.list)) return teachers.list;
-    const list = [];
-    for (const c of cache.data.courses) {
-      try {
-        for (const u of await getAll("/api/v1/courses/" + c.id + "/users?enrollment_type[]=teacher&include[]=avatar_url&per_page=20", 1))
-          if (u && u.id && u.name && !list.some(t => t.id === u.id && t.course === c.id)) list.push({ id: u.id, name: String(u.name).slice(0, 80), avatar: typeof u.avatar_url === "string" ? u.avatar_url : null, course: c.id, courseName: shortName(c.name) });
-      } catch (e) { /* the course hides its people */ }
-    }
-    await chrome.storage.local.set({ teachers: { user: cache.user, at: Date.now(), list } });
+    let failed = false;
+    const list = [], got = await pool(cache.data.courses, 3, c => getAll("/api/v1/courses/" + c.id + "/users?enrollment_type[]=teacher&include[]=avatar_url&per_page=20", 1).catch(() => { failed = true; return []; }));   // three at a time; a course that hides its people gives none
+    cache.data.courses.forEach((c, i) => {
+      for (const u of Array.isArray(got[i]) ? got[i] : [])
+        if (u && u.id && u.name && !list.some(t => t.id === u.id && t.course === c.id)) list.push({ id: u.id, name: String(u.name).slice(0, 80), avatar: typeof u.avatar_url === "string" ? u.avatar_url : null, course: c.id, courseName: shortName(c.name) });
+    });
+    await chrome.storage.local.set({ teachers: { user: cache.user, at: failed ? Date.now() - 864e5 + 3600e3 : Date.now(), list } });   // a failed course is tried again in an hour, not tomorrow
     return list;
   }
   // "Pergunte ao professor": each teacher with photo; the button opens Canvas's own compose, addressed (the inbox reads

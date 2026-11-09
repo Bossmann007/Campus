@@ -200,7 +200,7 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-hea
   const apply = () => {
     const t = p.theme, on = t === "dark" || t === "dim" || (t === "auto" && dark.matches) || (t === "night" && night()), cl = document.documentElement.classList;
     cl.toggle("cp-dark", on); cl.toggle("cp-dim", on && t === "dim");
-    look.textContent = css(p.look, p.nav, p, on);
+    const next = css(p.look, p.nav, p, on); if (look.textContent !== next) look.textContent = next;   // the same 15 KB again would restyle the page for nothing
     cl.toggle("cp-mode-limpo", p.mode === "limpo"); cl.toggle("cp-mode-foco", p.mode === "foco");
     cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look]));
   };

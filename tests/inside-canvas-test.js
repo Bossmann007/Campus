@@ -417,6 +417,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(all(updRun.anchor).filter(e => e.id === "cp-dash").length, 1, "after an update the panel is drawn from the last reading, not after Canvas answers");
   await new Promise(r => setTimeout(r, 400));
   assert(updRun.store.cache.v === C.EXT_LATEST && reads(updRun).length === 5, "and the reading is redone in the background");
+  // a failed reading (Canvas throttled or down) keeps the lock a minute: the next page shows the last reading, no new burst
+  const failed = await runContent("/", null, st10, { scripts: pageEnv, failCourses: true }); await new Promise(r => setTimeout(r, 50));
+  assert(failed.store.refreshing > 0, "a failed reading leaves the lock");
+  const afterFail = await runContent("/", null, failed.store, { scripts: pageEnv });
+  assert.strictEqual(reads(afterFail).length, 0, "the next page within a minute does not read everything again");
   const lockedSlow = await runContent("/", null, {}, { slow: 40 });
   assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 0, "no reading at all: waits for Canvas");
   await new Promise(r => setTimeout(r, 250));
