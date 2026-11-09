@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<!-- Video scene for media/ia.mp4 (not deployed). SCENE=ia NAME=ia scripts/render-video loads this page once per frame with
+     headless virtual time (CSS animations do not run there: everything moves by timers). Left: a terminal with the three
+     real commands and the CLI's real messages. Right: a chat with an AI app calling the quanto_falta tool. Made-up grades,
+     no token on screen. 0-6 s install, login, setup; 6-13.5 s the question, the tool call, the answer; then the closing line. -->
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>ia</title>
+<style>
+  @font-face { font-family:"Fraunces"; font-weight:500; src:url(../ext/fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
+  * { box-sizing:border-box; } html { overflow:hidden; }
+  body { margin:0; width:1280px; height:100vh; overflow:hidden; background:radial-gradient(120% 90% at 50% 0%, #2A3347 0%, #1D2433 60%); font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#1D2433; }
+  .win { position:fixed; top:34px; bottom:92px; border-radius:14px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5); }
+  .bar { height:38px; display:flex; align-items:center; gap:7px; padding:0 14px; font-size:12.5px; }
+  .bar i { width:11px; height:11px; border-radius:50%; background:#ff5f57; } .bar i:nth-child(2) { background:#febc2e; } .bar i:nth-child(3) { background:#28c840; }
+  .bar span { margin-left:10px; }
+  /* terminal */
+  .term { left:34px; width:560px; background:#141925; border:1px solid #0c1019; color:#E8E2D4; }
+  .term .bar { background:#1B2130; color:#8C93A3; border-bottom:1px solid #0c1019; }
+  .tbody { padding:18px 20px; font:13.5px/1.7 "SF Mono",ui-monospace,Menlo,monospace; white-space:pre-wrap; }
+  .tbody .p { color:#F0603F; } .tbody .ok { color:#6CC59A; } .tbody .dim { color:#8C93A3; } .tbody .cur { display:inline-block; width:8px; height:16px; background:#E8E2D4; vertical-align:-3px; }
+  /* chat */
+  .chat { left:624px; right:34px; background:#FBF7EF; border:1px solid #11161f; display:flex; flex-direction:column; opacity:.45; }
+  .chat.on { opacity:1; }
+  .chat .bar { background:#F4EEE3; color:#5F6675; border-bottom:1px solid #ECE4D3; }
+  .msgs { flex:1; padding:20px 22px 0; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
+  .me { align-self:flex-end; max-width:78%; padding:10px 14px; border-radius:16px 16px 4px 16px; background:#1D2433; color:#FBF7EF; }
+  .tool { align-self:flex-start; display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; border:1px solid #ECE4D3; background:#fff; font-size:12.5px; color:#5F6675; }
+  .tool b { color:#1D2433; font-weight:600; } .tool .dot { width:8px; height:8px; border-radius:50%; background:#E6B15C; } .tool.done .dot { background:#2F7D5B; }
+  .ai { align-self:flex-start; width:100%; padding:14px 16px; border-radius:16px 16px 16px 4px; background:#fff; border:1px solid #ECE4D3; }
+  .ai h4 { margin:0 0 8px; font:500 17px/1.2 "Fraunces",Georgia,serif; }
+  .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:6px 0; border-top:1px solid #F0E9DA; font-size:14px; }
+  .row small { display:block; color:#5F6675; font-size:12px; } .pill { padding:1px 9px; border-radius:999px; font-weight:600; font-size:12px; white-space:nowrap; }
+  .warn { background:#FBEFD6; color:#744405; } .okp { background:#E2F1E9; color:#1F5C42; } .bad { background:#FCE4DD; color:#912713; }
+  .ai p { margin:8px 0 0; font-size:13px; color:#5F6675; }
+  .ask { margin:14px 22px 18px; height:44px; border-radius:14px; border:1px solid #DCD1BC; background:#fff; display:flex; align-items:center; padding:0 14px; color:#1D2433; }
+  .ask .ph { color:#8C909A; } .ask .cur { display:inline-block; width:2px; height:18px; background:#1D2433; margin-left:1px; }
+  /* caption and closing line */
+  .cap { position:fixed; left:0; right:0; bottom:26px; text-align:center; color:#FBF7EF; font:500 24px/1.2 "Fraunces",Georgia,serif; }
+  .cap em { font-style:normal; color:#F0603F; }
+  .tag { position:fixed; right:38px; bottom:8px; color:#8C93A3; font-size:11.5px; } .tag.l { right:auto; left:38px; }
+  [hidden] { display:none !important; }
+</style></head>
+<body>
+  <div class="win term"><div class="bar"><i></i><i></i><i></i><span>Terminal</span></div><div class="tbody" id="t"></div></div>
+  <div class="win chat" id="chat"><div class="bar"><i></i><i></i><i></i><span>Sua IA (Claude, Codex, VS Code, Cursor…)</span></div>
+    <div class="msgs" id="msgs"></div>
+    <div class="ask" id="ask"><span class="ph" id="ph">Pergunte sobre o seu Canvas…</span><span id="typed"></span></div>
+  </div>
+  <div class="cap" id="cap"></div>
+  <div class="tag l">Caderno+ MCP · roda no seu computador</div><div class="tag">notas de exemplo</div>
+<script>
+const $ = id => document.getElementById(id), at = (ms, f) => setTimeout(f, ms);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const cap = html => { $("cap").innerHTML = html; };
+// terminal: a prompt, the command typed, then its output lines
+const T = $("t"); let cur = el("span", "cur");
+function prompt() { const p = el("span", "p", "$ "); T.append(p); const c = el("span"); T.append(c, cur); return c; }
+function type(node, text, ms, done) { let i = 0; const id = setInterval(() => { node.textContent = text.slice(0, ++i); if (i >= text.length) { clearInterval(id); if (done) done(); } }, ms / text.length); }
+function out(text, cls) { cur.remove(); T.append("\n", el("span", cls || "dim", text), "\n"); }
+let line;
+at(300, () => { cap("<em>1</em> · Instale"); line = prompt(); });
+at(500, () => type(line, "npm install -g caderno-mcp", 1000));
+at(1750, () => out("added 1 package in 406ms"));
+at(2100, () => { cap("<em>2</em> · Guarde o token no cofre do sistema"); line = prompt(); });
+at(2300, () => type(line, "caderno-mcp login", 700));
+at(3200, () => out("(o cofre pede o token do Canvas: ele não aparece na tela)"));
+at(3900, () => { cur.remove(); T.append(el("span", "ok", "Token salvo (Keychain) e aceito pelo Canvas da PUCPR."), "\n"); });
+at(4500, () => { cap("<em>2</em> · Ligue no app da sua IA"); line = prompt(); });
+at(4650, () => type(line, "caderno-mcp setup", 600));
+at(5400, () => { cur.remove(); T.append("\n", el("span", "dim", "## Claude Code\nclaude mcp add caderno --scope user -- node …/server.js\n## Codex · VS Code · Cursor · Gemini CLI …"), "\n"); prompt(); });
+// chat: the question typed, sent, the tool call, the answer row by row
+at(6100, () => { $("chat").classList.add("on"); cap("<em>3</em> · Pergunte"); });
+at(6400, () => { $("ph").hidden = true; const c = el("span", "cur"); $("ask").append(c); type($("typed"), "Quanto falta em cada matéria pra fechar com 7?", 1500); });
+at(8200, () => { $("typed").textContent = ""; $("ph").hidden = false; const c = $("ask").querySelector(".cur"); if (c) c.remove(); $("msgs").append(el("div", "me", "Quanto falta em cada matéria pra fechar com 7?")); });
+let tool;
+at(8700, () => { tool = el("div", "tool"); tool.append(el("span", "dot"), el("b", null, "caderno"), el("span", null, "quanto_falta · lendo o Canvas…")); $("msgs").append(tool); });
+at(9600, () => { tool.classList.add("done"); tool.lastChild.textContent = "quanto_falta · só leitura ✓"; });
+const rows = [["Banco de Dados", "3,9 garantidos · projeto final em 18/11", "precisa 4,7", "warn"], ["Programação", "3,4 agora · fórmula do Centro de Notas", "precisa 6,0", "warn"],
+  ["Cálculo", "7,4 garantidos", "meta garantida", "okp"], ["Redes", "2,1 garantidos · prova na sexta", "precisa 8,2", "bad"]];
+let ai;
+at(10000, () => { ai = el("div", "ai"); ai.append(el("h4", null, "Para fechar com 7:")); $("msgs").append(ai); });
+rows.forEach((r, i) => at(10350 + i * 550, () => { const row = el("div", "row"), l = el("div"); l.append(r[0], el("small", null, r[1])); row.append(l, el("span", "pill " + r[3], r[2])); ai.append(row); }));
+at(12700, () => ai.append(el("p", null, "A mais apertada é Redes. Quer um plano de estudo até sexta?")));
+at(13500, () => cap("Token no cofre · só leitura · <em>sem servidor</em>"));
+at(14900, () => cap("caderno-plus.vercel.app<em>/ia</em>"));
+</script>
+</body></html>

@@ -4,10 +4,11 @@
 # location.pathname). The calculator now lives in the Canvas panels, so there is no extension page to serve.
 # Needs Brave or Chrome, python3 and ffmpeg. FRAMES="ms ms ..." renders only those moments to $OUT (default /tmp/cp-media) for review;
 # STILL=1 renders the two store screenshots (1280x800) instead.
+# SCENE=ia NAME=ia renders video/ia.html into media/ia.mp4 (the AI video); POSTER=<second> picks its poster frame.
 set -eu
 cd "$(dirname "$0")/.."
 B="${BROWSER:-/Applications/Brave Browser.app/Contents/MacOS/Brave Browser}"
-fps=20; secs=16; tmp=$(mktemp -d); root=$(mktemp -d)
+fps=20; secs=${SECS:-16}; scene="${SCENE:-scene}"; name="${NAME:-demo}"; tmp=$(mktemp -d); root=$(mktemp -d)
 ln -s "$PWD/extension" "$root/ext"; ln -s "$PWD/video" "$root/video"
 port=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
 python3 -m http.server "$port" --bind 127.0.0.1 --directory "$root" >/dev/null 2>&1 & srv=$!
@@ -15,7 +16,7 @@ trap 'kill $srv 2>/dev/null; rm -rf "$tmp" "$root"' EXIT
 sleep 1
 shot() {   # $1 = virtual ms, $2 = output png, $3 = query, $4 = window height
   "$B" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --blink-settings=preferredColorScheme=1 --virtual-time-budget="$1" --window-size=1280,${4:-720} \
-    --screenshot="$2" "http://127.0.0.1:$port/video/scene.html${3:-}" 2>/dev/null
+    --screenshot="$2" "http://127.0.0.1:$port/video/$scene.html${3:-}" 2>/dev/null
 }
 if [ -n "${STILL:-}" ]; then   # store screenshots: STILL=1 renders both
   shot 3000 store/screenshot-1280x800.png "?still=dash" 800; shot 3000 store/screenshot-2-1280x800.png "?still=cal" 800
@@ -32,6 +33,6 @@ while [ $i -lt $n ]; do
   i=$((i + 1))
 done
 mkdir -p media
-ffmpeg -loglevel error -y -framerate $fps -i "$tmp/%04d.png" -c:v libx264 -pix_fmt yuv420p -crf 26 -preset slow -movflags +faststart media/demo.mp4
-cp "$tmp/$(printf %04d $((fps * 3 + 10)))".png media/demo-poster.png
+ffmpeg -loglevel error -y -framerate $fps -i "$tmp/%04d.png" -c:v libx264 -pix_fmt yuv420p -crf 26 -preset slow -movflags +faststart "media/$name.mp4"
+cp "$tmp/$(printf %04d $((fps * ${POSTER:-3} + 10)))".png "media/$name-poster.png"
 ls -la media
