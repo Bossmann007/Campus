@@ -11,7 +11,7 @@ Caderno+ é uma extensão do Chrome, Brave e Edge que roda dentro do Canvas da P
 - **Simular notas e anotações:** na página da matéria, digite notas hipotéticas e veja na hora se garante a meta; anotações por matéria, só no seu computador.
 - **Exportar .ics** das entregas e provas para Google Agenda, Outlook ou celular.
 - **Foco:** timer de 25 minutos de estudo e 5 de pausa no botão da extensão.
-- **Aparência própria:** o Canvas inteiro com a identidade do Caderno+: 9 temas (Caderno, Kraft, Marca-texto, Menta, Oceano, Pastel, Grafite, Contraste, Original), fundos (liso, pautado, quadriculado, pontilhado, aurora), anel com a porcentagem garantida nos cards, a barra do Caderno+ ao lado da saudação, fonte, cor do menu, cards em grade/compactos/lista com cor por matéria e a próxima entrega.
+- **Aparência própria:** o Canvas inteiro com a identidade do Caderno+: 9 temas (Caderno, Kraft, Marca-texto, Menta, Oceano, Pastel, Grafite, Contraste, Original), cor de fundo do tema (Oceano azul claro, Menta verde…) ou uma cor sua, desenhos de fundo (pautado, quadriculado, pontilhado, aurora), anel com a porcentagem garantida nos cards, a barra do Caderno+ ao lado da saudação, fonte, cor do menu, cards em grade/compactos/lista com cor por matéria e a próxima entrega.
 - **Modos Limpo e Foco:** Limpo tira a bagunça do Canvas e deixa só o que importa; Foco mostra só uma lista do que fazer agora.
 - **O que mudou** desde a última visita (arquivos, módulos, tarefas, avisos) e **Minhas tarefas** (também com + no Ctrl+K).
 - **Conforto:** temas escuro, escuro suave e escuro à noite; cards do painel recolhíveis; botões ↑ ↓ em páginas longas. O painel aparece na hora com a última leitura enquanto atualiza.

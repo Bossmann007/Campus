@@ -6,6 +6,7 @@ $("ver").textContent = "v" + chrome.runtime.getManifest().version;
 // Each change writes only its own key over the latest prefs (the Canvas panel changes mode, meta and the native dashboard
 // too), and the popup follows changes made elsewhere: neither side undoes the other.
 const setPref = async (k, v) => { const { prefs } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, prefs, { [k]: v }) }); };
+const tints = [...document.querySelectorAll("[data-tint]")];
 const looks = [...document.querySelectorAll("[data-look]")], modes = [...document.querySelectorAll("[data-mode]")];
 function showPrefs(prefs) {
   const p = cpPrefs(prefs);
@@ -15,12 +16,17 @@ function showPrefs(prefs) {
   looks.forEach(b => { b.setAttribute("aria-checked", String(b.dataset.look === p.look)); b.tabIndex = b.dataset.look === p.look ? 0 : -1; });
   modes.forEach(b => { b.setAttribute("aria-checked", String(b.dataset.mode === p.mode)); b.tabIndex = b.dataset.mode === p.mode ? 0 : -1; });
   for (const box of document.querySelectorAll("[data-pref]")) box.checked = p[box.dataset.pref];
+  const own = /^#[0-9a-f]{6}$/i.test(p.bgColor) ? p.bgColor.toUpperCase() : "", preset = tints.some(b => b.dataset.tint === own);
+  tints.forEach(b => b.setAttribute("aria-checked", String(b.dataset.tint === own)));
+  $("bgPickWrap").classList.toggle("on", !!own && !preset); if (own) $("bgPick").value = own.toLowerCase();
 }
 $("theme").addEventListener("change", () => setPref("theme", $("theme").value));
 $("dlFolder").addEventListener("change", () => { const v = cpFolder($("dlFolder").value); $("dlFolder").value = v; setPref("dlFolder", v); });
 for (const sel of document.querySelectorAll("[data-sel]")) sel.addEventListener("change", () => setPref(sel.dataset.sel, sel.value));
 for (const b of looks) b.addEventListener("click", () => setPref("look", b.dataset.look));
 for (const b of modes) b.addEventListener("click", () => setPref("mode", b.dataset.mode));
+for (const b of tints) b.addEventListener("click", () => setPref("bgColor", b.dataset.tint));   // "" = the look's own paper
+$("bgPick").addEventListener("change", () => setPref("bgColor", $("bgPick").value.toUpperCase()));
 // radio groups: one Tab stop (the checked one), arrows move and choose
 const roving = (group, key) => group.forEach((b, i) => b.addEventListener("keydown", e => {
   const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0; if (!d) return;

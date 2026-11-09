@@ -11,18 +11,21 @@
       <button type="button" role="radio" data-mode="foco"><b>Foco</b><small>só o que fazer agora</small></button>
     </div>
     <div class="looks" role="radiogroup" aria-label="Tema">
-      <button type="button" role="radio" data-look="caderno"><i style="--a:#FBF7EF;--b:#1D2433;--c:#E2482B"></i>Caderno</button>
-      <button type="button" role="radio" data-look="kraft"><i style="--a:#F3EBDD;--b:#3B2F25;--c:#C2611F"></i>Kraft</button>
-      <button type="button" role="radio" data-look="marca"><i style="--a:#FFFFFF;--b:#1C1C1C;--c:#E0A800"></i>Marca-texto</button>
-      <button type="button" role="radio" data-look="menta"><i style="--a:#F2F8F5;--b:#1E3B32;--c:#2F9E74"></i>Menta</button>
-      <button type="button" role="radio" data-look="oceano"><i style="--a:#F3F7FB;--b:#14273E;--c:#1E6FD9"></i>Oceano</button>
-      <button type="button" role="radio" data-look="grafite"><i style="--a:#F7F7F5;--b:#111111;--c:#111111"></i>Grafite</button>
-      <button type="button" role="radio" data-look="pastel"><i style="--a:#F6F4FB;--b:#3B3363;--c:#7C5CDB"></i>Pastel</button>
+      <button type="button" role="radio" data-look="caderno"><i style="--a:#F7EFDF;--b:#1D2433;--c:#E2482B"></i>Caderno</button>
+      <button type="button" role="radio" data-look="kraft"><i style="--a:#EEE2CC;--b:#3B2F25;--c:#C2611F"></i>Kraft</button>
+      <button type="button" role="radio" data-look="marca"><i style="--a:#FFF8D9;--b:#1C1C1C;--c:#E0A800"></i>Marca-texto</button>
+      <button type="button" role="radio" data-look="menta"><i style="--a:#E2F2EA;--b:#1E3B32;--c:#2F9E74"></i>Menta</button>
+      <button type="button" role="radio" data-look="oceano"><i style="--a:#E2EDF9;--b:#14273E;--c:#1E6FD9"></i>Oceano</button>
+      <button type="button" role="radio" data-look="grafite"><i style="--a:#EEEEEB;--b:#111111;--c:#111111"></i>Grafite</button>
+      <button type="button" role="radio" data-look="pastel"><i style="--a:#EEE9F9;--b:#3B3363;--c:#7C5CDB"></i>Pastel</button>
       <button type="button" role="radio" data-look="contraste"><i style="--a:#FFFFFF;--b:#000000;--c:#0040C1"></i>Contraste</button>
       <button type="button" role="radio" data-look="original"><i style="--a:#FFFFFF;--b:#334451;--c:#2B7ABC"></i>Original</button>
     </div>
     <div class="list">
-      <label class="row"><span>Fundo do Canvas</span>
+      <div class="row"><span>Cor do fundo <small>do tema ou outra</small></span><span class="tints" role="radiogroup" aria-label="Cor do fundo">
+        <button type="button" role="radio" data-tint="" title="A do tema" aria-label="A do tema">T</button><button type="button" role="radio" data-tint="#E2EDF9" title="Azul claro" aria-label="Azul claro" style="--c:#E2EDF9"></button><button type="button" role="radio" data-tint="#E2F2EA" title="Verde claro" aria-label="Verde claro" style="--c:#E2F2EA"></button><button type="button" role="radio" data-tint="#FBE6EC" title="Rosa claro" aria-label="Rosa claro" style="--c:#FBE6EC"></button><button type="button" role="radio" data-tint="#FFF6D6" title="Amarelo claro" aria-label="Amarelo claro" style="--c:#FFF6D6"></button><button type="button" role="radio" data-tint="#EEE9F9" title="Lilás" aria-label="Lilás" style="--c:#EEE9F9"></button><label class="pick" id="bgPickWrap" title="Outra cor"><input type="color" id="bgPick" aria-label="Outra cor"></label>
+      </span></div>
+      <label class="row"><span>Desenho do fundo</span>
         <select data-sel="bg"><option value="liso">Liso</option><option value="pautado">Pautado</option><option value="quadriculado">Quadriculado</option><option value="pontilhado">Pontilhado</option><option value="aurora">Aurora (cor do tema)</option></select></label>
       <label class="row"><span>Modo escuro</span>
         <select id="theme"><option value="off">Desligado</option><option value="dark">Escuro</option><option value="dim">Escuro suave</option><option value="night">À noite (19h às 7h)</option><option value="auto">Igual ao sistema</option></select></label>
