@@ -3,6 +3,18 @@
 Não oficial. Roda **no seu computador**, com **o seu token**, guardado **no cofre do seu sistema**. Só lê: não entrega
 trabalho, não responde quiz, não manda mensagem, não marca nada.
 
+## Antes de instalar: para onde vão os seus dados
+
+- O que as ferramentas devolvem (notas, prazos, títulos de avisos e de módulos, nomes das matérias) vai para o app de IA
+  que você conectar e, por ele, para a nuvem do provedor (por exemplo, a Anthropic, no Claude). Fica no histórico da
+  conversa e pode ficar nos logs do app.
+- Títulos escritos no Canvas podem ter nomes de professores ou colegas (ex.: "Grupo da Ana").
+- Depois de conectado, a IA pode consultar sozinha durante a conversa (as ferramentas só leem).
+- O token do Canvas dá acesso **total** à sua conta (entregar trabalho, mandar mensagem). Quem limita a leitura é este
+  programa, não o token. Por isso: validade até o fim do semestre e revogue quando parar de usar.
+- O cofre do sistema protege o token de arquivos e de outras contas do computador, mas **não** de programas que rodam
+  com o seu próprio usuário. Não instale coisas desconhecidas na mesma conta.
+
 ## Instalar (Claude Code ou Claude Desktop)
 
 1. Node 18 ou mais novo.
@@ -28,4 +40,4 @@ app (`claude mcp remove caderno`).
 ## Aviso
 
 A política de API da Instructure (§3(i)) proíbe acessar o Canvas por servidores MCP não aprovados por ela. Este servidor
-não é aprovado pela Instructure nem pela PUCPR. Use por sua conta.
+não é aprovado pela Instructure nem pela PUCPR, e elas podem bloquear tokens de alunos. Use por sua conta.

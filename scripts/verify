@@ -8,6 +8,7 @@ node tests/extension-test.js
 node tests/rules-test.js                                # validator on bad packs, two turmas in one core, draft without grades
 TZ=America/Sao_Paulo node tests/rules-golden.js app.html   # cc-manha numbers identical to before the rule packs
 TZ=America/Sao_Paulo node tests/inside-canvas-test.js
+cmp -s extension/core.js mcp/lib/core.js && cmp -s extension/collect.js mcp/lib/collect.js || { echo "stale mcp/lib: run scripts/sync-mcp-lib"; exit 1; }
 TZ=America/Sao_Paulo node tests/mcp-test.js                # the MCP server: read-only, token never in an output, the panel numbers
 for f in extension/*.js; do node --check "$f"; done
 for f in mcp/*.js; do node --check "$f"; done

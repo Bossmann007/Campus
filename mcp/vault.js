@@ -9,16 +9,18 @@
 const { execFile, spawn } = require("child_process"), fs = require("fs");
 
 const SERVICE = "caderno-plus-canvas", ACCOUNT = "pucpr.instructure.com";
+// absolute paths: a program of the same name in the current folder (a cloned repo) is never run instead
+const PS = (process.env.SystemRoot || "C:\\Windows") + "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", SEC = "/usr/bin/security";
 // Each store: the program and arguments for read (prints the token), write (prompts the student itself) and delete.
 function commands(platform) {
   if (platform === "darwin") return {
-    read: ["security", ["find-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w"]],
-    write: ["security", ["add-generic-password", "-U", "-s", SERVICE, "-a", ACCOUNT, "-l", "Caderno+ · token do Canvas", "-w"]],   // -w last: security asks for the value
-    remove: ["security", ["delete-generic-password", "-s", SERVICE, "-a", ACCOUNT]] };
+    read: [SEC, ["find-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w"]],
+    write: [SEC, ["add-generic-password", "-U", "-s", SERVICE, "-a", ACCOUNT, "-l", "Caderno+ · token do Canvas", "-w"]],   // -w last: security asks for the value
+    remove: [SEC, ["delete-generic-password", "-s", SERVICE, "-a", ACCOUNT]] };
   if (platform === "win32") return {
-    read: ["powershell", ["-NoProfile", "-NonInteractive", "-Command", "$s = Get-Content -Raw (Join-Path $env:APPDATA 'caderno-plus\\canvas.dpapi') | ConvertTo-SecureString; [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))"]],
-    write: ["powershell", ["-NoProfile", "-Command", "$s = Read-Host -AsSecureString 'Cole o token do Canvas'; $d = Join-Path $env:APPDATA 'caderno-plus'; New-Item -Force -ItemType Directory $d | Out-Null; $s | ConvertFrom-SecureString | Set-Content -Path (Join-Path $d 'canvas.dpapi')"]],
-    remove: ["powershell", ["-NoProfile", "-NonInteractive", "-Command", "Remove-Item -ErrorAction Stop (Join-Path $env:APPDATA 'caderno-plus\\canvas.dpapi')"]] };
+    read: [PS, ["-NoProfile", "-NonInteractive", "-Command", "$s = (Get-Content -Raw (Join-Path $env:APPDATA 'caderno-plus\\canvas.dpapi')).Trim() | ConvertTo-SecureString; [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))"]],
+    write: [PS, ["-NoProfile", "-Command", "$s = Read-Host -AsSecureString 'Cole o token do Canvas'; $d = Join-Path $env:APPDATA 'caderno-plus'; New-Item -Force -ItemType Directory $d | Out-Null; $s | ConvertFrom-SecureString | Set-Content -Path (Join-Path $d 'canvas.dpapi')"]],
+    remove: [PS, ["-NoProfile", "-NonInteractive", "-Command", "Remove-Item -ErrorAction Stop (Join-Path $env:APPDATA 'caderno-plus\\canvas.dpapi')"]] };
   return {
     read: ["secret-tool", ["lookup", "service", SERVICE, "host", ACCOUNT]],
     write: ["secret-tool", ["store", "--label=Caderno+ · token do Canvas", "service", SERVICE, "host", ACCOUNT]],   // asks "Password:" itself
@@ -31,7 +33,7 @@ const looks = s => /^[\x21-\x7e]{20,200}$/.test(s);   // Canvas tokens: printabl
 
 async function readToken({ env = process.env, platform = process.platform, run = runOut, readFile = fs.readFileSync } = {}) {
   if (env.CANVAS_TOKEN_FILE) { try { const t = tidy(readFile(env.CANVAS_TOKEN_FILE, "utf8")); if (looks(t)) return { token: t, from: "arquivo do cofre" }; } catch (e) {} return { token: null, from: "arquivo do cofre" }; }
-  if (env.CADERNO_MCPB_TOKEN) { const t = tidy(env.CADERNO_MCPB_TOKEN); return { token: looks(t) ? t : null, from: "Claude Desktop" }; }
+  if (env.CADERNO_MCPB_TOKEN) { const t = tidy(env.CADERNO_MCPB_TOKEN); delete env.CADERNO_MCPB_TOKEN; return { token: looks(t) ? t : null, from: "Claude Desktop" }; }   // out of the env at once: no child inherits it
   const [cmd, args] = commands(platform).read, t = tidy(await run(cmd, args));
   return { token: looks(t) ? t : null, from: platform === "darwin" ? "Keychain" : platform === "win32" ? "DPAPI" : "Secret Service" };
 }

@@ -19,7 +19,6 @@ async function cli(cmd) {
   if (cmd === "login") {
     say("1. No Canvas: Conta → Configurações → \"+ Novo token de acesso\". Finalidade: Caderno+ MCP. Expira: fim do semestre.");
     say("2. Copie o token e cole quando o cofre do sistema pedir (o texto não aparece enquanto você cola).\n");
-    if (process.platform === "darwin") await vault.removeToken().catch(() => {});   // -U alone does not replace on every macOS
     const ok = await vault.writeToken();
     if (!ok) { say(process.platform === "linux" ? "Não deu para salvar. Instale o secret-tool (pacote libsecret-tools) e tente de novo." : "Não deu para salvar no cofre."); process.exitCode = 1; return; }
     say(""); process.exitCode = (await check()) ? 0 : 1; return;

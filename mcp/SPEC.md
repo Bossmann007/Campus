@@ -18,13 +18,18 @@ for "quanto falta"), **zero dependencies** (MCP over stdio is newline-delimited 
 no third-party code to audit or to be hijacked).
 
 **For every student, each one local** (Enzo, 2026-11-09: not waiting for PUCPR's TI): each student installs it on their
-own computer, with their own token in their own OS vault. No server of ours, no shared token, nothing leaves the
-machine except the student's own GETs to `pucpr.instructure.com`.
+own computer, with their own token in their own OS vault. No server of ours and no shared token. What leaves the machine:
+the student's own GETs to `pucpr.instructure.com`, and every tool reply, which goes to the AI app and its provider's cloud
+(chat history, app logs). The README says this before the install steps.
 
 ## Vault (per user, per OS)
 
-`mcp/vault.js` picks the store of the system; the token never goes on a command line (`ps`), in shell history, in an env
-var, in a config file or through our stdout. `npx caderno-mcp login` asks for it with hidden input and hands it to the
+`mcp/vault.js` picks the store of the system (by absolute path, so a same-named program in the current folder is never
+run); the token never goes on a command line (`ps`), in shell history, in a config file or through our stdout. One env
+var exception: Claude Desktop passes the `.mcpb` field as `CADERNO_MCPB_TOKEN`, deleted from the process env on read.
+The stores protect against files and other OS accounts, not against programs of the same user (macOS trusts
+`/usr/bin/security`, the creator of the item, so any same-user process can read it with no prompt; an unlocked Secret
+Service and DPAPI behave the same): said in the README. `npx caderno-mcp login` asks for it with hidden input and hands it to the
 store through **stdin** of the store's own tool.
 
 | OS | Store | Write / read / delete |
@@ -62,9 +67,9 @@ Host pinned to `https://pucpr.instructure.com`; every request built from an allo
 |---|---|---|
 | `courses` | `/api/v1/courses?enrollment_state=active` | id, name, term |
 | `upcoming` | `/api/v1/planner/items` (−7 to +15 days) | date, time, course, title, done, late |
-| `grades` | `/api/v1/courses/:id/assignment_groups?include[]=assignments&include[]=submission` | per item: score, points |
+| `grades` | `/api/v1/courses/:id/assignments?include[]=submission` (the extension's `collect.js`) | per item: score, points, due, missing, submitted |
 | `quanto_falta` | the same readings + `core.js` (`fromCanvas`, `requiredFor`) | per subject: earned, needed, label, as the panel (Canvas grades only; grades typed by hand in the extension are not seen, said in the reply) |
-| `announcements` | `/api/v1/announcements` (10 newest) | date, course, title, unread; no author, no body by default; `body: true` gives the text of one |
+| `announcements` | `/api/v1/announcements` (10 newest) | date, course, title, unread; no author, no body |
 | `modules` | `/api/v1/courses/:id/modules?include[]=items` | names, item titles, Canvas links |
 
 Out: inbox and people (third-party data, a manipulation path), files content, quizzes, any write. Every Canvas-written
@@ -106,5 +111,6 @@ answer.
 New: `mcp/server.js` (stdio JSON-RPC + tools), `mcp/cli.js` (login, logout, status, setup hints), `mcp/vault.js` (the
 three OS stores + token file), `mcp/canvas.js` (allowlisted GETs), `mcp/package.json` (bin `caderno-mcp`, no
 dependencies), `mcp/manifest.json` (`.mcpb`), `tests/mcp-test.js`, `mcp/README.md` (setup in Portuguese). Later: a
-"Conectar sua IA" link in the popup to the setup page.
+"Conectar sua IA" link in the popup to the setup page; before it ships, `privacidade.html` gets a section "Caderno+ MCP
+(opcional, separado)": the AI provider receives the replies, the token's full power, how to revoke.
 Changed: `scripts/verify` (runs the new test), `bridge/SPEC.md` (phase B points here), `README.md`.
