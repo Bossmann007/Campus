@@ -192,6 +192,9 @@
     });
     return { nodes: [pad, chk], ta, busy: () => Date.now() - typed < 30000 };
   }
+  // Our panels' shadow roots are closed (page scripts cannot read the notes); the root stays on the host for our own code,
+  // in the extension's isolated world, which the page never sees.
+  const shadow = host => { const r = host.attachShadow({ mode: "closed" }); host.cpRoot = r; return r; };
   // One chrome.storage listener per page for the blocks drawn on it; a block that left the page returns false and is dropped.
   const onStore = new Set(); let storeHooked = false;
   function watchStore(f) {
@@ -631,7 +634,7 @@
     let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
     for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
     const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";
-    const root = host.attachShadow({ mode: "closed" }), wrap = el("div", "box head");
+    const root = shadow(host), wrap = el("div", "box head");
     styleRoot(root); wrap.appendChild(hd); root.append(wrap); at.prepend(host);
     return true;
   }
@@ -646,7 +649,7 @@
     const anchor = document.getElementById("content");
     if (document.getElementById(id) || !anchor) return null;
     const host = el("div", "cp-host"); host.id = id;
-    const root = host.attachShadow({ mode: "closed" }), box = el("div", "box");
+    const root = shadow(host), box = el("div", "box");
     styleRoot(root); root.append(box); anchor.prepend(host);
     return box;
   }
@@ -952,7 +955,7 @@
     if (host) return;
     const cols = document.getElementById("DashboardCard_Container");
     host = el("div", "cp-host cp-noteshost"); host.id = "cp-notes";
-    const root = host.attachShadow({ mode: "closed" }), box = el("div", "box side"), h = el("div", "side-h"), close = el("button", "mini", "Fechar ×");
+    const root = shadow(host), box = el("div", "box side"), h = el("div", "side-h"), close = el("button", "mini", "Fechar ×");
     close.type = "button"; close.setAttribute("aria-label", "Fechar as anotações"); close.addEventListener("click", () => toggleNotes(false));
     h.append(el("b", null, "Anotações"), close);
     const nb = notesBlock(cache, "painel", null, () => window.cpRedraw && window.cpRedraw());
@@ -1390,7 +1393,7 @@
     if (cur) { cur.remove(); return; }   // the shortcut again closes it
     const host = el("div", "cp-host"); host.id = "cp-search";
     host.style.cssText = "position:fixed;inset:0;z-index:10000;margin:0";
-    const root = host.attachShadow({ mode: "closed" }), back = el("div", "pal-back"), dlg = el("div", "pal");
+    const root = shadow(host), back = el("div", "pal-back"), dlg = el("div", "pal");
     styleRoot(root);
     dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true"); dlg.setAttribute("aria-label", "Buscar no Canvas");
     const q = el("input", "pal-q"); q.type = "text"; q.autocomplete = "off"; q.placeholder = "Buscar tarefas, módulos e matérias…"; q.setAttribute("aria-label", "Buscar");
@@ -1673,7 +1676,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     if (document.getElementById("cp-scroll") || !de || typeof window.innerHeight !== "number" || !window.scrollTo) return;
     const host = el("div", "cp-host"); host.id = "cp-scroll";
     host.style.cssText = "position:fixed;right:18px;bottom:76px;z-index:9998;margin:0;display:none";
-    const root = host.attachShadow({ mode: "closed" }), style = el("style");
+    const root = shadow(host), style = el("style");
     style.textContent = `button { display:block; width:34px; height:34px; margin-top:6px; border-radius:50%; border:1px solid #ECE4D3; background:#FBF7EF; color:#1D2433; font:600 15px/1 -apple-system,BlinkMacSystemFont,sans-serif;
       cursor:pointer; box-shadow:0 6px 16px -8px rgba(29,36,51,.5); opacity:.85; } button:hover { opacity:1; } button:focus-visible { outline:2px solid #E2482B; outline-offset:2px; }`;
     const go = (txt, label, top) => { const b = el("button", null, txt); b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
@@ -1711,7 +1714,8 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     if (!window.cpKeys) { window.cpKeys = 1; addEventListener("keydown", e => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { if (window.cpSearch) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); } return; }
       if (!EXT || !e.altKey || e.ctrlKey || e.metaKey || e.code !== "KeyN") return;
-      const tg = e.composedPath ? e.composedPath()[0] : e.target;
+      let tg = e.composedPath ? e.composedPath()[0] : e.target;
+      if (tg && tg.cpRoot && tg.cpRoot.activeElement) tg = tg.cpRoot.activeElement;   // a field inside one of our closed panels
       if (tg && (/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || "") || tg.isContentEditable)) return;   // typing (Option+N is the tilde on a Mac): never ours
       const cp = document.getElementById("qf-panel");
       if (cp && cp.cpOpenNotes) { e.preventDefault(); cp.cpOpenNotes(); }
