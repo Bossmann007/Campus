@@ -3,6 +3,8 @@
 const $ = id => document.getElementById(id);
 $("ver").textContent = "v" + chrome.runtime.getManifest().version;
 // "Arquivo para a sua IA" turned itself off (Chrome asked where to save): say why; turning it on again clears it.
+// where the last file went (the worker keeps Chrome's absolute path): what the student gives the MCP if it is not the default
+chrome.storage.local.get("agentPath").then(({ agentPath }) => { if (typeof agentPath === "string" && agentPath) { $("agentPath").textContent = "Gravado em: " + agentPath; $("agentPath").hidden = false; } });
 chrome.storage.local.get("agentErr").then(({ agentErr }) => { if (typeof agentErr === "string" && agentErr) { $("agentErr").textContent = agentErr; $("agentErr").hidden = false; } });
 for (const b of document.querySelectorAll('[data-pref="agentFile"]')) b.addEventListener("change", () => { if (b.checked) { chrome.storage.local.remove("agentErr"); $("agentErr").hidden = true; } });
 // Novidades (notes.js): once after an update, until "Entendi" (shared with the panel on the dashboard).

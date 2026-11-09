@@ -590,7 +590,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(r.ok && swSaved.length === n0 + 1 && w.filename === "Minha Pasta/caderno-agente.json" && w.conflictAction === "overwrite" && w.saveAs === false && /^data:application\/json;charset=utf-8,/.test(w.url), "written over <pasta>/caderno-agente.json");
     const did = session.agentDl[session.agentDl.length - 1];
     assert(typeof did === "number", "its id kept to clear the history line");
+    chromeSW.downloads.search = async q => [{ id: q.id, state: "complete", filename: "/Users/aluno/Downloads/Minha Pasta/caderno-agente.json" }];
     await listeners.changed({ id: did, state: { current: "complete" } });
+    assert.strictEqual(local.agentPath, "/Users/aluno/Downloads/Minha Pasta/caderno-agente.json", "the absolute path kept for the popup");
+    delete chromeSW.downloads.search;
     assert(!session.agentDl.includes(did) && local.prefs.agentFile === true, "finished: out of the download history, switch still on");
     await ask({ type: "agentFile", data: { a: 2 } }, CANVAS_TAB); const did2 = session.agentDl[session.agentDl.length - 1];
     await listeners.changed({ id: did2, state: { current: "interrupted" } });

@@ -139,6 +139,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 async function agentDone(id, state) {
   const { agentDl = [] } = await chrome.storage.session.get("agentDl");
   await chrome.storage.session.set({ agentDl: agentDl.filter(x => x !== id) });
+  if (state === "complete" && chrome.downloads.search) {   // the absolute path, shown in the popup so the student can give it to the MCP
+    const [d] = await chrome.downloads.search({ id });
+    if (d && typeof d.filename === "string" && /caderno-agente\.json$/.test(d.filename)) await chrome.storage.local.set({ agentPath: d.filename });
+  }
   if (chrome.downloads.erase) chrome.downloads.erase({ id });
   if (state === "interrupted") {
     const { prefs } = await chrome.storage.local.get("prefs");
