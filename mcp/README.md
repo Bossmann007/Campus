@@ -15,7 +15,12 @@ trabalho, não responde quiz, não manda mensagem, não marca nada.
 - O cofre do sistema protege o token de arquivos e de outras contas do computador, mas **não** de programas que rodam
   com o seu próprio usuário. Não instale coisas desconhecidas na mesma conta.
 
-## Instalar (Claude Code ou Claude Desktop)
+## Instalar no Claude Desktop (mais fácil)
+
+Abra `caderno-mcp-<versão>.mcpb` com dois cliques, cole o token do Canvas quando o Claude Desktop pedir. Ele guarda o
+token no cofre do sistema e passa ao servidor quando abre.
+
+## Instalar pelo terminal (Claude Code ou Claude Desktop)
 
 1. Node 18 ou mais novo.
 2. No Canvas: Conta → Configurações → **+ Novo token de acesso**. Finalidade "Caderno+ MCP", expira no fim do semestre.

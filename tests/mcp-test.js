@@ -52,6 +52,7 @@ let n = 0; const ok = () => n++;
   await assert.rejects(cv.tools.modules({ course_id: "1/../../users" }), /só dígitos/, "a course id with a path is refused");
   assert.strictEqual(clean("a\u0000b".repeat(400)).length, 500, "capped");
   assert.strictEqual(clean("ok" + String.fromCodePoint(0xE0049, 0xE0067) + "\u200b fim\u2028"), "ok fim", "zero-width, line separators and Unicode tag characters out");
+  assert.strictEqual(clean("a" + "\u00ad\u061c\ufe0f" + String.fromCodePoint(0xE0101) + "b"), "a b", "soft hyphen, Arabic mark, variation selectors out");
   { let k = 0; const gf2 = guardedFetch(TOKEN, async () => ({ ok: true }), { n: 0, at: Date.now() }); for (; k < 400; k++) await gf2("/api/v1/courses"); await assert.rejects(gf2("/api/v1/courses"), /limite/, "at most 400 reads per 5 minutes"); }
   ok();
 
