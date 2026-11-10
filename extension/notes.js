@@ -1,8 +1,10 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.3.2",
+  version: "6.3.3",
   items: [
+    "Correção: nos avisos e fóruns, a barra de cima (tela dividida, busca, ordem, tradução) segue o tema; estava preta nos modos escuros",
+    "Correção: a lista de fóruns, a busca de arquivos, as abas de Pessoas, os campos de escolha e os quizzes clássicos também deixaram de ficar pretos nos modos escuros",
     "Sua IA: a página explica o que ela responde agora (o que falta entregar, quizzes, matéria pelo nome) e as perguntas prontas foram revistas",
     "Correção: na página da tarefa, a barra de baixo (Anterior, Nova tentativa, Próximo) e a tabela do arquivo enviado seguem o tema (estavam pretas nos modos escuros)",
     "Os números do painel (Garantido, Quanto falta, Entregues) agora dizem de qual matéria são, e você escolhe: Todas ou uma matéria, nos botões logo acima deles",

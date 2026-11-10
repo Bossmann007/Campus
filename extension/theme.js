@@ -162,7 +162,13 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look #context_modules .context_module.item-group-condensed { padding:0 !important; }
 :root.cp-look #assignments-student-footer { background-color:var(--cp-paper) !important; border-top:1px solid var(--cp-line) !important; }   /* the task page (assignments 2, React): its fixed Anterior / Próximo bar is white, black in the dark modes */
 :root.cp-look :is([data-testid="uploaded_files_table"], [data-testid="attempt-tab"] > div) { background-color:var(--cp-card) !important; }
-:root.cp-look [data-testid="assignments-2-student-view"] [class*="textInput__facade"] { background-color:var(--cp-card) !important; }   /* the "Tentativa" picker: white facade beside its input */
+:root.cp-look #application [class*="textInput__facade"], :root.cp-look [data-testid="translate-button"] > span { background-color:var(--cp-card) !important; }   /* InstUI fields (Tentativa, the search and sort of announcements and forums) paint white, black in the dark modes */
+:root.cp-look #discussion-drawer-layout #module_sequence_footer_container > div { background-color:transparent !important; }
+/* white blocks found by a sweep of the real Canvas in a dark mode: forum lists, the files search, People tabs, fields, classic quizzes */
+:root.cp-look :is([data-testid="discussion-connected-container"], .ic-discussion-row, #content .display_question.question, #content :is(input.ic-Input, select)) { background-color:var(--cp-card) !important; color:var(--cp-ink); }
+:root.cp-look :is(.discussions-v2__container-image, #group_categories_tabs .roster-tab, #group_categories_tabs .ui-tabs-nav li, #content .quiz-submission) { background-color:transparent !important; }
+:root.cp-look :is(#content .quiz-submission, #right-side, table.roster) :is(th, td, tr) { background-color:transparent !important; border-color:var(--cp-line) !important; }
+:root.cp-look #content .display_question .header { background-color:color-mix(in srgb, var(--cp-card) 70%, var(--cp-paper)) !important; border-color:var(--cp-line) !important; }   /* announcements and forums: the white box behind the toolbar */
 :root.cp-look [data-testid="uploaded_files_table"] :is(thead, tbody, tr, th, td) { background-color:transparent !important; }
 :root.cp-look .module-sequence-footer .module-sequence-footer-content { background:var(--cp-paper) !important; border-top:1px solid var(--cp-line) !important; }   /* Anterior / Próximo on tasks and files: Canvas paints the bar light gray, a black strip in the dark modes */
 :root.cp-look #context_modules .context_module .ig-header { margin-top:0 !important; }   /* its 15px top margin showed as a dark strip over each module */
