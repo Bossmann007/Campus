@@ -1,8 +1,9 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.3.1",
+  version: "6.3.2",
   items: [
+    "Sua IA: a página explica o que ela responde agora (o que falta entregar, quizzes, matéria pelo nome) e as perguntas prontas foram revistas",
     "Correção: na página da tarefa, a barra de baixo (Anterior, Nova tentativa, Próximo) e a tabela do arquivo enviado seguem o tema (estavam pretas nos modos escuros)",
     "Os números do painel (Garantido, Quanto falta, Entregues) agora dizem de qual matéria são, e você escolhe: Todas ou uma matéria, nos botões logo acima deles",
     "Correção: nos temas verdes, as entregas sem nota e o Quanto falta pareciam \"tudo certo\" (saíam na cor do tema); agora saem em âmbar, separadas das lançadas",

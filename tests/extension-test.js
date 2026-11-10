@@ -27,6 +27,13 @@ assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no
 assert(!/agentErr|agentFile|caderno-agente/.test(html), "popup: no AI file switch (6.0: the MCP uses a token)");
 { // "Conectar sua IA": the popup only links to the site page; the page and the privacy text carry the warnings
   const root = path.join(__dirname, ".."), ia = fs.readFileSync(path.join(root, "ia.html"), "utf8"), pv = fs.readFileSync(path.join(root, "privacidade.html"), "utf8");
+  { // the AI pages follow the MCP: the bundle linked is the current version, every question asked is one a tool answers, the grid is full
+    const v = require("../mcp/package.json").version, ai = fs.readFileSync(path.join(dir, "ai.html"), "utf8");
+    assert(ia.includes("releases/download/mcp-v" + v + "/caderno-mcp-" + v + ".mcpb") && !/mcp-v(?!\d+\.\d+\.\d+\/caderno-mcp-)/.test(ia), "/ia links the .mcpb of mcp " + v);
+    assert(/OAuth/.test(ia) && /3\(i\)/.test(ia), "/ia states both Canvas rules (API policy 3(i), OAuth for apps used by many)");
+    const asks = (ai.match(/<button type="button" data-q=/g) || []).length;
+    assert(asks % 4 === 0 && /Pendências/.test(ai) && /Quizzes/.test(ai) && !/Simular/.test(ai), "ai.html: " + asks + " questions (a full grid of 4), pendências and quizzes, no simulation the MCP cannot do");
+  }
   assert(/<a id="ia" href="https:\/\/caderno-plus\.vercel\.app\/ia" target="_blank" rel="noopener noreferrer">/.test(html), "popup: one link to the site's /ia page");
   assert(!/mcp|caderno-mcp/i.test(fs.readdirSync(dir).join(" ")), "no MCP code inside the extension");
   assert(/^!ia\.html$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")) && !/<script/i.test(ia), "the /ia page is published, with no scripts");
