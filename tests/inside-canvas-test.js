@@ -589,7 +589,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const ins = all(sp).filter(e => e.className === "simi");
   assert(ins.length > 0 && ins.every(i => i.placeholder && /^Simular a nota de /.test(i["aria-label"])), "one input per item without a grade, the need as placeholder");
   ins.forEach(i => { i.value = "abc"; i.listeners.input(); });
-  assert.strictEqual(headTxt().replace(" (simulação)", ""), before, "an invalid grade changes nothing");
+  assert.strictEqual(headTxt().replace(" (simulação)", "").replace("com essas notas", "pelas notas lançadas"), before, "an invalid grade changes nothing");
   ins.forEach(i => { i.value = String(i["aria-label"].match(/de ([\d,]+)\)$/)[1]); i.listeners.input(); });
   assert(/\(simulação\)/.test(headTxt()) && /10 garantidos de 10|garantida com essas notas/.test(headTxt()), "full marks everywhere: the head says so: " + headTxt());
   assert(/simulating/.test(all(sp).find(e => /^card cring/.test(e.className)).className), "the head is marked as a simulation");
