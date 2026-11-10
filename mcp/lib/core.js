@@ -225,7 +225,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.7.0";
+  const EXT_LATEST = "6.8.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -345,7 +345,74 @@ const NotasCore = (() => {
     const need = gain > 0 ? (meta - now) / gain * 10 : Infinity;
     return { status: need > 10 ? "nao-da" : "precisa", now: shown, need: need > 10 ? null : Math.round(need * 100) / 100, open, notYet, counted, total: 10, parts };
   }
+  // The student's formula, written the way the Plano de Ensino writes it, one line per part:
+  //   Final = 40% RA1 + 60% RA2          (weights in %, or 0,4 RA1; they are normalised when they do not add to 100)
+  //   RA1 = 75% Prova do RA1 + 25% Exercícios
+  //   Exercícios = média(TDE 1, TDE 2, PBL01)
+  //   RA2 = soma(PjBL Parte 2, Somativa RA2) de 5   (points added up, out of 5)
+  // The first line is the final grade (0-10). A name no line defines is a Canvas activity, found by its name (accents and
+  // case ignored; every activity whose name contains it). Each activity counts as its grade over its points; one without a
+  // grade is "left". A part with no activity yet counts as left too (said in missing).
+  // formulaParse(text) -> { lines: [{ name, op: "w" | "avg" | "sum", terms: [{ w, ref }], top }], errors: [..] }
+  const foldName = x => String(x == null ? "" : x).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  function formulaParse(text) {
+    const lines = [], errors = [];
+    String(text || "").split(/\r?\n|;/).slice(0, 60).forEach((raw, n) => {
+      const s = raw.replace(/#.*/, "").trim(); if (!s) return;
+      const m = /^([^=]{1,80})=(.{1,600})$/.exec(s); if (!m) { errors.push("linha " + (n + 1) + ": falta o \"=\" (ex.: Final = 40% RA1 + 60% RA2)"); return; }
+      const name = m[1].trim(), rhs = m[2].trim();
+      const fn = /^(m[eé]dia|soma)\s*\((.*)\)\s*(?:de\s+([\d.,]+))?$/i.exec(rhs);
+      if (fn) {
+        const refs = fn[2].split(",").map(x => x.trim()).filter(Boolean), top = fn[3] ? Number(fn[3].replace(",", ".")) : null;
+        if (!refs.length) { errors.push("linha " + (n + 1) + ": " + fn[1] + "() sem nada dentro"); return; }
+        lines.push({ name, op: /^s/i.test(fn[1]) ? "sum" : "avg", terms: refs.map(ref => ({ w: 1, ref })), top: top > 0 ? top : null }); return;
+      }
+      const terms = [];
+      for (const part of rhs.split("+")) {
+        const t = part.trim(), w = /^([\d.,]+)\s*%\s*(?:de\s+|x\s+|×\s*|\*\s*)?(.+)$/i.exec(t) || /^(0?[.,]\d+|1(?:[.,]0+)?)\s*(?:x|×|\*)?\s+(.+)$/i.exec(t);
+        if (!w) { errors.push("linha " + (n + 1) + ": \"" + t.slice(0, 40) + "\" sem peso (ex.: 40% RA1)"); return; }
+        let v = Number(w[1].replace(",", ".")); if (!/%/.test(t) && v <= 1) v *= 100;
+        terms.push({ w: v, ref: w[2].trim() });
+      }
+      lines.push({ name, op: "w", terms, top: null });
+    });
+    if (!lines.length && !errors.length) errors.push("escreva a fórmula, uma parte por linha (ex.: Final = 40% RA1 + 60% RA2)");
+    return { lines, errors };
+  }
+  // items: [{ key, name, points, score }]. Returns custom()'s fields plus leaves: [{ name, items: [names], missing }] and errors.
+  function formulaEval(text, items, meta) {
+    const { lines, errors } = formulaParse(text), byName = new Map(lines.map(l => [foldName(l.name), l]));
+    const out = (status, extra) => Object.assign({ status, now: null, need: null, open: 0, notYet: 0, counted: 0, total: 10, leaves: [], errors }, extra);
+    if (errors.length || !lines.length) return out("erro");
+    const acts = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0), leaves = new Map();
+    const leafOf = ref => { const k = foldName(ref); if (!leaves.has(k)) { const exact = acts.filter(a => foldName(a.name) === k), hit = !k ? [] : exact.length ? exact : acts.filter(a => (" " + foldName(a.name) + " ").includes(" " + k + " ")); /* whole words: "TDE 1" is not "TDE 10" */ leaves.set(k, { name: ref, items: hit, missing: !hit.length }); } return leaves.get(k); };
+    // value of a node with "x" (0-1) on everything left: { v: 0-10, pts, top }
+    const val = (ref, x, seen) => {
+      const l = byName.get(foldName(ref));
+      if (!l) { const lf = leafOf(ref);
+        if (lf.missing) return { v: x * 10, pts: null, top: null, left: true };
+        let got = 0, of = 0; for (const a of lf.items) { const p = Number(a.points); of += p; got += a.score == null || !Number.isFinite(Number(a.score)) ? x * p : Math.min(p, Math.max(0, Number(a.score))); }
+        return { v: got / of * 10, pts: got, top: of }; }
+      if (seen.has(l)) throw new Error("a parte \"" + l.name + "\" usa ela mesma");
+      const s2 = new Set(seen).add(l), kids = l.terms.map(t => Object.assign({ w: t.w }, val(t.ref, x, s2)));
+      if (l.op === "sum") { const pts = kids.reduce((s, k) => s + (k.pts == null ? (k.top || 0) * x : k.pts), 0), top = l.top || kids.reduce((s, k) => s + (k.top || 0), 0);
+        return { v: top > 0 ? Math.min(10, pts / top * 10) : 0, pts, top }; }
+      if (l.op === "avg") return { v: kids.reduce((s, k) => s + k.v, 0) / kids.length };
+      const W = kids.reduce((s, k) => s + k.w, 0); return { v: W > 0 ? kids.reduce((s, k) => s + k.w * k.v, 0) / W : 0 };
+    };
+    let now, best;
+    try { now = val(lines[0].name, 0, new Set()).v; best = val(lines[0].name, 1, new Set()).v; } catch (e) { errors.push(String(e.message)); return out("erro"); }
+    const lv = [...leaves.values()], counted = lv.reduce((s, l) => s + l.items.length, 0);
+    const open = acts.filter(a => lv.some(l => l.items.includes(a)) && (a.score == null || !Number.isFinite(Number(a.score)))).length;
+    const extra = { leaves: lv.map(l => ({ name: l.name, items: l.items.map(a => a.name), missing: l.missing })), counted, open, notYet: lv.filter(l => l.missing).length, weights: lines.filter(l => l.op === "w" && Math.abs(l.terms.reduce((s, t) => s + t.w, 0) - 100) > 0.5).map(l => l.name) };
+    const shown = Math.round(now * 100) / 100;
+    if (now >= meta - 1e-9) return out("garantido", Object.assign(extra, { now: shown, need: 0 }));
+    if (best < meta - 1e-9) return out("nao-da", Object.assign(extra, { now: shown }));
+    let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (val(lines[0].name, mid, new Set()).v >= meta - 1e-9) hi = mid; else lo = mid; }
+    return out("precisa", Object.assign(extra, { now: shown, need: Math.round(hi * 1000) / 100 }));
+  }
   function custom(items, rule, meta) {
+    if (rule && typeof rule.formula === "string" && rule.formula.trim()) return formulaEval(rule.formula, items, meta);   // the student's own formula wins
     const off = new Set(rule && Array.isArray(rule.off) ? rule.off.map(String) : []), total = rule && Number(rule.total) > 0 && Number(rule.total) <= 1000 ? Number(rule.total) : 10;
     if (rule && rule.parts && typeof rule.parts === "object" && Object.keys(rule.parts).some(k => /^[A-E]$/.test(k) && Number(rule.parts[k] && rule.parts[k].w) > 0)) return customParts(Array.isArray(items) ? items : [], rule, meta, off);
     const counted = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)));
@@ -424,6 +491,6 @@ const NotasCore = (() => {
       return Object.assign({ status: "precisa", now, need: Math.round(hi * 1000) / 100, left, approx }, extra);
     } catch (e) { return none("sem-formula"); }
   }
-  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, formulaParse, formulaEval, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();

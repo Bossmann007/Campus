@@ -432,25 +432,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const cp = await runContent("/courses/42", null, {}, { courseId: 42 }), pb = () => cp.anchor.kids.find(k => k.id === "qf-panel") || all(cp.body).find(k => k.id === "qf-panel") || all(cp.anchor).find(k => k.id === "qf-panel");
     { const dash = await runContent("/", null, {}, { courseId: 42 }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
       assert(!/meta garantida · soma dos pontos/.test(dt) && !/recuperação · soma dos pontos/.test(dt), "no garantido or recuperação from the plain sum before the student checks the rule"); }
-    const p0 = pb(); assert(p0 && /Soma dos pontos do Canvas/.test(text(p0)) && /A nota vai até/.test(text(p0)), "course page: the rule card and editor: " + (p0 ? text(p0).slice(0, 200) : "no panel"));
-    const boxes = () => all(pb()).filter(e => e.tag === "input" && e.type === "checkbox"), before = text(pb()).match(/(\d+,\d) de 10 agora/);
-    assert(boxes().length > 1 && boxes().every(b => b.checked), "every graded item counts by default");
-    const first = boxes()[0]; first.checked = false; await first.listeners.change(); await new Promise(r => setTimeout(r, 20));
+    const p0 = pb(); assert(p0 && /Sua fórmula/.test(text(p0)) && all(p0).some(e => e.tag === "textarea"), "course page: the rule card and the formula editor");
+    const ta = () => all(pb()).find(e => e.tag === "textarea"), applyF = async v => { ta().value = v; await all(pb()).find(e => e.textContent === "Aplicar").listeners.click(); await new Promise(r => setTimeout(r, 20)); };
+    assert(/^# Uma parte por linha/.test(ta().value) && /Final = soma\(/.test(ta().value), "an example made of this course's Canvas activities");
+    const names = (cp.store.cache.data.courses.find(c => c.id === 42).assignments || []).filter(x => x.points > 0).map(x => x.name);
+    await applyF("Final = 40% A\nA = média(" + names[0] + ")\n# a part with nothing in Canvas yet:\nB = soma(Nada assim) de 4\nFinal2 = 60% B");
     const saved = cp.store.myRules && cp.store.myRules[5] && cp.store.myRules[5]["42"];
-    assert(saved && saved.off.length === 1 && saved.total === 10 && /Sua regra/.test(text(pb())) && !boxes()[0].checked, "unticked: saved for this user and this course, the card says it is your rule");
-    const tot = all(pb()).find(e => e.tag === "input" && e.type === "number"); tot.value = "20"; await tot.listeners.change(); await new Promise(r => setTimeout(r, 20));
-    assert.strictEqual(cp.store.myRules[5]["42"].total, 20, "the grade's top saved");
-    // weights by part: turn on, put items in parts A and B, weigh them; the card says each part
-    await all(pb()).find(e => e.textContent === "Usar pesos por parte").listeners.click(); await new Promise(r => setTimeout(r, 20));
-    assert.deepStrictEqual(cp.store.myRules[5]["42"].parts, { A: { w: 50 }, B: { w: 50 } }, "two parts of 50% to start");
-    const sels = () => all(pb()).filter(e => e.tag === "select"); assert(sels().length === boxes().length, "a part picker per item");
-    sels()[1].value = "A"; await sels()[1].listeners.change(); await new Promise(r => setTimeout(r, 20));
-    sels()[2].value = "B"; await sels()[2].listeners.change(); await new Promise(r => setTimeout(r, 20));
-    const keys = Object.keys(cp.store.myRules[5]["42"].part); assert(keys.length === 2 && Object.values(cp.store.myRules[5]["42"].part).sort().join() === "A,B", "items saved in their parts, the first change kept");
-    const wA = all(pb()).find(e => e["aria-label"] === "Peso da parte A em %"); wA.value = "40"; await wA.listeners.change(); await new Promise(r => setTimeout(r, 20));
-    assert(cp.store.myRules[5]["42"].parts.A.w === 40 && cp.store.myRules[5]["42"].parts.B.w === 50 && /parte A \(40%\)/.test(text(pb())), "weights saved, the card shows each part: " + text(pb()).slice(0, 300));
+    assert(saved && /Final = 40% A/.test(saved.formula), "the formula saved for this user and this course");
+    assert(/Pela sua fórmula/.test(text(pb())) && new RegExp(names[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(text(pb())), "the card says it is the formula; each name shows its Canvas activity");
+    await applyF("Final = 40 RA1"); assert(/sem peso/.test(text(pb())) && /A fórmula tem um erro/.test(text(pb())), "a formula with an error says which line, and gives no number");
     const back = all(pb()).find(e => e.textContent === "Voltar ao padrão"); await back.listeners.click(); await new Promise(r => setTimeout(r, 20));
-    assert(!cp.store.myRules[5]["42"] && /Soma dos pontos do Canvas/.test(text(pb())), "back to the default: the rule removed");
+    assert(!cp.store.myRules[5]["42"], "back to the default: the rule removed");
     ok(); }
   assert.match(text(ob), /Próximos 7 dias/); assert.match(text(ob), /Prova adiada/, "week and announcements still shown");
   assert(!all(ob).some(e => e.tag === "button" && /rascunho/i.test(e.textContent)) && !/rascunho/i.test(text(ob)), "other turma: just the note, no draft button");

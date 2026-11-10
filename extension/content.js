@@ -195,7 +195,7 @@
     const parts = {}, part = {};
     for (const k of ["A", "B", "C"]) { const x = rule.parts && rule.parts[k]; if (x && Number(x.w) > 0) parts[k] = Object.assign({ w: Math.min(100, Number(x.w)) }, Number(x.top) > 0 ? { top: Math.min(1000, Number(x.top)) } : {}); }
     for (const [key, k] of Object.entries(rule.part || {}).slice(0, 300)) if (/^[ABC]$/.test(k)) part[String(key).slice(0, 300)] = k;
-    const mine = Object.assign({}, base[user], { [courseId]: Object.assign({ off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 }, Object.keys(parts).length ? { parts, part } : {}, rule.own ? { own: true } : {}) });
+    const mine = Object.assign({}, base[user], { [courseId]: Object.assign({ off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 }, Object.keys(parts).length ? { parts, part } : {}, rule.own ? { own: true } : {}, typeof rule.formula === "string" && rule.formula.trim() ? { formula: rule.formula.slice(0, 4000) } : {}) });
     myRules = mine; await chrome.storage.local.set({ myRules: Object.assign({}, base, { [user]: mine }) });
   }
   let ruleCache = null;   // the reading the items come from (set where the panels are drawn)
@@ -590,6 +590,8 @@
     .own-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; } .own-row .own-b { flex:none; }
     .c.scale { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; }
     .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:13.5px; }
+    .formula { padding:12px 14px; } .formula p.c, .formula .found li { white-space:normal; overflow:visible; text-overflow:clip; } .formula textarea { box-sizing:border-box; width:100%; margin:8px 0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; resize:vertical; }
+    .formula .acts { display:flex; gap:8px; align-items:center; } .formula .err { color:var(--bad); } .formula .found { margin:10px 0 0; padding-left:18px; font-size:13px; } .formula .found .miss { color:var(--warn); } .formula > .mini { margin-top:10px; }
     .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:12.5px; } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
     .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
     .ih { border-top:0; background:var(--track); font-size:11px; font-weight:600; color:var(--muted); padding:7px 12px; }
@@ -1389,54 +1391,31 @@
     if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes
       const items = ruleItems(courseId), rule = myRules[courseId] || { off: [], total: 10 }, off = new Set(rule.off || []);
       const card = el("div", "card cring"), m = el("div", "mid");
-      m.append(el("div", "t", mr.status === "vazio" ? (mr.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " passou dos pontos dela" : "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0)) : fmt(mr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+      m.append(el("div", "t", mr.status === "erro" ? "A fórmula tem um erro: veja abaixo" : mr.status === "vazio" ? (mr.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " passou dos pontos dela" : "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0)) : fmt(mr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
         el("div", "c", mr.status === "vazio" ? (mr.parts ? (mr.emptyPart ? "A parte " + mr.emptyPart + " ainda não tem atividade: escolha a parte de cada atividade na lista (ou diga quantos pontos ela vale)." : "Escolha a parte de cada atividade na lista abaixo.") : "Marque o que vale nota na lista abaixo.")
           : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " soma " + fmt(mr.planned, 1) + " pontos, mais que os " + fmt(mr.total, 1) + " dela: tire o que não vale nota ou aumente os pontos da parte " + mr.part + "." : "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz).") : mr.unsure ? "Pela soma dos pontos daria " + (mr.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : customText(mr) + (mr.notYet > 0.001 ? " · " + fmt(mr.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
-        el("div", "c", mr.parts && mr.parts.length ? "Sua regra: " + mr.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + fmt(p.now, 1) + "/10").join(" · ") + (mr.emptyPart ? " · a parte " + mr.emptyPart + " não tem atividade" : "")
+        el("div", "c", rule.formula ? "Pela sua fórmula" + (mr.notYet ? " · " + mr.notYet + (mr.notYet === 1 ? " parte ainda não está" : " partes ainda não estão") + " no Canvas (contam como o que falta)" : "") : mr.parts && mr.parts.length ? "Sua regra: " + mr.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + fmt(p.now, 1) + "/10").join(" · ") + (mr.emptyPart ? " · a parte " + mr.emptyPart + " não tem atividade" : "")
           : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
-      if (mr.status !== "vazio" && mr.status !== "acima" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
+      if (mr.status !== "vazio" && mr.status !== "acima" && mr.status !== "erro" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
       box.appendChild(card);
-      const ed = el("div", "card items rule"), th = el("div", "ir ih"); th.append(el("span", null, "Conta na nota?"), el("span", null, "Pontos"), el("span", null, "Nota"));
-      ed.appendChild(th);
+      // the editor: the formula, written as the Plano de Ensino writes it, and what each name found in Canvas
       const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
-      const cur = () => myRules[courseId] || rule;   // the rule as stored now (a second quick change keeps the first)
-      const save = async change => { await saveRule(cache.user, courseId, Object.assign({}, cur(), change)); redraw(); };
-      const weighted = !!(rule.parts && Object.keys(rule.parts).length);
-      for (const it of items) {
-        const row = el("div", "ir" + (off.has(it.key) ? " off" : "")), lab = el("label", "n"), ck = el("input");
-        ck.type = "checkbox"; ck.checked = !off.has(it.key); ck.setAttribute("aria-label", "Conta na nota: " + it.name);
-        ck.addEventListener("change", () => { const o = new Set(cur().off || []); if (ck.checked) o.delete(it.key); else o.add(it.key); save({ off: [...o] }); });
-        lab.append(ck, el("span", null, it.name));
-        if (weighted) {   // which part of the Plano de Ensino this item belongs to
-          const ps = el("select", "part"); ps.setAttribute("aria-label", "Parte de " + it.name);
-          for (const k of ["", "A", "B", "C"]) { const o = el("option", null, k ? "Parte " + k : "fora"); o.value = k; if (((rule.part || {})[it.key] || "") === k) o.selected = true; ps.appendChild(o); }
-          ps.addEventListener("change", () => { const pt = Object.assign({}, cur().part); if (ps.value) pt[it.key] = ps.value; else delete pt[it.key]; save({ part: pt }); });
-          lab.appendChild(ps);
-        }
-        row.append(lab, el("span", "w", fmt(it.points, 2)), el("span", "g", it.score == null ? "—" : fmt(it.score, 2)));
-        ed.appendChild(row);
+      const ed = el("div", "card rule formula"), ta = el("textarea"), acts = el("div", "acts"), apply = el("button", "primary", "Aplicar"), ex = el("button", "mini", "Exemplo");
+      const sample = "# Uma parte por linha. Um nome que nenhuma linha define é uma atividade do Canvas (pelo nome).\n"
+        + "Final = soma(" + items.slice(0, 6).map(i => i.name.replace(/[,()=+%#;]/g, " ").replace(/\s+/g, " ").trim()).join(", ") + ") de 10\n"
+        + "# Com pesos, como no Plano de Ensino:\n# Final = 40% RA1 + 60% RA2\n# RA1 = 75% Prova do RA1 + 25% Exercícios\n# Exercícios = média(TDE 1, TDE 2, PBL01)";
+      ta.value = rule.formula || sample; ta.rows = Math.min(14, Math.max(5, ta.value.split("\n").length + 1)); ta.spellcheck = false; ta.setAttribute("aria-label", "Fórmula da nota desta matéria");
+      apply.type = ex.type = "button";
+      apply.addEventListener("click", async () => { await saveRule(cache.user, courseId, Object.assign({}, myRules[courseId] || rule, { formula: String(ta.value).slice(0, 4000) })); redraw(); });
+      ex.addEventListener("click", () => { ta.value = sample; });
+      acts.append(apply, ex);
+      ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Escreva como no Plano de Ensino: pesos em % (Final = 40% RA1 + 60% RA2), média(...) ou soma(...) de N. Os nomes que não são partes são atividades do Canvas."), ta, acts);
+      if (rule.formula) {   // what the formula found: errors, then each name and its Canvas activities
+        const r = C.custom(items, rule, T);
+        for (const e of r.errors || []) ed.appendChild(el("p", "c err", e));
+        if (r.weights && r.weights.length) ed.appendChild(el("p", "c", "Os pesos de " + r.weights.join(", ") + " não somam 100%: foram ajustados na proporção."));
+        if (r.leaves && r.leaves.length) { const ul = el("ul", "found"); for (const l of r.leaves) { const li = el("li", l.missing ? "miss" : null); li.append(el("b", null, l.name), el("span", null, l.missing ? " → não achei no Canvas: conta como o que falta" : " → " + l.items.join("; "))); ul.appendChild(li); } ed.appendChild(ul); }
       }
-      const tl = el("label", "c tot"), ti = el("input"); ti.type = "number"; ti.min = "1"; ti.max = "1000"; ti.step = "0.5"; ti.value = String(rule.total || 10); ti.setAttribute("aria-label", "A nota vai até");
-      ti.addEventListener("change", () => { const v = Number(String(ti.value).replace(",", ".")); if (v > 0 && v <= 1000) save({ off: (myRules[courseId] || rule).off || [], total: v }); });
-      tl.append(el("span", null, "A nota vai até "), ti, el("span", null, " pontos (veja no Plano de Ensino)"));
-      if (!weighted) ed.appendChild(tl);
-      // weights by part: "RA1 40%, RA2 60%"; each part's top defaults to the points of its items
-      const pw = el("div", "c tot parts"), parts = rule.parts || {};
-      pw.appendChild(el("span", null, weighted ? "Pesos:" : "O Plano de Ensino tem pesos por parte (ex.: RA1 40%, RA2 60%)?"));
-      if (weighted) for (const k of ["A", "B", "C"]) {
-        const w = el("input"), tp = el("input"); w.type = tp.type = "number"; w.min = "0"; w.max = "100"; w.step = "5"; tp.min = "0"; tp.max = "1000"; tp.step = "0.5";
-        w.value = parts[k] ? String(parts[k].w) : ""; tp.value = parts[k] && parts[k].top ? String(parts[k].top) : ""; tp.placeholder = "auto";
-        w.setAttribute("aria-label", "Peso da parte " + k + " em %"); tp.setAttribute("aria-label", "Pontos da parte " + k + " (vazio: os pontos das atividades dela)");
-        const set = () => { const ps = Object.assign({}, cur().parts), v = Number(String(w.value).replace(",", ".")), t = Number(String(tp.value).replace(",", "."));
-          if (v > 0) ps[k] = Object.assign({ w: v }, t > 0 ? { top: t } : {}); else delete ps[k]; save(Object.keys(ps).length ? { parts: ps } : { parts: {}, part: {} }); };
-        w.addEventListener("change", set); tp.addEventListener("change", set);
-        pw.append(el("span", "pk", "Parte " + k), w, el("span", null, "% de"), tp, el("span", null, "pts"));
-      } else {
-        const on = el("button", "mini", "Usar pesos por parte"); on.type = "button";
-        on.addEventListener("click", () => save({ parts: { A: { w: 50 }, B: { w: 50 } }, part: {} }));
-        pw.appendChild(on);
-      }
-      ed.appendChild(pw);
       if (myRules[courseId]) { const rs = el("button", "mini", own ? "Voltar à regra pronta" : "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); if (own) location.reload(); else redraw(); }); ed.appendChild(rs); }
       box.appendChild(ed);
     }

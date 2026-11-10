@@ -136,4 +136,21 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.strictEqual(NotasCore.custom(its, { parts: { A: { w: 40 }, B: { w: 60 } }, part: { p1: "A", p2: "B" }, off: ["p2"] }, 7).status, "vazio", "an unticked item leaves its part too");
   ok();
 }
+{ // the student's formula, written as the Plano de Ensino writes it (Imperativa-like: the Centro de Notas gives 3,4 and 6,0)
+  const it = [{ key: "1", name: "Prova do RA1", points: 10, score: 8 }, { key: "2", name: "TDE 1: Motivação", points: 10, score: 10 }, { key: "3", name: "TDE 10", points: 10, score: 0 },
+    { key: "4", name: "PBL01", points: 10, score: 10 }, { key: "5", name: "Prova do RA2", points: 10, score: null }, { key: "6", name: "Trabalho do RA2", points: 10, score: null }];
+  const f = "Final = 40% RA1 + 60% RA2\nRA1 = 75% Prova do RA1 + 25% Exercícios\nExercícios = média(TDE 1, PBL01)\nRA2 = 70% Prova do RA2 + 30% Trabalho do RA2";
+  const r = NotasCore.custom(it, { formula: f }, 7);
+  assert(r.status === "precisa" && r.now === 3.4 && Math.abs(r.need - 6) < 0.01, "the Centro's numbers from the written formula: " + JSON.stringify(r).slice(0, 200));
+  assert.deepStrictEqual(r.leaves.find(l => l.name === "TDE 1").items, ["TDE 1: Motivação"], "\"TDE 1\" is a whole word: not TDE 10");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = 0,4 RA1 + 0,6 RA2\nRA1 = 75% Prova do RA1 + 25% Exercícios\nExercícios = média(TDE 1, PBL01)\nRA2 = 70% Prova do RA2 + 30% Trabalho do RA2" }, 7).now, 3.4, "weights as decimals too");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = soma(Prova do RA1, PBL01) de 20" }, 7).now, 9, "soma(...) de N: 18 of 20 = 9");
+  const miss = NotasCore.custom(it, { formula: "Final = 50% Prova do RA1 + 50% Prova do RA3" }, 7);
+  assert(miss.notYet === 1 && miss.leaves[1].missing && miss.now === 4 && Math.abs(miss.need - 6) < 0.01, "a name not in Canvas yet counts as left: " + JSON.stringify(miss).slice(0, 160));
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = 40 RA1" }, 7).status, "erro", "a term without a weight is an error");
+  assert(NotasCore.custom(it, { formula: "Final = 40% A\nA = 100% Final" }, 7).errors.some(e => /ela mesma/.test(e)), "a loop is an error, not a hang");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = 30% Prova do RA1 + 30% PBL01" }, 7).weights[0], "Final", "weights that do not add to 100 are said (and normalised)");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = média(Prova do RA1, PBL01)" }, 9).status, "garantido", "média of 8 and 10 = 9");
+  ok();
+}
 console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");
