@@ -1,8 +1,9 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.6.2",
+  version: "6.7.0",
   items: [
+    "Monte a sua própria nota em qualquer matéria: na página da matéria, \"Montar minha própria regra\" (embaixo dos pesos ou da fórmula do Centro de Notas). \"Voltar à regra pronta\" desfaz",
     "Banco de Dados: as notas do Canvas já são os pontos da nota final (aviso do professor), então a PjBL Parte II vale os 2 pontos do Canvas",
     "Centro de Notas: se as notas dele ainda não foram lidas, o painel mostra um botão Permitir a leitura (antes só o Atualizar do botão da extensão pedia)",
     "Na matéria, quando o Canvas soma diferente dos pesos do Plano de Ensino, o card explica (ex.: uma atividade lançada de 0 a 2 que vale 1,5); e o número grande agora diz \"média que falta tirar (de 10)\"",

@@ -214,18 +214,19 @@ function makeCanvas(token, opts = {}) {
     async quanto_falta(args = {}) {
       const meta = Math.min(10, Math.max(5, Number(String(args.meta == null ? 7 : args.meta).replace(",", ".")) || 7)), d = await reading(), t = today();
       if (C.expired(t)) return { note: C.EXPIRED_NOTE, subjects: [] };
-      const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c));   // like the panel: every active course
+      // the student's own rules live in the extension, per Canvas user: used only when they are this student's (another
+      // student may have logged in on that browser since its last reading)
+      let rules = {}; if (ponte) { try { const [got, me] = await Promise.all([ponte.rules(), getAll("/api/v1/users/self", 1)]); if (got.user != null && me && got.user === me.id) rules = got.rules; } catch (e) { rules = {}; } }
+      const ownOf = cv => !!(rules[String(cv.id)] && rules[String(cv.id)].own);   // a course the student moved to their own rule
+      const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c && !ownOf(cv)));   // like the panel: every active course
       const grades = C.fromCanvas(d).grades, out = subs.map(c => {
         const st = C.courseState(c, grades, t, meta), nx = C.nextItem(st);
         return { source: "regras", id: c.id, name: c.name, earned: pts(st.earned), status: st.status, label: panelLabel(st), next: nx ? { date: nx.date, name: nx.name } : null };
       });
       // every other course of the term: the formula the professor set in the Centro de Notas
-      // the student's own rules live in the extension, per Canvas user: used only when they are this student's (another
-      // student may have logged in on that browser since its last reading)
-      let rules = {}; if (ponte) { try { const [got, me] = await Promise.all([ponte.rules(), getAll("/api/v1/users/self", 1)]); if (got.user != null && me && got.user === me.id) rules = got.rules; } catch (e) { rules = {}; } }
-      for (const cv of d.courses.filter(cv => !C.subjectOf(cv, true)).slice(0, 15)) {
+      for (const cv of d.courses.filter(cv => !C.subjectOf(cv, true) || ownOf(cv)).slice(0, 15)) {
         const base = { source: "centro", course_id: cv.id, untrusted_canvas_text: { name: clean(cv.name, 160) } };
-        let cu = null, err = null; try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; }
+        let cu = null, err = null; if (!ownOf(cv)) { try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; } }   // the student's own rule wins over the Centro's formula
         const r0 = cu ? C.centro(cu, meta) : null;
         if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) {   // as the panel: no formula, or one the student cannot see whole   // no formula: the student's own rule (from the extension, with the ponte), else the sum of the points
           const rule = rules[String(cv.id)], items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), points: x.points, score: x.score == null ? null : x.score }));

@@ -476,7 +476,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!all(ntb).some(e => e.textContent === "Nenhum aviso nos últimos 60 dias."), "and do not claim there were no announcements");
   // course panel: the source line; garantido explained as a reading of the grades
   const cp = await runContent("/courses/71306", [], {}), cpb = cp.anchor.kids.find(k => k.id === "qf-panel");
-  assert(all(cpb).some(e => e.className === "muted src" && /^Pesos do Plano de Ensino 2026\/2 · não oficial, confira no Canvas$/.test(e.textContent)), "course panel: source line");
+  assert(all(cpb).some(e => /^muted src/.test(e.className) && /Pesos do Plano de Ensino 2026\/2 · não oficial, confira no Canvas/.test(text(e))), "course panel: source line");
+  { // any course can move to the student's own rule: the button saves it, the ready-made weights step aside (page and dashboard)
+    const ob = all(cpb).find(e => e.textContent === "Montar minha própria regra"); assert(ob, "the own-rule button under the ready-made weights");
+    const reloads = []; cp.env.location.reload = () => reloads.push(1); await ob.listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert(cp.store.myRules && cp.store.myRules[5]["71306"].own === true && reloads.length === 1, "saved as the student's own rule, the page reloads");
+    const after = await runContent("/courses/71306", [], { myRules: cp.store.myRules }), ap = after.anchor.kids.find(k => k.id === "qf-panel");
+    assert(/Soma dos pontos do Canvas|Sua regra/.test(text(ap)) && /Voltar à regra pronta/.test(text(ap)) && !/Pesos do Plano de Ensino 2026\/2/.test(text(ap)), "the course page now shows the student's rule, with a way back");
+    const dash = await runContent("/", null, { myRules: cp.store.myRules }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
+    assert(/sua regra/i.test(dt) && /Banco de Dados|Arquitetura/.test(dt), "the dashboard lists it with the student's rule: " + dt.slice(0, 200)); }
   assert(all(cpb).filter(e => e.className === "big" && /garantido/.test(text(e))).every(e => e.title === C.GARANTIDO_TIP), "garantido tooltip: not official");
   assert.strictEqual(C.GARANTIDO_TIP, "Garantido pelas notas lançadas; não considera frequência nem recuperação"); ok();
 
