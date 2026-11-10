@@ -207,6 +207,36 @@
   const customOf = courseId => { const items = ruleItems(courseId); if (!items.length) return null; const r = C.custom(items, myRules[courseId], T); if (r.status === "vazio" && !r.parts) return null;
     const mine = !!myRules[courseId]; return Object.assign(r, { mine, unsure: !mine && (r.status === "garantido" || r.status === "nao-da") }); };
   const customPill = r => r.status === "acima" || r.unsure ? "confira" : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.";
+  // The formula the editor starts from: the professor's in the Centro de Notas (its tree written out), else the Plano de
+  // Ensino weights Caderno+ has for the course, else the sum of the Canvas points. { text, from }.
+  const shortName2 = n => String(n || "").split(/[:(,;+=#]/)[0].replace(/\s+/g, " ").trim().slice(0, 60);   // an activity's name, short enough for a formula
+  function startFormula(courseId, items, shortRef = shortName2) {
+    const nm = x => shortRef(x) || "Parte", pct = x => String(Math.round(x * 100) / 100).replace(".", ",") + "%";
+    const cu = myCentro[courseId], cr = cu ? C.centro(cu, T) : null;
+    if (cu && cr && cr.status !== "sem-formula") {
+      const cols = new Map(); for (const g of cu.grupos || []) for (const gc of (g && g.grupo_colunas) || []) if (gc && gc.coluna) cols.set(gc.coluna.id_coluna, gc.coluna);
+      for (const c of cu.colunas || []) cols.set(c.id_coluna, c);
+      const final = (cu.colunas || []).find(c => c && c.tipo_coluna === "final"), lines = [], seen = new Set();
+      const write = (col, name) => { if (!col || seen.has(col.id_coluna) || lines.length > 30) return; seen.add(col.id_coluna);
+        const kids = (col.colunas_associadas_pai || []).map(k => ({ col: cols.get(k.id_coluna) || { id_coluna: k.id_coluna, nome_coluna: "Parte " + k.id_coluna }, w: k.pivot && Number(k.pivot.peso_coluna_filho) })).filter(k => k.col);
+        if (!kids.length) return; const names = kids.map(k => nm(k.col.nome_coluna)), calc = col.tipo_calculo;
+        lines.push(name + " = " + (calc === "media_ponderada" ? kids.map((k, i) => pct(k.w || 0) + " " + names[i]).join(" + ") : (calc === "total" ? "soma(" : "média(") + names.join(", ") + ")")
+          + (calc === "maximo" || calc === "minimo" ? "   # no Centro é o " + (calc === "maximo" ? "maior" : "menor") + " deles (recuperação)" : ""));
+        kids.forEach((k, i) => { if ((k.col.colunas_associadas_pai || []).length) write(k.col, names[i]); }); };
+      if (final) { write(final, "Final"); if (lines.length) return { text: lines.join("\n"), from: "da fórmula do professor no Centro de Notas" }; }
+    }
+    const pack = C.COURSES.find(x => C.CANVAS[x.id] && C.CANVAS[x.id].cids.map(String).includes(String(courseId)));
+    if (pack) {
+      const map = C.CANVAS[pack.id].items || {}, extra = [];
+      const terms = pack.items.map(it => { const m = map[it.id] || {}; let ref = nm(it.name.replace(/\s*·\s*/g, " "));   // an item with no Canvas activity keeps its full name (it shows as not in Canvas yet)
+        if (m.one) ref = nm(m.one);
+        else if (m.avg || m.sum) { ref = nm(it.name.replace(/^RA\d+\s*·\s*/, "")); extra.push(ref + " = " + (m.sum ? "soma(" : "média(") + (m.avg || m.sum).map(nm).join(", ") + ")" + (m.sum ? " de " + String(it.inMax).replace(".", ",") : "")); }
+        return pct(it.max * 10) + " " + ref; });
+      return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos do Plano de Ensino que o Caderno+ tem" };
+    }
+    const total = items.reduce((t, i) => t + Number(i.points || 0), 0);
+    return { text: "Final = soma(" + items.slice(0, 12).map(i => nm(i.name)).join(", ") + ") de " + String(Math.max(10, Math.round(total * 100) / 100)).replace(".", ","), from: "da soma dos pontos do Canvas" };
+  }
   const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
   // the offer to read the Centro de Notas, on the dashboard and on a course page, while its permission is missing
   const centroOffer = () => { const b = el("div", "card centro-ask"), go = el("button", "primary", "Permitir a leitura");
@@ -621,7 +651,9 @@
     .own-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; } .own-row .own-b { flex:none; }
     .c.scale { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; }
     .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:13.5px; }
-    .formula { padding:12px 14px; } .formula p.c, .formula .found li { white-space:normal; overflow:visible; text-overflow:clip; } .formula textarea { box-sizing:border-box; width:100%; margin:8px 0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; resize:vertical; }
+    .formula { padding:12px 14px; } .formula .acts { justify-content:flex-start; } .formula .from { opacity:.8; } .formula .res { font-weight:600; color:var(--fg); margin-top:8px; }
+    .formula .lbl { margin-top:10px; } .formula .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .formula .chip { padding:3px 9px; border:1px solid var(--line); border-radius:999px; background:var(--bg); color:var(--fg); font:12px/1.3 var(--sans); cursor:pointer; } .formula .chip:hover { border-color:var(--coral); }
+    .formula .back { margin-top:12px; } .formula .found-d { margin-top:10px; font-size:13px; } .formula .found-d summary { cursor:pointer; color:var(--muted); } .formula p.c, .formula .found li { white-space:normal; overflow:visible; text-overflow:clip; } .formula textarea { box-sizing:border-box; width:100%; margin:8px 0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; resize:vertical; }
     .formula .acts { display:flex; gap:8px; align-items:center; } .formula .err { color:var(--bad); } .formula .found { margin:10px 0 0; padding-left:18px; font-size:13px; } .formula .found .miss { color:var(--warn); } .formula > .mini { margin-top:10px; }
     .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:12.5px; } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
     .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
@@ -1388,7 +1420,8 @@
     ruleCache = cache;
     const mr = !c && !cr && prefs.grades && !a.expired && ruleItems(courseId).length ? customOf(courseId) || { status: "vazio" } : null;   // neither (or chosen): the student's own rule
     const ownBtn = () => { const b = el("button", "mini own-b", "Montar minha própria regra"); b.type = "button"; b.title = "Usar os pontos do Canvas desta matéria, com o que você tira da conta e os pesos que você puser, no lugar desta regra";
-      b.addEventListener("click", async () => { await saveRule(cache.user, courseId, { merge: true, own: true }); location.reload(); }); return b; };   // keeps a formula written before
+      b.addEventListener("click", async () => { const had = myRules[courseId] && myRules[courseId].formula;   // starts with the professor's or the Plano's formula, saved, so the card and the editor agree
+        await saveRule(cache.user, courseId, Object.assign({ merge: true, own: true }, had ? {} : { formula: startFormula(courseId, ruleItems(courseId)).text })); location.reload(); }); return b; };
     if (!c && !cr && !mr && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
@@ -1430,25 +1463,40 @@
           : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
       if (mr.status !== "vazio" && mr.status !== "acima" && mr.status !== "erro" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
       box.appendChild(card);
-      // the editor: the formula, written as the Plano de Ensino writes it, and what each name found in Canvas
+      // the editor: the formula as the Plano de Ensino writes it; it starts from the professor's (Centro de Notas) or the
+      // Plano's weights, shows the result while typing, and offers the course's activities as short names to insert
       const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
-      const ed = el("div", "card rule formula"), ta = el("textarea"), acts = el("div", "acts"), apply = el("button", "primary", "Aplicar"), ex = el("button", "mini", "Exemplo");
-      const sample = "# Uma parte por linha. Um nome que nenhuma linha define é uma atividade do Canvas (pelo nome).\n"
-        + "Final = soma(" + items.slice(0, 6).map(i => i.name.replace(/[,()=+%#;]/g, " ").replace(/\s+/g, " ").trim()).join(", ") + ") de 10\n"
-        + "# Com pesos, como no Plano de Ensino:\n# Final = 40% RA1 + 60% RA2\n# RA1 = 75% Prova do RA1 + 25% Exercícios\n# Exercícios = média(TDE 1, TDE 2, PBL01)";
-      ta.value = rule.formula || sample; ta.rows = Math.min(14, Math.max(5, ta.value.split("\n").length + 1)); ta.spellcheck = false; ta.setAttribute("aria-label", "Fórmula da nota desta matéria");
-      apply.type = ex.type = "button";
+      const ed = el("div", "card rule formula"), ta = el("textarea"), acts = el("div", "acts"), apply = el("button", "primary", "Aplicar"), restart = el("button", "mini", "Recomeçar");
+      const shortRef = shortName2;
+      const start = startFormula(courseId, items, shortRef);
+      ta.value = rule.formula || start.text; ta.rows = Math.min(16, Math.max(4, ta.value.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 64)), 0) + 1));   // long lines wrap: count them ta.spellcheck = false; ta.setAttribute("aria-label", "Fórmula da nota desta matéria");
+      apply.type = restart.type = "button"; restart.title = "Voltar à fórmula inicial (" + start.from + ")";
+      const pv = el("div", "pv"), found = el("div");
+      const preview = () => {   // the result of what is typed now (nothing saved until Aplicar)
+        const r = C.custom(items, { formula: ta.value }, T); pv.replaceChildren(); found.replaceChildren();
+        if (r.status === "erro") { for (const e of r.errors || []) pv.appendChild(el("p", "c err", e)); return; }
+        pv.appendChild(el("p", "c res", "Com esta fórmula: " + (r.now == null ? "—" : fmt(r.now, 1)) + " agora · " + (r.status === "garantido" ? "meta " + fmt(T, T % 1 ? 1 : 0) + " garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + " em média no que falta")
+          + (r.weights && r.weights.length ? " · os pesos de " + r.weights.join(", ") + " não somam 100% (ajustados)" : "")));
+        if (r.leaves && r.leaves.length) {   // what each name found: open by itself only when a name found nothing
+          const miss = r.leaves.filter(l => l.missing).length, det = el("details", "found-d"), ul = el("ul", "found");
+          det.appendChild(el("summary", null, "O que cada nome achou no Canvas (" + r.leaves.length + ")" + (miss ? " · " + miss + " sem atividade" : ""))); if (miss) det.open = true;
+          for (const l of r.leaves) { const li = el("li", l.missing ? "miss" : null); li.append(el("b", null, l.name), el("span", null, l.missing ? " → não achei no Canvas (conta como o que falta)" : " → " + l.items.join("; "))); ul.appendChild(li); }
+          det.appendChild(ul); found.appendChild(det); }
+      };
+      let pt = 0; ta.addEventListener("input", () => { clearTimeout(pt); pt = setTimeout(preview, 250); });
       apply.addEventListener("click", async () => { await saveRule(cache.user, courseId, { merge: true, formula: String(ta.value).slice(0, 4000), own: own || undefined }); redraw(); });
-      ex.addEventListener("click", () => { ta.value = sample; });
-      acts.append(apply, ex);
-      ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Escreva como no Plano de Ensino: pesos em % (Final = 40% RA1 + 60% RA2), média(...) ou soma(...) de N. Os nomes que não são partes são atividades do Canvas."), ta, acts);
-      if (rule.formula) {   // what the formula found: errors, then each name and its Canvas activities
-        const r = C.custom(items, rule, T);
-        for (const e of r.errors || []) ed.appendChild(el("p", "c err", e));
-        if (r.weights && r.weights.length) ed.appendChild(el("p", "c", "Os pesos de " + r.weights.join(", ") + " não somam 100%: foram ajustados na proporção."));
-        if (r.leaves && r.leaves.length) { const ul = el("ul", "found"); for (const l of r.leaves) { const li = el("li", l.missing ? "miss" : null); li.append(el("b", null, l.name), el("span", null, l.missing ? " → não achei no Canvas: conta como o que falta" : " → " + l.items.join("; "))); ul.appendChild(li); } ed.appendChild(ul); }
-      }
-      if (myRules[courseId]) { const rs = el("button", "mini", own ? "Voltar à regra pronta" : "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); if (own) location.reload(); else redraw(); }); ed.appendChild(rs); }
+      restart.addEventListener("click", () => { ta.value = start.text; preview(); });
+      acts.append(apply, restart);
+      // the course's activities: a click puts the short name where the cursor is
+      const chips = el("div", "chips");
+      for (const it of items.slice(0, 40)) { const b = el("button", "chip", shortRef(it.name)); b.type = "button"; b.title = it.name + " · " + fmt(it.points, 2) + " pts";
+        b.addEventListener("click", () => { const v = String(ta.value), at = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length, add = shortRef(it.name);
+          ta.value = v.slice(0, at) + add + v.slice(typeof ta.selectionEnd === "number" ? ta.selectionEnd : at); if (ta.focus) ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(at + add.length, at + add.length); preview(); });
+        chips.appendChild(b); }
+      ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Uma parte por linha, como no Plano de Ensino: pesos em % (Final = 40% RA1 + 60% RA2), média(A, B) ou soma(A, B) de N. Um nome que nenhuma linha define é uma atividade do Canvas."),
+        el("p", "c from", "Começou " + start.from + "."), ta, acts, pv, el("div", "c lbl", "Atividades desta matéria (clique para pôr na fórmula):"), chips, found);
+      preview();
+      if (myRules[courseId]) { const rs = el("button", "mini back", own ? "Voltar à regra pronta" : "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); if (own) location.reload(); else redraw(); }); ed.appendChild(rs); }
       box.appendChild(ed);
     }
     courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});

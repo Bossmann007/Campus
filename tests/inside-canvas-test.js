@@ -440,7 +440,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
       assert(!/meta garantida · soma dos pontos/.test(dt) && !/recuperação · soma dos pontos/.test(dt), "no garantido or recuperação from the plain sum before the student checks the rule"); }
     const p0 = pb(); assert(p0 && /Sua fórmula/.test(text(p0)) && all(p0).some(e => e.tag === "textarea"), "course page: the rule card and the formula editor");
     const ta = () => all(pb()).find(e => e.tag === "textarea"), applyF = async v => { ta().value = v; await all(pb()).find(e => e.textContent === "Aplicar").listeners.click(); await new Promise(r => setTimeout(r, 20)); };
-    assert(/^# Uma parte por linha/.test(ta().value) && /Final = soma\(/.test(ta().value), "an example made of this course's Canvas activities");
+    assert(/^Final = soma\(/.test(ta().value) && /Começou da soma dos pontos do Canvas/.test(text(pb())) && /Com esta fórmula:/.test(text(pb())), "starts from the sum of this course's Canvas activities, with a live result");
+    { const chip = all(pb()).find(e => e.className === "chip"); assert(chip, "the course's activities as chips"); const before = ta().value; ta().selectionStart = ta().selectionEnd = 0; chip.listeners.click(); assert(ta().value.length > before.length && ta().value.startsWith(chip.textContent), "a chip puts its name at the cursor"); }
     const names = (cp.store.cache.data.courses.find(c => c.id === 42).assignments || []).filter(x => x.points > 0).map(x => x.name);
     await applyF("Final = 40% A\nA = média(" + names[0] + ")\n# a part with nothing in Canvas yet:\nB = soma(Nada assim) de 4\nFinal2 = 60% B");
     const saved = cp.store.myRules && cp.store.myRules[5] && cp.store.myRules[5]["42"];
@@ -480,7 +481,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const reloads = []; cp.env.location.reload = () => reloads.push(1); await ob.listeners.click(); await new Promise(r => setTimeout(r, 20));
     assert(cp.store.myRules && cp.store.myRules[5]["71306"].own === true && reloads.length === 1, "saved as the student's own rule, the page reloads");
     const after = await runContent("/courses/71306", [], { myRules: cp.store.myRules }), ap = after.anchor.kids.find(k => k.id === "qf-panel");
-    assert(/Soma dos pontos do Canvas|Sua regra/.test(text(ap)) && /Voltar à regra pronta/.test(text(ap)) && !/Pesos do Plano de Ensino 2026\/2/.test(text(ap)), "the course page now shows the student's rule, with a way back");
+    assert(/Pela sua fórmula|Sua fórmula/.test(text(ap)) && /Voltar à regra pronta/.test(text(ap)) && !/Pesos do Plano de Ensino 2026\/2 · não oficial/.test(text(ap)), "the course page now shows the student's rule, with a way back");
+    assert(/^Final = .*% /.test(cp.store.myRules[5]["71306"].formula) && /Começou dos pesos do Plano de Ensino/.test(text(ap)), "it starts from the Plano's weights, written as a formula and saved");
     const dash = await runContent("/", null, { myRules: cp.store.myRules }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
     assert(/sua regra/i.test(dt) && /Banco de Dados|Arquitetura/.test(dt), "the dashboard lists it with the student's rule: " + dt.slice(0, 200)); }
   assert(all(cpb).filter(e => e.className === "big" && /garantido/.test(text(e))).every(e => e.title === C.GARANTIDO_TIP), "garantido tooltip: not official");
