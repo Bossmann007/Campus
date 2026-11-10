@@ -74,6 +74,11 @@ Instale só o pacote `caderno-mcp` do npm (publicado por `bossmann`) ou o `.mcpb
 - `announcements`: avisos recentes (título, matéria, data, se foi lido); sem autor nem texto.
 - `modules`: módulos de uma matéria e os títulos dos itens.
 - `teachers`: o nome dos professores de cada matéria.
+- `pendencias`: o que o Canvas marca como faltando e as entregas online ainda abertas com prazo à frente.
+- `quizzes`: quizzes clássicos de uma matéria (datas, tentativas, tempo, pontos); sem as perguntas.
+
+`grades`, `modules`, `pendencias` e `quizzes` aceitam `course_id` ou `course` (um pedaço do nome da matéria). Sem
+uma matéria só com esse nome, a resposta traz as candidatas com o `course_id`.
 
 ## Segurança
 

@@ -730,6 +730,20 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(tk.store.tasks[5].length === 1 && tk.store.tasks[5][0].title === "imprimir resumo" && tk.store.tasks[5][0].date === isoIn(1) && tk.store.tasks[9], "saved per user, the day read from the words");
   assert(all(tk.anchor).some(e => /^ev /.test(e.className) && /^imprimir resumo · Minha tarefa/.test(e["aria-label"] || "")), "a task with a day shows in the week");
   assert(tk.sent.filter(m => m.type === "remind").pop().items.some(i => /imprimir resumo/.test(i.title)), "and gets a reminder");
+  { // steps inside a task: added from "+", ticked, counted in the task's line, deleted; ten at most
+    const lab = re => all(tcard()).find(e => re.test(e["aria-label"] || "")), nap = () => new Promise(r => setTimeout(r, 15));
+    const addStep = async v => { lab(/^Adicionar passo em: imprimir/).listeners.click(); lab(/^Novo passo de: imprimir/).value = v;
+      await all(tcard()).filter(e => e.tag === "form").find(f => / step$/.test(f.className)).listeners.submit({ preventDefault() {} }); await nap(); };
+    await addStep("ler o capítulo 3"); await addStep("  "); await addStep("fazer os exercícios");
+    assert.deepStrictEqual(tk.store.tasks[5][0].subs, [{ t: "ler o capítulo 3", d: false }, { t: "fazer os exercícios", d: false }], "two steps saved inside the task, the blank one ignored");
+    assert.match(text(tcard()), /minha tarefa · 0 de 2 passos/, "the task line counts its steps");
+    await lab(/^Marcar passo como feito: ler/).listeners.click(); await nap();
+    assert(tk.store.tasks[5][0].subs[0].d === true && /1 de 2 passos/.test(text(tcard())) && lab(/^Desmarcar passo: ler/), "a step ticked");
+    await lab(/^Apagar passo: fazer/).listeners.click(); await nap();
+    assert(tk.store.tasks[5][0].subs.length === 1 && tk.store.tasks[5].length === 1, "a step deleted, the task stays");
+    for (let i = 0; i < 12; i++) if (lab(/^Adicionar passo em: imprimir/)) { lab(/^Adicionar passo em: imprimir/).listeners.click(); const inp = lab(/^Novo passo de: imprimir/); if (!inp) break; await addStep("p" + i); }
+    assert.strictEqual(tk.store.tasks[5][0].subs.length, 10, "ten steps at most");
+  }
   await all(tcard()).find(e => /^Marcar como feito: imprimir/.test(e["aria-label"] || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
   assert(/ dn$/.test(all(tcard()).find(e => /^row/.test(e.className) && /imprimir/.test(text(e))).className), "ticked: greyed");
   await all(tcard()).find(e => /^Apagar: imprimir/.test(e["aria-label"] || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));

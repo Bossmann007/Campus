@@ -124,9 +124,10 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert.strictEqual(store.prefs.mode, "foco", "a popup change writes only its own key: the panel's mode survives");
   global.location.hash = "#tab";   // the import runs in a tab (a file dialog closes the popup)
   store.tasks = { 9: [{ id: "a", title: "do outro", date: null }] };
-  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09" }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
+  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09", subs: [{ t: "passo", d: true, x: 1 }, { t: 7 }, null] }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
   assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
+  assert.deepStrictEqual(store.tasks[5][0].subs, [{ t: "passo", d: true }], "import: a task keeps its well-formed steps");
   assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
   store.cache = Object.assign({}, store.cache, { user: 5 });
   pel("importFile").files = [{ text: async () => JSON.stringify({ app: "quanto-falta", grades: { "imp:pbl09": "8", "abd:s3": "0,9", "x y": "1" } }) }];

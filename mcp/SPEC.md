@@ -92,8 +92,14 @@ Host pinned to `https://pucpr.instructure.com`; every request built from an allo
 | `quanto_falta` | the same readings + `core.js` (`fromCanvas`, `requiredFor`) | per subject: earned, needed, label, as the panel (Canvas grades only; grades typed by hand in the extension are not seen, said in the reply) |
 | `announcements` | `/api/v1/announcements` (10 newest) | date, course, title, unread; no author, no body |
 | `modules` | `/api/v1/courses/:id/modules?include[]=items` | names, item titles, Canvas links |
+| `pendencias` | the same readings | what Canvas flags as missing, online items still open with a due date ahead, and the courses that could not be read |
+| `quizzes` | `/api/v1/courses/:id/quizzes` | classic quizzes: title, dates, points, minutes, attempts, question count; no description, no questions (404 = quizzes off in the course) |
 
-Out: inbox and people (third-party data, a manipulation path), files content, quizzes, any write. Every Canvas-written
+`grades`, `modules`, `pendencias` and `quizzes` take `course_id` or `course` (a piece of the name, accents and case
+ignored). No single match, or an id outside the student's term: the reply is the candidates with their ids, and
+nothing is requested for that id.
+
+Out: inbox and people (third-party data, a manipulation path), files content, quiz questions and answers, any write. Every Canvas-written
 string goes inside `untrusted_canvas_text`, control characters stripped, each ≤ 500 chars, reply ≤ 48 KB, so the AI
 treats teacher/student text as data, not instructions.
 

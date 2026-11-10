@@ -9,7 +9,7 @@ const BASE = "https://pucpr.instructure.com";
 // Every path the server may read; ids are digits only. Anything else throws before a request leaves the machine.
 const ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/assignments$/, /^\/api\/v1\/announcements$/,
   /^\/api\/v1\/planner\/items$/, /^\/api\/v1\/courses\/\d{1,15}\/modules$/, /^\/api\/v1\/courses\/\d{1,15}\/users$/, /^\/api\/v1\/courses\/\d{1,15}\/tabs$/,
-  /^\/api\/v1\/courses\/\d{1,15}\/external_tools\/sessionless_launch$/];
+  /^\/api\/v1\/courses\/\d{1,15}\/external_tools\/sessionless_launch$/, /^\/api\/v1\/courses\/\d{1,15}\/quizzes$/];
 // The Centro de Notas (PUCPR's grade tool, an LTI tab in every course): only this host, only these paths, never the token.
 const CENTRO = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io", LTI_URL = CENTRO + "/lti";
 const TOOL_PATHS = [/^\/lti$/, /^\/lti\/finalize$/, /^\/curso\/\d{1,15}$/];
@@ -168,6 +168,21 @@ function makeCanvas(token, opts = {}) {
     return out;
   };
   const courseId = id => { const s = String(id == null ? "" : id); if (!/^\d{1,15}$/.test(s)) throw new Error("course_id deve ser só dígitos"); return s; };
+  // A course by id or by a piece of its name (accents and case ignored). One match: its id. None or several: the tool
+  // answers with the candidates (names stay inside untrusted_canvas_text) so the AI asks again with a course_id.
+  const fold = x => String(x == null ? "" : x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const pick = async args => {
+    const list = (d, hit, erro) => ({ miss: { note: NOTE, erro, candidates: (hit.length ? hit.slice(0, 5) : d.courses.slice(0, 15)).map(c => ({ course_id: c.id, untrusted_canvas_text: { name: clean(c.name, 160) } })) } });
+    if (args.course_id != null && args.course_id !== "") {   // an id that is not one of the student's courses of the term is said so, not read
+      const id = courseId(args.course_id), d = await reading();
+      return d.courses.some(c => String(c.id) === id) ? { id } : list(d, [], "esse course_id não é de uma matéria sua deste semestre: escolha um da lista");
+    }
+    const asked = args.course != null && String(args.course).trim() !== "", q = fold(String(args.course == null ? "" : args.course).slice(0, 120));
+    if (!asked) return {};
+    const d = await reading(), hit = !q ? [] : d.courses.filter(c => fold(c.name).includes(q)), exact = hit.filter(c => fold(c.name) === q), one = exact.length === 1 ? exact : hit;
+    if (one.length === 1) return { id: courseId(one[0].id) };
+    return list(d, hit, hit.length ? "mais de uma matéria com esse nome: repita com o course_id" : "nenhuma matéria com esse nome: escolha um course_id");
+  };
   // the Centro de Notas, one course at a time (the tool keeps one session), each reading kept 10 minutes
   const centroCache = new Map(); let queue = Promise.resolve();
   const centroOf = id => {
@@ -208,7 +223,8 @@ function makeCanvas(token, opts = {}) {
         subjects: out };
     },
     async grades(args = {}) {
-      const d = await reading(), want = args.course_id != null ? courseId(args.course_id) : null;
+      const pk = await pick(args); if (pk.miss) return pk.miss;
+      const d = await reading(), want = pk.id || null;
       const cs = d.courses.filter(c => !want || String(c.id) === want);
       return { note: NOTE, courses: cs.map(c => ({ course_id: c.id, untrusted_canvas_text: { name: clean(c.name, 160) },
         assignments: c.assignments.slice(0, 80).map(a => ({ score: numOr(a.score), points: numOr(a.points), due: isoOr(a.due), missing: a.missing === true, submitted: a.submitted === true, url: canvasLink(a.url), untrusted_canvas_text: { name: clean(a.name, 200) } })) })) };
@@ -229,9 +245,34 @@ function makeCanvas(token, opts = {}) {
       return { note: NOTE, announcements: list.map(a => ({ at: isoOr(a.at), unread: a.unread === true, url: canvasLink(a.url), untrusted_canvas_text: { title: clean(a.title, 200), course: clean(a.course, 160) } })) };   // no author, no body
     },
     async modules(args = {}) {
-      const id = courseId(args.course_id), mods = await getAll("/api/v1/courses/" + id + "/modules?include[]=items&per_page=50", 3);
+      const pk = await pick(args); if (pk.miss) return pk.miss;
+      if (!pk.id) throw new Error("passe course_id ou course (nome da matéria)");
+      const id = courseId(pk.id), mods = await getAll("/api/v1/courses/" + id + "/modules?include[]=items&per_page=50", 3);
       return { note: NOTE, modules: (Array.isArray(mods) ? mods : []).slice(0, 40).map(m => ({ untrusted_canvas_text: { name: clean(m.name, 200) },
         items: (m.items || []).slice(0, 60).map(i => ({ type: wordOr(i.type), url: canvasLink(i.html_url), untrusted_canvas_text: { title: clean(i.title, 200) } })) })) };
+    },
+    // What Canvas itself flags as missing, and what is still open with a due date ahead. Paper and no-submission items
+    // are never "open": Canvas cannot know they were handed in.
+    async pendencias(args = {}) {
+      const pk = await pick(args); if (pk.miss) return pk.miss;
+      const d = await reading(), now = Date.now(), missing = [], open = [], cs = d.courses.filter(c => !pk.id || String(c.id) === pk.id);
+      for (const c of cs) for (const a of c.assignments) {
+        const row = { course_id: c.id, due: isoOr(a.due), points: numOr(a.points), url: canvasLink(a.url), untrusted_canvas_text: { name: clean(a.name, 200), course: clean(c.name, 160) } };
+        if (a.missing === true) missing.push(row);
+        else if (a.online && !a.submitted && a.score == null && a.due && Date.parse(a.due) > now) open.push(row);
+      }
+      const byDue = (x, y) => String(x.due).localeCompare(String(y.due));
+      return { note: NOTE, aviso: "missing = o que o Canvas marca como faltando; open = entregas online ainda não enviadas, com prazo à frente; unread = matérias que o Canvas não deixou ler agora (nada se sabe delas).",
+        unread: cs.filter(c => c.failed === true).map(c => c.id), missing: missing.sort(byDue).slice(0, 60), open: open.sort(byDue).slice(0, 60) };
+    },
+    // Classic quizzes of one course: dates, attempts allowed, time limit. No questions, no description.
+    async quizzes(args = {}) {
+      const pk = await pick(args); if (pk.miss) return pk.miss;
+      if (!pk.id) throw new Error("passe course_id ou course (nome da matéria)");
+      let qs; try { qs = await getAll("/api/v1/courses/" + pk.id + "/quizzes?per_page=50", 2); }
+      catch (e) { if (!/ 404$/.test(String(e && e.message))) throw e; return { note: NOTE, aviso: "Esta matéria não usa os quizzes clássicos do Canvas (a área de quizzes está desligada nela).", quizzes: [] }; }   // real Canvas: 404 where the professor turned quizzes off
+      return { note: NOTE, aviso: "Só os quizzes clássicos; os Novos Quizzes aparecem como tarefa em grades e upcoming. attempts -1 = sem limite de tentativas.", quizzes: (Array.isArray(qs) ? qs : []).slice(0, 60).map(q => ({ due: isoOr(q.due_at), opens: isoOr(q.unlock_at), closes: isoOr(q.lock_at),
+        points: numOr(q.points_possible), minutes: numOr(q.time_limit), attempts: numOr(q.allowed_attempts), questions: numOr(q.question_count), url: canvasLink(q.html_url), untrusted_canvas_text: { title: clean(q.title, 200) } })) };
     },
     async teachers() {   // names and course only, three courses at a time
       const d = await reading(), cs = d.courses.slice(0, 15), out = [];
@@ -251,11 +292,13 @@ function makeCanvas(token, opts = {}) {
 const TOOL_DEFS = [   // the plain subset every client accepts (type, description, properties, required); limits are checked here
   { name: "quanto_falta", description: "Quanto falta em cada matéria do semestre para chegar na meta: regras do Plano de Ensino da turma quando o Caderno+ as tem, senão a fórmula do professor no Centro de Notas (notas do Canvas).", inputSchema: { type: "object", properties: { meta: { type: "number", description: "Meta de 5 a 10 (padrão 7)" } } } },
   { name: "upcoming", description: "Entregas, provas e eventos do Canvas de 7 dias atrás até os próximos dias.", inputSchema: { type: "object", properties: { days: { type: "integer", description: "Quantos dias à frente, de 1 a 30 (padrão 15)" } } } },
-  { name: "grades", description: "Notas lançadas no Canvas por avaliação (todas as matérias do semestre, ou uma). Prefira passar course_id.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" } } } },
+  { name: "grades", description: "Notas lançadas no Canvas por avaliação (todas as matérias do semestre, ou uma). Passe course_id ou course.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" }, course: { type: "string", description: "Parte do nome da matéria, quando não souber o course_id" } } } },
   { name: "courses", description: "Matérias ativas do semestre no Canvas, com o course_id.", inputSchema: { type: "object", properties: {} } },
   { name: "announcements", description: "Avisos recentes dos professores (título, matéria, data, se foi lido). Sem autor nem texto.", inputSchema: { type: "object", properties: { limit: { type: "integer", description: "Quantos avisos, de 1 a 10 (padrão 10)" } } } },
   { name: "teachers", description: "Professores de cada matéria do semestre (só o nome), para saber com quem falar.", inputSchema: { type: "object", properties: {} } },
-  { name: "modules", description: "Módulos de uma matéria e os títulos dos itens, com links do Canvas.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" } }, required: ["course_id"] } },
+  { name: "modules", description: "Módulos de uma matéria e os títulos dos itens, com links do Canvas.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" }, course: { type: "string", description: "Parte do nome da matéria, quando não souber o course_id" } } } },
+  { name: "pendencias", description: "O que o Canvas marca como faltando e as entregas online ainda abertas com prazo à frente (todas as matérias, ou uma).", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" }, course: { type: "string", description: "Parte do nome da matéria, quando não souber o course_id" } } } },
+  { name: "quizzes", description: "Quizzes clássicos de uma matéria: datas, tentativas permitidas, tempo e pontos. Sem as perguntas.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" }, course: { type: "string", description: "Parte do nome da matéria, quando não souber o course_id" } } } },
 ].map(t => Object.assign(t, { annotations: { readOnlyHint: true, openWorldHint: false } }));
 
 module.exports = { BASE, ALLOW, CENTRO, LTI_URL, checkUrl, guardedFetch, launchFetch, toolFetch, readCentro, makeCanvas, TOOL_DEFS, clean, panelLabel };

@@ -659,7 +659,7 @@
     .side { padding:12px; } .side-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font:600 15px/1.2 var(--serif); } .side .notes:first-of-type { margin-top:0; }
     .chk h3 { margin:0 0 6px; } .chk .add { grid-template-columns:minmax(0,1fr) 140px auto; } .side .chk .add { grid-template-columns:1fr auto; } .side .chk .add input[type=text] { grid-column:1 / -1; } .side .chk .row { grid-template-columns:64px minmax(0,1fr) auto; } .chk ul { list-style:none; margin:0; padding:0; } .chk .row { grid-template-columns:76px minmax(0,1fr) auto; border-top:1px solid var(--line); padding:5px 0; } .chk .row:first-child { border-top:0; }
     .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
-    .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
+    .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .tasks .row.sub { padding-top:2px; padding-bottom:2px; border-top:0; font-size:.94em; } .tasks .row.sub .add { grid-column:2 / -1; margin:0; grid-template-columns:minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
     .meta { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
     .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
@@ -1053,9 +1053,29 @@
       ck.addEventListener("click", async () => { await setMark(cache.user, { key: "own:" + t.id, date: t.date || addDays(0) }, !done); redraw(); });
       const del = el("button", "ck del", "×"); del.type = "button"; del.setAttribute("aria-label", "Apagar: " + t.title);
       del.addEventListener("click", async () => { await saveTasks(cache.user, l => l.filter(x => x.id !== t.id)); redraw(); });
-      end.append(ck, del);
-      li.append(el("span", "d", t.date ? cap(dayLabel(t.date)) : "sem dia"), mid(t.title, null, done ? "feita" : t.date && t.date < today() ? "atrasada" : "minha tarefa"), end);
-      ul.appendChild(li);
+      // steps of a task: { t, d } each, ten at most, kept inside the task
+      const subs = Array.isArray(t.subs) ? t.subs.filter(s => s && s.t) : [], left = subs.filter(s => !s.d).length;
+      const change = f => saveTasks(cache.user, l => l.map(x => x.id === t.id ? Object.assign({}, x, { subs: f(Array.isArray(x.subs) ? x.subs.filter(s => s && s.t) : []).slice(0, 10) }) : x)).then(redraw);
+      const at = (l, i, s) => l[i] && l[i].t === s.t ? i : l.findIndex(x => x.t === s.t);   // another tab may have moved the steps: the same text, not just the same place
+      const plus = el("button", "ck", "+"); plus.type = "button"; plus.setAttribute("aria-label", "Adicionar passo em: " + t.title);
+      end.append(plus, ck, del);
+      li.append(el("span", "d", t.date ? cap(dayLabel(t.date)) : "sem dia"), mid(t.title, null, (done ? "feita" : t.date && t.date < today() ? "atrasada" : "minha tarefa") + (subs.length ? " · " + (subs.length - left) + " de " + subs.length + " passos" : "")), end);
+      ul.appendChild(li); let tail = li;
+      subs.forEach((s, i) => {
+        const sl = el("li", "row sub" + (s.d ? " dn" : "")), se = el("span", "end");
+        const sk = el("button", "ck", "✓"); sk.type = "button"; sk.setAttribute("aria-pressed", String(!!s.d)); sk.setAttribute("aria-label", (s.d ? "Desmarcar passo: " : "Marcar passo como feito: ") + s.t);
+        sk.addEventListener("click", () => change(l => { const k = at(l, i, s); return l.map((x, j) => j === k ? { t: x.t, d: !s.d } : x); }));
+        const sd = el("button", "ck del", "×"); sd.type = "button"; sd.setAttribute("aria-label", "Apagar passo: " + s.t);
+        sd.addEventListener("click", () => change(l => { const k = at(l, i, s); return l.filter((x, j) => j !== k); }));
+        se.append(sk, sd); sl.append(el("span", "d", ""), mid(s.t), se); ul.appendChild(sl); tail = sl;
+      });
+      plus.addEventListener("click", () => {
+        if (li.cpStep || subs.length >= 10) return; li.cpStep = true;
+        const fl = el("li", "row sub"), f = el("form", "add step"), si = el("input"), sb = el("button", "primary", "Adicionar passo");
+        si.type = "text"; si.placeholder = "Passo (ex.: ler o capítulo 3)"; si.setAttribute("aria-label", "Novo passo de: " + t.title); si.maxLength = 100; sb.type = "submit";
+        f.addEventListener("submit", e => { e.preventDefault(); const v = String(si.value || "").trim().slice(0, 100); if (v) change(l => l.concat([{ t: v, d: false }])); });
+        f.append(si, sb); fl.appendChild(f); tail.after ? tail.after(fl) : ul.appendChild(fl); if (si.focus) si.focus();
+      });
     }
     if (list.length) sec.appendChild(ul); else sec.appendChild(el("div", "muted", "Coisas que não estão no Canvas: estudar, imprimir, levar material. Com dia, entram na semana e nos lembretes."));
     foldable(sec, h, "tasks"); return sec;
