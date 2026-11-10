@@ -1,8 +1,10 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.1.4",
+  version: "6.1.5",
   items: [
+    "Acabamento: texto legível no tema Marca-texto, foco visível nos campos, a busca acompanha as setas, o painel diz quando o Canvas foi lido, e o calendário e a lista de cursos se atualizam com a leitura nova",
+    "Downloads: arquivos pequenos não baixam mais em dobro, e um erro não trava os botões",
     "Dois alunos no mesmo navegador: a turma e as matérias tiradas do painel agora são de cada um, e o backup leva só os dados de quem está usando",
     "Correções da revisão: os lembretes voltam sozinhos depois de uma atualização, o modo e a meta não voltam atrás quando chega uma leitura nova, e a lista de tarefas do Canvas só some quando a nossa semana aparece",
     "Anotações do painel arrumadas: a coluna fica sempre no topo, ao lado do painel, e os cards não se espalham mais em volta dela ao trocar de modo",

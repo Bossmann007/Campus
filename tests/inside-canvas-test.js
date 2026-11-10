@@ -1010,6 +1010,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(lk.cls.has("cp-look") && lk.cls.has("cp-look-nav") && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look and menu");
   assert(!/font-family/.test(lookCss()) && !/Fraunces/.test(lookCss()), "no font forced on Canvas (InstUI sets its own; mixed families looked broken)");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()), "cards rounded");
+  assert(/--cp-on-accent:#FFFFFF;/.test(lookCss()) && /--ic-brand-button--primary-text:#FFFFFF !important/.test(lookCss()), "Caderno: white text over the coral accent");
+  { const mk = theme("off", false); await new Promise(r => setTimeout(r, 5)); mk.listen.change({ prefs: { newValue: { look: "marca" } } }, "local");
+    const css = mk.styles.find(x => x.id === "cp-look").textContent;
+    assert(/--cp-accent:#E0A800; --cp-on-accent:#1C1C1C;/.test(css) && /--ic-brand-button--primary-text:#1C1C1C !important/.test(css), "Marca-texto: dark text over the yellow accent (white was 2:1)"); }
   assert(/\.ic-DashboardCard__box__container \{ text-align:center/.test(lookCss()) && !/\.ic-DashboardCard \{ display:flex/.test(lookCss()) && !/__header_hero, \.ic-DashboardCard__header_image \{ height/.test(lookCss()), "Canvas's own card layout kept, rows only centered (no forced sizes)");
   assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", bg: "liso", bgColor: "", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false, navHide: false }), "kept for the next first paint");
   assert(!/translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()), "the left menu stays by default");

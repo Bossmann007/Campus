@@ -522,7 +522,7 @@
 
   const CSS = `
     :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
-      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, var(--cp-card,#fff)); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, var(--cp-card,#fff));
+      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --on-coral:var(--cp-on-accent,#fff); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, var(--cp-card,#fff)); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, var(--cp-card,#fff));
       --paper:var(--cp-paper,#FBF7EF); --track:color-mix(in srgb, var(--cp-line,#ECE4D3) 75%, var(--cp-paper,#FBF7EF)); --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
@@ -570,7 +570,7 @@
     .mk::before { content:"C"; position:absolute; left:2.5px; top:0; font:600 14px/18px var(--serif); color:var(--tile-c); }
     .mk::after { content:""; position:absolute; right:2px; top:3px; width:5px; height:5px;
       background:linear-gradient(var(--coral),var(--coral)) center/100% 1.6px no-repeat, linear-gradient(var(--coral),var(--coral)) center/1.6px 100% no-repeat; }
-    .muted { color:var(--muted); font-size:12.5px; } .muted.src { margin:-2px 0 10px; font-size:11.5px; } .acts + .muted.src, .items + .muted.src { margin-top:8px; } .muted.why { margin:0 0 10px; }
+    .muted { color:var(--muted); font-size:12.5px; } .muted.read { margin:10px 2px 0; font-size:11.5px; text-align:right; } .muted.src { margin:-2px 0 10px; font-size:11.5px; } .acts + .muted.src, .items + .muted.src { margin-top:8px; } .muted.why { margin:0 0 10px; }
     h3 { margin:0 0 6px; font:600 17px/1.3 var(--serif); letter-spacing:-.01em; display:flex; gap:8px; align-items:center; }
     .lbl { margin:12px 0 2px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
     .pill { flex:none; padding:0 8px; border-radius:999px; font:600 11.5px/20px var(--sans); white-space:nowrap; }
@@ -589,7 +589,7 @@
     button.primary { background:var(--fg); color:var(--bg); border-color:var(--fg); } button.primary:hover:not(:disabled) { background:var(--fg); border-color:var(--fg); box-shadow:0 2px 0 var(--coral); }
     button:disabled { opacity:.5; cursor:default; }
     a { color:inherit; text-decoration:none; } a:hover { text-decoration:underline; text-decoration-color:var(--coral); text-underline-offset:3px; }
-    :is(a, button):focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:6px; }
+    :is(a, button, input, textarea, select):focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:6px; }   /* fields too: some reset everything with all:unset */
     .grid { display:grid; gap:10px; }
     @container cp (min-width:760px) { .news > ul { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:32px; } }
     @container cp (min-width:1240px) { .news > ul { grid-template-columns:repeat(3, minmax(0,1fr)); column-gap:24px; } }   /* wide screens: the date stays near its line */
@@ -619,7 +619,7 @@
     .col .ev.more { padding:4px 7px; text-align:center; background:var(--soft); color:var(--fg); border-color:var(--line); }
     .ev:hover, .ev:focus-visible { z-index:4; transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); text-decoration:none; } .ev:active { transform:scale(.98); } .ev:focus-visible { outline:2px solid var(--ring); border-radius:7px; }
     .ev.ok { background:#E2F1E9; color:#1F5C42; border-color:#BFE0CC; } .ev.wa { background:#FBEFD6; color:#744405; border-color:#F0D9A8; }
-    .ev.ex { background:var(--coral); color:#fff; } .ev.in { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:3px solid var(--fg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
+    .ev.ex { background:var(--coral); color:var(--on-coral); } .ev.in { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:3px solid var(--fg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
     .tip { position:absolute; left:0; bottom:calc(100% + 7px); z-index:5; display:grid; gap:1px; width:max-content; max-width:260px; padding:7px 10px; border-radius:8px;
       background:var(--fg); color:var(--bg); font:500 12px/1.4 var(--sans); white-space:normal; text-align:left; box-shadow:0 10px 24px -10px rgba(29,36,51,.5);
       opacity:0; visibility:hidden; transform:translateY(3px); pointer-events:none; transition:opacity .12s, transform .12s, visibility 0s .12s; }
@@ -667,7 +667,7 @@
     .cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; padding:0; overflow:hidden; background:var(--line); }
     .cwd { padding:8px 10px; background:var(--soft); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
     .cday { min-height:118px; padding:6px; background:var(--bg); display:flex; flex-direction:column; gap:4px; min-width:0; } .cday.off { background:var(--soft); } .cday.we { background:color-mix(in srgb, var(--soft) 55%, var(--bg)); }
-    .cday .cn { display:inline-grid; place-items:center; height:24px; font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
+    .cday .cn { display:inline-grid; place-items:center; height:24px; font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:var(--on-coral); }
     .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
     .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
@@ -1162,6 +1162,9 @@
       } else box.append(el("div", "muted why", why));
     }
     box.appendChild(grid);
+    { // when Canvas was read, at the foot of the panel (the course page says it in its header)
+      const d = C.localISO(new Date(cache.at)), when = (d === today() ? "hoje" : ago(d)) + " às " + hhmm(new Date(cache.at).toISOString());
+      box.appendChild(el("div", "muted read", "Lido do Canvas " + when + " · o botão Atualizar da extensão lê de novo")); }
     if (prefs.week && !cache.planner) grid.appendChild(el("div", "muted why", "Não consegui ler os prazos do Canvas agora. A lista de tarefas do próprio Canvas continua ao lado; tento de novo na próxima leitura."));
     if (week) {
       let sec = null;
@@ -1496,12 +1499,14 @@
         if (now !== root) items = items.map(f => Object.assign({}, f, { filename: now + f.filename.slice(root.length) }));
         btns.forEach(b => { b.disabled = true; }); status.textContent = "Baixando " + items.length + "…";
         let started = 0;
-        for (let i = 0; i < items.length; i += 300) {   // the service worker takes up to 300 per message
-          const res = await chrome.runtime.sendMessage({ type: "download", items: items.slice(i, i + 300) });
-          started += res && Array.isArray(res.done) ? res.done.length : 0;
-        }
-        status.textContent = started + " de " + items.length + " enviados para Downloads/" + root;
-        btns.forEach(b => { b.disabled = false; });
+        try {
+          for (let i = 0; i < items.length; i += 300) {   // the service worker takes up to 300 per message
+            const res = await chrome.runtime.sendMessage({ type: "download", items: items.slice(i, i + 300) });
+            started += res && Array.isArray(res.done) ? res.done.length : 0;
+          }
+          status.textContent = started + " de " + items.length + " enviados para Downloads/" + now;
+        } catch (e) { status.textContent = "Não deu para baixar agora (" + started + " de " + items.length + " enviados). Recarregue a página e tente de novo."; }   // the extension was updated under this tab, or the worker failed
+        finally { btns.forEach(b => { b.disabled = false; }); }
       };
       if (fresh.length) { const b = el("button", "primary", "Baixar " + fresh.length + (fresh.length === 1 ? " novo" : " novos")); b.addEventListener("click", () => save(fresh)); acts.prepend(b); btns.push(b); }
       if (all.length) { const b = el("button", null, "Baixar todos"); b.addEventListener("click", () => save(all)); acts.insertBefore(b, status); btns.push(b); }
@@ -1578,7 +1583,9 @@
         li.append(el("span", "pal-k", x.k), mid(x.t, null, x.c)); li.addEventListener("click", () => go(x)); ul.appendChild(li);
       });
       if (!hits.length) ul.appendChild(el("li", "pal-e", q.value ? "Nada encontrado." : "Digite para buscar, ou + para criar uma tarefa (ex.: + revisar slides sex)."));
+      const on = ul.querySelector ? ul.querySelector(".on") : null; if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest" });   // the arrows keep the choice in view
     };
+    dlg.addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); close(); } });   // Esc closes from anywhere in the dialog, not only from the field
     q.addEventListener("input", () => { sel = 0; draw(); });
     q.addEventListener("keydown", e => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, Math.min(hits.length - 1, sel + (e.key === "ArrowDown" ? 1 : -1))); draw(); }
@@ -1609,13 +1616,15 @@
       const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.setAttribute("data-cp-tray", "1"); item.appendChild(p);
     }
   }
+  let trayA = null, trayHidden = null;   // the latest reading and hidden list: the watcher is set once, its data is not
   function watchTray(a, hidden) {
-    if (trayWatch || typeof MutationObserver === "undefined" || !document.body) return;
+    trayA = a; trayHidden = hidden;
+    if (trayWatch || typeof MutationObserver === "undefined" || !document.body) { if (trayWatch) enhanceTray(trayA, trayHidden); return; }
     let t = 0;
     // only the tray portal (Cursos, Grupos...), not every change on the page; the whole page only until the portal exists
     let onPortal = false;
     const aim = () => { const p = document.getElementById("nav-tray-portal"); onPortal = !!p; trayWatch.disconnect(); trayWatch.observe(p || document.body, { childList: true, subtree: true }); };
-    trayWatch = new MutationObserver(() => { if (!onPortal && document.getElementById("nav-tray-portal")) aim(); clearTimeout(t); t = setTimeout(() => enhanceTray(a, hidden), 150); });
+    trayWatch = new MutationObserver(() => { if (!onPortal && document.getElementById("nav-tray-portal")) aim(); clearTimeout(t); t = setTimeout(() => enhanceTray(trayA, trayHidden), 150); });
     aim();
     enhanceTray(a, hidden);
   }
@@ -1679,7 +1688,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   const FOLD_CSS = `#cp-navfold { display:flex; align-items:center; gap:6px; margin:0 0 10px 6px; padding:5px 10px 5px 6px; border:1px solid currentColor; border-radius:999px; background:none; color:inherit; opacity:.55; cursor:pointer; font:600 11.5px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; letter-spacing:.02em; transition:opacity .15s; }
 #cp-navfold:hover, #cp-navfold:focus-visible { opacity:1; }
 #cp-navfold i, #cp-navopen i { display:block; width:14px; height:14px; background:currentColor; -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M10 3.5 5.5 8l4.5 4.5'/></svg>") no-repeat center / contain; mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M10 3.5 5.5 8l4.5 4.5'/></svg>") no-repeat center / contain; }
-#cp-navopen { position:fixed; top:96px; left:var(--cp-navleft, 84px); z-index:999; display:grid; place-items:center; width:20px; height:52px; padding:0; border:0; border-radius:0 12px 12px 0; background:var(--ic-brand-primary, #E2482B); color:#fff; cursor:pointer; box-shadow:3px 2px 12px -6px rgba(0,0,0,.5); transition:width .15s; }
+#cp-navopen { position:fixed; top:96px; left:var(--cp-navleft, 84px); z-index:999; display:grid; place-items:center; width:20px; height:52px; padding:0; border:0; border-radius:0 12px 12px 0; background:var(--ic-brand-primary, #E2482B); color:var(--cp-on-accent, #fff); cursor:pointer; box-shadow:3px 2px 12px -6px rgba(0,0,0,.5); transition:width .15s; }
 #cp-navopen:hover, #cp-navopen:focus-visible { width:26px; }
 #cp-navopen i { -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M6 3.5 10.5 8 6 12.5'/></svg>"); mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M6 3.5 10.5 8 6 12.5'/></svg>"); }`;
   const tabKey = a => [...(a.classList || [])].find(c => c !== "active") || (a.className || "").split(" ").find(c => c && c !== "active") || "";
@@ -1770,6 +1779,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     const months = [], first = C.TERM_END.slice(0, 4) === today().slice(0, 4) ? today().slice(0, 4) : String(Number(C.TERM_END.slice(0, 4)) - 1);
     for (let d = new Date(Number(first), 7, 1); C.localISO(d) <= C.TERM_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(C.localISO(d).slice(0, 7));
     let cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : months[0];
+    { const home = cur, hostEl = document.getElementById("cp-cal"); if (hostEl) hostEl.cpBusy = () => cur !== home; }   // a new reading redraws the calendar, but not under a student looking at another month
     const extra = {}, base = agenda(a, cache, marks);
     const ruleItems = (a.rules ? a.mine : []).flatMap(c => c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, course: C.SHORT[c.id] || c.name, date: it.date, exam: it.exam, task: !it.exam, url: courseOf[c.id] ? location.origin + "/courses/" + courseOf[c.id] : null, rule: true })));
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
@@ -1842,7 +1852,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     style.textContent = `button { display:block; width:34px; height:34px; margin-top:6px; border-radius:50%; border:1px solid #ECE4D3; background:#FBF7EF; color:#1D2433; font:600 15px/1 -apple-system,BlinkMacSystemFont,sans-serif;
       cursor:pointer; box-shadow:0 6px 16px -8px rgba(29,36,51,.5); opacity:.85; } button:hover { opacity:1; } button:focus-visible { outline:2px solid #E2482B; outline-offset:2px; }`;
     const go = (txt, label, top) => { const b = el("button", null, txt); b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
-      b.addEventListener("click", () => window.scrollTo({ top: top(), behavior: "smooth" })); return b; };
+      b.addEventListener("click", () => window.scrollTo({ top: top(), behavior: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })); return b; };
     root.append(style, go("↑", "Voltar ao topo", () => 0), go("↓", "Ir para o fim", () => de.scrollHeight));
     let busy = false;
     const check = () => { busy = false; host.style.display = de.scrollHeight > window.innerHeight * 2.5 ? "block" : "none"; };
@@ -1885,7 +1895,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user)]);   // side by side, not one after another
     let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
-    if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
+    if (again) for (const id of ["cp-dash", "qf-panel", "cp-cal"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
     sendReminders(agenda(a, cache, marks), prefs, cache);
     if (prefs.search) window.cpSearch = () => openSearch(a, cache);   // opens the latest reading

@@ -143,11 +143,15 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
     if (!cards.cardImg) out.push(`.ic-DashboardCard__header_image { background-image:none !important; height:72px !important; } .ic-DashboardCard__header_hero { opacity:1 !important; height:72px !important; }`);
     if (L) {
       const [paper, card, ink, muted, line, accent, link, menu] = L;
+      // text over the accent: white, or ink when the accent is light (Marca-texto's yellow gave white text a 2:1 contrast)
+      const onAccent = (() => { const m = /^#([0-9a-f]{6})$/i.exec(accent); if (!m) return "#FFFFFF";
+        const [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+        return 1.05 / (.2126 * r + .7152 * g + .0722 * b + .05) >= 3 ? "#FFFFFF" : "#1C1C1C"; })();
       const B = BGS[cards.bg];   // the same fixed background on every page layer, so the nested layers line up
       if (B) out.push(`:root.cp-look :is(body, #application, #wrapper, #main, .ic-Layout-wrapper, .ic-Layout-contentMain, #content-wrapper, #right-side-wrapper, #right-side, .ic-Dashboard-header, .ic-Dashboard-header :is(div, span, header):not(.cp-host, button *, [role="button"] *)) { background-image:${B[0]} !important; background-size:${B[1]} !important; background-attachment:fixed !important; }`);
-      out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent};
+      out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent}; --cp-on-accent:${onAccent};
   --ic-brand-primary:${accent} !important; --ic-link-color:${link} !important; --ic-brand-font-color-dark:${ink} !important;
-  --ic-brand-button--primary-bgd:${accent} !important; --ic-brand-button--primary-text:#FFFFFF !important;
+  --ic-brand-button--primary-bgd:${accent} !important; --ic-brand-button--primary-text:${onAccent} !important;
   --ic-brand-button--secondary-bgd:${card} !important; --ic-brand-button--secondary-text:${ink} !important; --cp-menu:${menu}; }
 :root.cp-look body, :root.cp-look #application, :root.cp-look #wrapper, :root.cp-look #main, :root.cp-look .ic-Layout-wrapper,
 :root.cp-look .ic-Layout-contentMain, :root.cp-look #content-wrapper, :root.cp-look #right-side-wrapper, :root.cp-look #right-side { background-color:var(--cp-paper) !important; color:var(--cp-ink); }
@@ -185,6 +189,8 @@ ${NAV_ICONS.map(([sel], i) => i ? `:root.cp-look #section-tabs ${sel}::before { 
 :root.cp-look-nav .ic-app-header { background:${menu} !important; }
 :root.cp-look-nav .ic-app-header .ic-app-header__menu-list-item.ic-app-header__menu-list-item--active .ic-app-header__menu-list-link { background:${L ? L[5] : "rgba(255,255,255,.18)"} !important; color:#fff !important; }
 :root.cp-look-nav .ic-app-header .ic-app-header__menu-list-link:hover { background-color:rgba(255,255,255,.14) !important; }`);
+    // less motion when the system asks for it: our own transitions on Canvas (the course menu, the cards, the folded menu)
+    out.push(`@media (prefers-reduced-motion:reduce) { :root.cp-look :is(#section-tabs li a, .ic-DashboardCard, #left-side), #cp-navfold, #cp-navopen, #cp-navopen i { transition:none !important; } }`);
     return out.join("\n");
   };
   if (typeof location !== "undefined" && /^\/(dashboard)?\/?$/.test(location.pathname || "")) document.documentElement.classList.toggle("cp-dash-page", true);

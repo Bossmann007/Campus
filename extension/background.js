@@ -184,8 +184,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         if (!okDownload(it, root)) continue;
         try {
           const did = await chrome.downloads.download({ url: it.url, filename: it.filename, conflictAction: "uniquify", saveAs: false });
-          const { pending = {} } = await chrome.storage.session.get("pending");
-          pending[did] = it.id; await chrome.storage.session.set({ pending });
+          await inLine(async () => { const { pending = {} } = await chrome.storage.session.get("pending"); pending[did] = it.id; await chrome.storage.session.set({ pending }); });
           done.push(it.id);
         } catch (e) { /* one bad file does not stop the rest */ }
       }
@@ -194,16 +193,22 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
 });
+// The lists of downloads under way and done are read, changed and written one at a time: many small files finishing
+// together used to overwrite each other's entry, and those files came back as "new" and were downloaded twice.
+let line = Promise.resolve();
+const inLine = f => (line = line.then(f, f));
 // A file counts as downloaded only when Chrome finishes it; cancelled or failed ones stay "new".
-chrome.downloads.onChanged.addListener(async ch => {
+chrome.downloads.onChanged.addListener(ch => {
   const state = ch.state && ch.state.current;
   if (state !== "complete" && state !== "interrupted") return;
-  const { pending = {} } = await chrome.storage.session.get("pending"), fileId = pending[ch.id];
-  if (fileId === undefined) return;
-  delete pending[ch.id]; await chrome.storage.session.set({ pending });
-  if (state !== "complete") return;
-  const { dl } = await chrome.storage.local.get("dl"), have = Array.isArray(dl) ? dl : [];
-  if (!have.includes(fileId)) await chrome.storage.local.set({ dl: [...have, fileId] });
+  return inLine(async () => {
+    const { pending = {} } = await chrome.storage.session.get("pending"), fileId = pending[ch.id];
+    if (fileId === undefined) return;
+    delete pending[ch.id]; await chrome.storage.session.set({ pending });
+    if (state !== "complete") return;
+    const { dl } = await chrome.storage.local.get("dl"), have = Array.isArray(dl) ? dl : [];
+    if (!have.includes(fileId)) await chrome.storage.local.set({ dl: [...have, fileId] });
+  });
 });
 chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); scheduleTick(); restoreAlarms(); });
 chrome.runtime.onInstalled.addListener(details => {
