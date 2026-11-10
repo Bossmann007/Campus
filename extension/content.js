@@ -60,7 +60,24 @@
     let id = pageUser();
     if (!id) { try { id = (await getAll("/api/v1/users/self")).id; } catch (e) { await forget(); throw e; } }
     if (cache && cache.user !== id) await forget();
+    await ownerIs(id);
     return id;
+  }
+  // The turma confirmed and the courses taken off the dashboard belong to a Canvas user ("mineOf" says whose the current
+  // ones are). Another student on this Chrome starts clean (asked the turma again, nothing hidden) and each one gets
+  // theirs back ("byUser"). The look and the mode are the browser's. The first run adopts what is already there.
+  let ownerSwapped = false;
+  async function ownerIs(id) {
+    const { mineOf, prefs, hidden, byUser } = await chrome.storage.local.get(["mineOf", "prefs", "hidden", "byUser"]);
+    if (mineOf === id) return;
+    if (mineOf == null) { await chrome.storage.local.set({ mineOf: id }); return; }
+    const stash = Object.assign({}, byUser && typeof byUser === "object" ? byUser : {}), p = Object.assign({}, prefs);
+    stash[mineOf] = { turma: p.turma || null, hidden: Array.isArray(hidden) ? hidden.map(String).slice(0, 200) : [] };
+    const mine = stash[id] && typeof stash[id] === "object" ? stash[id] : {};
+    if (mine.turma) p.turma = String(mine.turma); else delete p.turma;
+    delete stash[id];
+    await chrome.storage.local.set({ mineOf: id, byUser: stash, prefs: p, hidden: Array.isArray(mine.hidden) ? mine.hidden.map(String) : [] });
+    ownerSwapped = true;
   }
   // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
   const forget = async () => {
@@ -1849,7 +1866,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   }
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
-    const first = await chrome.storage.local.get(["prefs", "cache", "refreshing"]), prefs = cpPrefs(first.prefs);
+    const first = await chrome.storage.local.get(["prefs", "cache", "refreshing"]); let prefs = cpPrefs(first.prefs);
     if (prefs.scroll) scrollButtons();
     let cache;
     let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
@@ -1857,6 +1874,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     const paintAll = (c, again) => (queue = queue.then(() => draw(c, livePrefs, again)).catch(e => oops("desenhar o painel", e)));
     try { cache = await load(fresh => { if (fresh.at !== cache.at) { cache = fresh; paintAll(fresh, true); } }, first); }
     catch (e) { oops("ler o Canvas", e); if (!/ 401$/.test(String(e && e.message))) troubleBanner(e); return; }   // logged out: quiet (Canvas asks to log in)
+    if (ownerSwapped) { prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs); livePrefs = prefs; }   // another student: their turma, not the previous one's
     window.cpRepaint = () => paintAll(cache, true);   // the latest reading drawn again (the Centro de Notas landed)
     await paintAll(cache, false);
   }

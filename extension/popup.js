@@ -63,8 +63,12 @@ $("refresh").addEventListener("click", async () => {
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
 const KEEP = ["hand", "marks", "tasks", "notes", "checks", "hidden", "prefs", "fold"];
+// Only the student using Canvas now: grades, ticks, tasks, notes and checklists are kept per Canvas user, and the file
+// carries that one slice (other students of this Chrome stay out of it). The look, the mode and the folds are the browser's.
+const backupOf = (got, user) => Object.assign({}, got, Object.fromEntries(["hand", "marks", "tasks", "notes", "checks"].map(k => [k, user != null && got[k] && typeof got[k] === "object" && got[k][user] !== undefined ? { [user]: got[k][user] } : {}])));
 $("export").addEventListener("click", async () => {
-  const got = await chrome.storage.local.get(KEEP), body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
+  const all = await chrome.storage.local.get(KEEP.concat("cache")), got = backupOf(Object.fromEntries(KEEP.map(k => [k, all[k]])), all.cache && all.cache.user != null ? all.cache.user : null);
+  const body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = "caderno-plus-backup.json"; a.click();
   $("status").textContent = "Backup salvo nos Downloads.";
 });

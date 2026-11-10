@@ -655,6 +655,18 @@ async function runContent(pathname, files, preStore, opts = {}) {
       assert(wl.kids.length > 0 && all(wl).some(e => e.className === "dh"), "narrow: filled when it shows, grouped by day");
     } finally { delete global.ResizeObserver; delete global.getComputedStyle; }
     ok(); }
+  { // two students on one Chrome: the turma confirmed and the courses taken off the dashboard belong to each Canvas user
+    const envOf = id => [{ textContent: 'ENV = {"current_user_id":"' + id + '"}' }];
+    const a1 = await runContent("/", null, { prefs: { turma: "outro", mode: "foco" }, hidden: ["71306"] }, { scripts: envOf(5) }); await new Promise(r => setTimeout(r, 20));
+    assert(a1.store.mineOf === 5 && a1.store.prefs.turma === "outro" && a1.store.hidden[0] === "71306", "the first student keeps what was already chosen (no reset on update)");
+    const b1 = await runContent("/", null, a1.store, { scripts: envOf(8), selfId: 8 }); await new Promise(r => setTimeout(r, 20));
+    assert(b1.store.mineOf === 8 && !b1.store.prefs.turma && (!b1.store.hidden || b1.store.hidden.length === 0), "another student starts clean: asked the turma again, no hidden courses: " + JSON.stringify([b1.store.prefs.turma, b1.store.hidden]));
+    assert.strictEqual(b1.store.prefs.mode, "foco", "the look and the mode are the browser's, not the student's");
+    b1.store.prefs = Object.assign({}, b1.store.prefs, { turma: "Outra turma" }); b1.store.hidden = ["999"];
+    const a2 = await runContent("/", null, b1.store, { scripts: envOf(5) }); await new Promise(r => setTimeout(r, 20));
+    assert(a2.store.mineOf === 5 && a2.store.prefs.turma === "outro" && a2.store.hidden[0] === "71306", "back to the first student: their turma and hidden courses return");
+    assert(a2.store.byUser && a2.store.byUser[8] && a2.store.byUser[8].turma === "Outra turma" && a2.store.byUser[8].hidden[0] === "999", "and the second student's are kept for next time");
+    ok(); }
   { // 6.0: no file for the AI any more (the MCP reads Canvas with the student's token): nothing written, nothing asked
     const run = await runContent("/", null, { prefs: { agentFile: true } }); await new Promise(r => setTimeout(r, 30));
     assert(!run.sent.some(m => m.type === "agentFile") && !JSON.stringify(run.store).includes("caderno-agente"), "no AI file, even with the old switch saved");

@@ -43,6 +43,14 @@ assert(!/agentErr|agentFile|caderno-agente/.test(html), "popup: no AI file switc
   for (const w of [/nuvem da empresa da IA/, /acesso <b>total<\/b>/, /3\(i\)/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
   assert(/Caderno\+ MCP: conectar sua IA/.test(pv) && /aqui os dados saem do computador/.test(pv) && /única exceção é opcional/.test(pv), "privacy page: the MCP section and the exception in the summary"); }
 assert(/const KEEP = \[[^\]]*"checks"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /checks: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "the backup carries the checklists, validated on import");
+{ // the backup carries only the student who is using Canvas now (other students of this Chrome stay out of the file)
+  const pj = fs.readFileSync(path.join(dir, "popup.js"), "utf8"), m = /const backupOf = ([\s\S]*?);\n/.exec(pj);
+  assert(m, "popup.js has backupOf(got, user)");
+  const backupOf = new Function("return " + m[1])();
+  const out = backupOf({ hand: { 5: { a: "1" }, 8: { b: "2" } }, marks: { 5: { k: "2026-11-01" }, 8: {} }, tasks: { 8: [{ id: "t" }] }, notes: { 5: { x: "meu" }, 8: { x: "do outro" } }, checks: { 5: {} }, hidden: ["1"], prefs: { mode: "foco" }, fold: { a: true } }, 5);
+  assert.deepStrictEqual(Object.keys(out.hand), ["5"]); assert.deepStrictEqual(Object.keys(out.notes), ["5"]); assert.deepStrictEqual(out.tasks, {}, "only this student's slices");
+  assert(out.hidden[0] === "1" && out.prefs.mode === "foco" && out.fold.a === true && !JSON.stringify(out).includes("do outro"), "the browser's own choices stay; nothing of the other student");
+  assert.deepStrictEqual(backupOf({ hand: { 5: {} } }, null).hand, {}, "no reading yet (unknown student): no per-student data in the file"); }
 { const nj = fs.readFileSync(path.join(dir, "notes.js"), "utf8"), ver = (nj.match(/version: "([\d.]+)"/) || [])[1];
   assert.strictEqual(ver, manifest.version, "Novidades are for this version");
   assert(manifest.content_scripts.some(c => c.js.indexOf("notes.js") >= 0 && c.js.indexOf("notes.js") < c.js.indexOf("content.js")) && /src="notes\.js"/.test(html), "notes.js loads before the panel and in the popup");

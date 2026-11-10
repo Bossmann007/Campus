@@ -2,7 +2,8 @@
 
 Goal (2026-11-09, Enzo): connect the student's AI (Claude Code, Claude Desktop, the OpenBot PUCPR bot) to Canvas, by MCP
 if needed, with the Canvas token kept on the student's machine in the OS vault (Keychain style), never in a file. This
-replaces phase B of `bridge/SPEC.md` (the native-messaging bridge); the JSON file of phase A stays optional.
+replaced two earlier designs, both dropped and removed from the repo (they stay in the git history): a JSON file the
+extension wrote for the AI, and a native-messaging bridge.
 
 ## Update (MCP 1.0, 2026-11-09, Enzo): token only
 
@@ -14,7 +15,8 @@ without the token (its verifier authorizes it) and the tool host gets only its f
 
 ## Update (2026-11-09, later, superseded by 1.0): no token by default
 
-The default source is now the extension's file (`bridge/SPEC.md`, "Arquivo para a sua IA"): `mcp/file.js` reads
+(Historical: this whole section describes the file mode removed in 1.0.) The default source is now the extension's
+file ("Arquivo para a sua IA"): `mcp/file.js` reads
 `Downloads/PUCPR/caderno-agente.json` or `CADERNO_FILE` only (never a scan of Downloads: an unzipped download could
 plant one), opens it as a regular file only (no symlink, FIFO or device; size checked on the open file), refuses a
 future `read_at`, and treats every value as untrusted (the format check is not proof of origin): enums and patterns
@@ -132,4 +134,4 @@ three OS stores + token file), `mcp/canvas.js` (allowlisted GETs), `mcp/package.
 dependencies), `mcp/manifest.json` (`.mcpb`), `tests/mcp-test.js`, `mcp/README.md` (setup in Portuguese). Later: a
 "Conectar sua IA" link in the popup to the setup page; before it ships, `privacidade.html` gets a section "Caderno+ MCP
 (opcional, separado)": the AI provider receives the replies, the token's full power, how to revoke.
-Changed: `scripts/verify` (runs the new test), `bridge/SPEC.md` (phase B points here), `README.md`.
+Changed: `scripts/verify` (runs the new test), `README.md`.

@@ -528,8 +528,8 @@
   <section class="block" id="canvas">
     <div class="bhead"><h2>Importar do Canvas</h2><span class="hint">sem senha e sem token: suas notas não passam por servidor nenhum</span></div>
     <div class="import">
-      <div class="acts canvasgo"><a class="btn" href="https://pucpr.instructure.com/" target="_blank" rel="noopener noreferrer">Abrir o Canvas da PUCPR ↗</a><span class="muted">entre, clique na extensão (ou no favorito) e volte aqui</span></div>
-      <details class="exthow" id="exthow"><summary>Como importar pela extensão</summary>
+      <div class="acts canvasgo"><a class="btn" href="https://pucpr.instructure.com/" target="_blank" rel="noopener noreferrer">Abrir o Canvas da PUCPR ↗</a><span class="muted">com a extensão, o quanto falta já aparece lá dentro; esta página é para simular à mão</span></div>
+      <details class="exthow" id="exthow"><summary>Ver as notas direto no Canvas, com a extensão</summary>
       <ol class="steps ext">
         <li><b>Instale a extensão Caderno+</b> no Chrome, Brave ou Edge (no computador).
           <div class="acts"><a class="btn primary" id="extdl" href="https://github.com/Bossmann007/Campus/releases/latest/download/quanto-falta-extension.zip">Baixar extensão</a></div>
@@ -537,10 +537,10 @@
             <li>Descompacte o arquivo baixado: fica uma pasta <b>quanto-falta-extension</b>.</li>
             <li>Abra <b>chrome://extensions</b> (no Brave, brave://extensions; no Edge, edge://extensions).</li>
             <li>Ligue o <b>Modo do desenvolvedor</b>, clique em <b>Carregar sem compactação</b> e escolha a pasta.</li>
-            <li>Fixe o ícone Q na barra (ícone de quebra-cabeça → alfinete).</li>
+            <li>Fixe o ícone do Caderno+ na barra (ícone de quebra-cabeça → alfinete).</li>
           </ol><p class="muted">O código é aberto e só lê suas notas no Canvas: <a href="https://github.com/Bossmann007/Campus/tree/main/extension">veja a extensão no GitHub</a>.</p></details></li>
-        <li><b>Abra o Canvas da PUCPR</b>, já logado, clique no ícone Q e em <b>Importar notas do Canvas</b>.</li>
-        <li><b>Esta página abre sozinha</b> com as notas: confira e clique em Aplicar.</li>
+        <li><b>Abra o Canvas da PUCPR</b>, já logado: o painel do Caderno+ aparece na página inicial e em cada matéria, com as suas notas e quanto falta.</li>
+        <li><b>Esta página não recebe mais as notas da extensão</b>: aqui você lança as notas à mão para simular, ou cola o texto do script abaixo.</li>
       </ol></details>
       <details class="exthow" id="exthow-up"><summary>Como atualizar a extensão</summary>
         <ol class="steps ext">
@@ -812,7 +812,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.1.3";
+  const EXT_LATEST = "6.1.4";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
