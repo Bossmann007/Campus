@@ -155,6 +155,7 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
     const ct = fs.readFileSync(path.join(dir, "content.js"), "utf8"), th = fs.readFileSync(path.join(dir, "theme.js"), "utf8");
     assert(/\.trk i\.late \{ background:var\(--warn\); \}/.test(ct) && /\.kpi \.v\.need \{ color:var\(--warn\); \}/.test(ct) && !/t-bad \{ color:var\(--coral\)/.test(ct), "late, need and bad in status colours");
     assert(/\.module-sequence-footer \.module-sequence-footer-content \{ background:var\(--cp-paper\)/.test(th) && /#assignments-student-footer \{ background-color:var\(--cp-paper\)/.test(th) && /#discussion-drawer-layout #module_sequence_footer_container > div \{ background-color:transparent/.test(th), "the Anterior / Próximo bars (files, tasks) and the announcement toolbar follow the look");
+    assert(/\[data-testid="translate-button"\] \{ display:none !important; \}/.test(th), "the translate button is hidden");
   }
   console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });

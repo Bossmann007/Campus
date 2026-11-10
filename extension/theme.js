@@ -122,6 +122,8 @@ ${RS} .event-details > * { margin-top:2px; } ${RS} .event-details :is(b, strong)
 :root.cp-look .course-list-term-column, :root.cp-look .course-list-group-column { color:var(--cp-muted) !important; font-size:13px; }`);
     // the classic dashboard: our panel sits between its header and the course cards; its side column (to do, coming up:
     // our week shows them) goes away while our panel is there
+    // announcements and forums: Canvas's "Ativar tradução" button, which nobody here uses (the student asked for it gone)
+    out.push(`:is(span, div):has(> [data-testid="translate-button"]), [data-testid="translate-button"] { display:none !important; }`);
     out.push(`${W}.cp-has-week #right-side-wrapper { display:none !important; } ${W}.cp-has-panel #DashboardCard_Container { margin-top:6px; }`);
     // Only on the dashboard (quizzes, grades and assignments keep their side column: timers, totals and submissions live there).
     // limpo: the side column, footer, activity stream and card icons go; foco: also the course cards, once our panel is drawn
@@ -162,7 +164,7 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
 :root.cp-look #context_modules .context_module.item-group-condensed { padding:0 !important; }
 :root.cp-look #assignments-student-footer { background-color:var(--cp-paper) !important; border-top:1px solid var(--cp-line) !important; }   /* the task page (assignments 2, React): its fixed Anterior / Próximo bar is white, black in the dark modes */
 :root.cp-look :is([data-testid="uploaded_files_table"], [data-testid="attempt-tab"] > div) { background-color:var(--cp-card) !important; }
-:root.cp-look #application [class*="textInput__facade"], :root.cp-look [data-testid="translate-button"] > span { background-color:var(--cp-card) !important; }   /* InstUI fields (Tentativa, the search and sort of announcements and forums) paint white, black in the dark modes */
+:root.cp-look #application [class*="textInput__facade"] { background-color:var(--cp-card) !important; }   /* InstUI fields (Tentativa, the search and sort of announcements and forums) paint white, black in the dark modes */
 :root.cp-look #discussion-drawer-layout #module_sequence_footer_container > div { background-color:transparent !important; }
 /* white blocks found by a sweep of the real Canvas in a dark mode: forum lists, the files search, People tabs, fields, classic quizzes */
 :root.cp-look :is([data-testid="discussion-connected-container"], .ic-discussion-row, #content .display_question.question, #content :is(input.ic-Input, select)) { background-color:var(--cp-card) !important; color:var(--cp-ink); }
