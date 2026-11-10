@@ -1,8 +1,12 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.12.1",
+  version: "6.12.2",
   items: [
+    "A nota de agora é sempre arredondada para baixo, igual no painel, na página da matéria e na sua IA (7,96 aparece 7,9, nunca 8,0)",
+    "Fórmula: soma(...) de uma parte que é média ou peso agora avisa (antes contava os pontos dela como faltando); um nome curto que também acha a atividade de outra linha (\"Prova\" e \"Prova RA2\") é avisado",
+    "Downloads: atalhos e scripts do sistema (.url, .desktop, .terminal, .scpt e parecidos) nunca são baixados; ao trocar de aluno no navegador, os avisos de nota do anterior são apagados",
+    "Sua IA: usa as datas do Canvas, o horário de Brasília e arredonda como o painel (Caderno+ MCP 1.7.2)",
     "Um quadro só para qualquer turma: a próxima entrega do Canvas, as matérias para escolher, os três números e o quanto falta de cada matéria, dizendo de onde vem cada número",
     "Fonte oficial primeiro: a sua regra, depois a fórmula do professor no Centro de Notas, os pesos que ele pôs no Canvas, e só então os pesos do Plano de Ensino transcritos pelo Caderno+ (ou a soma dos pontos)",
     "Matéria sem regra com mais de 10 pontos no Canvas agora tem número: os pontos são levados a 10 (e o painel pede para conferir na matéria)",

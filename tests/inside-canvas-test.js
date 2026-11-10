@@ -47,6 +47,9 @@ const imported = [];   // importScripts("prefs.js") shares the worker's global s
 const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro, nextMidnight, scheduleTick, restoreAlarms, ponteAnswer, ponteUp, ponteDown };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
+for (const x of ["a.exe", "a.jse", "a.url", "a.desktop", "a.terminal", "a.scpt", "a.XLL", "a.command"]) assert(!sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "PUCPR/BD/Outros/" + x }), "the worker refuses an executable too: " + x);
+assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "PUCPR/WEB/Codigo/script.js" }), "course code (.js) still downloads");
+assert.strictEqual(F.safeName("atalho.url"), null);
 const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
 assert.strictEqual(cpFolder("Faculdade/2026-2"), "Faculdade/2026-2"); assert.strictEqual(cpFolder("../etc"), "etc"); assert.strictEqual(cpFolder("a/b/c/d"), "PUCPR", "more than 3 levels: the default");
 assert.strictEqual(cpFolder('x<>:"|?*y'), "xy"); assert.strictEqual(cpFolder(""), "PUCPR"); assert.strictEqual(cpFolder("nul/Aulas."), "nul_/Aulas", "Windows-reserved names and trailing dots fixed");
@@ -390,8 +393,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const noFind = await runContent("/", null, { prefs: { search: false } });
   if (noFind.winListeners.keydown) noFind.winListeners.keydown({ key: "k", ctrlKey: true, preventDefault() {}, stopPropagation() {} });
   assert(!noFind.body.kids.some(k => k.id === "cp-search") && !all(noFind.anchor).some(e => e.className === "find"), "switched off in the popup: Ctrl+K does nothing, no button");
-  const bye = await runContent("/logout", null, { search: { user: 5, at: Date.now(), items: [] }, cache: {} });
-  assert(!bye.store.search && !bye.store.cache, "logging out forgets the search index too"); ok();
+  const bye = await runContent("/logout", null, { search: { user: 5, at: Date.now(), items: [] }, cache: {}, notified: { "1:2|8": 1 }, shown: { x: "/" } });
+  assert(!bye.store.search && !bye.store.cache, "logging out forgets the search index too");
+  assert(!bye.store.notified && !bye.store.shown, "and the last student's grade-notice keys"); ok();
 
   // our exams in the timeline (with what each needs) and the exam-week band; a week with nothing shows a friendly line
   const fakeDate = iso => { const T = Date.parse(iso); return class extends Date { constructor(...a) { if (a.length) super(...a); else super(T); } static now() { return T; } }; };

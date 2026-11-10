@@ -1,0 +1,17 @@
+#!/usr/bin/env node
+// Code rules from AGENTS.md §6 that a script can see: no name declared twice at the top of a file's main scope
+// (content.js is one big scope), and no innerHTML-style sinks in the extension.
+"use strict";
+const fs = require("fs"), path = require("path"), dir = path.join(__dirname, "..", "extension"), bad = [];
+for (const f of fs.readdirSync(dir).filter(f => f.endsWith(".js") && f !== "core.js")) {
+  const src = fs.readFileSync(path.join(dir, f), "utf8"), lines = src.split("\n"), seen = new Map();
+  const ind = /^\((?:async )?\(\) => \{$/m.test(src.split("\n").slice(0, 8).join("\n")) ? "  " : "";   // files wrapped in one IIFE: its body is the main scope
+  const decl = new RegExp("^" + ind + "(?:async )?function ([A-Za-z_$][\\w$]*)\\s*\\(|^" + ind + "(?:const|let) ([A-Za-z_$][\\w$]*)\\s*=");
+  lines.forEach((l, i) => {
+    const m = decl.exec(l), name = m && (m[1] || m[2]);
+    if (name) { if (seen.has(name)) bad.push(f + ":" + (i + 1) + " '" + name + "' already declared at line " + seen.get(name)); else seen.set(name, i + 1); }
+    if (/\.(innerHTML|outerHTML)\s*=|insertAdjacentHTML\(|document\.write\(/.test(l)) bad.push(f + ":" + (i + 1) + " HTML sink: use textContent / el()");
+  });
+}
+if (bad.length) { console.error("code rules (AGENTS.md §6):\n  " + bad.join("\n  ")); process.exit(1); }
+console.log("code rules ok: no duplicate top-level names, no HTML sinks");

@@ -9,6 +9,7 @@ const daysTo = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(lo
 function okDownload(it, root = "PUCPR") {
   if (!it || typeof it.url !== "string" || typeof it.filename !== "string") return false;
   let u; try { u = new URL(it.url); } catch (e) { return false; }
+  if (/\.(app|command|sh|bash|zsh|csh|exe|msi|dmg|pkg|bat|cmd|com|scr|ps1|vbs|vbe|jar|apk|lnk|reg|hta|wsf|wsh|cpl|msc|pif|iso|img|vhd|docm|xlsm|pptm|jse|url|desktop|terminal|scpt|xll|workflow|action|inf|gadget)$/i.test(it.filename)) return false;   // executables never, even if a page script asks (files.js keeps the same list)
   return u.origin === CANVAS && it.filename.startsWith(root + "/") && it.filename.length > root.length + 1 && !it.filename.split("/").some(p => p === "" || p === "." || p === "..");
 }
 

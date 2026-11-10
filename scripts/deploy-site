@@ -1,0 +1,11 @@
+#!/bin/sh
+# Deploy the static site to production (Vercel project faltaquanto → caderno-plus.vercel.app). Run only when the owner
+# asked for it. Refuses on a dirty tree; cleans what the Vercel CLI leaves behind; checks the live version.
+set -e
+cd "$(dirname "$0")/.."
+[ -z "$(git status --porcelain)" ] || { echo "deploy-site: commit first (dirty tree):"; git status --short; exit 1; }
+ext=$(node -p 'require("./extension/manifest.json").version')
+npx -y vercel@latest deploy --prod --yes 2>&1 | grep -E "Aliased|Error" || true
+rm -f .env.local; git checkout -- .gitignore 2>/dev/null || true
+live=$(curl -sL "https://caderno-plus.vercel.app/app?nc=$$" | sed -n 's/.*const EXT_LATEST = "\([0-9.]*\)".*/\1/p' | head -1)
+[ "$live" = "$ext" ] && echo "site live: $ext" || { echo "deploy-site: live EXT_LATEST is '$live', expected $ext (cache? check again)"; exit 1; }

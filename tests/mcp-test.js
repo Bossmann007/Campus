@@ -113,7 +113,7 @@ let n = 0; const ok = () => n++;
   assert(list.result.tools.length === 9 && list.result.tools.every(t => t.annotations.readOnlyHint === true), "nine tools, all read-only");
   assert.deepStrictEqual(list.result.tools.map(t => t.name).sort(), require("../mcp/manifest.json").tools.map(t => t.name).sort(), "manifest lists the same tools");
   { const mf = require("../mcp/manifest.json"), pk = require("../mcp/package.json"), tk = mf.user_config.canvas_token, ei = mf.user_config.extension_id;
-    assert(mf.version === pk.version && pk.version === "1.7.1" && tk.required === false && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.3.0: the token optional and sensitive, no file.js shipped");
+    assert(mf.version === pk.version && tk.required === false && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.3.0: the token optional and sensitive, no file.js shipped");
     assert(ei && ei.required === false && mf.server.mcp_config.env.CADERNO_EXT_ID === "${user_config.extension_id}" && ["ponte.js", "host.js"].every(f => pk.files.includes(f)), "the bundle asks for the extension id (the ponte), and ships the host"); }
   { // every AI client: names of letters and _ (≤ 64), schemas in the plain subset (OpenAI, Gemini and the rest accept it)
     const keys = new Set(["type", "description", "properties", "required"]), walk = (sch, at) => { for (const k of Object.keys(sch)) assert(keys.has(k), "schema keyword " + k + " in " + at); for (const [n, v] of Object.entries(sch.properties || {})) walk(v, at + "." + n); };

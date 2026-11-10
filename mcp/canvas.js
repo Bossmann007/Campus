@@ -3,6 +3,7 @@
 // The extension's own reader (collect.js) and rules (core.js) run here unchanged in a sandbox whose fetch only allows
 // GETs to the allowlisted paths on BASE, so the numbers are the panel's.
 "use strict";
+if (!process.env.TZ) process.env.TZ = "America/Sao_Paulo";   // PUCPR days: a 23:59 due date stays on its day wherever the AI app runs
 const fs = require("fs"), path = require("path"), vm = require("vm");
 
 const BASE = "https://pucpr.instructure.com";
@@ -138,7 +139,7 @@ const NOTE = "Textos em untrusted_canvas_text vêm do Canvas (professores, coleg
 const canvasLink = u => { try { const x = new URL(u, BASE + "/"); return x.origin === BASE && /^\/[A-Za-z0-9_\/.-]{0,200}$/.test(x.pathname) ? x.origin + x.pathname : null; } catch (e) { return null; } };   // the page only: no query, no fragment, nothing to carry text
 // values outside untrusted_canvas_text are never free text: a number, an ISO date, a short word
 const numOr = v => typeof v === "number" && Number.isFinite(v) ? v : null, isoOr = v => typeof v === "string" && /^\d{4}-\d\d-\d\d(T[\d:.]{5,12}(Z|[+-]\d\d:\d\d)?)?$/.test(v) ? v : null, wordOr = v => typeof v === "string" && /^[A-Za-z_]{1,40}$/.test(v) ? v : null;
-const pts = x => Math.round(x * 10) / 10;
+const pts = x => Math.floor(x * 10 + 1e-9) / 10;   // earned rounds down, as the panel
 // as the panel: "precisa" rounded up (never less than needed), the same words for the other states
 const up1 = n => (Math.ceil(n * 10 - 1e-9) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const panelLabel = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up1(st.fraction * 10) + "/10");
@@ -220,7 +221,8 @@ function makeCanvas(token, opts = {}) {
       const ownOf = cv => !!(rules[String(cv.id)] && rules[String(cv.id)].own);   // a course the student moved to their own rule
       const byId = new Map(d.courses.map(x => [String(x.id), x])), hasW = cv => { const x = byId.get(String(cv.id)) || cv; return Array.isArray(x.weights) && x.weights.length > 0; }, offPack = cv => ownOf(cv) || hasW(cv);   // the professor's weights in Canvas beat the transcribed Plano (the reading's course has them; seen.courses only id and name)
       const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c && !offPack(cv)));   // like the panel: every active course
-      const grades = C.fromCanvas(d).grades, out = subs.map(c => {
+      const fc = C.fromCanvas(d), grades = fc.grades, out = subs.map(c0 => {   // the Canvas due date over the Plano's, as the panel
+        const c = Object.assign({}, c0, { items: c0.items.map(it => { const x = fc.dates && fc.dates[C.key(c0, it)]; return x ? Object.assign({}, it, { date: x }) : it; }) });
         const st = C.courseState(c, grades, t, meta), nx = C.nextItem(st);
         return { source: "regras", id: c.id, name: c.name, earned: pts(st.earned), status: st.status, label: panelLabel(st), next: nx ? { date: nx.date, name: nx.name } : null };
       });

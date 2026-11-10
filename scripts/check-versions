@@ -1,0 +1,16 @@
+#!/usr/bin/env node
+// Every version spot agrees (scripts/bump writes them all). Exit 1 names the spot that drifted.
+"use strict";
+const fs = require("fs"), path = require("path"), root = path.join(__dirname, ".."), read = f => fs.readFileSync(path.join(root, f), "utf8");
+const ext = JSON.parse(read("extension/manifest.json")).version, mcp = JSON.parse(read("mcp/package.json")).version, bad = [];
+const want = (name, got, exp) => { if (got !== exp) bad.push(name + ": " + got + " (expected " + exp + ")"); };
+want("app.html EXT_LATEST", (/const EXT_LATEST = "([\d.]+)"/.exec(read("app.html")) || [])[1], ext);
+want("extension/core.js EXT_LATEST", (/EXT_LATEST = "([\d.]+)"/.exec(read("extension/core.js")) || [])[1], ext);
+want("extension/notes.js version", (/version: "([\d.]+)"/.exec(read("extension/notes.js")) || [])[1], ext);
+want("index.html tag", (/<span class="tag">([\d.]+)<\/span>/.exec(read("index.html")) || [])[1], ext.split(".").slice(0, 2).join("."));
+want("README.md", (/extension \(([\d.]+)\)/.exec(read("README.md")) || [])[1], ext);
+want("mcp/manifest.json", JSON.parse(read("mcp/manifest.json")).version, mcp);
+for (const m of read("ia.html").matchAll(/caderno-mcp-([\d.]+)\.mcpb/g)) want("ia.html .mcpb link", m[1], mcp);
+for (const m of read("ia.html").matchAll(/mcp-v([\d.]+)\//g)) want("ia.html release tag", m[1], mcp);
+if (bad.length) { console.error("version drift (run scripts/bump):\n  " + bad.join("\n  ")); process.exit(1); }
+console.log("versions ok: extension " + ext + ", MCP " + mcp);

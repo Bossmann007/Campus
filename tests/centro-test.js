@@ -121,6 +121,12 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert(big.status === "acima" && big.now === null && big.planned === 20, "points adding up past the top: no number, never a false garantido: " + JSON.stringify(big));
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], { total: 20 }, 7).now, 8.5, "told the top: 17 of 20 = 8,5");
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 2 }], {}, 7).status, "nao-da", "nothing left, below the meta");
+  { const r3 = NotasCore.formulaEval("Final = soma(A, P) de 10\nA = média(TDE)", [{ key: "t", name: "TDE", points: 5, score: 0 }, { key: "p", name: "P", points: 5, score: null }], 7);
+    assert(r3.status === "erro" && /média ou um peso/.test(r3.errors.join(" ")), "soma() over a média line: an error, not its points silently counted as left: " + JSON.stringify(r3.errors));
+    const r4 = NotasCore.formulaEval("Final = 50% RA1 + 50% RA2\nRA1 = 100% Prova\nRA2 = 100% Prova RA2", [{ key: "1", name: "Prova RA1", points: 10, score: 10 }, { key: "2", name: "Prova RA2", points: 10, score: null }], 7);
+    assert(r4.errors.some(e => /Prova RA2" conta em RA1/.test(e)), "a short name that also finds an activity of another line is warned: " + JSON.stringify(r4.errors));
+    const r5 = NotasCore.formulaEval("Final = 50% A + 50% B\nA = média(T1)\nB = média(T2)", [{ key: "1", name: "T1", points: 10, score: 8 }, { key: "2", name: "T2", points: 10, score: null }], 7);
+    assert(!r5.errors.length, "distinct names: no warning"); }
   { const sc = NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], null, 7);
     assert(sc.scaled && sc.total === 20 && sc.now === 8.5 && sc.status === "garantido", "no rule at all: the Canvas points brought to 0-10 (17 of 20 = 8,5): " + JSON.stringify(sc)); }
   assert.strictEqual(NotasCore.custom(it, { off: ["a", "b", "c", "x"] }, 7).status, "vazio", "nothing counts");

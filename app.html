@@ -816,7 +816,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.12.1";
+  const EXT_LATEST = "6.12.2";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -993,6 +993,7 @@ const NotasCore = (() => {
       const s2 = new Set(seen).add(l), kids = l.terms.map(t => Object.assign({ w: t.w }, val(t.ref, x, s2)));
       if (l.op === "sum") {   // points added up; what is not in Canvas yet (a missing name, or the top above the known points) is left
         const known = kids.reduce((s, k) => s + (k.top || 0), 0), got = kids.reduce((s, k) => s + (k.pts == null ? 0 : k.pts), 0);
+        const line = l.terms.find((t, i) => kids[i].pts === undefined); if (line) throw new Error("\"" + l.name + "\" soma pontos, mas \"" + line.ref + "\" é uma média ou um peso (sem pontos): use pesos (ex.: 50% " + line.ref + " + 50% ...) ou faça \"" + line.ref + "\" com soma(...) de N");   // its points would vanish and its whole weight count as left
         if (kids.some(k => k.top == null) && !l.top) throw new Error("\"" + l.name + "\" soma algo que ainda não está no Canvas: diga quantos pontos ela vale com \"de N\" (ex.: soma(...) de 5)");
         const top = l.top || known; return { v: top > 0 ? Math.min(10, (got + x * Math.max(0, top - known)) / top * 10) : 0, pts: got + x * Math.max(0, top - known), top }; }
       if (l.op === "avg") return { v: kids.reduce((s, k) => s + k.v, 0) / kids.length };
@@ -1001,6 +1002,8 @@ const NotasCore = (() => {
     let now, best;
     try { now = val(lines[0].name, 0, new Set()).v; best = val(lines[0].name, 1, new Set()).v; } catch (e) { errors.push(String(e.message)); return out("erro"); }
     const lv = [...leaves.values()], counted = lv.reduce((s, l) => s + l.items.length, 0);
+    { const where = new Map(); for (const l of lines) for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref));   // one activity in two lines counts twice (a short name like "Prova" also finds "Prova RA2")
+      for (const a of lf ? lf.items : []) { const w = where.get(a); if (w && w.line !== l) errors.push("\"" + a.name + "\" conta em " + w.line.name + " (por \"" + w.ref + "\") e em " + l.name + " (por \"" + t.ref + "\"): use um nome mais completo"); else if (!w) where.set(a, { line: l, ref: t.ref }); } } }
     for (const l of lines) { const seen = new Map(); for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref)); for (const a of lf ? lf.items : []) { if (seen.has(a) && seen.get(a) !== t.ref) errors.push("\"" + a.name + "\" entrou duas vezes em " + l.name + " (por \"" + seen.get(a) + "\" e \"" + t.ref + "\"): um nome com vírgula? use um pedaço sem vírgula"); seen.set(a, t.ref); } } }
     const open = acts.filter(a => lv.some(l => l.items.includes(a)) && (a.score == null || !Number.isFinite(Number(a.score)))).length;
     const extra = { leaves: lv.map(l => ({ name: l.name, items: l.items.map(a => a.name), missing: l.missing })), counted, open, notYet: lv.filter(l => l.missing).length, weights: lines.filter(l => l.op === "w" && Math.abs(l.terms.reduce((s, t) => s + t.w, 0) - 100) > 0.5).map(l => l.name) };
@@ -1083,7 +1086,7 @@ const NotasCore = (() => {
       }
       if (cols.size > 600) return none("incompleto");
       const base = val(fin, 0, new Set()), shift = shown != null ? shown - base : 0, at = f => { visits = 0; return val(fin, f, new Set()) + shift; };
-      const now = Math.round(at(0) * 100) / 100, T = Number(meta) || 7, left = [...open];
+      const now = floor2(at(0)), T = Number(meta) || 7, left = [...open];
       const extra = fill != null && Number.isFinite(Number(fill)) ? { projected: Math.round(Math.min(10, at(Math.min(10, Math.max(0, Number(fill))) / 10)) * 100) / 100 } : {};
       if (at(0) >= T - 1e-9) return Object.assign({ status: "garantido", now, need: 0, left, approx }, extra);
       if (!left.length || at(1) < T - 1e-9) return Object.assign({ status: "nao-da", now, need: null, left, approx }, extra);
