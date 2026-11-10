@@ -31,8 +31,11 @@ function stableNode(exec = process.execPath, env = process.env, fsx = require("f
 }
 const NODE = stableNode(), J = x => JSON.stringify(x, null, 2);
 const ENTRY = { command: NODE, args: [SERVER] };
-// Quoted for the student's shell: POSIX single quotes (an apostrophe as '\''), Windows double quotes (an inner " as \").
-const q = (x, win = process.platform === "win32") => win ? "\"" + String(x).replace(/"/g, "\\\"") + "\"" : "'" + String(x).replace(/'/g, "'\\''") + "'";
+// Quoted for the student's shell: POSIX single quotes (an apostrophe as '\''); Windows double quotes by the rules Windows
+// programs use to split a command line (CommandLineToArgvW): an inner " as \", the backslashes right before a quote,
+// or at the very end, doubled. Other backslashes (C:\Users\...) stay as they are.
+const winQuote = x => "\"" + String(x).replace(/(\\*)"/g, "$1$1\\\"").replace(/(\\+)$/, "$1$1") + "\"";
+const q = (x, win = process.platform === "win32") => win ? winQuote(x) : "'" + String(x).replace(/'/g, "'\\''") + "'";
 const RUN = () => q(NODE) + " " + q(SERVER);
 const APPS = {
   "claude-code": ["Claude Code", () => "claude mcp add caderno --scope user -- " + RUN()],

@@ -113,7 +113,7 @@ let n = 0; const ok = () => n++;
   assert(list.result.tools.length === 9 && list.result.tools.every(t => t.annotations.readOnlyHint === true), "nine tools, all read-only");
   assert.deepStrictEqual(list.result.tools.map(t => t.name).sort(), require("../mcp/manifest.json").tools.map(t => t.name).sort(), "manifest lists the same tools");
   { const mf = require("../mcp/manifest.json"), pk = require("../mcp/package.json"), tk = mf.user_config.canvas_token, ei = mf.user_config.extension_id;
-    assert(mf.version === pk.version && pk.version === "1.3.0" && tk.required === false && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.3.0: the token optional and sensitive, no file.js shipped");
+    assert(mf.version === pk.version && pk.version === "1.3.1" && tk.required === false && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.3.0: the token optional and sensitive, no file.js shipped");
     assert(ei && ei.required === false && mf.server.mcp_config.env.CADERNO_EXT_ID === "${user_config.extension_id}" && ["ponte.js", "host.js"].every(f => pk.files.includes(f)), "the bundle asks for the extension id (the ponte), and ships the host"); }
   { // every AI client: names of letters and _ (≤ 64), schemas in the plain subset (OpenAI, Gemini and the rest accept it)
     const keys = new Set(["type", "description", "properties", "required"]), walk = (sch, at) => { for (const k of Object.keys(sch)) assert(keys.has(k), "schema keyword " + k + " in " + at); for (const [n, v] of Object.entries(sch.properties || {})) walk(v, at + "." + n); };
@@ -188,6 +188,10 @@ let n = 0; const ok = () => n++;
     { const { execFileSync } = require("child_process");
       for (const x of ["/tmp/o'brien dir/server.js", 'C:\\Users\\a "b"\\x', "$HOME `id` ;rm"]) assert.strictEqual(execFileSync("/bin/sh", ["-c", "printf %s " + cli.q(x, false)], { encoding: "utf8" }), x, "POSIX quoting keeps " + x); }
     assert.strictEqual(cli.q('a "b"', true), '"a \\"b\\""', "Windows: inner quotes escaped");
+    { // Windows quoting undone the way Windows programs split a command line (CommandLineToArgvW), for odd inputs
+      const unq = s => { let out = "", i = 1; while (i < s.length - 1) { let n = 0; while (s[i] === "\\") { n++; i++; } if (s[i] === '"' && i < s.length - 1) { out += "\\".repeat(n >> 1); if (n % 2) { out += '"'; i++; } else break; } else if (i >= s.length - 1) { out += "\\".repeat(n >> 1); } else { out += "\\".repeat(n); } if (i < s.length - 1 && s[i] !== '"') { out += s[i]; i++; } } return out; };
+      for (const x of ["C:\\Users\\a b\\node.exe", "C:\\dir\\", 'say \\"hi\\"', JSON.stringify({ args: ["C:\\x\\server.js"] }), "plain"]) {
+        const quoted = cli.q(x, true); assert(quoted.startsWith('"') && quoted.endsWith('"'), "wrapped: " + quoted); assert.strictEqual(unq(quoted), x, "Windows quoting round-trips " + x + " as " + quoted); } }
     assert(/^gemini mcp add --scope user caderno /.test(cli.APPS.gemini[1]()), "Gemini: user scope (its default is the current folder)");
     assert(/source": "custom"/.test(cli.APPS.zed[1]()) && /name: caderno/.test(cli.APPS.goose[1]()) && /type: stdio/.test(cli.APPS.continue[1]()), "Zed, Goose and Continue in their own formats");
     assert(/desconhecido/.test(cli.setup("nope")) && cli.setup("codex").startsWith("Codex"), "one app, or the list of names");
