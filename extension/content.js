@@ -181,7 +181,8 @@
   let myTasks = [];
   // The Centro de Notas read by the worker, per Canvas user ("centro": { user, at, courses: { <course id>: curso | null } }).
   let myCentro = {};
-  async function loadCentro(user) { const { centro } = await chrome.storage.local.get("centro"); myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
+  let centroOff = false;   // the worker could not read the Centro de Notas: its permission was never granted (centro.html grants it)
+  async function loadCentro(user) { const { centro, centroOff: off } = await chrome.storage.local.get(["centro", "centroOff"]); centroOff = !!off; myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
   // quanto falta from the professor's formula in the Centro de Notas, for a course without our rules; null without a formula
   const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && ["garantido", "precisa", "nao-da"].includes(r.status) ? r : null; };   // sem-formula and incompleto: no number
   // The student's own rule (C.custom) for a course with neither our rules nor a formula in the Centro de Notas: per Canvas
@@ -206,6 +207,10 @@
     const mine = !!myRules[courseId]; return Object.assign(r, { mine, unsure: !mine && (r.status === "garantido" || r.status === "nao-da") }); };
   const customPill = r => r.status === "acima" || r.unsure ? "confira" : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.";
   const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
+  // the offer to read the Centro de Notas, on the dashboard and on a course page, while its permission is missing
+  const centroOffer = () => { const b = el("div", "card centro-ask"), go = el("button", "primary", "Permitir a leitura");
+    b.append(el("div", "mid", "As notas do Centro de Notas (a fórmula que o professor montou) ainda não foram lidas: falta a sua permissão."), go);
+    go.type = "button"; go.addEventListener("click", () => chrome.runtime.sendMessage({ type: "centroAsk" }).catch(() => {})); return b; };
   const centroText = r => fmt(r.now, 1) + "/10 · " + (r.status === "garantido" ? "garantido" : r.status === "nao-da" ? "recuperação" : "precisa " + up(r.need, 1) + "/10" + (r.approx ? " (aprox.)" : ""));
   const centroTone = r => r.status === "garantido" ? "ok" : r.status === "nao-da" ? "bad" : r.need > 8 ? "bad" : "warn";
   // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
@@ -580,6 +585,8 @@
     .cring { display:flex; align-items:center; gap:14px; padding:12px 14px; }
     .items { overflow:hidden; } .ir { display:grid; grid-template-columns:minmax(0,1fr) 56px 140px; gap:10px; align-items:center; padding:8px 12px; border-top:1px solid var(--line); }
     .rule .ir.off .n { color:var(--muted); text-decoration:line-through; } .rule label.n { display:flex; gap:8px; align-items:center; cursor:pointer; } .rule label.n input { accent-color:var(--coral); flex:none; }
+    .c.scale { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; }
+    .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:13.5px; }
     .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:12.5px; } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
     .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
     .ih { border-top:0; background:var(--track); font-size:11px; font-weight:600; color:var(--muted); padding:7px 12px; }
@@ -1015,7 +1022,7 @@
   function needBig(st) {
     const nd = C.courseNeed(st), box = el("div", "big");
     const v = st.status === "garantido" ? "✓" : nd.impossible ? "nem com 10" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
-    const cap = st.status === "garantido" ? "garantido" : st.status === "depende-atrasadas" ? "faltam notas antigas" : nd.impossible ? "nem com nota cheia" : "precisa, em 10";
+    const cap = st.status === "garantido" ? "garantido" : st.status === "depende-atrasadas" ? "faltam notas antigas" : nd.impossible ? "nem com nota cheia" : "média que falta tirar (de 10)";
     box.append(el("b", "v t-" + (st.status === "depende-atrasadas" ? "warn" : nd.tone), v), el("span", null, cap));
     if (st.status === "garantido") box.title = C.GARANTIDO_TIP;
     return box;
@@ -1252,6 +1259,7 @@
       yes.type = no.type = "button"; yes.addEventListener("click", () => answer(a.turma)); no.addEventListener("click", () => answer("outro"));
     }
     if (!prefs.dash) return;   // panel switched off: only the turma question
+    if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
     if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
@@ -1346,6 +1354,7 @@
     const official = c && prefs.grades ? centroOf(courseId) : null;   // with our rules too: the Centro de Notas number beside them, to compare
     if (official) heroSub.textContent += " · Centro de Notas: " + fmt(official.now, 1) + " agora" + (official.status === "precisa" ? ", precisa " + up(official.need, 1) + (official.approx ? " (aprox.)" : "") : official.status === "garantido" ? ", garantido" : official.status === "nao-da" ? ", recuperação" : "");
     const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
+    if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
     if (!c && prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again
       if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); } }); });
     if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
@@ -1432,6 +1441,12 @@
         const head = el("div", "card cring" + (simOn ? " simulating" : "")), mid = el("div", "mid");
         mid.append(el("div", "t", earnedText(st) + " garantidos de 10" + (simOn ? " (simulação)" : "")),
           el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida" + (simOn ? " com essas notas" : " pelas notas lançadas") : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
+        // the Canvas sum and ours differ when an item is graded on another scale than what it is worth (PjBL II of BD:
+        // Canvas 0-2, worth 1,5 of the final): said, item by item, so the two numbers are not a mystery
+        { let raw = 0; const scaled = [];   // the grades in Canvas only (a simulation does not change this line)
+          for (const it of c.items) { const g = C.parseNum(a.canvas[C.key(c, it)]); if (g == null || Number.isNaN(g)) continue; raw += g; if (Math.abs(it.inMax - it.max) > 1e-9) scaled.push(it.name.replace(/^RA\d · /, "") + ": o Canvas lança de 0 a " + fmt(it.inMax, 2) + ", vale " + fmt(it.max, 2)); }
+          const e0 = C.courseState(c, a.canvas, today(), T).earned;
+          if (Math.abs(raw - e0) >= 0.05) mid.appendChild(el("div", "c scale", "No Canvas as notas somam " + fmt(raw, 2) + "; pelos pesos do Plano de Ensino valem " + fmt(e0, 2) + (scaled.length ? " (" + scaled.slice(0, 3).join("; ") + ")" : ""))); }
         head.append(ring(st, true), mid, needBig(st)); return head;
       };
       box.appendChild(headBox);

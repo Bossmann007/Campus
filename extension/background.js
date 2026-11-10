@@ -195,6 +195,12 @@ async function ponteOpen() {
   port.onDisconnect.addListener(() => { ponteErr = (chrome.runtime.lastError && chrome.runtime.lastError.message) || "desligada"; if (ponte === port) ponte = null; });
   return true;
 }
+if (chrome.permissions && chrome.permissions.onAdded) chrome.permissions.onAdded.addListener(async p => {   // the Centro de Notas just allowed: read the courses of the last reading now
+  if (!p || !Array.isArray(p.origins) || !p.origins.some(o => o.startsWith(CENTRO))) return;
+  await chrome.storage.local.remove("centroOff");
+  const { cache } = await chrome.storage.local.get("cache"), ids = cache && cache.data && Array.isArray(cache.data.courses) ? cache.data.courses.map(c => String(c.id)) : [];
+  if (cache && typeof cache.user === "number" && ids.length) centroAll(cache.user, ids.slice(0, 15)).catch(() => {});
+});
 if (chrome.permissions && chrome.permissions.onAdded) chrome.permissions.onAdded.addListener(p => { if (p && Array.isArray(p.permissions) && p.permissions.includes("nativeMessaging")) ponteUp(); });
 ponteUp();   // every time the worker starts (browser start, an update): reconnects when the student turned the ponte on
 
@@ -220,10 +226,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   // read the Centro de Notas of these courses (from the panel's reading); at most once an hour per user (formulas change
   // rarely and each read is six requests per course); Atualizar in the popup forces it
+  if (msg.type === "centroAsk") { chrome.tabs.create({ url: chrome.runtime.getURL("centro.html") }); reply({ ok: true }); return; }   // a Canvas page cannot ask for a permission: this page can
   if (msg.type === "centro" && Array.isArray(msg.ids) && typeof msg.user === "number") {
     (async () => {
       const ids = msg.ids.map(String).filter(x => /^\d{1,15}$/.test(x)).slice(0, 15), { centro } = await chrome.storage.local.get("centro");
-      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return reply({ ok: false, permission: false });   // asked once, from Atualizar in the popup
+      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) { const { centroOff } = await chrome.storage.local.get("centroOff"); if (!centroOff) await chrome.storage.local.set({ centroOff: true }); return reply({ ok: false, permission: false }); }   // the panels offer centro.html to grant it
       if (centro && centro.user === msg.user && Date.now() - centro.at < 60 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
       await centroAll(msg.user, ids); reply({ ok: true });
     })().catch(() => reply({ ok: false }));

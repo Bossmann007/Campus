@@ -765,6 +765,14 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the popup changes the mode: the panel follows at once (no reload, no fight with the header switch)
   const sync = await runContent("/", null); await sync.env.window.cpPrefsChanged({ mode: "foco" }); await new Promise(r => setTimeout(r, 15));
   assert(/Agora/.test(text(sync.anchor)) && all(sync.anchor).filter(e => e.id === "cp-dash").length === 1, "the panel redraws in the popup's mode");
+  { // the Centro de Notas never read (no permission): the dashboard and the course page offer it; the button asks the worker
+    const off = await runContent("/", null, { centroOff: true }), ask = all(off.anchor).find(e => e.textContent === "Permitir a leitura");
+    assert(ask && /ainda não foram lidas/.test(text(off.anchor)), "the offer on the dashboard"); await ask.listeners.click();
+    assert(off.sent.some(m => m.type === "centroAsk"), "the button asks the worker to open the permission page");
+    const cpo = await runContent("/courses/71306", [], { centroOff: true }); assert(/Permitir a leitura/.test(text(cpo.anchor.kids.find(k => k.id === "qf-panel"))), "and on the course page");
+    const on = await runContent("/", null); assert(!/Permitir a leitura/.test(text(on.anchor)), "no offer once it was read or allowed");
+    // the course card says why our sum differs from Canvas's (an item graded on another scale)
+    ok(); }
   { const live = await runContent("/", null); assert(/Minhas tarefas/.test(text(live.anchor)), "tasks card on");
     await live.env.window.cpPrefsChanged({ tasks: false }); await new Promise(r => setTimeout(r, 30));
     assert(!/Minhas tarefas/.test(text(live.anchor)) && all(live.anchor).filter(e => e.id === "cp-dash").length === 1, "a panel switch in the popup (tasks off) redraws at once, one panel"); }

@@ -812,7 +812,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.6.0";
+  const EXT_LATEST = "6.6.1";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -1495,7 +1495,7 @@ const NotasCore = (() => {
     left.append(el("div", "t", u.item.name), el("div", "s", (SHORT[u.course.id] || u.course.name) + " · " + dmy(u.item.date) + ", " + when));
     const nd = C.courseNeed(u.st), v = nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
     const vv = el("div", "v num", v); vv.style.color = "var(--" + nd.tone + ")";
-    need.append(vv, el("div", "u", nd.impossible ? "nem com nota cheia" : "precisa, em 10" + (nd.approx ? " (faltam notas antigas)" : "")));
+    need.append(vv, el("div", "u", nd.impossible ? "nem com nota cheia" : "média que falta tirar (de 10)" + (nd.approx ? " (faltam notas antigas)" : "")));
     box.append(el("div", "k", "Próxima avaliação que conta"), left, need);
     const rest = list.slice(1, 3);
     if (rest.length) { const t = el("div", "then", "Depois: ");

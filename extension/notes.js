@@ -1,8 +1,10 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.6.0",
+  version: "6.6.1",
   items: [
+    "Centro de Notas: se as notas dele ainda não foram lidas, o painel mostra um botão Permitir a leitura (antes só o Atualizar do botão da extensão pedia)",
+    "Na matéria, quando o Canvas soma diferente dos pesos do Plano de Ensino, o card explica (ex.: uma atividade lançada de 0 a 2 que vale 1,5); e o número grande agora diz \"média que falta tirar (de 10)\"",
     "Sua regra com pesos por parte: na página da matéria, \"Usar pesos por parte\" (ex.: RA1 40%, RA2 60%), e cada atividade na sua parte",
     "A sua IA usa a mesma regra que você montou (Caderno+ MCP 1.3, pela ponte)",
     "Atividades dispensadas não contam no quanto falta; o tema Marca-texto tem texto legível; as setas do teclado escolhem o modo e a matéria; os botões do popup valem na hora",
