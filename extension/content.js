@@ -1219,17 +1219,19 @@
     const sec = el("section", "card centro ov"), head = el("div", "ovh"), seg = el("div", "seg ov-mode"), body = el("div", "ov-body"), modeBtns = [];
     const tipOf = u => u.full + " · " + (u.now == null ? "sem nota calculada" : dn(u.now) + " de 10 agora") + " · " + u.label + " · " + SRCS[u.src] + (u.scaled ? " (" + fmt(u.scaled, 0) + " pontos levados a 10)" : "");
     const nameCell = u => { const n = el("a", "ovn"); n.href = "/courses/" + u.cid; n.append(el("span", "n", u.name), el("span", "c", SRCS[u.src])); n.title = u.full; return n; };
-    const valCell = u => el("span", "ovv pill " + u.tone, u.need != null ? up(u.need, 1) : u.status === "garantido" ? "✓" : u.status === "nao-da" ? "rec." : u.status === "erro" ? "erro" : "?");
+    const gap = u => u.now == null ? null : Math.max(0, T - u.now);   // points still missing to the student's meta (BD: 7 − 6,5 = 0,5)
+    const valCell = u => { const g = gap(u), v = el("span", "ovv pill " + u.tone, u.status === "garantido" || g === 0 ? "✓" : u.status === "erro" ? "erro" : g == null ? "?" : "+" + up(g, 1));
+      v.title = u.status === "garantido" || g === 0 ? "meta garantida" : g == null ? "sem nota calculada" : "faltam " + up(g, 1) + " pontos para a meta " + fmt(T, T % 1 ? 1 : 0) + (u.need != null ? " (média de " + up(u.need, 1) + " no que falta)" : u.status === "nao-da" ? " · nem com 10 no que falta" : ""); return v; };
     const scale = () => { const r = el("div", "ovr ovscale"), ax = el("div", "ovbar ovax"); for (const v of ["0", "5", "10"]) ax.appendChild(el("span", null, v)); r.setAttribute("aria-hidden", "true"); r.append(el("span"), ax, el("span", "ovv")); return r; };
     const VIEWS = {
       barras: ["Barras", "nota garantida em cada matéria, de 0 a 10; o risco é a meta", () => { const rows = shownU().map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone), m = el("b");
           f.style.width = (u.now == null ? 0 : Math.min(100, u.now * 10)) + "%"; m.style.left = Math.min(99.5, T * 10) + "%"; bar.append(f, m); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
           if (u.now != null && u.now >= 1.2) bar.appendChild(el("span", "ovin", dn(u.now)));   // inside the bar only when it fits
           r.append(nameCell(u), bar, valCell(u)); return r; }); return rows.concat(scale()); }],
-      falta: ["Falta", "média que falta tirar (de 10) no que resta, da mais apertada para a mais folgada", () => shownU().slice().sort((p, q) => (q.need == null ? -1 : q.need) - (p.need == null ? -1 : p.need)).map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone);
-          f.style.width = (u.need != null ? Math.min(100, u.need * 10) : u.status === "nao-da" ? 100 : 0) + "%"; if (u.status === "nao-da") f.className = "bad hatch"; bar.append(f); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
+      falta: ["Falta", "pontos que faltam até a meta em cada matéria, de quem falta mais para quem falta menos", () => shownU().slice().sort((p, q) => (gap(q) == null ? -1 : gap(q)) - (gap(p) == null ? -1 : gap(p))).map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone);
+          f.style.width = (gap(u) == null ? 0 : Math.min(100, gap(u) * 10)) + "%"; if (u.status === "nao-da") f.className = "bad hatch"; bar.append(f); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
           r.append(nameCell(u), bar, valCell(u)); return r; }).concat(scale())],
-      aneis: ["Anéis", "quanto de 10 já está garantido; no meio, o que falta tirar", () => { const g = el("div", "ovrings"); for (const u of shownU()) { const c = el("a", "ovring"), ring = el("div", "rg"), mid = el("b", null, u.need != null ? up(u.need, 1) : u.status === "garantido" ? "✓" : u.status === "nao-da" ? "rec." : "?");
+      aneis: ["Anéis", "quanto de 10 já está garantido; no meio, os pontos que faltam até a meta", () => { const g = el("div", "ovrings"); for (const u of shownU()) { const c = el("a", "ovring"), ring = el("div", "rg"), mid = el("b", null, u.status === "garantido" || gap(u) === 0 ? "✓" : gap(u) == null ? "?" : "+" + up(gap(u), 1));
           const pct = u.now == null ? 0 : Math.min(100, u.now * 10); ring.dataset.t = u.tone; ring.style.cssText = "--p:" + pct + "%;--m:" + Math.min(100, T * 10) + "%"; ring.appendChild(mid);
           c.href = "/courses/" + u.cid; c.dataset.tip = tipOf(u); c.setAttribute("aria-label", tipOf(u)); c.append(ring, el("span", "n", u.name), el("span", "c", (u.now == null ? "—" : dn(u.now)) + " garantido"));
           g.appendChild(c); } return [g]; }],

@@ -432,6 +432,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(all(gb).some(e => e.className === "ovbar" && e.dataset.tip) && all(gb).some(e => e.className === "ovr ovscale"), "the default view is a bar chart with a 0-10 scale and a tooltip per bar");
   assert.deepStrictEqual(rows.map(r => all(r).find(e => e.tag === "a").href), mine.map(c => "/courses/" + cvOf(c.id)), "a Quanto falta row per enrolled subject, each opening its Canvas course");
   assert(rows.every((r, i) => text(r).includes(C.SHORT[mine[i].id])), "rows named like the calculator");
+  { const e = Math.floor(Math.min(10, sem.states.abd.earned) * 100 + 1e-9) / 100, g = Math.max(0, 7 - e), pv = all(rows[0]).find(x => /ovv pill/.test(x.className || "")).textContent;
+    assert.strictEqual(pv, g === 0 || sem.states.abd.status === "garantido" ? "✓" : "+" + up1(g), "the pill: points still missing to the meta, not the average"); }
   assert(/Plano de Ensino/.test(text(gb)) && !/Ciência da Computação/.test(text(gb)), "dashboard grades: each row says its source, no course name");
   { const modes = all(gb).filter(e => e.role === "radio" && e.dataset && e.dataset.m); assert.deepStrictEqual(modes.map(b => b.textContent), ["Barras", "Falta", "Anéis", "Entregas", "Lista"], "five views of the quanto falta");
     for (const b of modes) { await b.listeners.click(); await new Promise(r => setTimeout(r, 5)); const body = all(gb).find(e => e.className === "ov-body"); assert(body.dataset.mode === b.dataset.m && body.kids.length > 0 && gd.store.prefs.ovMode === b.dataset.m, "view " + b.dataset.m + " draws and is saved"); }
