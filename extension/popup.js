@@ -58,8 +58,14 @@ $("refresh").addEventListener("click", async () => {
   const { cache } = await chrome.storage.local.get("cache");
   if (cache) await chrome.storage.local.set({ cache: Object.assign({}, cache, { at: 0 }) });
   const { centro } = await chrome.storage.local.get("centro"); if (centro) await chrome.storage.local.set({ centro: Object.assign({}, centro, { at: 0 }) });   // the Centro de Notas too
-  await chrome.storage.local.remove("refreshing");
-  $("status").textContent = "Atualiza na próxima página do Canvas.";
+  // everything read from Canvas with a longer life comes again too: teachers, course colours, the search list, the
+  // "Desde a sua última visita" files and modules
+  await chrome.storage.local.remove(["refreshing", "teachers", "ccolors", "search"]);
+  const { snap } = await chrome.storage.local.get("snap"); if (snap && typeof snap === "object") await chrome.storage.local.set({ snap: Object.fromEntries(Object.entries(snap).map(([u, v]) => [u, Object.assign({}, v, { netAt: 0 })])) });
+  // and the Canvas page open now reads it at once (no waiting for the next page)
+  let tab = null; try { [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); } catch (e) { tab = null; }
+  if (tab && typeof tab.url === "string" && tab.url.startsWith("https://pucpr.instructure.com/")) { chrome.tabs.reload(tab.id); $("status").textContent = "Lendo o Canvas de novo…"; }
+  else $("status").textContent = "Atualiza na próxima página do Canvas.";
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
 const KEEP = ["hand", "marks", "tasks", "notes", "checks", "myRules", "hidden", "prefs", "fold"];

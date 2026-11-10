@@ -44,7 +44,10 @@ async function collectCanvasGrades(seen, known) {
     let as;   // one course that does not answer (403, 5xx) does not take the others down: it comes back empty and marked
     try { as = (early.has(String(c.id)) && await early.get(String(c.id))) || await get(asgUrl(c.id)); }
     catch (e) { if (/ 401$/.test(String(e && e.message)) || cs.length === 1) throw e; return { id: c.id, name: c.name, assignments: [], failed: true }; }
-    return ({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null,
+    // the professor's own weights, when the course weighs its assignment groups in Canvas (an official formula)
+    let weights; if (c.apply_assignment_group_weights === true) { try { const gs = await get("/api/v1/courses/" + c.id + "/assignment_groups?per_page=50", 1);
+      weights = (Array.isArray(gs) ? gs : []).filter(g => g && Number(g.group_weight) > 0).map(g => ({ id: g.id, name: String(g.name || "").slice(0, 80), w: Number(g.group_weight) })); } catch (e) { weights = undefined; } }
+    return ({ id: c.id, name: c.name, ...(weights && weights.length ? { weights } : {}), assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null, group: a.assignment_group_id == null ? null : a.assignment_group_id,
       score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
       due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
       excused: !!(a.submission && a.submission.excused) || a.omit_from_final_grade === true,   // dispensed, or left out of the final grade by the professor

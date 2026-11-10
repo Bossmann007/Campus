@@ -27,7 +27,11 @@ const at = (iso, days, h) => { const [y, m, d] = iso.split("-").map(Number); ret
 let queue = Promise.resolve();   // two Canvas tabs at once: one rebuild after the other
 const remind = (items, alarms = true) => (queue = queue.then(() => rebuild(items, alarms), () => rebuild(items, alarms)));
 async function rebuild(items, alarms) {
-  for (const a of await chrome.alarms.getAll()) if (a.name.startsWith("r|")) await chrome.alarms.clear(a.name);
+  // the same list again (every new Canvas tab sends it): nothing to redo when its alarms are all still there
+  const sig = JSON.stringify([alarms, (items || []).slice(0, 60).map(it => it && [it.key, it.title, it.date, it.due, it.url, it.course])]);
+  const have = (await chrome.alarms.getAll()).filter(a => a.name.startsWith("r|")), { remindSig, remindN } = chrome.storage.session ? await chrome.storage.session.get(["remindSig", "remindN"]) : {};
+  if (remindSig === sig && have.length === remindN) return;
+  for (const a of have) await chrome.alarms.clear(a.name);
   const reminders = {}, now = Date.now(), upcoming = [];
   for (const it of items.slice(0, 60)) {
     if (it && typeof it.title === "string" && typeof it.date === "string" && /^\d{4}-\d\d-\d\d$/.test(it.date)) upcoming.push({ title: it.title.slice(0, 120), date: it.date });
@@ -44,6 +48,7 @@ async function rebuild(items, alarms) {
     }
   }
   await chrome.storage.local.set({ reminders, upcoming });
+  if (chrome.storage.session) await chrome.storage.session.set({ remindSig: sig, remindN: Object.keys(reminders).length });
 }
 // Monday 08:00: what the week holds, from the last list a Canvas page sent ("3 entregas e 1 prova · Prova: RA2 (qui)").
 function nextMonday8(now = new Date()) {
@@ -156,7 +161,7 @@ async function centroAll(user, ids, f = fetch) {
 // browser's login, so the student's AI needs no token. On only after the student grants "nativeMessaging" (Sua IA page);
 // while connected the worker stays alive (Chrome 105+). Only GETs to the MCP's own allowlist, and the Centro de Notas reader.
 const PONTE_HOST = "br.caderno_plus.mcp";
-const PONTE_ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/(assignments|modules|users|tabs|quizzes)$/, /^\/api\/v1\/announcements$/, /^\/api\/v1\/planner\/items$/];
+const PONTE_ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/(assignments|modules|users|tabs|quizzes|assignment_groups)$/, /^\/api\/v1\/announcements$/, /^\/api\/v1\/planner\/items$/];
 let ponte = null, ponteErr = "";
 async function ponteAnswer(m, f = fetch) {
   const id = m && m.id;
@@ -295,6 +300,6 @@ chrome.notifications.onClicked.addListener(async id => {
   if (typeof shown[id] === "string" && shown[id].startsWith(CANVAS + "/")) chrome.tabs.create({ url: shown[id] });
   chrome.notifications.clear(id);
 });
-chrome.storage.onChanged.addListener(async (ch, area) => {   // turned off: drop pending reminders (the week list stays for the summary)
-  if (area === "local" && ch.prefs && !cpPrefs(ch.prefs.newValue).remind) remind((await chrome.storage.local.get("upcoming")).upcoming || [], false);
-});
+// No storage.onChanged listener here: it woke this worker on every write of every tab (the reading, notes as they are
+// typed, ticks). Reminders switched off are honoured when an alarm fires (notify reads prefs.remind) and the next Canvas
+// page sends alarms: false.

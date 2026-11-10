@@ -1,8 +1,12 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.10.0",
+  version: "6.11.0",
   items: [
+    "Para qualquer turma: os números do painel, a próxima entrega e o dia da prova no ícone vêm do Canvas, do Centro de Notas e dos pesos que o professor pôs no próprio Canvas, não só das regras prontas",
+    "Datas oficiais: quando a atividade está no Canvas, vale a data do Canvas (não a do Plano de Ensino); data do Plano não confirmada aparece como \"data a confirmar\"",
+    "O Atualizar lê tudo de novo na hora (professores, cores, novidades) e recarrega a página do Canvas aberta",
+    "Mais leve: o processo de fundo não acorda mais a cada gravação, lembretes iguais não são refeitos, uma leitura igual não redesenha o painel, e arquivos e módulos grandes são lidos três de cada vez",
     "Fórmula da sua nota mais fácil: ela já começa com a fórmula do professor (Centro de Notas) ou com os pesos do Plano de Ensino, mostra o resultado enquanto você digita, e as atividades da matéria viram botões para pôr na fórmula",
     "O calendário vem do programa de cada matéria: todas as atividades e os eventos do Canvas do semestre inteiro, mais as provas do Plano de Ensino, sem repetir",
     "Revisão geral: o quanto falta nunca aparece menor do que é; soma(...) sem \"de N\" avisa em vez de dar garantido; a linha Final vale onde estiver; atividade dispensada sai da média; uma falha do Centro de Notas não apaga a última leitura; o backup avisa quando não sabe de quem é, e a importação não apaga notas novas",

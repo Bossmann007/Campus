@@ -115,10 +115,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if (opts.denied) return { ok: false, status: 401, text: async () => "", headers: { get: () => null } };
     if (url === "/api/v1/users/self") return page({ id: opts.selfId || 5 });
     if (url.startsWith("/api/v1/courses?") && opts.failCourses) return { ok: false, status: 500, text: async () => "", headers: { get: () => null } };
-    if (url.startsWith("/api/v1/courses?")) return page([{ id: cid, name: opts.courseName || BD }].concat(opts.more || []));
+    if (url.startsWith("/api/v1/courses?")) return page([Object.assign({ id: cid, name: opts.courseName || BD }, opts.groups ? { apply_assignment_group_weights: true } : {})].concat(opts.more || []));
+    if (opts.groups && url.startsWith("/api/v1/courses/" + cid + "/assignment_groups")) return page(opts.groups);
     if (url.startsWith("/api/v1/courses/" + cid + "/assignments")) return page([{ name: "Entrega PjBL - Parte 1 03/09", points_possible: 1, html_url: "/courses/71306/assignments/11", submission: { score: 1 } },
       { name: "Avaliação somativa RA1 10/09", points_possible: 1.25, submission: { score: 1.25 } }, { name: "Avaliação somativa RA2 22/10", points_possible: 3, submission: { score: 3 } },
-      { name: "Entrega PjBL - Parte 2 15/10", points_possible: 2, submission: { score: 2 } }]);
+      { name: "Entrega PjBL - Parte 2 15/10", points_possible: 2, submission: { score: 2 } }].concat(opts.extraAsg || []));
     if ((opts.more || []).some(c => url.startsWith("/api/v1/courses/" + c.id + "/assignments"))) return page([]);
     if (url.startsWith("/api/v1/announcements")) return page([{ context_code: "course_" + cid, title: "Prova adiada", posted_at: new Date().toISOString(), read_state: "unread", html_url: "https://pucpr.instructure.com/courses/71306/discussion_topics/1" },
       { context_code: "course_" + cid, title: "Bem-vindos", posted_at: "2026-08-01T12:00:00Z", read_state: "read", html_url: "https://evil.example/x" }]);
@@ -292,8 +293,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await ask({ type: "remind", items: [{ key: "assignment:1", title: "Entrega: Lista", course: "BD", due, url: "https://pucpr.instructure.com/courses/71306/assignments/1" }] }, CANVAS_TAB);
   local.prefs = { remind: false }; await listeners.alarm({ name: hour, scheduledTime: Date.now() }); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(notes.length, 1, "reminders off: no notification");
-  listeners.storage({ prefs: { newValue: { remind: false } } }, "local"); await new Promise(r => setTimeout(r, 5));
-  assert.strictEqual(Object.keys(alarms).filter(k => k.startsWith("r|")).length, 0, "turning reminders off drops the pending ones"); ok();
+  await ask({ type: "remind", alarms: false, items: [{ key: "assignment:1", title: "Entrega: Lista", course: "BD", due, url: "https://pucpr.instructure.com/courses/71306/assignments/1" }] }, CANVAS_TAB);   // the next page, reminders off
+  assert.strictEqual(Object.keys(alarms).filter(k => k.startsWith("r|")).length, 0, "turning reminders off drops the pending ones (no storage listener waking the worker)");
+  const nAlarms = Object.keys(alarms).length; await ask({ type: "remind", alarms: false, items: [{ key: "assignment:1", title: "Entrega: Lista", course: "BD", due, url: "https://pucpr.instructure.com/courses/71306/assignments/1" }] }, CANVAS_TAB);
+  assert.strictEqual(Object.keys(alarms).length, nAlarms, "the same list again: nothing redone"); ok();
 
   // dashboard: the next 7 days as a timeline (planner + our exams), overdue work above it, and the announcements
   const dash2 = await runContent("/", null), wk = dash2.anchor.kids.find(k => k.id === "cp-dash");
@@ -432,7 +435,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   // another turma (same course name, another Canvas id): no grade parts, one line saying why; the generic parts keep working
   const ot = await runContent("/", null, {}, { courseId: 42 }), ob = ot.anchor.kids.find(k => k.id === "cp-dash");
-  assert(ob && !all(ob).some(e => /kpi|tile|upnext/.test(e.className)), "other turma: no grade parts");
+  assert(ob && !all(ob).some(e => /tile/.test(e.className)), "other turma: no Plano tiles");
+  assert(/Entregues/.test(text(ob)) && /\d+ de \d+/.test(text(ob)) && /Quanto falta/.test(text(ob)), "other turma: the numbers from Canvas and the course's rule (any turma)");
+  { const nxt = await runContent("/", null, {}, { courseId: 42, extraAsg: [{ name: "Prova final", points_possible: 4, due_at: new Date(Date.now() + 3 * 864e5).toISOString(), html_url: "/courses/42/assignments/99", submission: { score: null } }] }), nt = text(nxt.anchor.kids.find(k => k.id === "cp-dash"));
+    assert(/Próxima entrega/.test(nt) && /Prova final/.test(nt) && /em 3 dias/.test(nt), "other turma: the next delivery from Canvas, by its official date");
+    const nm = nxt.sent.filter(m => m.type === "next").pop(); assert(nm && nm.label === "Prova final" && nm.date, "the icon counts days to the next Canvas exam: " + JSON.stringify(nm)); }
   assert(/Quanto falta/.test(text(ob)) && /soma dos pontos: confira na matéria/.test(text(ob)) && !all(ob).some(e => e.className === "muted why"), "other turma: quanto falta by the sum of Canvas points, said so, to check on the course page");
   { // the course page of that course: the student's rule (untick what is not graded, how far the grade goes), saved per user
     const cp = await runContent("/courses/42", null, {}, { courseId: 42 }), pb = () => cp.anchor.kids.find(k => k.id === "qf-panel") || all(cp.body).find(k => k.id === "qf-panel") || all(cp.anchor).find(k => k.id === "qf-panel");
@@ -773,6 +780,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the popup changes the mode: the panel follows at once (no reload, no fight with the header switch)
   const sync = await runContent("/", null); await sync.env.window.cpPrefsChanged({ mode: "foco" }); await new Promise(r => setTimeout(r, 15));
   assert(/Agora/.test(text(sync.anchor)) && all(sync.anchor).filter(e => e.id === "cp-dash").length === 1, "the panel redraws in the popup's mode");
+  { // the professor's weights set in Canvas (weighted assignment groups) are the rule for any turma, said so
+    const g = await runContent("/", null, {}, { courseId: 42, groups: [{ id: 1, name: "RA1", group_weight: 70 }, { id: 2, name: "RA2", group_weight: 30 }],
+      extraAsg: [{ name: "Prova RA1", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/71", submission: { score: 8 } }, { name: "Prova RA2", points_possible: 10, assignment_group_id: 2, html_url: "/courses/42/assignments/72", submission: { score: null } }] });
+    const gt = text(g.anchor.kids.find(k => k.id === "cp-dash"));
+    assert(/pesos que o professor pôs no Canvas/.test(gt), "the dashboard uses Canvas's group weights: " + gt.slice(0, 200));
+    ok(); }
+  { // the official date: a Plano item that is a Canvas activity shows Canvas's due date; a Plano date the Plano itself does not confirm says so
+    const dp = await runContent("/courses/71306", [], {}, { extraAsg: [{ name: "Entrega Pjbl Parte 3 - 18/11", points_possible: 1, due_at: "2027-01-05T15:00:00Z", html_url: "/courses/71306/assignments/13", submission: { score: null } }] });
+    const pt = text(dp.anchor.kids.find(k => k.id === "qf-panel"));
+    assert(/05\/01/.test(pt) && /data a confirmar/.test(pt), "Canvas's due date (05/01) over the Plano's 18/11; the unconfirmed TDE says data a confirmar: " + pt.match(/PjBL Parte III[^|]*\|[^|]*\|[^|]*/));
+    ok(); }
   { // the Centro de Notas never read (no permission): the dashboard and the course page offer it; the button asks the worker
     const off = await runContent("/", null, { centroOff: true }), ask = all(off.anchor).find(e => e.textContent === "Permitir a leitura");
     assert(ask && /ainda não foram lidas/.test(text(off.anchor)), "the offer on the dashboard"); await ask.listeners.click();
@@ -1035,7 +1053,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(reads(locked).length, 0, "another tab is reading: this one uses the last reading");
   assert(all(locked.anchor).some(e => /kpi/.test(e.className)), "and still draws it");
   const freed = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 2 * 60 * 1000 }));
-  assert.strictEqual(reads(freed).length, 6, "a lock left by a closed tab expires after a minute"); assert.strictEqual(freed.store.refreshing, undefined, "lock released");
+  assert.strictEqual(reads(freed).length, 6, "a lock left by a closed tab expires after a minute"); assert(!freed.store.refreshing, "lock released (0: not reading, written with the cache in one go)");
   // SSO or cookie switch: no user id in the page, a fresh reading of A, but the session is B → nothing of A is drawn
   const toB = await runContent("/", null, Object.assign({}, cold.store, { who: { id: 5, at: Date.now() } }), { selfId: 8, failCourses: true });
   assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert(!all(toB.anchor).some(e => /kpi|week|cring/.test(e.className || "")) && all(toB.anchor).some(e => /trouble/.test(e.className || "")), "nothing of A drawn, only why Canvas could not be read"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");

@@ -9,7 +9,7 @@ const BASE = "https://pucpr.instructure.com";
 // Every path the server may read; ids are digits only. Anything else throws before a request leaves the machine.
 const ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/assignments$/, /^\/api\/v1\/announcements$/,
   /^\/api\/v1\/planner\/items$/, /^\/api\/v1\/courses\/\d{1,15}\/modules$/, /^\/api\/v1\/courses\/\d{1,15}\/users$/, /^\/api\/v1\/courses\/\d{1,15}\/tabs$/,
-  /^\/api\/v1\/courses\/\d{1,15}\/external_tools\/sessionless_launch$/, /^\/api\/v1\/courses\/\d{1,15}\/quizzes$/];
+  /^\/api\/v1\/courses\/\d{1,15}\/external_tools\/sessionless_launch$/, /^\/api\/v1\/courses\/\d{1,15}\/quizzes$/, /^\/api\/v1\/courses\/\d{1,15}\/assignment_groups$/];
 // The Centro de Notas (PUCPR's grade tool, an LTI tab in every course): only this host, only these paths, never the token.
 const CENTRO = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io", LTI_URL = CENTRO + "/lti";
 const TOOL_PATHS = [/^\/lti$/, /^\/lti\/finalize$/, /^\/curso\/\d{1,15}$/];
@@ -229,12 +229,16 @@ function makeCanvas(token, opts = {}) {
         let cu = null, err = null; if (!ownOf(cv)) { try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; } }   // the student's own rule wins over the Centro's formula
         const r0 = cu ? C.centro(cu, meta) : null;
         if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) {   // as the panel: no formula, or one the student cannot see whole   // no formula: the student's own rule (from the extension, with the ponte), else the sum of the points
-          const rule = rules[String(cv.id)], items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score }));   // the name: a written formula finds its activities by it
+          const items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, group: x.group }));
+          // the student's rule; else the professor's weights set in Canvas (weighted assignment groups), as the panel does
+          let rule = rules[String(cv.id)], cw = false;
+          if (!rule && Array.isArray(cv.weights) && cv.weights.length) { const L = "ABCDE", ws = cv.weights.slice(0, 5), parts = {}, part = {}; ws.forEach((g, i) => { parts[L[i]] = { w: g.w }; });
+            for (const x of items) { const i = ws.findIndex(g => String(g.id) === String(x.group)); if (i >= 0) part[x.key] = L[i]; } rule = { parts, part }; cw = true; }   // the name: a written formula finds its activities by it
           const r = items.length ? C.custom(items, rule, meta) : null;
           if (r && r.status === "erro") { out.push({ source: "regra-do-aluno", course_id: cv.id, status: "erro", label: "a fórmula que o aluno escreveu tem um erro: " + clean(String((r.errors || [])[0] || ""), 160), untrusted_canvas_text: { name: clean(cv.name, 160) } }); continue; }
           if (r && r.status !== "vazio") {
             const unsure = !rule && (r.status === "garantido" || r.status === "nao-da");
-            out.push({ source: rule ? "regra-do-aluno" : "soma-dos-pontos", course_id: cv.id, status: unsure ? "confira" : r.status, now: r.now, need: r.need,
+            out.push({ source: cw ? "pesos-do-canvas" : rule ? "regra-do-aluno" : "soma-dos-pontos", course_id: cv.id, status: unsure ? "confira" : r.status, now: r.now, need: r.need,
               label: r.status === "acima" ? "os pontos somam " + r.planned + ", mais que " + r.total + ": o aluno precisa ajustar a regra na página da matéria" : unsure ? "pela soma dos pontos daria " + (r.status === "garantido" ? "garantido" : "recuperação") + ", mas a regra não foi conferida pelo aluno" : CENTRO_LABEL[r.status] || "precisa " + up1(r.need) + "/10",
               untrusted_canvas_text: { name: clean(cv.name, 160) } });
             continue;
