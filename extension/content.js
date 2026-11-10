@@ -234,12 +234,21 @@
         kids.forEach((k, i) => { if ((k.col.colunas_associadas_pai || []).length) write(k.col, names[i]); }); };
       if (final) { write(final, "Final"); if (lines.length) return { text: lines.join("\n"), from: "da fórmula do professor no Centro de Notas" }; }
     }
+    // the professor's weights set in Canvas (weighted assignment groups): one line per group, its activities added up (as Canvas does)
+    const cw = canvasWeightsRule(courseId);
+    if (cw) { const acts = items.filter(x => x && x.name), fold = x => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(), used = new Set(acts.map(x => fold(nm(x.name)))), terms = [], extra = [];
+      for (const [L, g] of Object.entries(cw.parts)) { const mine = acts.filter(x => cw.part[x.key] === L); if (!mine.length) continue;
+        if (mine.length === 1) { terms.push(pct(g.w) + " " + nm(mine[0].name)); continue; }   // one activity: the group is that activity
+        let name = nm(cw.names[L] || "Parte " + L); if (used.has(fold(name))) name = "Grupo " + L; used.add(fold(name));   // never the name of an activity (it would point at itself)
+        terms.push(pct(g.w) + " " + name); extra.push(name + " = soma(" + mine.map(x => nm(x.name)).join(", ") + ")"); }
+      if (terms.length) return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos que o professor pôs no Canvas" };
+    }
     const pack = C.COURSES.find(x => C.CANVAS[x.id] && C.CANVAS[x.id].cids.map(String).includes(String(courseId)));
     if (pack) {
       const map = C.CANVAS[pack.id].items || {}, extra = [];
       const terms = pack.items.map(it => { const m = map[it.id] || {}; let ref = nm(it.name.replace(/\s*·\s*/g, " "));   // an item with no Canvas activity keeps its full name (it shows as not in Canvas yet)
         if (m.one) ref = nm(m.one);
-        else if (m.avg || m.sum) { ref = nm(it.name.replace(/^RA\d+\s*·\s*/, "")); extra.push(ref + " = " + (m.sum ? "soma(" : "média(") + (m.avg || m.sum).map(nm).join(", ") + ")" + (m.sum ? " de " + String(it.inMax).replace(".", ",") : "")); }
+        else if (m.avg || m.sum) { ref = nm(it.name.replace(/^RA\d+\s*·\s*/, "")); extra.push(ref + " = " + (m.sum ? "soma(" : "média(") + (m.avg || m.sum).map(nm).join(", ") + ")" + (m.sum && !(m.factor && m.factor !== 1) ? " de " + String(it.inMax).replace(".", ",") : "")); }
         return pct(it.max * 10) + " " + ref; });
       return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos do Plano de Ensino que o Caderno+ tem" };
     }
@@ -695,6 +704,10 @@
     .rg { --c:var(--muted); width:64px; height:64px; border-radius:50%; display:grid; place-items:center; background:conic-gradient(var(--c) var(--p), var(--track) 0); position:relative; }
     .rg[data-t=ok] { --c:var(--ok); } .rg[data-t=warn] { --c:var(--warn); } .rg[data-t=bad] { --c:var(--bad); } .rg::after { content:""; position:absolute; inset:-3px; border-radius:50%; background:conic-gradient(transparent calc(var(--m) - .8%), var(--coral) 0 calc(var(--m) + .8%), transparent 0); -webkit-mask:radial-gradient(circle, transparent 22px, #000 23px); mask:radial-gradient(circle, transparent 22px, #000 23px); }   /* the meta: a tick across the ring */
     .rg > b { display:grid; place-items:center; width:48px; height:48px; border-radius:50%; background:var(--bg); font:700 14px/1 var(--sans); }
+    .ovdet { display:grid; gap:10px; margin-top:6px; padding-top:10px; border-top:1px solid var(--line); } .ovstats { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; }
+    .ovst { display:grid; gap:2px; padding:8px 10px; border-radius:10px; background:var(--soft); } .ovst b { font:600 18px/1.1 var(--serif); } .ovdet > .k { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .ovacts { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:6px 18px; } .ovact { display:grid; grid-template-columns:minmax(0,1fr) 90px 64px; gap:8px; align-items:center; font-size:12.5px; }
+    .ovact .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:inherit; } .ovact a.n:hover { text-decoration:underline; } .ovact .c { text-align:right; font-size:11.5px; } .ovbar.sm { height:8px; } .ovact.more { grid-template-columns:1fr; }
     .ovcap { margin-top:8px; } @media (max-width:560px) { .ovr { grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto; } } .ov h3 { margin:0 0 6px; } .ov .row .mid .c { white-space:normal; overflow:visible; line-height:1.35; }
     .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:13.5px; }
     .formula { padding:12px 14px; } .formula .acts { justify-content:flex-start; } .formula .from { opacity:.8; } .formula .res { font-weight:600; color:var(--fg); margin-top:8px; }
@@ -825,7 +838,9 @@
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
     .ask-b { margin-left:0 !important; color:var(--coral-ink) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
     .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
-    .centro-sim { display:grid; gap:6px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
+    .centro-sim { display:grid; gap:8px; } .sim-h { display:flex; justify-content:space-between; align-items:center; } .sim-rows { display:grid; gap:4px; }
+    .sim-r { display:grid; grid-template-columns:minmax(0,1fr) auto 70px; gap:10px; align-items:center; padding:4px 0; border-top:1px solid var(--line); } .sim-r .n { font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sim-r input { width:70px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:600 14px var(--sans); text-align:center; } .sim-r input:focus { outline:2px solid var(--coral); outline-offset:1px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
     .band-c { position:absolute; left:0; right:0; top:0; height:4px; background:var(--coral); } .htxt { flex:1; min-width:0; }
     .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 21px/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .hs { margin-top:3px; color:var(--muted); font-size:12.5px; } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
@@ -1242,7 +1257,21 @@
           li.append(el("span", "d", u.now == null ? "—" : dn(u.now)), mid(u.full, "/courses/" + u.cid, txt + " · " + SRC[u.src] + (u.scaled ? " (" + fmt(u.scaled, u.scaled % 1 ? 1 : 0) + " pontos levados a 10)" : "")), valCell(u)); ul.appendChild(li); } return [ul]; }],
     };
     let curMode = "barras"; redrawOv = () => show(curMode);
-    const cap = el("p", "c scale ovcap"), show = m => { curMode = m; body.replaceChildren(...VIEWS[m][2]()); body.dataset.mode = m; cap.textContent = VIEWS[m][1] + ". Meta " + fmt(T, T % 1 ? 1 : 0) + ". Passe o mouse para ver de onde vem cada número; na página da matéria você monta ou muda a sua regra.";
+    // one subject picked: under the chart, its numbers and each Canvas activity with its grade (what fills the box)
+    const detail = u => { const cv = courses.find(c => String(c.id) === u.cid), w = el("div", "ovdet"), stats = el("div", "ovstats"), ul = el("ul", "ovacts"), g = gap(u);
+      const stat = (k, v, cls) => { const d = el("div", "ovst"); d.append(el("span", "c", k), el("b", cls || null, v)); stats.appendChild(d); };
+      stat("Garantido", u.now == null ? "—" : dn(u.now)); stat("Até a meta " + fmt(T, T % 1 ? 1 : 0), u.status === "garantido" || g === 0 ? "✓" : g == null ? "?" : "+" + up(g, 1), "t-" + (u.tone === "nt" ? "warn" : u.tone));
+      stat("Média no que falta", u.need != null ? up(u.need, 1) : u.status === "garantido" ? "—" : u.status === "nao-da" ? "rec." : "?"); const tr = trackOf(u.items); stat("Entregues", tr.done + " de " + tr.total); stat("Fonte", SRCS[u.src]);
+      const acts = ((cv && cv.assignments) || []).filter(x => x && Number(x.points) > 0 && !x.excused).sort((p, q) => (p.due ? Date.parse(p.due) : 9e15) - (q.due ? Date.parse(q.due) : 9e15));
+      for (const x of acts.slice(0, 14)) { const li = el("li", "ovact"), nmEl = el(typeof x.url === "string" && x.url.startsWith(location.origin + "/") ? "a" : "span", "n", x.name), bar = el("div", "ovbar sm"), f = el("i");
+        if (nmEl.tag === "a" || nmEl.tagName === "A") nmEl.href = x.url; nmEl.title = x.name;
+        const late = !x.submitted && x.score == null && x.due && Date.parse(x.due) < nowMs, st = x.score != null ? fmt(Number(x.score), 1) + "/" + fmt(Number(x.points), Number(x.points) % 1 ? 1 : 0) : x.submitted ? "entregue" : late ? "vencida" : x.due ? "até " + dmy(C.localISO(new Date(x.due))) : "sem data";
+        f.className = x.score != null ? (Number(x.score) / Number(x.points) >= T / 10 ? "ok" : "warn") : x.submitted ? "nt" : late ? "bad hatch" : "nt"; f.style.width = (x.score != null ? Math.min(100, Number(x.score) / Number(x.points) * 100) : x.submitted || late ? 100 : 0) + "%";
+        if (x.submitted && x.score == null) f.style.opacity = ".45"; bar.appendChild(f); bar.dataset.tip = x.name + " · " + st;
+        li.append(nmEl, bar, el("span", "c", st)); ul.appendChild(li); }
+      if (acts.length > 14) { const li = el("li", "ovact more"), l = el("a", "n", "ver as " + acts.length + " atividades na matéria →"); l.href = "/courses/" + u.cid; li.appendChild(l); ul.appendChild(li); }
+      w.append(stats); if (acts.length) w.append(el("div", "k", "Atividades no Canvas"), ul); return w; };
+    const cap = el("p", "c scale ovcap"), show = m => { curMode = m; const one = shownU().length === 1 && U.length > 1 ? shownU()[0] : null; body.replaceChildren(...VIEWS[m][2](), ...(one ? [detail(one)] : [])); body.dataset.mode = m; cap.textContent = VIEWS[m][1] + ". Meta " + fmt(T, T % 1 ? 1 : 0) + ". Passe o mouse para ver de onde vem cada número; na página da matéria você monta ou muda a sua regra.";
       for (const b of modeBtns) b.setAttribute("aria-checked", String(b.dataset.m === m)); };
     seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Como mostrar o quanto falta");
     const mode0 = VIEWS[prefs.ovMode] ? prefs.ovMode : "barras";
@@ -1510,13 +1539,27 @@
       card.append(m, el("span", "pill " + centroTone(cr), cr.status === "garantido" ? "garantido" : cr.status === "nao-da" ? "recuperação" : "precisa " + up(cr.need, 1)));
       box.appendChild(card);
       if (!a.expired && ruleItems(courseId).length) { const r0 = el("div", "muted src own-row"); r0.append(el("span", null, "Pela fórmula do Centro de Notas."), ownBtn()); box.appendChild(r0); }
-      if (cr.left.length) {   // simulate: the same grade on everything left, and the final it gives (nothing is saved)
-        const simC = el("div", "card centro-sim"), lab = el("label", "c"), range = el("input"), out = el("b", "t");
-        range.type = "range"; range.min = "0"; range.max = "10"; range.step = "0.5"; range.value = String(Math.min(10, Math.max(0, Math.ceil((cr.need != null ? cr.need : 7) * 2) / 2)));
-        range.setAttribute("aria-label", "Nota no que falta");
-        const show = () => { const p = C.centro(myCentro[courseId], T, Number(range.value)); out.textContent = "tirando " + fmt(Number(range.value), 1) + " no que falta, você fica com " + dn(p.projected) + (p.projected >= T ? " ✓" : ""); };
-        range.addEventListener("input", show); lab.append(el("span", null, "Simular"), range); simC.append(lab, out); show();
-        box.appendChild(simC);
+      if (cr.left.length) {   // simulate: type the grade you expect in each item left (saved on this computer); the rest gets what is still needed
+        const cu = myCentro[courseId], pts = new Map(); for (const g of Array.isArray(cu.grupos) ? cu.grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) pts.set(gc.coluna.id_coluna, gc.coluna.atividade && Number(gc.coluna.atividade.pontos_possiveis) || 10);
+        const simC = el("div", "card centro-sim"), out = el("b", "t"), rows = el("div", "sim-rows"), inputs = new Map(), clear = el("button", "mini", "Limpar");
+        const num = v => { const n = Number(String(v).replace(",", ".")); return String(v).trim() !== "" && Number.isFinite(n) ? Math.min(10, Math.max(0, n)) : null; };
+        const typed = () => { const g = {}; for (const [id, inp] of inputs) { const v = num(inp.value); if (v != null) g[id] = v; } return g; };
+        const show = () => { const g = typed(), n = Object.keys(g).length;
+          if (!n) { out.textContent = "Digite a nota que você espera em cada uma (de 0 a 10): o resultado aparece aqui."; out.className = "t muted"; return; }
+          const p = C.centro(cu, T, { grades: g, rest: 0 }), all = n >= inputs.size;
+          out.className = "t " + (p.status === "garantido" ? "t-ok" : p.status === "nao-da" ? "t-bad" : "t-warn");
+          out.textContent = all ? "Com essas notas você fica com " + dn(p.projected) + (p.projected >= T - 1e-9 ? " ✓ meta " + fmt(T, T % 1 ? 1 : 0) : ": faltam " + up(T - p.projected, 1) + " para a meta")
+            : p.status === "garantido" ? "Com essas notas a meta já fica garantida ✓" : p.status === "nao-da" ? "Com essas notas não dá para chegar à meta, nem com 10 no resto" : "Com essas notas, precisa " + up(p.need, 1) + "/10 em média no resto"; };
+        const save = async () => { const { centroSim = {} } = await chrome.storage.local.get("centroSim"), mine = Object.assign({}, centroSim[cache.user]); mine[courseId] = typed(); if (!Object.keys(mine[courseId]).length) delete mine[courseId];
+          await chrome.storage.local.set({ centroSim: Object.assign({}, centroSim, { [cache.user]: mine }) }); };
+        for (const id of cr.left.slice(0, 20)) { const r = el("label", "sim-r"), inp = el("input"); inp.type = "text"; inp.inputMode = "decimal"; inp.placeholder = cr.need != null ? up(cr.need, 1) : "nota";
+          inp.setAttribute("aria-label", "Nota esperada em " + (names.get(id) || "atividade")); inputs.set(id, inp);
+          inp.addEventListener("input", () => { show(); save(); });
+          r.append(el("span", "n", names.get(id) || "Atividade"), el("span", "c", "vale " + fmt(pts.get(id) || 10, 0) + " pts no Centro"), inp); rows.appendChild(r); }
+        clear.type = "button"; clear.addEventListener("click", () => { for (const inp of inputs.values()) inp.value = ""; show(); save(); });
+        const hd = el("div", "sim-h"); hd.append(el("b", null, "Simule suas notas"), clear);
+        simC.append(hd, rows, out); show(); box.appendChild(simC);
+        chrome.storage.local.get("centroSim").then(({ centroSim }) => { const g = centroSim && centroSim[cache.user] && centroSim[cache.user][courseId]; if (!g) return; for (const [id, inp] of inputs) if (g[id] != null) inp.value = fmt(Number(g[id]), 1); show(); }).catch(() => {});
       }
     }
     if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes

@@ -780,6 +780,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(mFull2.store.prefs.kpiCourse === one.dataset.id && one["aria-checked"] === "true" && chips[0]["aria-checked"] === "false", "a subject picked and saved");
     const kt = text(kp(mFull2)); assert(kt.split(one.textContent).length - 1 >= 3 && !/média das/.test(kt), "every number names the picked subject: " + kt.slice(0, 200));
     { const nc = all(mFull2.anchor).find(e => /upnext/.test(e.className || "")); assert(!nc || text(nc).includes(one.textContent), "the next delivery is the picked subject's (or none)"); }
+    assert(all(mFull2.anchor).some(e => e.className === "ovdet") && all(mFull2.anchor).filter(e => e.className === "ovst").length === 5, "one subject picked: its numbers and activities fill the box");
     const ovRows = all(mFull2.anchor).filter(e => e.className === "ovr"); assert(ovRows.length === 1 && text(ovRows[0]).includes(one.textContent), "the quanto falta chart shows only the picked subject");
     one.listeners.dblclick(); assert(/\/courses\/\d+$/.test(String(mFull2.env.location.assigned)) && String(mFull2.env.location.assigned).endsWith(one.dataset.id), "a double click on the subject opens its course page");
     await chips[0].listeners.click(); await new Promise(r => setTimeout(r, 10)); assert(all(mFull2.anchor).filter(e => e.className === "ovr").length === 3, "Todas: every subject again");
@@ -805,6 +806,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(/pesos do Canvas/.test(gt), "the dashboard uses Canvas's group weights: " + gt.slice(0, 200));
     const gp = await runContent("/", null, {}, { groups: [{ id: 1, name: "RA1", group_weight: 70 }, { id: 2, name: "RA2", group_weight: 30 }] }), gpt = text(gp.anchor.kids.find(k => k.id === "cp-dash"));
     assert(/pesos do Canvas/.test(gpt) && !/Plano de Ensino/.test(gpt), "a subject with a ready-made Plano rule: the professor's Canvas weights win: " + gpt.slice(0, 300));
+    { const G = [{ id: 1, name: "RA1", group_weight: 70 }, { id: 2, name: "Vídeo", group_weight: 30 }], A = [{ name: "Tarefa A", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/81", submission: { score: 9 } },
+        { name: "Tarefa B", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/82", submission: { score: 5 } }, { name: "Prova", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/83", submission: { score: null } },
+        { name: "Vídeo", points_possible: 10, assignment_group_id: 2, html_url: "/courses/42/assignments/84", submission: { score: 10 } }];
+      const gc = await runContent("/courses/42", null, {}, { courseId: 42, groups: G, extraAsg: A }), ph = gc.anchor.kids.find(k => k.id === "qf-panel") || all(gc.anchor).find(k => k.id === "qf-panel");
+      const ta = all(ph).find(e => e.tag === "textarea"), pt = text(ph);
+      assert(ta && /^Final = 70% RA1 \+ 30% Vídeo/.test(ta.value) && /RA1 = soma\(Tarefa A, Tarefa B, Prova\)/.test(ta.value) && /Começou dos pesos que o professor pôs no Canvas/.test(pt), "a course with Canvas weights: the formula starts from them, a one-activity group is the activity: " + (ta && ta.value));
+      assert(!/garantida/.test(pt.split("Com esta fórmula:")[1] || ""), "and its preview is no false garantido (14 of 30 in RA1, the Prova still open: 6,2 now)"); }
     ok(); }
   { // the official date: a Plano item that is a Canvas activity shows Canvas's due date; a Plano date the Plano itself does not confirm says so
     const dp = await runContent("/courses/71306", [], {}, { extraAsg: [{ name: "Entrega Pjbl Parte 3 - 18/11", points_possible: 1, due_at: "2027-01-05T15:00:00Z", html_url: "/courses/71306/assignments/13", submission: { score: null } }] });
@@ -1057,8 +1065,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const cp = await runContent("/courses/99901", [], { centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
     const cph = cp.anchor.kids[0];
     assert(cph && /2,0 de 10 agora/.test(text(cph)) && /precisa 10,0\/10 em média no que falta/.test(text(cph)) && /Falta: Prova final/.test(text(cph)), "the course page: now, the need and what is left, from the Centro de Notas: " + (cph && text(cph)).slice(0, 200));
-    const rng = all(cph).find(e => e.tag === "input" && e.type === "range"), simOut = all(cph).find(e => e.className === "t" && /tirando/.test(e.textContent));
-    assert(rng && simOut && /tirando 10,0 no que falta, você fica com 7,0 ✓/.test(simOut.textContent), "the simulator starts at the need and shows the final: " + (simOut && simOut.textContent));
+    const inp = all(cph).find(e => e.tag === "input" && e.type === "text" && /Prova final/.test(e["aria-label"] || (e.attrs && e.attrs["aria-label"]) || "")) || all(cph).find(e => e.tag === "input" && e.type === "text"), simOut = () => all(cph).find(e => /^t( |$)/.test(e.className || "") && /Com essas notas|Digite a nota/.test(e.textContent));
+    assert(inp && /Digite a nota/.test(simOut().textContent), "the simulator: one box per item left, waiting for a grade");
+    inp.value = "10"; inp.listeners.input(); await new Promise(r => setTimeout(r, 10));
+    assert(/Com essas notas você fica com 7,0 ✓/.test(simOut().textContent), "a typed grade gives the final: " + simOut().textContent);
+    assert(cp.store.centroSim && cp.store.centroSim[5] && cp.store.centroSim[5]["99901"] && Object.values(cp.store.centroSim[5]["99901"])[0] === 10, "the typed grade is kept on this computer, per user and course");
+    inp.value = "4"; inp.listeners.input(); await new Promise(r => setTimeout(r, 10)); assert(/faltam 3,0 para a meta/.test(simOut().textContent), "below the meta: how much is missing: " + simOut().textContent);
   }
   const cdh = await runContent("/", null, { hidden: ["71306"] });
   assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing");
