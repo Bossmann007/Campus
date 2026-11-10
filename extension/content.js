@@ -1128,11 +1128,12 @@
     const courses = cache.data.courses.filter(c => !hiddenNow.includes(String(c.id))), sem = a.rules ? C.semester(a.mine, a.grades, t, T) : null, U = [];
     for (const cv of courses) {
       const cid = String(cv.id), pack = a.byCanvasId[cid], acts = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused);
-      if (pack && sem) { const st = sem.states[pack.id];
+      if (pack && sem && a.has && sem.states[pack.id]) { const st = sem.states[pack.id];   // as the course page: the Plano only once a grade was read
         U.push({ cid, name: C.SHORT[pack.id] || shortName(cv.name), src: "plano", now: Math.min(10, st.earned), need: st.status === "precisa" ? st.fraction * 10 : null, status: st.status === "depende-atrasadas" ? "faltam" : st.status,
           items: sem.items.filter(x => x.course === pack).map(x => ({ s: x.s, date: x.item.date, tip: (C.SHORT[pack.id] || "") + " · " + x.item.name + " · " + dmy(x.item.date) })) }); continue; }
-      if (a.expired || !acts.length) continue;
-      const ownR = !!(myRules[cid] && myRules[cid].own), cr = ownR ? null : centroOf(cid), r = cr || customOf(cid), src = cr ? "centro" : r && r.mine ? "aluno" : r && r.canvasWeights ? "canvas" : "soma";   // the student's own rule first
+      const ownR = !!(myRules[cid] && myRules[cid].own), cr = ownR ? null : centroOf(cid);
+      if (!cr && (a.expired || !acts.length)) continue;   // a Centro formula counts even with no Canvas activity
+      const r = cr || customOf(cid), src = cr ? "centro" : r && r.mine ? "aluno" : r && r.canvasWeights ? "canvas" : "soma";   // the student's own rule first
       const sure = r && !["erro", "acima", "vazio"].includes(r.status) && !r.unsure && r.now != null;
       U.push({ cid, name: shortName(cv.name), src, now: sure ? r.now : null, need: sure && r.status === "precisa" ? r.need : null, scaled: r && r.scaled ? r.total : 0, status: !r ? "sem" : r.status === "erro" ? "erro" : r.status === "acima" ? "acima" : r.unsure ? "confira" : r.status, r,
         items: acts.map(x => { const d = x.due ? C.localISO(new Date(x.due)) : "9999-12-31"; return { s: x.score != null ? "ok" : x.submitted ? "sent" : x.missing || (x.due && Date.parse(x.due) < nowMs) ? "late" : "next", date: d, tip: shortName(cv.name) + " · " + x.name + (x.due ? " · " + dmy(d) : "") }; }) });
@@ -1146,7 +1147,6 @@
       left.append(el("div", "k", "Próxima entrega"), el("div", "t", nx.x.name), el("div", "c", (u ? u.name : shortName(nx.c.name)) + " · " + dmy(dd) + " " + hhmm(nx.x.due) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias") + " · " + fmt(nx.x.points, 2) + " pts"));
       if (u && u.need != null) big.append(el("b", "v t-" + (u.need > 8 ? "bad" : "warn"), up(u.need, 1)), el("span", null, "média que falta tirar (de 10)")); else if (u && u.status === "garantido") big.append(el("b", "v t-ok", "✓"), el("span", null, "meta garantida"));
       card.append(left, big); out.push(card); }
-    if (clean) return out;
     const kpis = el("div", "kpis"), kpi = (k, v, cls, subEl) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (subEl) d.appendChild(subEl); kpis.appendChild(d); };
     const meterOf = x => { const m = el("div", "meter"), f = el("i"), g = el("b"); m.setAttribute("aria-hidden", "true"); f.style.width = Math.min(100, x * 10) + "%"; g.style.left = Math.min(99.5, T * 10) + "%"; m.append(f, g); return m; };
     const trackOf = items => { const trk = el("div", "trk"), its = items.slice().sort((p, q) => p.date.localeCompare(q.date)), n = k => its.filter(x => x.s === k).length;
@@ -1175,8 +1175,7 @@
       chips.push(b); pick.appendChild(b);
     }
     radioKeys(chips); fill(pickId);
-    if (U.length > 1) out.push(pick);
-    out.push(kpis);
+    if (!clean) { if (U.length > 1) out.push(pick); out.push(kpis); }   // limpo: no KPI row, the list stays
     // each course with its number and where it comes from
     const sec = el("section", "card centro ov"), ul = el("ul"); sec.appendChild(el("h3", null, "Quanto falta"));
     for (const u of U) { const li = el("li", "row"), txt = u.status === "erro" ? "a fórmula tem um erro: abra a matéria" : u.status === "acima" ? "os pontos passam do total: ajuste na matéria" : u.status === "confira" ? "confira a regra na matéria antes de contar com isso"
@@ -1434,8 +1433,8 @@
     if (official) heroSub.textContent += " · Centro de Notas: " + fmt(official.now, 1) + " agora" + (official.status === "precisa" ? ", precisa " + up(official.need, 1) + (official.approx ? " (aprox.)" : "") : official.status === "garantido" ? ", garantido" : official.status === "nao-da" ? ", recuperação" : "");
     const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
     if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
-    if (!c && prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again
-      if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); } }); });
+    if (prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again (a fresh analyse: its formula may now beat the Plano)
+      if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(own ? null : centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, analyse(cache, a.hand), cache, prefs); } }); });
     if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
       const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
       for (const g of Array.isArray(myCentro[courseId].grupos) ? myCentro[courseId].grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);

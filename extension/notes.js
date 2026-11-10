@@ -1,12 +1,13 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.12.0",
+  version: "6.12.1",
   items: [
     "Um quadro só para qualquer turma: a próxima entrega do Canvas, as matérias para escolher, os três números e o quanto falta de cada matéria, dizendo de onde vem cada número",
     "Fonte oficial primeiro: a sua regra, depois a fórmula do professor no Centro de Notas, os pesos que ele pôs no Canvas, e só então os pesos do Plano de Ensino transcritos pelo Caderno+ (ou a soma dos pontos)",
     "Matéria sem regra com mais de 10 pontos no Canvas agora tem número: os pontos são levados a 10 (e o painel pede para conferir na matéria)",
-    "A sua IA segue a mesma ordem (Caderno+ MCP 1.7)",
+    "A sua IA segue a mesma ordem (Caderno+ MCP 1.7), sem contar uma matéria duas vezes",
+    "Matéria só com fórmula no Centro de Notas (sem atividades no Canvas) aparece no painel; no modo Limpo, a lista do quanto falta fica",
     "Para qualquer turma: os números do painel, a próxima entrega e o dia da prova no ícone vêm do Canvas, do Centro de Notas e dos pesos que o professor pôs no próprio Canvas, não só das regras prontas",
     "Datas oficiais: quando a atividade está no Canvas, vale a data do Canvas (não a do Plano de Ensino); data do Plano não confirmada aparece como \"data a confirmar\"",
     "O Atualizar lê tudo de novo na hora (professores, cores, novidades) e recarrega a página do Canvas aberta",

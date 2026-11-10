@@ -218,7 +218,7 @@ function makeCanvas(token, opts = {}) {
       // student may have logged in on that browser since its last reading)
       let rules = {}; if (ponte) { try { const [got, me] = await Promise.all([ponte.rules(), getAll("/api/v1/users/self", 1)]); if (got.user != null && me && got.user === me.id) rules = got.rules; } catch (e) { rules = {}; } }
       const ownOf = cv => !!(rules[String(cv.id)] && rules[String(cv.id)].own);   // a course the student moved to their own rule
-      const hasW = cv => Array.isArray(cv.weights) && cv.weights.length > 0, offPack = cv => ownOf(cv) || hasW(cv);   // the professor's weights in Canvas beat the transcribed Plano
+      const byId = new Map(d.courses.map(x => [String(x.id), x])), hasW = cv => { const x = byId.get(String(cv.id)) || cv; return Array.isArray(x.weights) && x.weights.length > 0; }, offPack = cv => ownOf(cv) || hasW(cv);   // the professor's weights in Canvas beat the transcribed Plano (the reading's course has them; seen.courses only id and name)
       const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c && !offPack(cv)));   // like the panel: every active course
       const grades = C.fromCanvas(d).grades, out = subs.map(c => {
         const st = C.courseState(c, grades, t, meta), nx = C.nextItem(st);
