@@ -569,7 +569,7 @@
     .kpi { padding:10px 12px 12px; min-width:0; } .kpi .v { font:500 24px/1.15 var(--serif); letter-spacing:-.02em; margin:2px 0 4px; } .kpi .v.need { color:var(--warn); } .kpi .v.need.t-ok { color:var(--ok); }
     .meter { position:relative; height:6px; margin-top:6px; border-radius:99px; background:var(--track); }
     .meter i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--fg); } .meter b { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); }
-    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--warn); }
+    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--warn); } .trk i.sent { background:color-mix(in srgb, var(--ok) 45%, var(--track)); }
     .trk i:hover { outline:1.5px solid var(--fg); outline-offset:1px; }
     [data-tip]::after { content:attr(data-tip); position:absolute; z-index:6; left:50%; bottom:calc(100% + 8px); width:max-content; max-width:240px; padding:6px 9px; border-radius:7px; background:var(--fg); color:var(--bg);
       font:500 12px/1.35 var(--sans); box-shadow:0 10px 24px -10px rgba(29,36,51,.5); opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,3px); transition:opacity .12s, transform .12s, visibility 0s .12s; }
@@ -1045,10 +1045,11 @@
     const kpi = (k, v, cls, sub) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (sub) d.appendChild(sub); kpis.appendChild(d); return d; };
     const meterOf = x => { const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
       fill.style.width = Math.min(100, x * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); return meter; };
-    const trackOf = items => { const done = items.filter(x => x.s === "ok").length, late = items.filter(x => x.s === "late").length, trk = el("div", "trk");
-      trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
-      for (const x of items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
-      return { trk, done }; };
+    // ok: graded; sent: handed in, grade not out yet; late: past its date with nothing; next: still to come
+    const trackOf = items => { const graded = items.filter(x => x.s === "ok").length, sent = items.filter(x => x.s === "sent").length, late = items.filter(x => x.s === "late").length, done = graded + sent, trk = el("div", "trk");
+      trk.setAttribute("aria-label", graded + " com nota, " + sent + " entregues esperando nota, " + late + " sem nota e com prazo vencido, " + (items.length - done - late) + " pela frente");
+      for (const x of items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "com nota" : x.s === "sent" ? "entregue, esperando a nota" : x.s === "late" ? "prazo vencido, sem nota" : "pela frente"); trk.appendChild(b); }
+      return { trk, done, sent }; };
     const cnt = s => sem.counts[s] || 0;
     const fillKpis = id => {
       kpis.replaceChildren();
@@ -1074,7 +1075,7 @@
       else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
       else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
       else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
-      const tr = trackOf(sem.items), e = el("div"); e.append(tr.trk, el("div", "c per", a.mine.map(c => { const it = sem.items.filter(x => x.course.id === c.id); return C.SHORT[c.id] + " " + it.filter(x => x.s === "ok").length + "/" + it.length; }).join(" · ")));
+      const tr = trackOf(sem.items), e = el("div"); e.append(tr.trk, el("div", "c per", a.mine.map(c => { const it = sem.items.filter(x => x.course.id === c.id); return C.SHORT[c.id] + " " + it.filter(x => x.s === "ok" || x.s === "sent").length + "/" + it.length; }).join(" · ")));
       kpi("Entregues", tr.done + " de " + sem.items.length, null, e);
     };
     const pickId = a.mine.some(c => c.id === KPI_COURSE) ? KPI_COURSE : "", pick = el("div", "seg kpis-pick"), chips = [];

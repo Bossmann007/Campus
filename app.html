@@ -667,14 +667,17 @@ const NotasCore = (() => {
   const key = (c, it) => c.id + ":" + it.id;
 
   // today: "YYYY-MM-DD" in local time. An item dated today is still upcoming.
+  const PENDING = Symbol("pending");
+  // Items handed in whose grade is not out yet (grades[PENDING], set by fromCanvas from Canvas's "submitted"): past their
+  // date they are still to be graded, not lost, so they count with what is left. A symbol key: no JSON, no Object.keys.
   function courseState(c, grades, today, target) {
-    let earned = 0, futureMax = 0, lateMax = 0;
+    let earned = 0, futureMax = 0, lateMax = 0; const pend = grades && grades[PENDING] || {};
     const future = [], late = [], invalid = [];
     for (const it of c.items) {
       const p = itemPoints(it, grades[key(c, it)]);
       if (Number.isNaN(p)) invalid.push(it);
       if (p !== null && !Number.isNaN(p)) { earned += p; continue; }
-      if (it.date < today) { late.push(it); lateMax += it.max; }
+      if (it.date < today && !pend[key(c, it)]) { late.push(it); lateMax += it.max; }
       else { future.push(it); futureMax += it.max; }
     }
     earned = r9(earned); futureMax = r9(futureMax); lateMax = r9(lateMax);
@@ -688,8 +691,9 @@ const NotasCore = (() => {
     else status = "precisa";
     const fraction = need <= EPS ? 0 : futureMax > EPS ? need / futureMax : null;
     const fractionIfLate = need <= EPS ? 0 : futureMax + lateMax > EPS ? need / (futureMax + lateMax) : null;
-    return { earned, futureMax, lateMax, need, ceiling, ceilingIfLate, status, fraction, fractionIfLate,
-             future, late, invalid, provisional: late.length > 0 || invalid.length > 0 };
+    // today (not enumerable: the state's shape stays): future items before it are handed in, waiting for a grade
+    return Object.defineProperty({ earned, futureMax, lateMax, need, ceiling, ceilingIfLate, status, fraction, fractionIfLate,
+             future, late, invalid, provisional: late.length > 0 || invalid.length > 0 }, "today", { value: today });
   }
   // Same fraction of each pending item's maximum (so the weight of each item counts). Returned in the item's own scale.
   function requiredFor(st, item) {
@@ -706,7 +710,7 @@ const NotasCore = (() => {
     const out = [];
     for (const c of courses) {
       const st = courseState(c, grades, today, target);
-      for (const it of st.future) out.push({ course:c, item:it, st, req:requiredFor(st, it), min:minimumFor(st, it, target) });
+      for (const it of st.future) if (it.date >= today) out.push({ course:c, item:it, st, req:requiredFor(st, it), min:minimumFor(st, it, target) });   // handed-in ones wait for a grade, not for the student
     }
     return out.sort((a, b) => a.item.date.localeCompare(b.item.date) || a.course.name.localeCompare(b.course.name));
   }
@@ -772,7 +776,7 @@ const NotasCore = (() => {
     todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
     const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {}, stats = {};
     const knownStats = Array.isArray(data.courses) && data.courses.some(c => c && Array.isArray(c.assignments) && c.assignments.some(a => a && "stats" in a));
-    const grades = {}, missing = [], notes = [];
+    const grades = {}, missing = [], notes = [];   // grades[PENDING]: handed in, grade not out yet (not lost); only when there is one
     const turmas = new Set(courses.map(cv => subjectOf(cv, byId)).filter(Boolean).map(c => PACK_OF[c.id]));   // the reading's turmas
     for (const c of COURSES) {
       if (turmas.size && !turmas.has(PACK_OF[c.id])) continue;   // another turma's subject: not this student's
@@ -785,7 +789,7 @@ const NotasCore = (() => {
         if (parts.some(p => p.length !== 1)) { missing.push({ key:k, reason:"avaliação não está no Canvas (ou aparece repetida)" }); continue; }
         const got = parts.map(p => p[0]);
         if (rule.one && got[0].due) dates[k] = got[0].due;   // Canvas due date of a single-assignment item
-        if (got.some(a => a.score === null)) { missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
+        if (got.some(a => a.score === null)) { if (got.some(a => a.score === null && a.submitted)) (grades[PENDING] = grades[PENDING] || {})[k] = true; missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
         const pts = a => rule.pts && !(a.points > 0) ? rule.pts : a.points;
         if (got.some(a => !(pts(a) > 0))) { missing.push({ key:k, reason:"avaliação sem pontuação no Canvas" }); continue; }
         if (rule.one && got[0].stats && pts(got[0]) > 0) {   // class mean/min/max on the item's own scale
@@ -811,7 +815,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.8.0";
+  const EXT_LATEST = "6.8.1";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -863,7 +867,7 @@ const NotasCore = (() => {
   // Shared by the calculator page and the panels inside Canvas (extension/content.js), so both show the same numbers.
   const fractionTone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
   const statusTone = st => st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : fractionTone(st.fraction);
-  const nextItem = st => st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0] || null;
+  const nextItem = st => st.future.filter(it => !st.today || it.date >= st.today).sort((a, b) => a.date < b.date ? -1 : 1)[0] || null;   // never one already handed in
   // Ring: share of 10 already earned, and the share still possible (capped so both fit in one turn).
   const ringParts = st => { const e = Math.min(10, st.earned); return { earned: e / 10, future: Math.min(10 - e, st.futureMax) / 10 }; };
   // What a course still needs on 0-10 in each remaining item: of10 null when it cannot reach the goal; approx when
@@ -887,10 +891,11 @@ const NotasCore = (() => {
     const items = [];
     for (const c of courses) for (const it of c.items) {
       const p = itemPoints(it, grades[key(c, it)]), graded = p !== null && !Number.isNaN(p);
-      items.push({ course: c, item: it, s: graded ? "ok" : it.date < today ? "late" : "next" });
+      const sent = !graded && !!(grades && grades[PENDING] && grades[PENDING][key(c, it)]);   // handed in, the grade is not out yet
+      items.push({ course: c, item: it, s: graded ? "ok" : sent ? "sent" : it.date < today ? "late" : "next" });
     }
     items.sort((a, b) => a.item.date.localeCompare(b.item.date));
-    return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok").length, late: items.filter(x => x.s === "late").length };
+    return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok" || x.s === "sent").length, graded: items.filter(x => x.s === "ok").length, sent: items.filter(x => x.s === "sent").length, late: items.filter(x => x.s === "late").length };
   }
   // Centro de Notas (PUCPR's grade tool, an LTI in every course): its formula tree, evaluated the way the tool does it
   // (weights are percentages, a part without a grade counts 0; checked against the tool's own values, bridge/SPEC-centro-notas.md).

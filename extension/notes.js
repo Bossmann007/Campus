@@ -1,8 +1,9 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.8.0",
+  version: "6.8.1",
   items: [
+    "Correção: uma atividade que você entregou e ainda não tem nota não conta mais como zero (em Imperativa, o quanto falta passa de 7,2 para 6,0, igual ao Centro de Notas) e entra em Entregues; ela também não aparece mais como próxima avaliação",
     "Sua própria nota agora é uma fórmula, escrita como no Plano de Ensino: Final = 40% RA1 + 60% RA2, RA1 = 75% Prova do RA1 + 25% Exercícios, Exercícios = média(TDE 1, TDE 2)... Os nomes viram as atividades do Canvas, e a lista mostra o que achou",
     "Monte a sua própria nota em qualquer matéria: na página da matéria, \"Montar minha própria regra\" (embaixo dos pesos ou da fórmula do Centro de Notas). \"Voltar à regra pronta\" desfaz",
     "Banco de Dados: as notas do Canvas já são os pontos da nota final (aviso do professor), então a PjBL Parte II vale os 2 pontos do Canvas",

@@ -153,4 +153,20 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.strictEqual(NotasCore.custom(it, { formula: "Final = média(Prova do RA1, PBL01)" }, 9).status, "garantido", "média of 8 and 10 = 9");
   ok();
 }
+{ // handed in, grade not out yet: past its date it is still to be graded, not a zero (Imperativa's PBL06-10: 7,2 became 6,0)
+  const imp = NotasCore.COURSES.find(c => c.id === "imp"), cid = NotasCore.CANVAS.imp.cid, m = NotasCore.CANVAS.imp.items;
+  const names = Object.values(m).flatMap(r => r.one ? [r.one] : r.avg || r.sum || []);
+  const mk = submittedEx2 => ({ v: 1, courses: [{ id: cid, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem", assignments: names.map((n, i) => {
+    const ex2 = (m.ex2.avg || []).includes(n), graded = /TDE 1|TDE 2|PBL0[1-5]|Prova do RA1/.test(n);
+    return { name: n, points: 10, score: graded ? 8 : null, due: ex2 ? "2026-10-28" : "2026-12-01", submitted: ex2 && submittedEx2, missing: false, online: true }; }) }] });
+  const st = sub => NotasCore.courseState(imp, NotasCore.fromCanvas(mk(sub)).grades, "2026-11-10", 7);
+  assert(st(true).lateMax === 0 && st(true).futureMax > st(false).futureMax, "handed in and not graded: counted with what is left, not lost");
+  assert(st(false).lateMax > 0, "not handed in, past its date: still late (a real zero risk)");
+  const nx = NotasCore.nextItem(st(true)); assert(!nx || nx.date >= "2026-11-10", "a handed-in item is never the next assessment: " + (nx && nx.date));
+  const sem = NotasCore.semester([imp], NotasCore.fromCanvas(mk(true)).grades, "2026-11-10", 7);
+  assert(sem.sent > 0 && sem.done === sem.graded + sem.sent && sem.items.some(x => x.s === "sent"), "Entregues counts what was handed in and waits for a grade");
+  assert(NotasCore.upcoming([imp], NotasCore.fromCanvas(mk(true)).grades, "2026-11-10", 7).every(u => u.item.date >= "2026-11-10"), "nor in the coming list");
+  assert.deepStrictEqual(Object.keys(NotasCore.fromCanvas(mk(true)).grades).filter(k => /pending/i.test(k)), [], "the pending mark is not a grade key (no backup, no count)");
+  ok();
+}
 console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");
