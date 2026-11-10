@@ -648,7 +648,7 @@
     .box { position:relative; container:cp / inline-size; overflow-x:clip; overflow-clip-margin:6px; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
     .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
-    .box > .card, .box > .kpis, .box > .tiles { margin-bottom:10px; }
+    .box > .card, .box > .kpis, .box > .tiles, .box > .nslot > .card { margin-bottom:10px; }   /* .nslot is display:contents */
     .k { font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
     .nslot { display:contents; }
     .upnext { display:flex; align-items:center; gap:16px; padding:12px 14px; } .upnext .k { text-transform:none; letter-spacing:0; font-size:12px; font-weight:500; }
@@ -1924,16 +1924,23 @@
   // The left-menu trays (Cursos, Grupos, Histórico, Ajuda: canvas-lms navigation_header/react/trays, all in #nav-tray-portal):
   // the look is page CSS; here the Cursos tray gets our pill on our subjects and leaves out the courses taken off the dashboard.
   let trayWatch = null;
+  let trayCache = null;   // the reading the tray numbers come from (set with watchTray)
   function enhanceTray(a, hidden) {
-    const portal = document.getElementById("nav-tray-portal");
+    const portal = document.getElementById("nav-tray-portal"); let nums = null;
     if (!portal || !portal.querySelectorAll) return;
     for (const link of portal.querySelectorAll('a[href^="/courses/"]')) {
       const m = /^\/courses\/(\d+)$/.exec(link.getAttribute("href") || ""); if (!m) continue;
       const item = link.closest ? link.closest("li") : null;
       if (item) item.style.display = hidden().includes(m[1]) ? "none" : "";
-      const c = a.byCanvasId[m[1]];
-      if (!c || !a.has || !item || item.querySelector("[data-cp-tray]")) continue;
-      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.setAttribute("data-cp-tray", "1"); item.appendChild(p);
+      if (!item) continue;
+      const c = a.byCanvasId[m[1]]; let txt = null, tone = "warn";
+      if (c && a.has && a.rules) { const st = a.state(c); txt = earnedText(st) + "/10 · " + a.label(st); tone = a.tone(st); }
+      else if (trayCache) { const u = (nums = nums || new Map(courseNumbers(a, trayCache).U.map(x => [x.cid, x]))).get(m[1]);   // any course, any turma: the dashboard's number
+        if (u && (u.now != null || u.status === "nao-da")) { txt = (u.now == null ? "" : dn(u.now) + "/10 · ") + u.label; tone = u.tone === "nt" ? "warn" : u.tone; } }
+      const old = item.querySelector("[data-cp-tray]");
+      if (old && old.textContent === txt) continue;   // unchanged: no write (the watcher would see it)
+      if (old) old.remove();
+      if (txt) { const p = pill(txt, tone); p.setAttribute("data-cp-tray", "1"); item.appendChild(p); }
     }
   }
   let trayA = null, trayHidden = null;   // the latest reading and hidden list: the watcher is set once, its data is not
@@ -2243,7 +2250,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       const { hidden } = await chrome.storage.local.get("hidden");
       let off = Array.isArray(hidden) ? hidden.map(String) : [];
       const getOff = () => off, setOff = async list => { off = list.map(String); await chrome.storage.local.set({ hidden: off }); };
-      watchTray(a, getOff);
+      trayCache = cache; watchTray(a, getOff);
       if (/^\/courses\/?$/.test(location.pathname)) coursesPage(a, getOff, setOff);
     }
     const anyCourse = /^\/courses\/(\d+)(\/|$)/.exec(location.pathname);
@@ -2294,7 +2301,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       window.cpGreet = () => { if (++greetTries > 12 || (document.querySelector && document.querySelector(".cp-greet"))) { window.cpGreet = null; return; } greet(agenda(a, cache, marks)); };
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centroOff && !ch.centroOff.newValue) { centroOff = false; for (const h of ["cp-dash", "qf-panel"]) { const x = document.getElementById(h), r = x && x.cpRoot; for (const o of r && r.querySelectorAll ? r.querySelectorAll(".centro-ask") : []) o.remove(); } }   // allowed: the offer goes at once
-        if (ch.centro) loadCentro(cache.user).then(() => { if (window.cpRepaint) window.cpRepaint(); if (window.cpCards) window.cpCards(analyse(cache, gradeA && gradeA.hand)); }); }); }   // both: the cards were drawn before the Centro landed   // the Centro de Notas landed: the panel and the cards again
+        if (ch.centro) loadCentro(cache.user).then(() => { if (window.cpRepaint) window.cpRepaint(); const a2 = analyse(cache, gradeA && gradeA.hand); if (window.cpCards) window.cpCards(a2); if (trayA) { trayA = a2; enhanceTray(trayA, trayHidden); } }); }); }   // both: the cards were drawn before the Centro landed   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;

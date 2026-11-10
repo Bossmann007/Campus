@@ -947,6 +947,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const t1 = mkItem(71306), t2 = mkItem(88); tray.append(t1.li, t2.li); tray.querySelectorAll = sel => [t1.a, t2.a];
   const trp = await runContent("/", null, { hidden: ["88"] }, { tray }); await new Promise(r => setTimeout(r, 200));
   assert(/\/10 · /.test(text(t1.li)) && t2.li.style.display === "none", "Cursos tray: pill on ours, hidden course left out");
+  { const tr2 = fakeEl("div"), t3 = mkItem(42); tr2.append(t3.li); tr2.querySelectorAll = sel => [t3.a];
+    await runContent("/", null, {}, { tray: tr2, courseId: 42, groups: [{ id: 1, name: "RA1", group_weight: 70 }, { id: 2, name: "RA2", group_weight: 30 }],
+      extraAsg: [{ name: "Prova RA1", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/71", submission: { score: 8 } }, { name: "Prova RA2", points_possible: 10, assignment_group_id: 2, html_url: "/courses/42/assignments/72", submission: { score: null } }] }); await new Promise(r => setTimeout(r, 200));
+    assert(t3.li.kids.some(e => e["data-cp-tray"]), "Cursos tray: a course of another turma gets the dashboard's number too: " + text(t3.li)); }
   // /courses: our pill per subject and Tirar do painel / Mostrar no painel on every course
   const mkRow = id => { const tr = fakeEl("tr"), td = fakeEl("td"), a = fakeEl("a"); a.getAttribute = () => "/courses/" + id; td.append(a); tr.append(td);
     Object.defineProperty(a, "parentNode", { get() { return this.parent; } }); tr.querySelector = sel => sel === "[data-cp-row]" ? all(tr).find(e => e["data-cp-row"]) || null : a; return tr; };
