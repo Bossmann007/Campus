@@ -1,8 +1,11 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.2.0",
+  version: "6.3.0",
   items: [
+    "Os números do painel (Garantido, Quanto falta, Entregues) agora dizem de qual matéria são, e você escolhe: Todas ou uma matéria, nos botões logo acima deles",
+    "Correção: nos temas verdes, as entregas sem nota e o Quanto falta pareciam \"tudo certo\" (saíam na cor do tema); agora saem em âmbar, separadas das lançadas",
+    "Correção: a barra dos botões Anterior e Próximo, nas tarefas e nos arquivos, agora segue o tema (era uma faixa preta nos modos escuros)",
     "Minhas tarefas agora têm passos: use o + de uma tarefa para quebrar em partes, marque cada uma e veja quantas faltam",
     "Sua IA (Caderno+ MCP 1.1): pergunta o que falta entregar, os quizzes de uma matéria, e acha a matéria pelo nome",
     "Acabamento: texto legível no tema Marca-texto, foco visível nos campos, a busca acompanha as setas, o painel diz quando o Canvas foi lido, e o calendário e a lista de cursos se atualizam com a leitura nova",

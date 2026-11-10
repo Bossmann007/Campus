@@ -697,6 +697,21 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const mClean = await runContent("/", null, { prefs: { mode: "limpo" } });
   assert(/Garantido até agora/.test(text(mFull.anchor)) && !/Garantido até agora/.test(text(mClean.anchor)) && /Próximos 7 dias/.test(text(mClean.anchor)), "limpo: no KPI row, the week stays");
   assert(/Prova adiada/.test(text(mClean.anchor)) && !/Bem-vindos/.test(text(mClean.anchor)), "limpo: only unread announcements");
+  { // the three numbers: every subject by default (each says which), or one picked in the chips, saved, gone in limpo
+    const pickOf = r => all(r.anchor).find(e => /kpis-pick/.test(e.className || "")), kp = r => all(r.anchor).find(e => /^kpis$/.test(e.className || ""));
+    const MORE = [{ id: 72009, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem" }, { id: 72005, name: "Resolução de Problemas de Natureza Discreta (Turma 2º B) - 2026 / 2º Sem" }];
+    const mOne = mFull; assert(!pickOf(mOne), "one subject only: no chips (Todas would be the same)");
+    const mFull2 = await runContent("/", null, {}, { more: MORE }), chips = pickOf(mFull2).kids;
+    assert(chips[0].textContent === "Todas" && chips[0]["aria-checked"] === "true" && chips.length === 4 && !pickOf(mClean), "chips: Todas first and checked, one per subject; none in limpo");
+    assert(/média das \d+ matérias/.test(text(kp(mFull2))) && /a mais apertada|tudo garantido|recuperação|faltam notas/.test(text(kp(mFull2))) && /\d+\/\d+ · /.test(text(kp(mFull2))), "Todas: the mean says it is a mean, the need names its subject, Entregues per subject");
+    const one = chips[1]; await one.listeners.click(); await new Promise(r => setTimeout(r, 10));
+    assert(mFull2.store.prefs.kpiCourse === one.dataset.id && one["aria-checked"] === "true" && chips[0]["aria-checked"] === "false", "a subject picked and saved");
+    const kt = text(kp(mFull2)); assert(kt.split(one.textContent).length - 1 >= 3 && !/média das/.test(kt), "every number names the picked subject: " + kt.slice(0, 200));
+    const again = await runContent("/", null, { prefs: { kpiCourse: one.dataset.id } }, { more: MORE });
+    assert(pickOf(again).kids[1]["aria-checked"] === "true", "the pick comes back on the next page");
+    const stale = await runContent("/", null, { prefs: { kpiCourse: "nao-existe" } }, { more: MORE });
+    assert(pickOf(stale).kids[0]["aria-checked"] === "true" && /média das/.test(text(kp(stale))), "a subject no longer in the panel falls back to Todas");
+  }
   const mFocus = await runContent("/", null, { prefs: { mode: "foco" } }), ft = all(mFocus.anchor).filter(e => e.tag !== "style").map(e => e.textContent).join(" | ");
   assert(/Agora \| 2 coisas/.test(ft) && /\d\d\/\d\d[ |]+Relatório/.test(ft) && /Lista 3/.test(ft) && !/Próximos 7 dias|Avisos|Garantido até agora|Quiz feito/.test(ft), "foco: only what to do now: " + ft.slice(0, 200));
   const segB = all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Foco");

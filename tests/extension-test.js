@@ -144,5 +144,10 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   await pel("fstop").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert(!palarms["focus|pausa"] && !store.focus && pel("fstop").hidden, "Parar clears it");
   assert(!/rascunho|nova-turma|issues\/new/.test(html + fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "no turma draft or issue in the popup (planned inside the extension, not shipped)");
+  { // status colours never come from the theme accent (a green look made "sem nota" and the need look like "ok")
+    const ct = fs.readFileSync(path.join(dir, "content.js"), "utf8"), th = fs.readFileSync(path.join(dir, "theme.js"), "utf8");
+    assert(/\.trk i\.late \{ background:var\(--warn\); \}/.test(ct) && /\.kpi \.v\.need \{ color:var\(--warn\); \}/.test(ct) && !/t-bad \{ color:var\(--coral\)/.test(ct), "late, need and bad in status colours");
+    assert(/\.module-sequence-footer \.module-sequence-footer-content \{ background:var\(--cp-paper\)/.test(th), "the Anterior / Próximo bar follows the look");
+  }
   console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });

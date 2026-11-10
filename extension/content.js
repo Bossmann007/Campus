@@ -9,6 +9,7 @@
   const VERSION = chrome.runtime.getManifest().version;
   const EXT = !!chrome.runtime.getURL;   // the extension (the bookmarklet keeps nothing after a reload)
   let T = 7;   // the meta (goal), from the popup or the dashboard; 7 by default
+  let KPI_COURSE = "";   // prefs.kpiCourse: the subject the three dashboard numbers are about ("" = every subject)
   let TURMA_PREF = null;   // prefs.turma: the turma the student confirmed, "outro" for another program, null when not asked yet
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
@@ -534,12 +535,12 @@
     .upnext { display:flex; align-items:center; gap:16px; padding:12px 14px; } .upnext .k { text-transform:none; letter-spacing:0; font-size:12px; font-weight:500; }
     .upnext .t, .cring .t { font:600 17px/1.25 var(--serif); letter-spacing:-.01em; margin:2px 0; overflow:hidden; text-overflow:ellipsis; } .upnext .mid, .cring .mid { flex:1; }
     .big { flex:none; text-align:right; } .big .v { display:block; font:500 30px/1 var(--serif); letter-spacing:-.02em; } .big span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
-    .v.t-ok { color:var(--ok); } .v.t-warn { color:var(--warn); } .v.t-bad { color:var(--coral); }
-    .kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-    .kpi { padding:10px 12px 12px; min-width:0; } .kpi .v { font:500 24px/1.15 var(--serif); letter-spacing:-.02em; margin:2px 0 4px; } .kpi .v.need { color:var(--coral); } .kpi .v.need.t-ok { color:var(--ok); }
+    .v.t-ok { color:var(--ok); } .v.t-warn { color:var(--warn); } .v.t-bad { color:var(--bad); }
+    .kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; } .seg.kpis-pick { display:flex; flex-wrap:wrap; width:fit-content; max-width:100%; margin:0 0 8px; } .kpi .c { margin-top:6px; } .kpi .c.per { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.45; }
+    .kpi { padding:10px 12px 12px; min-width:0; } .kpi .v { font:500 24px/1.15 var(--serif); letter-spacing:-.02em; margin:2px 0 4px; } .kpi .v.need { color:var(--warn); } .kpi .v.need.t-ok { color:var(--ok); }
     .meter { position:relative; height:6px; margin-top:6px; border-radius:99px; background:var(--track); }
     .meter i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--fg); } .meter b { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); }
-    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--coral); }
+    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--warn); }
     .trk i:hover { outline:1.5px solid var(--fg); outline-offset:1px; }
     [data-tip]::after { content:attr(data-tip); position:absolute; z-index:6; left:50%; bottom:calc(100% + 8px); width:max-content; max-width:240px; padding:6px 9px; border-radius:7px; background:var(--fg); color:var(--bg);
       font:500 12px/1.35 var(--sans); box-shadow:0 10px 24px -10px rgba(29,36,51,.5); opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,3px); transition:opacity .12s, transform .12s, visibility 0s .12s; }
@@ -979,22 +980,57 @@
       left.append(el("div", "k", "Próxima avaliação que conta"), el("div", "t", u.item.name), el("div", "c", C.SHORT[u.course.id] + " · " + dmy(u.item.date) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias")));
       card.append(left, needBig(u.st)); out.push(card);
     }
+    // The three numbers, for every subject ("Todas") or for the one the student picks in the chips above them (saved in
+    // prefs.kpiCourse); each number says which subject it is about.
     const sem = C.semester(a.mine, a.grades, t, T), kpis = el("div", "kpis");
     const kpi = (k, v, cls, sub) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (sub) d.appendChild(sub); kpis.appendChild(d); return d; };
-    const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
-    fill.style.width = Math.min(100, sem.mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal);
-    kpi("Garantido até agora", fmt(Math.floor(sem.mean * 10) / 10, 1), null, meter).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
+    const meterOf = x => { const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
+      fill.style.width = Math.min(100, x * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); return meter; };
+    const trackOf = items => { const done = items.filter(x => x.s === "ok").length, late = items.filter(x => x.s === "late").length, trk = el("div", "trk");
+      trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
+      for (const x of items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
+      return { trk, done }; };
     const cnt = s => sem.counts[s] || 0;
-    // the tightest subject, but not the one the "Próxima avaliação" card already shows (no 9,0 twice)
-    const heroId = list.length ? list[0].course.id : null, open2 = a.mine.filter(c => c.id !== heroId && sem.states[c.id].status === "precisa").sort((x, y) => sem.states[y.id].fraction - sem.states[x.id].fraction)[0];
-    const tight = sem.tight && sem.tight.id !== heroId ? sem.tight : open2 || sem.tight;
-    if (tight) kpi(tight === sem.tight ? "Quanto falta" : "Depois dessa", up(sem.states[tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[tight.id] + (tight === sem.tight ? ", a mais apertada" : ", a próxima mais apertada")));
-    else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
-    else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
-    else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
-    const trk = el("div", "trk"); trk.setAttribute("aria-label", sem.done + " lançadas, " + sem.late + " sem nota, " + (sem.items.length - sem.done - sem.late) + " pela frente");
-    for (const x of sem.items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
-    kpi("Entregues", sem.done + " de " + sem.items.length, null, trk);
+    const fillKpis = id => {
+      kpis.replaceChildren();
+      const c = a.mine.find(x => x.id === id);
+      if (c) {   // one subject
+        const st = sem.states[c.id], items = sem.items.filter(x => x.course.id === c.id), tr = trackOf(items), name = C.SHORT[c.id];
+        const g = el("div"); g.append(meterOf(st.earned), el("div", "c", name));
+        kpi("Garantido até agora", fmt(Math.floor(Math.min(10, st.earned) * 10) / 10, 1), null, g).title = "pontos garantidos de 10 em " + name + " · meta " + fmt(T, 1);
+        if (st.status === "garantido") kpi("Quanto falta", "0", "need t-ok", el("div", "c", name + ", garantido"));
+        else if (st.status === "nao-da") kpi("Quanto falta", "—", "need", el("div", "c", name + ", recuperação"));
+        else if (st.status === "depende-atrasadas") kpi("Quanto falta", "?", "need", el("div", "c", name + ", faltam notas antigas"));
+        else kpi("Quanto falta", up(st.fraction * 10, 1), "need", el("div", "c", name + ", em 10 no que falta"));
+        const e = el("div"); e.append(tr.trk, el("div", "c", name));
+        kpi("Entregues", tr.done + " de " + items.length, null, e);
+        return;
+      }
+      const g = el("div"); g.append(meterOf(sem.mean), el("div", "c", "média das " + a.mine.length + " matérias"));
+      kpi("Garantido até agora", fmt(Math.floor(sem.mean * 10) / 10, 1), null, g).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
+      // the tightest subject, but not the one the "Próxima avaliação" card already shows (no 9,0 twice)
+      const heroId = list.length ? list[0].course.id : null, open2 = a.mine.filter(c => c.id !== heroId && sem.states[c.id].status === "precisa").sort((x, y) => sem.states[y.id].fraction - sem.states[x.id].fraction)[0];
+      const tight = sem.tight && sem.tight.id !== heroId ? sem.tight : open2 || sem.tight;
+      if (tight) kpi(tight === sem.tight ? "Quanto falta" : "Depois dessa", up(sem.states[tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[tight.id] + (tight === sem.tight ? ", a mais apertada" : ", a próxima mais apertada")));
+      else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
+      else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
+      else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
+      const tr = trackOf(sem.items), e = el("div"); e.append(tr.trk, el("div", "c per", a.mine.map(c => { const it = sem.items.filter(x => x.course.id === c.id); return C.SHORT[c.id] + " " + it.filter(x => x.s === "ok").length + "/" + it.length; }).join(" · ")));
+      kpi("Entregues", tr.done + " de " + sem.items.length, null, e);
+    };
+    const pickId = a.mine.some(c => c.id === KPI_COURSE) ? KPI_COURSE : "", pick = el("div", "seg kpis-pick"), chips = [];
+    pick.setAttribute("role", "radiogroup"); pick.setAttribute("aria-label", "Matéria dos números");
+    for (const [id, name] of [["", "Todas"]].concat(a.mine.map(c => [c.id, C.SHORT[c.id]]))) {
+      const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(id === pickId)); b.dataset.id = id;
+      b.addEventListener("click", async () => {
+        KPI_COURSE = id; fillKpis(id);
+        for (const x of chips) x.setAttribute("aria-checked", String(x === b));
+        const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { kpiCourse: id }) });
+      });
+      chips.push(b); pick.appendChild(b);
+    }
+    fillKpis(pickId);
+    if (a.mine.length > 1) out.push(pick);
     out.push(kpis);
     const tiles = el("div", "tiles");
     for (const c of a.mine) {
@@ -1911,7 +1947,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
   let cardWatch = null, livePrefs = null;
   async function draw(cache, prefs, again) {
-    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null;
+    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null; KPI_COURSE = typeof prefs.kpiCourse === "string" ? prefs.kpiCourse : "";
     const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user)]);   // side by side, not one after another
     let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
