@@ -113,7 +113,7 @@ let n = 0; const ok = () => n++;
   assert(list.result.tools.length === 9 && list.result.tools.every(t => t.annotations.readOnlyHint === true), "nine tools, all read-only");
   assert.deepStrictEqual(list.result.tools.map(t => t.name).sort(), require("../mcp/manifest.json").tools.map(t => t.name).sort(), "manifest lists the same tools");
   { const mf = require("../mcp/manifest.json"), pk = require("../mcp/package.json"), tk = mf.user_config.canvas_token, ei = mf.user_config.extension_id;
-    assert(mf.version === pk.version && pk.version === "1.2.0" && tk.required === false && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.2.0: the token optional and sensitive, no file.js shipped");
+    assert(mf.version === pk.version && pk.version === "1.3.0" && tk.required === false && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.3.0: the token optional and sensitive, no file.js shipped");
     assert(ei && ei.required === false && mf.server.mcp_config.env.CADERNO_EXT_ID === "${user_config.extension_id}" && ["ponte.js", "host.js"].every(f => pk.files.includes(f)), "the bundle asks for the extension id (the ponte), and ships the host"); }
   { // every AI client: names of letters and _ (≤ 64), schemas in the plain subset (OpenAI, Gemini and the rest accept it)
     const keys = new Set(["type", "description", "properties", "required"]), walk = (sch, at) => { for (const k of Object.keys(sch)) assert(keys.has(k), "schema keyword " + k + " in " + at); for (const [n, v] of Object.entries(sch.properties || {})) walk(v, at + "." + n); };
@@ -273,7 +273,11 @@ let n = 0; const ok = () => n++;
     const fr = P.frame({ a: "é" }), got = []; P.unframer(m => got.push(m))(Buffer.concat([fr.subarray(0, 3), fr.subarray(3), P.frame({ b: 2 })]));
     assert(fr.readUInt32LE(0) === Buffer.byteLength(JSON.stringify({ a: "é" })) && got.length === 2 && got[0].a === "é" && got[1].b === 2, "native messaging frames: 32-bit length + UTF-8 JSON, split anywhere");
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cpt-")), sock = path.join(tmp, "s", "ponte.sock"), input = new PassThrough(), output = new PassThrough();
-    const browser = P.unframer(m => input.write(P.frame(m.op === "ping" ? { id: m.id, ok: true } : m.op === "get" ? { id: m.id, ok: true, status: 200, link: null, body: JSON.stringify([{ id: 7, name: "Banco (Turma 2º B) - 2026 / 2º Sem" }]) } : { id: m.id, error: "?" })));
+    let rulesUser = 5; const A1 = "https://pucpr.instructure.com/courses/7/assignments/1", A2 = "https://pucpr.instructure.com/courses/7/assignments/2";
+    const getBody = url => /\/users\/self/.test(url) ? { id: 5, name: "Aluno" } : /\/assignments/.test(url) ? [{ name: "P1", points_possible: 10, html_url: A1, submission: { score: 8 } }, { name: "P2", points_possible: 10, html_url: A2, submission: { score: null } }]
+      : /\/courses\?/.test(url) || /\/courses$/.test(url.split("?")[0]) ? [{ id: 7, name: "Banco (Turma 2º B) - 2026 / 2º Sem" }] : [];
+    const browser = P.unframer(m => input.write(P.frame(m.op === "ping" ? { id: m.id, ok: true } : m.op === "get" ? { id: m.id, ok: true, status: 200, link: null, body: JSON.stringify(getBody(m.url)) }
+      : m.op === "rules" ? { id: m.id, ok: true, user: rulesUser, rules: { 7: { off: [], total: 10, parts: { A: { w: 40 }, B: { w: 60 } }, part: { [A1]: "A", [A2]: "B" } } } } : { id: m.id, error: "?" })));
     output.on("data", browser);
     let exited = null; const srv = P.host({ input, output, sock, platform: process.platform, exit: c => { exited = c; } });
     await new Promise(r => srv.on("listening", r));
@@ -283,6 +287,10 @@ let n = 0; const ok = () => n++;
     const cvP = makeCanvas(null, { ponte: cl }), cs = await cvP.tools.courses();
     assert(cvP.via === "ponte" && cs.courses.length === 1 && /^Banco/.test(cs.courses[0].untrusted_canvas_text.name), "the tools answer through the ponte, with no token: " + JSON.stringify(cs).slice(0, 160));
     await assert.rejects(require("../mcp/canvas").ponteFetch(cl)("/api/v1/conversations"), /bloqueado/, "the allowlist is checked before the ponte too");
+    { const qf = await cvP.tools.quanto_falta({ meta: 7 }), b = qf.subjects.find(x => x.course_id === 7);
+      assert(b && b.source === "regra-do-aluno" && b.now === 3.2 && Math.abs(b.need - 6.33) < 0.01, "quanto_falta uses the student's own rule from the extension (RA1 40% graded 8, RA2 60% open): " + JSON.stringify(b));
+      rulesUser = 9; const other = (await makeCanvas(null, { ponte: cl }).tools.quanto_falta({ meta: 7 })).subjects.find(x => x.course_id === 7);
+      assert(other && other.source === "soma-dos-pontos", "rules of another Canvas user (the extension's last reading) are not applied: " + JSON.stringify(other)); }
     { // a second browser takes the socket over; the first one leaving does not remove it
       const in2 = new PassThrough(), out2 = new PassThrough(); out2.on("data", P.unframer(m => in2.write(P.frame({ id: m.id, ok: true, who: 2 }))));
       let ex2 = null; const s2 = P.host({ input: in2, output: out2, sock, platform: process.platform, exit: c => { ex2 = c; } }); await new Promise(r => s2.on("listening", r));

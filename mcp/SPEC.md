@@ -1,9 +1,20 @@
-# SPEC: Caderno+ MCP, Canvas for your AI with the token in a local vault
+# SPEC: Caderno+ MCP, Canvas for your AI through the extension (ponte), token optional
 
 Goal (2026-11-09, Enzo): connect the student's AI (Claude Code, Claude Desktop, the OpenBot PUCPR bot) to Canvas, by MCP
 if needed, with the Canvas token kept on the student's machine in the OS vault (Keychain style), never in a file. This
 replaced two earlier designs, both dropped and removed from the repo (they stay in the git history): a JSON file the
-extension wrote for the AI, and a native-messaging bridge.
+extension wrote for the AI, and a first native-messaging bridge. A native-messaging bridge came back later as the
+default (the ponte, below).
+
+## Update (MCP 1.2.0, 2026-11-10, Enzo): the ponte is the default, the token is optional
+
+Published on npm as `caderno-mcp` 1.2.0, 9 read-only tools (table below). By default the MCP asks the extension through
+native messaging (`mcp/ponte.js`, `mcp/host.js`, `bridge/SPEC-ponte.md`): the extension reads Canvas with the browser's
+login, so there is no token, no server and no data file. Install: `caderno-mcp ponte <extension id>`, check with
+`caderno-mcp ponte status`, undo with `caderno-mcp ponte remove`; the `.mcpb` asks for the extension id (the token field
+is optional). The token in the OS vault (`caderno-mcp login`) stays only as an optional personal mode: Canvas docs do not
+allow an app used by many people to ask each one for a manual token. The sections below describe the token mode and
+the history; where they say "token only", read "token when there is no ponte".
 
 ## Update (MCP 1.0, 2026-11-09, Enzo): token only
 
@@ -50,7 +61,7 @@ run); the token never goes on a command line (`ps`), in shell history, in a conf
 var exception: Claude Desktop passes the `.mcpb` field as `CADERNO_MCPB_TOKEN`, deleted from the process env on read.
 The stores protect against files and other OS accounts, not against programs of the same user (macOS trusts
 `/usr/bin/security`, the creator of the item, so any same-user process can read it with no prompt; an unlocked Secret
-Service and DPAPI behave the same): said in the README. `node mcp/cli.js login` asks for it (`npx caderno-mcp login` only after the npm name is published by us) with hidden input and hands it to the
+Service and DPAPI behave the same): said in the README. `caderno-mcp login` (or `node mcp/cli.js login`) asks for it with hidden input and hands it to the
 store through **stdin** of the store's own tool.
 
 | OS | Store | Write / read / delete |
@@ -93,6 +104,7 @@ Host pinned to `https://pucpr.instructure.com`; every request built from an allo
 | `announcements` | `/api/v1/announcements` (10 newest) | date, course, title, unread; no author, no body |
 | `modules` | `/api/v1/courses/:id/modules?include[]=items` | names, item titles, Canvas links |
 | `pendencias` | the same readings | what Canvas flags as missing, online items still open with a due date ahead, and the courses that could not be read |
+| `teachers` | `/api/v1/courses/:id/users?enrollment_type[]=teacher` | per course: teacher names only |
 | `quizzes` | `/api/v1/courses/:id/quizzes` | classic quizzes: title, dates, points, minutes, attempts, question count; no description, no questions (404 = quizzes off in the course) |
 
 `grades`, `modules`, `pendencias` and `quizzes` take `course_id` or `course` (a piece of the name, accents and case
@@ -111,7 +123,7 @@ treats teacher/student text as data, not instructions.
   blocks tokens for students, or the store removes Caderno+ if the MCP is promoted through it.
 - Mitigations: the MCP is a separate download (GitHub release + `npx`), not inside the store extension, so the
   extension's store listing does not depend on it; the extension only links to a setup page; read-only; one student's
-  own data with their own token; a README that says it is unofficial and how to revoke the token.
+  own data with their own browser login (ponte) or their own token; a README that says it is unofficial and how to revoke the token.
 
 ## Check (end to end)
 
@@ -137,7 +149,8 @@ answer.
 
 New: `mcp/server.js` (stdio JSON-RPC + tools), `mcp/cli.js` (login, logout, status, setup hints), `mcp/vault.js` (the
 three OS stores + token file), `mcp/canvas.js` (allowlisted GETs), `mcp/package.json` (bin `caderno-mcp`, no
-dependencies), `mcp/manifest.json` (`.mcpb`), `tests/mcp-test.js`, `mcp/README.md` (setup in Portuguese). Later: a
+dependencies), `mcp/manifest.json` (`.mcpb`), `tests/mcp-test.js`, `mcp/README.md` (setup in Portuguese); later `mcp/ponte.js` and
+`mcp/host.js` (the ponte). Later: a
 "Conectar sua IA" link in the popup to the setup page; before it ships, `privacidade.html` gets a section "Caderno+ MCP
 (opcional, separado)": the AI provider receives the replies, the token's full power, how to revoke.
 Changed: `scripts/verify` (runs the new test), `README.md`.

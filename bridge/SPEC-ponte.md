@@ -1,6 +1,6 @@
 # Ponte: the MCP reads Canvas through the extension, without a token
 
-Status: building, 2026-11-10. Decided by Enzo: no token for other students (Canvas docs: an app used by many people must
+Status: shipped in 6.4.0 / MCP 1.2.0 (2026-11-10); checked end to end on the real Canvas in Brave. Decided by Enzo: no token for other students (Canvas docs: an app used by many people must
 not ask each one to paste a manual token), no server, the extension's login session is the access.
 
 ## Shape

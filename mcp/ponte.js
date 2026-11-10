@@ -94,6 +94,7 @@ function client({ sock, timeout = 25000, connect = p => net.createConnection(p),
     // is the extension answering? 2 s at most, and a "yes" is kept 30 s (no ping in front of every tool call)
     async up() { if (seen && conn && Date.now() - seen < memo) return true; try { const r = await ask({ op: "ping" }, pingMs); seen = r && r.ok ? Date.now() : null; return !!seen; } catch (e) { seen = null; return false; } },
     async get(url) { const r = await ask({ op: "get", url }); if (r.error) throw new Error(String(r.error).slice(0, 200)); return r; },
+    async rules() { const r = await ask({ op: "rules" }); if (r.error) throw new Error(String(r.error).slice(0, 200)); return { user: r && r.user != null ? r.user : null, rules: r && r.rules && typeof r.rules === "object" ? r.rules : {} }; },
     async centro(course) { const r = await ask({ op: "centro", course: String(course) }); if (r.error) throw new Error(String(r.error).slice(0, 200)); return r.curso || null; },
     close() { if (conn) conn.destroy(); },
   };

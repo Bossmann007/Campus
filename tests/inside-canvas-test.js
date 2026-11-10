@@ -440,6 +440,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(saved && saved.off.length === 1 && saved.total === 10 && /Sua regra/.test(text(pb())) && !boxes()[0].checked, "unticked: saved for this user and this course, the card says it is your rule");
     const tot = all(pb()).find(e => e.tag === "input" && e.type === "number"); tot.value = "20"; await tot.listeners.change(); await new Promise(r => setTimeout(r, 20));
     assert.strictEqual(cp.store.myRules[5]["42"].total, 20, "the grade's top saved");
+    // weights by part: turn on, put items in parts A and B, weigh them; the card says each part
+    await all(pb()).find(e => e.textContent === "Usar pesos por parte").listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert.deepStrictEqual(cp.store.myRules[5]["42"].parts, { A: { w: 50 }, B: { w: 50 } }, "two parts of 50% to start");
+    const sels = () => all(pb()).filter(e => e.tag === "select"); assert(sels().length === boxes().length, "a part picker per item");
+    sels()[1].value = "A"; await sels()[1].listeners.change(); await new Promise(r => setTimeout(r, 20));
+    sels()[2].value = "B"; await sels()[2].listeners.change(); await new Promise(r => setTimeout(r, 20));
+    const keys = Object.keys(cp.store.myRules[5]["42"].part); assert(keys.length === 2 && Object.values(cp.store.myRules[5]["42"].part).sort().join() === "A,B", "items saved in their parts, the first change kept");
+    const wA = all(pb()).find(e => e["aria-label"] === "Peso da parte A em %"); wA.value = "40"; await wA.listeners.change(); await new Promise(r => setTimeout(r, 20));
+    assert(cp.store.myRules[5]["42"].parts.A.w === 40 && cp.store.myRules[5]["42"].parts.B.w === 50 && /parte A \(40%\)/.test(text(pb())), "weights saved, the card shows each part: " + text(pb()).slice(0, 300));
     const back = all(pb()).find(e => e.textContent === "Voltar ao padrão"); await back.listeners.click(); await new Promise(r => setTimeout(r, 20));
     assert(!cp.store.myRules[5]["42"] && /Soma dos pontos do Canvas/.test(text(pb())), "back to the default: the rule removed");
     ok(); }
@@ -737,6 +746,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const mFull2 = await runContent("/", null, {}, { more: MORE }), chips = pickOf(mFull2).kids;
     assert(chips[0].textContent === "Todas" && chips[0]["aria-checked"] === "true" && chips.length === 4 && !pickOf(mClean), "chips: Todas first and checked, one per subject; none in limpo");
     assert(/média das \d+ matérias/.test(text(kp(mFull2))) && /a mais apertada|tudo garantido|recuperação|faltam notas/.test(text(kp(mFull2))) && /\d+\/\d+ · /.test(text(kp(mFull2))), "Todas: the mean says it is a mean, the need names its subject, Entregues per subject");
+    assert(chips[0].tabIndex === 0 && chips[1].tabIndex === -1, "one Tab stop in the chips");
+    chips[0].listeners.keydown({ key: "ArrowRight", preventDefault() {} }); assert(chips[1].tabIndex === 0 && chips[0].tabIndex === -1, "the arrow moves to the next chip");
     const one = chips[1]; await one.listeners.click(); await new Promise(r => setTimeout(r, 10));
     assert(mFull2.store.prefs.kpiCourse === one.dataset.id && one["aria-checked"] === "true" && chips[0]["aria-checked"] === "false", "a subject picked and saved");
     const kt = text(kp(mFull2)); assert(kt.split(one.textContent).length - 1 >= 3 && !/média das/.test(kt), "every number names the picked subject: " + kt.slice(0, 200));
@@ -754,6 +765,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the popup changes the mode: the panel follows at once (no reload, no fight with the header switch)
   const sync = await runContent("/", null); await sync.env.window.cpPrefsChanged({ mode: "foco" }); await new Promise(r => setTimeout(r, 15));
   assert(/Agora/.test(text(sync.anchor)) && all(sync.anchor).filter(e => e.id === "cp-dash").length === 1, "the panel redraws in the popup's mode");
+  { const live = await runContent("/", null); assert(/Minhas tarefas/.test(text(live.anchor)), "tasks card on");
+    await live.env.window.cpPrefsChanged({ tasks: false }); await new Promise(r => setTimeout(r, 30));
+    assert(!/Minhas tarefas/.test(text(live.anchor)) && all(live.anchor).filter(e => e.id === "cp-dash").length === 1, "a panel switch in the popup (tasks off) redraws at once, one panel"); }
 
   // Canvas's widget dashboard: ours goes inside it, above its widgets; its Avisos widget replaces ours; "Só Caderno+" hides its widgets
   const WENV = [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }];

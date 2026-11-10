@@ -162,6 +162,10 @@ async function ponteAnswer(m, f = fetch) {
   try {
     if (!m || typeof m !== "object") return { id, error: "pedido inválido" };
     if (m.op === "ping") return { id, ok: true, v: chrome.runtime.getManifest().version };
+    if (m.op === "rules") {   // the student's own rules (courses without a formula), for the Canvas user of the last reading only
+      const { cache, myRules } = await chrome.storage.local.get(["cache", "myRules"]), user = cache && cache.user;
+      return { id, ok: true, user: user == null ? null : user, rules: user != null && myRules && typeof myRules === "object" && myRules[user] && typeof myRules[user] === "object" ? myRules[user] : {} };
+    }
     if (m.op === "get") {
       const u = new URL(String(m.url || ""));
       if (u.origin !== CANVAS || !PONTE_ALLOW.some(re => re.test(u.pathname)) || u.username || u.password) return { id, error: "bloqueado: fora da lista de leitura" };

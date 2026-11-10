@@ -149,9 +149,12 @@ ${D} .ic-Layout-contentMain { max-width:1180px; margin-left:auto !important; mar
       const onAccent = (() => { const m = /^#([0-9a-f]{6})$/i.exec(accent); if (!m) return "#FFFFFF";
         const [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
         return 1.05 / (.2126 * r + .7152 * g + .0722 * b + .05) >= 3 ? "#FFFFFF" : "#1C1C1C"; })();
+      // the accent as text on the card: kept when it reads (4.5:1), else the look's link color (Marca-texto's yellow on white is 1.9:1)
+      const lumOf = h => { const m = /^#([0-9a-f]{6})$/i.exec(h); if (!m) return null; const [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4); return .2126 * r + .7152 * g + .0722 * b; };
+      const la = lumOf(accent), lc = lumOf(card) != null ? lumOf(card) : lumOf(L0 ? L0[1] : ""), accentInk = la == null || lc == null ? link : (Math.max(la, lc) + .05) / (Math.min(la, lc) + .05) >= 4.5 ? accent : link;   // a card built with color-mix (dark modes): measured on the look's own card
       const B = BGS[cards.bg];   // the same fixed background on every page layer, so the nested layers line up
       if (B) out.push(`:root.cp-look :is(body, #application, #wrapper, #main, .ic-Layout-wrapper, .ic-Layout-contentMain, #content-wrapper, #right-side-wrapper, #right-side, .ic-Dashboard-header, .ic-Dashboard-header :is(div, span, header):not(.cp-host, button *, [role="button"] *)) { background-image:${B[0]} !important; background-size:${B[1]} !important; background-attachment:fixed !important; }`);
-      out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent}; --cp-on-accent:${onAccent};
+      out.push(`:root.cp-look { --cp-paper:${paper}; --cp-card:${card}; --cp-ink:${ink}; --cp-muted:${muted}; --cp-line:${line}; --cp-accent:${accent}; --cp-on-accent:${onAccent}; --cp-accent-ink:${accentInk};
   --ic-brand-primary:${accent} !important; --ic-link-color:${link} !important; --ic-brand-font-color-dark:${ink} !important;
   --ic-brand-button--primary-bgd:${accent} !important; --ic-brand-button--primary-text:${onAccent} !important;
   --ic-brand-button--secondary-bgd:${card} !important; --ic-brand-button--secondary-text:${ink} !important; --cp-menu:${menu}; }

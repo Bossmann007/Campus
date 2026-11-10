@@ -220,17 +220,33 @@ function makeCanvas(token, opts = {}) {
         return { source: "regras", id: c.id, name: c.name, earned: pts(st.earned), status: st.status, label: panelLabel(st), next: nx ? { date: nx.date, name: nx.name } : null };
       });
       // every other course of the term: the formula the professor set in the Centro de Notas
+      // the student's own rules live in the extension, per Canvas user: used only when they are this student's (another
+      // student may have logged in on that browser since its last reading)
+      let rules = {}; if (ponte) { try { const [got, me] = await Promise.all([ponte.rules(), getAll("/api/v1/users/self", 1)]); if (got.user != null && me && got.user === me.id) rules = got.rules; } catch (e) { rules = {}; } }
       for (const cv of d.courses.filter(cv => !C.subjectOf(cv, true)).slice(0, 15)) {
         const base = { source: "centro", course_id: cv.id, untrusted_canvas_text: { name: clean(cv.name, 160) } };
-        let cu; try { cu = await centroOf(courseId(cv.id)); } catch (e) { out.push(Object.assign(base, { status: "erro", label: "não deu para ler o Centro de Notas: " + clean(String(e && e.message || e), 160) })); continue; }
-        if (!cu) { out.push(Object.assign(base, { status: "sem-centro", label: "sem Centro de Notas nesta matéria" })); continue; }
-        const r = C.centro(cu, meta), names = colNames(cu);
+        let cu = null, err = null; try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; }
+        const r0 = cu ? C.centro(cu, meta) : null;
+        if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) {   // as the panel: no formula, or one the student cannot see whole   // no formula: the student's own rule (from the extension, with the ponte), else the sum of the points
+          const rule = rules[String(cv.id)], items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), points: x.points, score: x.score == null ? null : x.score }));
+          const r = items.length ? C.custom(items, rule, meta) : null;
+          if (r && r.status !== "vazio") {
+            const unsure = !rule && (r.status === "garantido" || r.status === "nao-da");
+            out.push({ source: rule ? "regra-do-aluno" : "soma-dos-pontos", course_id: cv.id, status: unsure ? "confira" : r.status, now: r.now, need: r.need,
+              label: r.status === "acima" ? "os pontos somam " + r.planned + ", mais que " + r.total + ": o aluno precisa ajustar a regra na página da matéria" : unsure ? "pela soma dos pontos daria " + (r.status === "garantido" ? "garantido" : "recuperação") + ", mas a regra não foi conferida pelo aluno" : CENTRO_LABEL[r.status] || "precisa " + up1(r.need) + "/10",
+              untrusted_canvas_text: { name: clean(cv.name, 160) } });
+            continue;
+          }
+          if (err) { out.push(Object.assign(base, { status: "erro", label: "não deu para ler o Centro de Notas: " + clean(String(err && err.message || err), 160) })); continue; }
+          if (!cu) { out.push(Object.assign(base, { status: "sem-centro", label: "sem Centro de Notas nesta matéria" })); continue; }
+        }
+        const r = r0, names = colNames(cu);
         out.push(Object.assign(base, { status: r.status, now: r.now, need: r.need, approx: r.approx,
           label: CENTRO_LABEL[r.status] || "precisa " + up1(r.need) + "/10" + (r.approx ? " (aproximado)" : ""),
           untrusted_canvas_text: { name: clean(cv.name, 160), left: [...r.left].slice(0, 40).map(id => clean(String(names.get(id) || ""), 120)).filter(Boolean) } }));
       }
       if (!out.length) return { note: "Nenhuma matéria deste semestre no Canvas.", subjects: [] };
-      return { meta, note: NOTE, aviso: "source \"regras\": os pesos do Plano de Ensino que o Caderno+ já tem para estas matérias; source \"centro\": a fórmula que o professor pôs no Centro de Notas (need = a mesma nota de 0 a 10 em tudo o que falta; left = o que ainda não tem nota). Só notas do Canvas: as digitadas à mão no Caderno+ não entram aqui.",
+      return { meta, note: NOTE, aviso: "source \"regras\": os pesos do Plano de Ensino que o Caderno+ já tem para estas matérias; source \"regra-do-aluno\" ou \"soma-dos-pontos\": sem fórmula, os pontos do Canvas (com o que o aluno tirou da conta e os pesos que ele pôs; status confira = ele ainda não conferiu); source \"centro\": a fórmula que o professor pôs no Centro de Notas (need = a mesma nota de 0 a 10 em tudo o que falta; left = o que ainda não tem nota). Só notas do Canvas: as digitadas à mão no Caderno+ não entram aqui.",
         subjects: out };
     },
     async grades(args = {}) {

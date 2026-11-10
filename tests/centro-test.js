@@ -125,6 +125,15 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 2, score: 5 }], {}, 7).now, 2, "a score above the points is capped");
   assert.strictEqual(NotasCore.custom(null, null, 7).status, "vazio", "no items: no number");
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 6.995 }], {}, 7).status, "nao-da", "6,995 is not 7 (compared before rounding)");
+  // weighted parts: RA1 40% (P1 10 pts, graded 8) and RA2 60% (P2 10 pts, open): 0,4 × 8 = 3,2; 3,2 + 0,6 × x ≥ 7 → x = 6,33
+  const its = [{ key: "p1", points: 10, score: 8 }, { key: "p2", points: 10, score: null }, { key: "ex", points: 1, score: 1 }];
+  const wr = NotasCore.custom(its, { parts: { A: { w: 40 }, B: { w: 60 } }, part: { p1: "A", p2: "B" } }, 7);
+  assert(wr.status === "precisa" && wr.now === 3.2 && Math.abs(wr.need - 6.33) < 0.01 && wr.parts.length === 2, "weighted parts: " + JSON.stringify(wr));
+  const wt = NotasCore.custom(its, { parts: { A: { w: 40, top: 20 }, B: { w: 60 } }, part: { p1: "A", p2: "B" } }, 7);
+  assert(wt.now === 1.6 && wt.notYet === 10, "a part's top above its items: the rest is still to come (0,4 × 8/20 × 10 = 1,6)");
+  assert.strictEqual(NotasCore.custom(its, { parts: { A: { w: 40 }, B: { w: 60 } }, part: { p1: "A" } }, 7).status, "vazio", "a weighted part with no item and no top: no number");
+  assert.strictEqual(NotasCore.custom(its, { parts: { A: { w: 100, top: 5 } }, part: { p1: "A" } }, 7).status, "acima", "a part past its top: no number");
+  assert.strictEqual(NotasCore.custom(its, { parts: { A: { w: 40 }, B: { w: 60 } }, part: { p1: "A", p2: "B" }, off: ["p2"] }, 7).status, "vazio", "an unticked item leaves its part too");
   ok();
 }
 console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");

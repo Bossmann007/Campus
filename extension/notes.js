@@ -1,8 +1,11 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.5.0",
+  version: "6.6.0",
   items: [
+    "Sua regra com pesos por parte: na página da matéria, \"Usar pesos por parte\" (ex.: RA1 40%, RA2 60%), e cada atividade na sua parte",
+    "A sua IA usa a mesma regra que você montou (Caderno+ MCP 1.3, pela ponte)",
+    "Atividades dispensadas não contam no quanto falta; o tema Marca-texto tem texto legível; as setas do teclado escolhem o modo e a matéria; os botões do popup valem na hora",
     "Quanto falta também nas matérias sem fórmula no Centro de Notas, pela soma dos pontos do Canvas: na página da matéria, tire o que não vale nota e diga até quanto a nota vai (na extensão; o favorito não guarda)",
     "No celular: o painel cabe na tela (com o favorito do site, em qualquer navegador)",
     "Sua IA sem token: a ponte deixa o Caderno+ MCP perguntar para a extensão, que lê o Canvas com o seu login. Ligue em Mais → Sua IA",

@@ -226,7 +226,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.5.0";
+  const EXT_LATEST = "6.6.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -325,8 +325,30 @@ const NotasCore = (() => {
   // { status: garantido | precisa | nao-da | vazio | acima, now (0-10), need (0-10, the same grade on everything left), open, notYet,
   // counted, planned }. "acima": the counted points add up to more than the top, so the sum is not the grade (items scored
   // on 10 each, or extras): no number until the student unticks what does not count or says how far the grade goes.
+  // Weighted parts (the Plano de Ensino's "RA1 40%, RA2 60%"): rule.parts { A: { w, top? } ... } and rule.part { <key>: "A" }.
+  // Each part is its items' points out of its top (its planned points unless the student says more are coming), the
+  // parts weighed by w; items in no part do not count. Same result fields, plus parts: [{ id, w, now, top, planned }].
+  function customParts(items, rule, meta, off) {
+    const P = rule.parts, ids = Object.keys(P).filter(k => /^[A-E]$/.test(k) && Number(P[k] && P[k].w) > 0), W = ids.reduce((s, k) => s + Number(P[k].w), 0);
+    const of = rule.part && typeof rule.part === "object" ? rule.part : {}, parts = [];
+    let now = 0, gain = 0, counted = 0, open = 0, notYet = 0;
+    for (const k of ids) {
+      const its = items.filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)) && of[String(i.key)] === k);
+      let e = 0, o = 0, pl = 0; for (const i of its) { const p = Number(i.points); pl += p; if (i.score == null || !Number.isFinite(Number(i.score))) o += p; else e += Math.min(p, Math.max(0, Number(i.score))); }
+      const top = Number(P[k].top) > 0 ? Number(P[k].top) : pl, w = Number(P[k].w) / W;
+      if (!(top > 0)) return { status: "vazio", now: 0, need: null, open: 0, notYet: 0, counted, total: 10, parts, emptyPart: k };   // a weighted part with nothing in it
+      if (pl > top * 1.001) return { status: "acima", now: null, need: null, open: 0, notYet: 0, counted, total: top, planned: Math.round(pl * 100) / 100, part: k, parts };
+      const ny = Math.max(0, top - pl); counted += its.length; open += o; notYet += ny;
+      now += w * e / top * 10; gain += w * (o + ny) / top * 10; parts.push({ id: k, w: Number(P[k].w), now: Math.round(e / top * 1000) / 100, top, planned: pl });
+    }
+    const shown = Math.round(now * 100) / 100;
+    if (now >= meta - 1e-9) return { status: "garantido", now: shown, need: 0, open, notYet, counted, total: 10, parts };
+    const need = gain > 0 ? (meta - now) / gain * 10 : Infinity;
+    return { status: need > 10 ? "nao-da" : "precisa", now: shown, need: need > 10 ? null : Math.round(need * 100) / 100, open, notYet, counted, total: 10, parts };
+  }
   function custom(items, rule, meta) {
     const off = new Set(rule && Array.isArray(rule.off) ? rule.off.map(String) : []), total = rule && Number(rule.total) > 0 && Number(rule.total) <= 1000 ? Number(rule.total) : 10;
+    if (rule && rule.parts && typeof rule.parts === "object" && Object.keys(rule.parts).some(k => /^[A-E]$/.test(k) && Number(rule.parts[k] && rule.parts[k].w) > 0)) return customParts(Array.isArray(items) ? items : [], rule, meta, off);
     const counted = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)));
     if (!counted.length) return { status: "vazio", now: 0, need: null, open: 0, notYet: 0, counted: 0, total };
     let earned = 0, open = 0, planned = 0;

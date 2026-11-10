@@ -191,7 +191,10 @@
   async function loadRules(user) { const { myRules: all } = await chrome.storage.local.get("myRules"); rulesUser = user; myRules = all && typeof all === "object" && all[user] && typeof all[user] === "object" ? all[user] : {}; return myRules; }
   async function saveRule(user, courseId, rule) {
     const { myRules: all } = await chrome.storage.local.get("myRules"), base = all && typeof all === "object" ? all : {};
-    const mine = Object.assign({}, base[user], { [courseId]: { off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 } });
+    const parts = {}, part = {};
+    for (const k of ["A", "B", "C"]) { const x = rule.parts && rule.parts[k]; if (x && Number(x.w) > 0) parts[k] = Object.assign({ w: Math.min(100, Number(x.w)) }, Number(x.top) > 0 ? { top: Math.min(1000, Number(x.top)) } : {}); }
+    for (const [key, k] of Object.entries(rule.part || {}).slice(0, 300)) if (/^[ABC]$/.test(k)) part[String(key).slice(0, 300)] = k;
+    const mine = Object.assign({}, base[user], { [courseId]: Object.assign({ off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 }, Object.keys(parts).length ? { parts, part } : {}) });
     myRules = mine; await chrome.storage.local.set({ myRules: Object.assign({}, base, { [user]: mine }) });
   }
   let ruleCache = null;   // the reading the items come from (set where the panels are drawn)
@@ -199,7 +202,7 @@
     return cv ? cv.assignments.filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, due: x.due })) : []; };
   // Until the student confirms the rule (any change saves it), no "garantido" or "recuperação": the sum may miss items
   // that are not in Canvas yet, or count extras
-  const customOf = courseId => { const items = ruleItems(courseId); if (!items.length) return null; const r = C.custom(items, myRules[courseId], T); if (r.status === "vazio") return null;
+  const customOf = courseId => { const items = ruleItems(courseId); if (!items.length) return null; const r = C.custom(items, myRules[courseId], T); if (r.status === "vazio" && !r.parts) return null;
     const mine = !!myRules[courseId]; return Object.assign(r, { mine, unsure: !mine && (r.status === "garantido" || r.status === "nao-da") }); };
   const customPill = r => r.status === "acima" || r.unsure ? "confira" : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.";
   const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
@@ -542,7 +545,7 @@
 
   const CSS = `
     :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
-      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --on-coral:var(--cp-on-accent,#fff); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, var(--cp-card,#fff)); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, var(--cp-card,#fff));
+      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --coral-ink:var(--cp-accent-ink,var(--cp-accent,#E2482B)); --on-coral:var(--cp-on-accent,#fff); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, var(--cp-card,#fff)); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, var(--cp-card,#fff));
       --paper:var(--cp-paper,#FBF7EF); --track:color-mix(in srgb, var(--cp-line,#ECE4D3) 75%, var(--cp-paper,#FBF7EF)); --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
@@ -577,6 +580,7 @@
     .cring { display:flex; align-items:center; gap:14px; padding:12px 14px; }
     .items { overflow:hidden; } .ir { display:grid; grid-template-columns:minmax(0,1fr) 56px 140px; gap:10px; align-items:center; padding:8px 12px; border-top:1px solid var(--line); }
     .rule .ir.off .n { color:var(--muted); text-decoration:line-through; } .rule label.n { display:flex; gap:8px; align-items:center; cursor:pointer; } .rule label.n input { accent-color:var(--coral); flex:none; }
+    .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:12.5px; } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
     .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
     .ih { border-top:0; background:var(--track); font-size:11px; font-weight:600; color:var(--muted); padding:7px 12px; }
     .ir .n { display:flex; align-items:center; gap:8px; min-width:0; } .ir .n .pill { font-size:10.5px; line-height:18px; } .ir .dt { color:var(--muted); font-size:11.5px; }
@@ -586,7 +590,7 @@
     @container cp (max-width:560px) { .kpis { grid-template-columns:minmax(0,1fr); } .upnext .t { font-size:15px; } .big .v { font-size:26px; } .ir { grid-template-columns:minmax(0,1fr) 40px 104px; } }
     @container cp (max-width:420px) { .tiles { grid-template-columns:minmax(0,1fr); } .cring .ring { display:none; } }
     .hd { display:flex; align-items:center; gap:8px; margin:0 -14px 12px; padding:10px 14px; border-bottom:1px solid var(--line); }
-    .hd b { font:600 15px/1 var(--serif); letter-spacing:-.01em; } .hd b i { font-style:normal; color:var(--coral); }
+    .hd b { font:600 15px/1 var(--serif); letter-spacing:-.01em; } .hd b i { font-style:normal; color:var(--coral-ink); }
     .brand { margin-left:auto; font-size:12px; font-weight:600; color:var(--muted); }
     .mk { position:relative; flex:none; width:18px; height:18px; border-radius:4.5px; background:var(--tile); }
     .mk::before { content:"C"; position:absolute; left:2.5px; top:0; font:600 14px/18px var(--serif); color:var(--tile-c); }
@@ -622,12 +626,12 @@
     .tl { position:relative; margin-top:6px; }
     .heads, .lanes, .rules { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
     .heads .dh { padding:0 6px 6px; font-size:11.5px; font-weight:600; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .heads .we { color:var(--muted); font-weight:500; } .heads .today { color:var(--coral); }
+    .heads .we { color:var(--muted); font-weight:500; } .heads .today { color:var(--coral-ink); }
     .rules { position:absolute; left:0; right:0; top:24px; bottom:0; border-top:1px solid var(--line); }
     .rules > span { border-left:1px solid var(--line); } .rules > span:last-of-type { border-right:1px solid var(--line); }
     .rules > span.today { background:color-mix(in srgb, var(--coral) 5%, transparent); }
     .band { position:absolute; top:0; bottom:0; background:var(--band2); border-left:2px solid var(--band1); border-right:2px solid var(--band1); }
-    .band b { position:absolute; left:7px; bottom:5px; font:700 10px/1 var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--coral); white-space:nowrap; }
+    .band b { position:absolute; left:7px; bottom:5px; font:700 10px/1 var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--coral-ink); white-space:nowrap; }
     .now { position:absolute; top:-3px; bottom:0; width:2px; margin-left:-1px; background:var(--coral); border-radius:2px; }
     .now::before { content:""; position:absolute; top:-3px; left:-3px; width:8px; height:8px; border-radius:50%; background:var(--coral); }
     .lanes { position:relative; padding:10px 0 12px; } .banded .lanes { padding-bottom:26px; }
@@ -667,7 +671,7 @@
     .pal-q { all:unset; box-sizing:border-box; display:block; width:100%; padding:14px 16px; font:500 16px/1.3 var(--sans); color:var(--fg); border-bottom:1px solid var(--line); }
     .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
-    .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral-ink); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
     .wnew .nt-i { display:block; padding-left:16px; position:relative; } .wnew .nt-i::before { content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--coral); }
     .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
@@ -698,7 +702,7 @@
     .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .news .row > .d:first-child { min-width:96px; } .d.lt { color:var(--bad); font-weight:600; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
     .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
-    .ask-b { margin-left:0 !important; color:var(--coral) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
+    .ask-b { margin-left:0 !important; color:var(--coral-ink) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
     .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
     .centro-sim { display:grid; gap:6px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
     .band-c { position:absolute; left:0; right:0; top:0; height:4px; background:var(--coral); } .htxt { flex:1; min-width:0; }
@@ -740,12 +744,25 @@
       .hero { flex-wrap:wrap; } .hero .htxt { flex:1 1 100%; } .hteach { flex:1 1 100%; }
     }
     .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
-    .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold:not(.pnotes) { margin-left:auto; } .box.pfolded .pnotes { display:none; } .box.head .pnotes { border-radius:0; } .pnotes[aria-pressed="true"] { color:var(--coral); }
+    .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold:not(.pnotes) { margin-left:auto; } .box.pfolded .pnotes { display:none; } .box.head .pnotes { border-radius:0; } .pnotes[aria-pressed="true"] { color:var(--coral-ink); }
     .wl { display:none; }
     @container cp (max-width:760px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
     `;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  // a row of radio buttons: one Tab stop, the arrows move and choose (as the popup's own groups and the course tabs)
+  // id: a group the click redraws (the mode switch): the new one takes the focus back (radioFocus)
+  let radioAgain = null;
+  const radioOn = x => (x.getAttribute ? x.getAttribute("aria-checked") : x["aria-checked"]) === "true";
+  const radioKeys = (list, id) => {
+    if (id && radioAgain === id) { radioAgain = null; const c = list.find(radioOn); if (c && c.focus) setTimeout(() => c.focus(), 0); }
+    list.forEach((b, i) => {
+      b.tabIndex = radioOn(b) || (i === 0 && !list.some(radioOn)) ? 0 : -1;
+      b.addEventListener("focus", () => list.forEach(x => { x.tabIndex = x === b ? 0 : -1; }));   // a click focuses the button: the Tab stop follows it
+      b.addEventListener("keydown", e => { const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0; if (!d) return;
+        e.preventDefault(); const nx = list[(i + d + list.length) % list.length]; list.forEach(x => { x.tabIndex = x === nx ? 0 : -1; }); if (nx.focus) nx.focus(); if (id) radioAgain = id; if (nx.click) nx.click(); });
+    });
+  };
   const mark = () => { const m = el("span", "mk"); m.setAttribute("aria-hidden", "true"); return m; };   // the logo tile, drawn in CSS
   const wordmark = () => { const b = el("b", null, "Caderno"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Caderno+"); return b; };
 
@@ -1059,6 +1076,7 @@
       });
       chips.push(b); pick.appendChild(b);
     }
+    radioKeys(chips);
     fillKpis(pickId);
     if (a.mine.length > 1) out.push(pick);
     out.push(kpis);
@@ -1195,12 +1213,13 @@
     { const hostEl = document.getElementById("cp-dash"); if (hostEl) hostEl.cpBusy = () => { const ae = hostEl.cpRoot && hostEl.cpRoot.activeElement; return !!ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName || "") && !!ae.value; }; }
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
-    const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
+    const seg = el("div", "seg"), segBs = []; seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
     for (const [k, label] of MODES) {
       const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(mode === k));
       b.title = { completo: "Tudo do Caderno+", limpo: "Só o que importa, sem a bagunça do Canvas", foco: "Só o que fazer agora" }[k];
-      if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
+      if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b); segBs.push(b);
     }
+    radioKeys(segBs, "mode");
     hd.appendChild(seg);
     // fold: the panel shrinks to this bar (kept in chrome.storage.local "panelFold") and opens again
     const foldB = el("button", "pfold"); foldB.type = "button";
@@ -1239,7 +1258,7 @@
     else if (why) {   // no rules of ours: the Centro de Notas formulas, course by course, when the professors set them
       const off = hiddenNow;   // the courses taken off the dashboard in the popup
       ruleCache = cache;
-      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r);   // an old term: its points are not this semester's
+      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r && x.r.status !== "vazio");   // an old term: its points are not this semester's
       if (rows.length) {
         const sec = el("section", "card centro"), h = el("h3", null, "Quanto falta"), ul = el("ul");
         sec.appendChild(h);
@@ -1349,27 +1368,54 @@
     if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes
       const items = ruleItems(courseId), rule = myRules[courseId] || { off: [], total: 10 }, off = new Set(rule.off || []);
       const card = el("div", "card cring"), m = el("div", "mid");
-      m.append(el("div", "t", mr.status === "vazio" ? "Nada conta na nota ainda" : mr.status === "acima" ? "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0) : fmt(mr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
-        el("div", "c", mr.status === "vazio" ? "Marque o que vale nota na lista abaixo." : mr.status === "acima" ? "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz)." : mr.unsure ? "Pela soma dos pontos daria " + (mr.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : customText(mr) + (mr.notYet > 0.001 ? " · " + fmt(mr.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
-        el("div", "c", (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
+      m.append(el("div", "t", mr.status === "vazio" ? (mr.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " passou dos pontos dela" : "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0)) : fmt(mr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+        el("div", "c", mr.status === "vazio" ? (mr.parts ? (mr.emptyPart ? "A parte " + mr.emptyPart + " ainda não tem atividade: escolha a parte de cada atividade na lista (ou diga quantos pontos ela vale)." : "Escolha a parte de cada atividade na lista abaixo.") : "Marque o que vale nota na lista abaixo.")
+          : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " soma " + fmt(mr.planned, 1) + " pontos, mais que os " + fmt(mr.total, 1) + " dela: tire o que não vale nota ou aumente os pontos da parte " + mr.part + "." : "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz).") : mr.unsure ? "Pela soma dos pontos daria " + (mr.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : customText(mr) + (mr.notYet > 0.001 ? " · " + fmt(mr.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
+        el("div", "c", mr.parts && mr.parts.length ? "Sua regra: " + mr.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + fmt(p.now, 1) + "/10").join(" · ") + (mr.emptyPart ? " · a parte " + mr.emptyPart + " não tem atividade" : "")
+          : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
       if (mr.status !== "vazio" && mr.status !== "acima" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
       box.appendChild(card);
       const ed = el("div", "card items rule"), th = el("div", "ir ih"); th.append(el("span", null, "Conta na nota?"), el("span", null, "Pontos"), el("span", null, "Nota"));
       ed.appendChild(th);
       const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
-      const save = async next => { await saveRule(cache.user, courseId, next); redraw(); };
+      const cur = () => myRules[courseId] || rule;   // the rule as stored now (a second quick change keeps the first)
+      const save = async change => { await saveRule(cache.user, courseId, Object.assign({}, cur(), change)); redraw(); };
+      const weighted = !!(rule.parts && Object.keys(rule.parts).length);
       for (const it of items) {
         const row = el("div", "ir" + (off.has(it.key) ? " off" : "")), lab = el("label", "n"), ck = el("input");
         ck.type = "checkbox"; ck.checked = !off.has(it.key); ck.setAttribute("aria-label", "Conta na nota: " + it.name);
-        ck.addEventListener("change", () => { const now = myRules[courseId] || rule, o = new Set(now.off || []); if (ck.checked) o.delete(it.key); else o.add(it.key); save({ off: [...o], total: now.total }); });   // the rule as stored now: a second quick click keeps the first
+        ck.addEventListener("change", () => { const o = new Set(cur().off || []); if (ck.checked) o.delete(it.key); else o.add(it.key); save({ off: [...o] }); });
         lab.append(ck, el("span", null, it.name));
+        if (weighted) {   // which part of the Plano de Ensino this item belongs to
+          const ps = el("select", "part"); ps.setAttribute("aria-label", "Parte de " + it.name);
+          for (const k of ["", "A", "B", "C"]) { const o = el("option", null, k ? "Parte " + k : "fora"); o.value = k; if (((rule.part || {})[it.key] || "") === k) o.selected = true; ps.appendChild(o); }
+          ps.addEventListener("change", () => { const pt = Object.assign({}, cur().part); if (ps.value) pt[it.key] = ps.value; else delete pt[it.key]; save({ part: pt }); });
+          lab.appendChild(ps);
+        }
         row.append(lab, el("span", "w", fmt(it.points, 2)), el("span", "g", it.score == null ? "—" : fmt(it.score, 2)));
         ed.appendChild(row);
       }
       const tl = el("label", "c tot"), ti = el("input"); ti.type = "number"; ti.min = "1"; ti.max = "1000"; ti.step = "0.5"; ti.value = String(rule.total || 10); ti.setAttribute("aria-label", "A nota vai até");
       ti.addEventListener("change", () => { const v = Number(String(ti.value).replace(",", ".")); if (v > 0 && v <= 1000) save({ off: (myRules[courseId] || rule).off || [], total: v }); });
       tl.append(el("span", null, "A nota vai até "), ti, el("span", null, " pontos (veja no Plano de Ensino)"));
-      ed.appendChild(tl);
+      if (!weighted) ed.appendChild(tl);
+      // weights by part: "RA1 40%, RA2 60%"; each part's top defaults to the points of its items
+      const pw = el("div", "c tot parts"), parts = rule.parts || {};
+      pw.appendChild(el("span", null, weighted ? "Pesos:" : "O Plano de Ensino tem pesos por parte (ex.: RA1 40%, RA2 60%)?"));
+      if (weighted) for (const k of ["A", "B", "C"]) {
+        const w = el("input"), tp = el("input"); w.type = tp.type = "number"; w.min = "0"; w.max = "100"; w.step = "5"; tp.min = "0"; tp.max = "1000"; tp.step = "0.5";
+        w.value = parts[k] ? String(parts[k].w) : ""; tp.value = parts[k] && parts[k].top ? String(parts[k].top) : ""; tp.placeholder = "auto";
+        w.setAttribute("aria-label", "Peso da parte " + k + " em %"); tp.setAttribute("aria-label", "Pontos da parte " + k + " (vazio: os pontos das atividades dela)");
+        const set = () => { const ps = Object.assign({}, cur().parts), v = Number(String(w.value).replace(",", ".")), t = Number(String(tp.value).replace(",", "."));
+          if (v > 0) ps[k] = Object.assign({ w: v }, t > 0 ? { top: t } : {}); else delete ps[k]; save(Object.keys(ps).length ? { parts: ps } : { parts: {}, part: {} }); };
+        w.addEventListener("change", set); tp.addEventListener("change", set);
+        pw.append(el("span", "pk", "Parte " + k), w, el("span", null, "% de"), tp, el("span", null, "pts"));
+      } else {
+        const on = el("button", "mini", "Usar pesos por parte"); on.type = "button";
+        on.addEventListener("click", () => save({ parts: { A: { w: 50 }, B: { w: 50 } }, part: {} }));
+        pw.appendChild(on);
+      }
+      ed.appendChild(pw);
       if (myRules[courseId]) { const rs = el("button", "mini", "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); redraw(); }); ed.appendChild(rs); }
       box.appendChild(ed);
     }
@@ -2061,9 +2107,11 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       window.cpPrefsChanged = async next => {
         const p2 = cpPrefs(next);
         if (!!p2.cardsFirst !== cardsFirst) { cardsFirst = !!p2.cardsFirst; placeDash(); }
-        if (p2.mode === prefs.mode && p2.meta === prefs.meta && p2.native === prefs.native) return;
+        // the switches in the popup that shape the panel: redrawn at once, not only on the next page
+        const PANEL = ["mode", "meta", "native", "grades", "week", "news", "tasks", "changes", "inbox", "newgrades", "dash", "cardPct", "remind"];   // cardImg is theme CSS only
+        if (PANEL.every(k => p2[k] === prefs[k])) return;
         const metaN = Math.min(10, Math.max(5, Number(String(p2.meta).replace(",", ".")) || 7));
-        prefs = p2; livePrefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
+        prefs = p2; livePrefs = p2; T = metaN; try { ctx.prefs = p2; } catch (e) { /* before the cards were first drawn */ } a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
         onMode(p2.mode);
       };
       window.cpHiddenChanged = list => { ctx.hidden = (Array.isArray(list) ? list : []).map(String); decorateCards(a, true, ctx); hideGradeCards(ctx.hidden); };   // unticked in the popup: off at once

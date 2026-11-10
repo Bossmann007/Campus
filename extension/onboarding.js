@@ -1,5 +1,5 @@
 // Onboarding (opened once on install, and from the popup): the turma, the mode, the look, the notifications, the downloads
-// folder and the optional file for the AI, written straight into chrome.storage.local "prefs" (each change only its own key).
+// folder and the AI (the ponte, on the Sua IA page), written straight into chrome.storage.local "prefs" (each change only its own key).
 // Modeled on Ardia's: a named step track, one decision per step, "Pular" at any time, the accent follows the chosen look,
 // and the step is saved ("obStep") so a closed tab resumes where it stopped; the last step stores "obDone".
 const $ = id => document.getElementById(id);
