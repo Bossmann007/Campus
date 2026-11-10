@@ -1,7 +1,7 @@
 # Caderno+ MCP: o seu Canvas da PUCPR para a sua IA
 
-Não oficial. Roda **no seu computador**, com **o seu token**, guardado **no cofre do seu sistema**. Só lê: não entrega
-trabalho, não responde quiz, não manda mensagem, não marca nada.
+Não oficial. Roda **no seu computador** e pergunta para a **extensão Caderno+**, que lê o Canvas com o login do seu
+navegador: **sem token**. Só lê: não entrega trabalho, não responde quiz, não manda mensagem, não marca nada.
 
 ## Antes de instalar: para onde vão os seus dados
 
@@ -10,36 +10,38 @@ trabalho, não responde quiz, não manda mensagem, não marca nada.
   conversa e pode ficar nos logs do app.
 - Títulos escritos no Canvas podem ter nomes de professores ou colegas (ex.: "Grupo da Ana").
 - Depois de conectado, a IA pode consultar sozinha durante a conversa (as ferramentas só leem).
-- O token do Canvas dá acesso **total** à sua conta (entregar trabalho, mandar mensagem). Quem limita a leitura é este
-  programa, não o token. Por isso: validade até o fim do semestre e revogue quando parar de usar.
-- O cofre do sistema protege o token de arquivos e de outras contas do computador, mas **não** de programas que rodam
-  com o seu próprio usuário. Não instale coisas desconhecidas na mesma conta.
+- A ponte fica num canal local que só o seu usuário abre (`~/.caderno-mcp/ponte.sock`, ou um pipe no Windows). Programas
+  que rodam com o seu próprio usuário conseguem usá-la; a extensão só aceita leituras de uma lista fixa.
 
-## Como ele lê o Canvas
+## Como ele lê o Canvas: a ponte
 
-Só com **o seu token** do Canvas, guardado no cofre do sistema (`caderno-mcp login`) ou no campo protegido do Claude
-Desktop. Para criar: Canvas → Conta → Configurações → **+ Novo token de acesso**, finalidade "Caderno+ MCP", validade até
-o fim do semestre. **Nunca cole o token no chat**, nem com a IA.
+```
+app de IA → caderno-mcp → (canal local) → ponte → (native messaging) → extensão Caderno+ → Canvas, com o seu login
+```
+
+1. `npm install -g caderno-mcp` (Node 18 ou mais novo; o pacote do npm publicado por `bossmann`).
+2. `caderno-mcp ponte <id da extensão>`: registra a ponte nos navegadores que você tem (Chrome, Brave, Edge, Chromium;
+   no Windows, uma chave do registro do seu usuário). O comando com o seu id está na página Sua IA do Caderno+.
+3. Na extensão: Mais → Sua IA → **Ligar a ponte** (o navegador pede para "se comunicar com aplicativos nativos").
+4. `caderno-mcp ponte status` confere; `caderno-mcp setup` mostra como ligar em cada app de IA.
+
+O navegador precisa estar aberto, com você logado no Canvas. `caderno-mcp ponte remove` desfaz o passo 2.
 
 **Centro de Notas:** para as matérias sem as regras do Caderno+, o `quanto_falta` usa a fórmula que o professor pôs no
-Centro de Notas (a ferramenta de notas da PUCPR no Canvas). O MCP abre o Centro de Notas como o Canvas abre: pede ao
-Canvas um lançamento (com o token), lê a página de lançamento **sem** o token, manda ao Centro de Notas só os campos
-daquele formulário e guarda só os cookies que ele mesmo pôs. O token nunca vai para o Centro de Notas. Uma matéria por
-vez. Matérias em que o professor não pôs fórmula aparecem como "sem fórmula".
+Centro de Notas (a ferramenta de notas da PUCPR no Canvas), lida pela extensão como o painel lê. Matérias em que o
+professor não pôs fórmula aparecem como "sem fórmula".
 
-## Instalar no Claude Desktop (mais fácil)
+## Instalar no Claude Desktop
 
-Abra `caderno-mcp-<versão>.mcpb` com dois cliques e cole o token do Canvas no campo pedido. O Claude Desktop guarda o
-token no cofre do sistema e passa ao servidor quando abre.
+Abra `caderno-mcp-<versão>.mcpb` com dois cliques e cole o **id da extensão** (página Sua IA do Caderno+) no campo
+pedido: o servidor registra a ponte sozinho. Depois, Ligar a ponte na extensão.
 
-## Instalar pelo terminal (Claude Code, Codex, Gemini CLI, Cursor, VS Code)
+## Uso pessoal com token (opcional)
 
-1. Node 18 ou mais novo, e `npm install -g caderno-mcp` (o pacote do npm publicado por `bossmann`).
-2. No Canvas: Conta → Configurações → **+ Novo token de acesso**. Finalidade "Caderno+ MCP", expira no fim do semestre.
-3. `caderno-mcp login` e cole o token quando o cofre pedir (macOS: Keychain; Windows: DPAPI do seu usuário;
-   Linux: Secret Service via `secret-tool`). O token não aparece na tela, nem no histórico, nem em arquivo de config.
-4. `caderno-mcp status` confere se o Canvas aceita.
-5. `caderno-mcp setup` mostra como ligar em cada app de IA (veja "Funciona com").
+Sem a ponte, dá para usar um token do Canvas seu: Canvas → Conta → Configurações → **+ Novo token de acesso**, e
+`caderno-mcp login` (fica no cofre do sistema: Keychain, DPAPI ou Secret Service). A documentação do Canvas não permite
+que um app usado por várias pessoas peça isso a cada aluno, por isso é só para você. O token dá acesso **total** à sua
+conta; nunca cole no chat; revogue no Canvas quando parar. Com a ponte ligada, ela é usada primeiro.
 
 ## Funciona com
 
@@ -52,16 +54,12 @@ formato segue a documentação de cada app. `node mcp/cli.js setup <app>` mostra
 Só pela web (ChatGPT web, Claude web, Le Chat, Grok, Gemini app): esses só falam com servidores na internet, e este fica
 no seu computador de propósito. No ChatGPT, use o app desktop (via Codex) ou o Secure MCP Tunnel da OpenAI.
 
-Pergunte: "quanto falta em cada matéria?", "o que vence esta semana?", "quais avisos novos?".
+Pergunte: "quanto falta em cada matéria?", "o que eu ainda não entreguei?", "o que vence esta semana?".
 
-## O que o cofre protege (e o que não)
-
-O token fica no cofre do sistema para não aparecer em arquivo de texto, na tela ou no histórico do terminal. Ele não
-fica protegido de outros programas que rodam com o seu usuário: no Mac, por exemplo, um programa seu pode pedir o item
-ao Keychain. Use um token com validade até o fim do semestre e revogue no Canvas quando parar de usar.
+## Onde instalar
 
 Instale só o pacote `caderno-mcp` do npm (publicado por `bossmann`) ou o `.mcpb` da release no GitHub do projeto
-(github.com/Bossmann007/Campus). Não instale cópias com nome parecido: o programa vai pedir o seu token.
+(github.com/Bossmann007/Campus). Não instale cópias com nome parecido.
 
 ## Ferramentas
 
@@ -88,14 +86,15 @@ uma matéria só com esse nome, a resposta traz as candidatas com o `course_id`.
 - Até 400 leituras a cada 5 minutos, para um laço da IA não martelar o Canvas.
 - Textos do Canvas chegam marcados como `untrusted_canvas_text`, sem caracteres invisíveis: a IA deve tratá-los como
   dados, nunca como instruções.
-- O token fica no cofre do sistema e nunca aparece em resposta, erro ou log.
+- A extensão confere de novo cada pedido da ponte (só GET, a mesma lista de caminhos, resposta de até 5 MB).
+- No uso com token, ele fica no cofre do sistema e nunca aparece em resposta, erro ou log.
 
 ## Parar
 
-`node mcp/cli.js logout` apaga o token do cofre. Revogue-o também no Canvas (Conta → Configurações). Remova o servidor do
-app (`claude mcp remove caderno`).
+`caderno-mcp ponte remove` tira a ponte dos navegadores. Remova o servidor do app (`claude mcp remove caderno`). Com
+token: `caderno-mcp logout` apaga do cofre; revogue também no Canvas (Conta → Configurações).
 
 ## Aviso
 
 A política de API da Instructure (§3(i)) proíbe acessar o Canvas por servidores MCP não aprovados por ela. Este servidor
-não é aprovado pela Instructure nem pela PUCPR, e elas podem bloquear tokens de alunos. Use por sua conta.
+não é aprovado pela Instructure nem pela PUCPR. Use por sua conta.

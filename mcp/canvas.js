@@ -143,22 +143,33 @@ const pts = x => Math.round(x * 10) / 10;
 const up1 = n => (Math.ceil(n * 10 - 1e-9) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const panelLabel = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up1(st.fraction * 10) + "/10");
 
+// The ponte (no token): the same allowlisted GETs, answered by the extension with the browser's login (mcp/ponte.js).
+function ponteFetch(ponte, budget = { n: 0, at: Date.now() }) {
+  return async (raw, opts = {}) => {
+    if (String(opts.method || "GET").toUpperCase() !== "GET") throw new Error("bloqueado: só leitura");
+    const u = checkUrl(raw); spend(budget);
+    const r = await ponte.get(u.href), body = typeof r.body === "string" ? r.body : "";
+    return { ok: !!r.ok, status: Number(r.status) || 0, text: async () => body, headers: { get: n => /^link$/i.test(n) && typeof r.link === "string" ? r.link : null } };
+  };
+}
 function makeCanvas(token, opts = {}) {
-  if (typeof token !== "string" || !token) throw new Error("sem token");
-  const realFetch = opts.fetch || fetch, budget = { n: 0, at: Date.now() }, f = guardedFetch(token, realFetch, budget), box = sandbox(f), C = box.C;
+  const ponte = opts.ponte || null;
+  if (!ponte && (typeof token !== "string" || !token)) throw new Error("sem token");
+  const realFetch = opts.fetch || fetch, budget = { n: 0, at: Date.now() }, f = ponte ? ponteFetch(ponte, budget) : guardedFetch(token, realFetch, budget), box = sandbox(f), C = box.C;
   const today = () => C.localISO(new Date());
   let cached = null;   // the reading, 5 minutes
   const reading = async () => {
     if (cached && Date.now() - cached.at < 5 * 60e3) return cached.data;
     const seen = {}, data = await box.collect(seen);
-    if (data.error) throw new Error(/ 401$/.test(data.error) ? "o Canvas recusou o token (vencido ou revogado). Crie outro no Canvas (Conta → Configurações → \"+ Novo token de acesso\"), salve de novo (no Claude Desktop: nas configurações da extensão Caderno+; nos outros apps: caderno-mcp login) e reinicie o app de IA." : data.error);
+    if (data.error) throw new Error(/ 401$/.test(data.error) && ponte ? "o Canvas pediu login: entre no Canvas da PUCPR no navegador onde está o Caderno+ e pergunte de novo."
+      : / 401$/.test(data.error) ? "o Canvas recusou o token (vencido ou revogado). Crie outro no Canvas (Conta → Configurações → \"+ Novo token de acesso\"), salve de novo (no Claude Desktop: nas configurações da extensão Caderno+; nos outros apps: caderno-mcp login) e reinicie o app de IA." : data.error);
     cached = { at: Date.now(), data, seen }; return data;
   };
   const getAll = async (url, max = 5) => {
     const out = []; let next = url, n = 0;
     while (next && n++ < max) {
       const r = await f(next);
-      if (!r.ok) throw new Error("o Canvas respondeu " + r.status + (r.status === 401 ? ": token inválido ou revogado (rode caderno-mcp login)" : ""));
+      if (!r.ok) throw new Error("o Canvas respondeu " + r.status + (r.status === 401 ? (ponte ? ": entre no Canvas no navegador" : ": token inválido ou revogado (rode caderno-mcp login)") : ""));
       const txt = await r.text(); if (txt.length > 5e6) throw new Error("resposta grande demais do Canvas");
       let body; try { body = JSON.parse(txt.replace(/^while\(1\);/, "")); } catch (e) { throw new Error("o Canvas respondeu algo que não é JSON"); }
       if (!Array.isArray(body)) return body;
@@ -187,7 +198,7 @@ function makeCanvas(token, opts = {}) {
   const centroCache = new Map(); let queue = Promise.resolve();
   const centroOf = id => {
     const c = centroCache.get(id); if (c && Date.now() - c.at < 10 * 60e3) return Promise.resolve(c.cu);
-    const p = queue.then(() => readCentro(id, f, realFetch, budget)).then(cu => { centroCache.set(id, { at: Date.now(), cu }); return cu; });
+    const p = queue.then(() => ponte ? (spend(budget), ponte.centro(id)) : readCentro(id, f, realFetch, budget)).then(cu => { centroCache.set(id, { at: Date.now(), cu }); return cu; });
     queue = p.catch(() => {}); return p;
   };
   const colNames = cu => { const m = new Map(), add = c => { if (c && c.id_coluna != null) m.set(c.id_coluna, c.nome_coluna); };
@@ -286,7 +297,7 @@ function makeCanvas(token, opts = {}) {
     },
   };
   const whoami = async () => { const me = await getAll("/api/v1/users/self", 1); return me && typeof me.id === "number" ? { ok: true } : { ok: false }; };
-  return { tools, whoami };
+  return { tools, whoami, via: ponte ? "ponte" : "token" };
 }
 
 const TOOL_DEFS = [   // the plain subset every client accepts (type, description, properties, required); limits are checked here
@@ -301,4 +312,4 @@ const TOOL_DEFS = [   // the plain subset every client accepts (type, descriptio
   { name: "quizzes", description: "Quizzes clássicos de uma matéria: datas, tentativas permitidas, tempo e pontos. Sem as perguntas.", inputSchema: { type: "object", properties: { course_id: { type: "string", description: "Id numérico da matéria no Canvas (veja a ferramenta courses)" }, course: { type: "string", description: "Parte do nome da matéria, quando não souber o course_id" } } } },
 ].map(t => Object.assign(t, { annotations: { readOnlyHint: true, openWorldHint: false } }));
 
-module.exports = { BASE, ALLOW, CENTRO, LTI_URL, checkUrl, guardedFetch, launchFetch, toolFetch, readCentro, makeCanvas, TOOL_DEFS, clean, panelLabel };
+module.exports = { BASE, ALLOW, CENTRO, LTI_URL, checkUrl, guardedFetch, ponteFetch, launchFetch, toolFetch, readCentro, makeCanvas, TOOL_DEFS, clean, panelLabel };

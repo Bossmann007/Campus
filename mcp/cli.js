@@ -4,6 +4,8 @@
 // caderno-mcp status     is a token saved, and does Canvas accept it (never shows it)
 // caderno-mcp logout     delete it from the vault
 // caderno-mcp setup [app] how to add it to each AI app (claude-code, codex, gemini, cursor, vscode, zed, ...)
+// caderno-mcp ponte <id>  connect to the Caderno+ extension (no token): registers the native host for each browser found
+// caderno-mcp ponte remove
 "use strict";
 const path = require("path"), vault = require("./vault");
 const say = s => process.stdout.write(s + "\n");
@@ -62,7 +64,20 @@ async function cli(cmd) {
   if (cmd === "logout") { say((await vault.removeToken()) ? "Token apagado do cofre. Revogue-o também no Canvas (Conta → Configurações)." : "Nenhum token para apagar."); return; }
   if (cmd === "status") { process.exitCode = (await check()) ? 0 : 1; return; }
   if (cmd === "setup") { say(setup(process.argv[3])); return; }
-  if (cmd && cmd !== "serve") { say("Comandos: login, status, logout, setup (sem comando: o servidor MCP)"); process.exitCode = 2; return; }
+  if (cmd === "ponte") {
+    const ponte = require("./ponte"), arg = process.argv[3], run = (c, a) => require("child_process").spawnSync(c, a, { stdio: "ignore" }).status === 0;
+    if (arg === "remove") { const g = ponte.remove({ run }); say(g.length ? "Ponte removida:\n" + g.join("\n") : "Nada para remover."); return; }
+    if (arg === "status" || !arg) {
+      const c = ponte.client(), up = await c.up(); c.close();
+      say(up ? "Ponte ligada: a extensão Caderno+ está respondendo (sem token)." : ponte.installed({ run }) ? "Ponte instalada, mas a extensão não respondeu: abra o navegador e ligue a ponte na página Sua IA do Caderno+." : "Ponte não instalada. Rode: caderno-mcp ponte <id> (o id aparece na página Sua IA do Caderno+).");
+      process.exitCode = up ? 0 : 1; return;
+    }
+    let wrote; try { wrote = ponte.install(arg, { node: NODE, run }); } catch (e) { say(e.message); process.exitCode = 2; return; }
+    if (!wrote.length) { say(process.platform === "win32" ? "Não deu para gravar o registro do Windows para nenhum navegador." : "Nenhum navegador compatível encontrado (Chrome, Brave, Edge, Chromium)."); process.exitCode = 1; return; }
+    say("Ponte instalada para:\n" + wrote.join("\n") + "\n\nAgora, na página Sua IA do Caderno+, clique em \"Ligar a ponte\". Depois rode: caderno-mcp ponte status");
+    return;
+  }
+  if (cmd && cmd !== "serve") { say("Comandos: ponte, login, status, logout, setup (sem comando: o servidor MCP)"); process.exitCode = 2; return; }
   require("./server.js").main();
 }
 if (require.main === module) cli(process.argv[2]);

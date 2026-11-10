@@ -17,7 +17,7 @@ let n = 0; const ok = () => n++;
   await assert.rejects(gf("/api/v1/courses", { method: "delete" }), /só leitura/, "no DELETE");
   await gf("/api/v1/courses");
   assert(calls.length === 1 && calls[0][1].method === "GET" && calls[0][1].headers.Authorization === "Bearer " + TOKEN && calls[0][1].redirect === "error", "GET with the token, no redirects followed");
-  const src = ["canvas.js", "server.js", "vault.js", "cli.js"].map(f => fs.readFileSync(path.join(__dirname, "..", "mcp", f), "utf8")).join("\n");
+  const src = ["canvas.js", "server.js", "vault.js", "cli.js", "ponte.js", "host.js"].map(f => fs.readFileSync(path.join(__dirname, "..", "mcp", f), "utf8")).join("\n");
   assert(!fs.existsSync(path.join(__dirname, "..", "mcp", "file.js")), "no file mode");
   const writes = src.split("\n").filter(l => /\b(POST|PUT|PATCH|DELETE)\b/.test(l));
   assert(writes.length === 2 && writes.every(l => !/\b(PUT|PATCH|DELETE)\b/.test(l) && l.includes("LTI_URL")), "no write method in mcp/ except the Centro de Notas launch form, aimed at LTI_URL");
@@ -112,8 +112,9 @@ let n = 0; const ok = () => n++;
   const list = await h({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   assert(list.result.tools.length === 9 && list.result.tools.every(t => t.annotations.readOnlyHint === true), "nine tools, all read-only");
   assert.deepStrictEqual(list.result.tools.map(t => t.name).sort(), require("../mcp/manifest.json").tools.map(t => t.name).sort(), "manifest lists the same tools");
-  { const mf = require("../mcp/manifest.json"), pk = require("../mcp/package.json"), tk = mf.user_config.canvas_token;
-    assert(mf.version === "1.1.0" && pk.version === "1.1.0" && tk.required === true && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.0.0, token required and sensitive, no file.js shipped"); }
+  { const mf = require("../mcp/manifest.json"), pk = require("../mcp/package.json"), tk = mf.user_config.canvas_token, ei = mf.user_config.extension_id;
+    assert(mf.version === pk.version && pk.version === "1.2.0" && tk.required === false && tk.sensitive === true && /Novo token de acesso/.test(tk.description) && /chat/.test(tk.description) && !pk.files.includes("file.js"), "1.2.0: the token optional and sensitive, no file.js shipped");
+    assert(ei && ei.required === false && mf.server.mcp_config.env.CADERNO_EXT_ID === "${user_config.extension_id}" && ["ponte.js", "host.js"].every(f => pk.files.includes(f)), "the bundle asks for the extension id (the ponte), and ships the host"); }
   { // every AI client: names of letters and _ (≤ 64), schemas in the plain subset (OpenAI, Gemini and the rest accept it)
     const keys = new Set(["type", "description", "properties", "required"]), walk = (sch, at) => { for (const k of Object.keys(sch)) assert(keys.has(k), "schema keyword " + k + " in " + at); for (const [n, v] of Object.entries(sch.properties || {})) walk(v, at + "." + n); };
     for (const t of list.result.tools) { assert(/^[a-z_]{1,64}$/.test(t.name), "tool name " + t.name); assert(t.inputSchema.type === "object" && typeof t.inputSchema.properties === "object", "object schema " + t.name); walk(t.inputSchema, t.name); for (const v of Object.values(t.inputSchema.properties)) assert(["string", "number", "integer"].includes(v.type), "plain type in " + t.name); } }
@@ -265,6 +266,53 @@ let n = 0; const ok = () => n++;
     await assert.rejects(tf(CENTRO + "/lti/finalize"), /bloqueado/, "a redirect off the tool host refused");
     await tf(CENTRO + "/curso/31", { headers: { Authorization: "Bearer " + TOKEN, Cookie: "x=y", "X-Inertia": "true" } });
     const last = seen[seen.length - 1][1]; assert(!("Authorization" in last.headers) && !("Cookie" in last.headers) && last.headers["X-Inertia"] === "true", "only the tool's headers pass: no Authorization, no outside cookie");
+    ok(); }
+
+  { // the ponte: framing, the host relaying between the browser and the socket, the client, the server preferring it, install
+    const P = require("../mcp/ponte"), { PassThrough } = require("stream"), os = require("os");
+    const fr = P.frame({ a: "é" }), got = []; P.unframer(m => got.push(m))(Buffer.concat([fr.subarray(0, 3), fr.subarray(3), P.frame({ b: 2 })]));
+    assert(fr.readUInt32LE(0) === Buffer.byteLength(JSON.stringify({ a: "é" })) && got.length === 2 && got[0].a === "é" && got[1].b === 2, "native messaging frames: 32-bit length + UTF-8 JSON, split anywhere");
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cpt-")), sock = path.join(tmp, "s", "ponte.sock"), input = new PassThrough(), output = new PassThrough();
+    const browser = P.unframer(m => input.write(P.frame(m.op === "ping" ? { id: m.id, ok: true } : m.op === "get" ? { id: m.id, ok: true, status: 200, link: null, body: JSON.stringify([{ id: 7, name: "Banco (Turma 2º B) - 2026 / 2º Sem" }]) } : { id: m.id, error: "?" })));
+    output.on("data", browser);
+    let exited = null; const srv = P.host({ input, output, sock, platform: process.platform, exit: c => { exited = c; } });
+    await new Promise(r => srv.on("listening", r));
+    assert.strictEqual(fs.statSync(path.dirname(sock)).mode & 0o777, 0o700, "the socket folder: only this user"); assert.strictEqual(fs.statSync(sock).mode & 0o777, 0o600, "the socket: only this user");
+    const cl = P.client({ sock });
+    assert.strictEqual(await cl.up(), true, "the client reaches the browser through the host");
+    const cvP = makeCanvas(null, { ponte: cl }), cs = await cvP.tools.courses();
+    assert(cvP.via === "ponte" && cs.courses.length === 1 && /^Banco/.test(cs.courses[0].untrusted_canvas_text.name), "the tools answer through the ponte, with no token: " + JSON.stringify(cs).slice(0, 160));
+    await assert.rejects(require("../mcp/canvas").ponteFetch(cl)("/api/v1/conversations"), /bloqueado/, "the allowlist is checked before the ponte too");
+    { // a second browser takes the socket over; the first one leaving does not remove it
+      const in2 = new PassThrough(), out2 = new PassThrough(); out2.on("data", P.unframer(m => in2.write(P.frame({ id: m.id, ok: true, who: 2 }))));
+      let ex2 = null; const s2 = P.host({ input: in2, output: out2, sock, platform: process.platform, exit: c => { ex2 = c; } }); await new Promise(r => s2.on("listening", r));
+      cl.close(); input.end(); await new Promise(r => setTimeout(r, 30));
+      assert(exited === 0 && fs.existsSync(sock), "the first host left without removing the newer host's socket");
+      const c2 = P.client({ sock }); assert.strictEqual(await c2.up(), true, "the newer host still answers"); c2.close();
+      in2.end(); await new Promise(r => setTimeout(r, 30));
+      assert(ex2 === 0 && !fs.existsSync(sock), "the last host removes its own socket"); }
+    { // a host that never answers: the ping gives up in its own short time, not the 25 s of a request
+      const in3 = new PassThrough(), out3 = new PassThrough(); const s3 = P.host({ input: in3, output: out3, sock, platform: process.platform, exit: () => {} }); await new Promise(r => s3.on("listening", r));
+      const c3 = P.client({ sock, pingMs: 150 }), t0 = Date.now(); assert.strictEqual(await c3.up(), false); assert(Date.now() - t0 < 1000, "ping timeout: " + (Date.now() - t0) + " ms"); c3.close(); in3.end(); await new Promise(r => setTimeout(r, 30)); }
+
+    assert.strictEqual(await P.client({ sock }).up(), false, "no browser: the client says so at once");
+    // install: the launcher and one manifest per browser folder found, allowed only for this extension id
+    const home = path.join(tmp, "h"), brave = path.join(home, "Library", "Application Support", "BraveSoftware", "Brave-Browser"); fs.mkdirSync(brave, { recursive: true });
+    assert.throws(() => P.install("not-an-id", { platform: "darwin", home }), /id da extensão/, "a bad id is refused");
+    const id = "abcdefghijklmnopabcdefghijklmnop", w = P.install(id, { platform: "darwin", home, node: "/opt/homebrew/bin/node", here: "/x/mcp" });
+    const mf = JSON.parse(fs.readFileSync(path.join(brave, "NativeMessagingHosts", P.HOST_NAME + ".json"), "utf8")), sh = fs.readFileSync(mf.path, "utf8");
+    assert(w.length === 1 && /^Brave/.test(w[0]) && mf.type === "stdio" && mf.allowed_origins.length === 1 && mf.allowed_origins[0] === "chrome-extension://" + id + "/", "manifest only where a browser is, only for this extension");
+    assert(sh.includes("exec '/opt/homebrew/bin/node' '/x/mcp/host.js'") && !/ELECTRON/.test(sh) && (fs.statSync(mf.path).mode & 0o777) === 0o700, "launcher: the same node, the host, only this user can run it");
+    assert(/ELECTRON_RUN_AS_NODE=1/.test(fs.readFileSync(P.install(id, { platform: "darwin", home, node: "/Applications/Claude.app/Contents/MacOS/Claude", here: "/x/mcp", probe: () => true }) && mf.path, "utf8")), "Claude Desktop's own binary runs as node");
+    assert.throws(() => P.install(id, { platform: "darwin", home, node: "/Applications/Other.app/Contents/MacOS/Other", here: "/x/mcp", probe: () => false }), /Node\.js/, "a binary that cannot run as node is refused, not written");
+    const t1 = fs.statSync(mf.path).mtimeMs; await new Promise(r => setTimeout(r, 20)); P.install(id, { platform: "darwin", home, node: "/Applications/Claude.app/Contents/MacOS/Claude", here: "/x/mcp", probe: () => true });
+    assert.strictEqual(fs.statSync(mf.path).mtimeMs, t1, "run again with the same values: nothing rewritten (the bundle runs it on every start)");
+    assert(P.installed({ platform: "darwin", home }) && P.remove({ platform: "darwin", home }).length === 2 && !P.installed({ platform: "darwin", home }), "remove takes the manifest and the launcher");
+    const regs = []; P.install(id, { platform: "win32", home, node: "C:\\n\\node.exe", here: "C:\\m", run: (c, a) => { regs.push([c, ...a].join(" ")); return true; } });
+    assert.throws(() => P.install(id, { platform: "win32", home, node: "C:\\n\\node.exe", here: "C:\\m" }), /registro/, "Windows without a way to write the registry: refused, nothing half done");
+    assert.deepStrictEqual(P.install(id, { platform: "win32", home, node: "C:\\n\\node.exe", here: "C:\\m", run: () => false }), [], "no key written: nothing reported as installed");
+    assert(regs.length === 3 && regs.every(r => /^reg add HKCU\\Software\\.*\\NativeMessagingHosts\\br\.caderno_plus\.mcp \/ve \/t REG_SZ \/d .*br\.caderno_plus\.mcp\.json \/f$/.test(r)), "Windows: a user registry key per browser: " + regs[0]);
+    fs.rmSync(tmp, { recursive: true, force: true });
     ok(); }
 
   console.log("mcp ok: " + n + " groups (read-only allowlist, tools and untrusted text, panel numbers, MCP server, vaults, standalone package and stdio, setup for every app, the Centro de Notas)");

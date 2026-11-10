@@ -15,7 +15,7 @@ for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.backgr
   assert(fs.existsSync(path.join(dir, f)), "file " + f); assert(new RegExp("\\b" + f.replace(".", "\\.") + "\\b").test(pack), "packaged: " + f); }
 for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(dir, f)), "icon " + f);
 const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
-assert(["storage", "downloads", "alarms", "notifications", "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
+assert([...manifest.permissions, ...(manifest.optional_permissions || []), "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 const ob = fs.readFileSync(path.join(dir, "onboarding.html"), "utf8");
 { const ai = fs.readFileSync(path.join(dir, "ai.html"), "utf8"), pk = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
@@ -45,9 +45,9 @@ assert(!/agentErr|agentFile|caderno-agente/.test(html), "popup: no AI file switc
     assert(/media-src 'self'/.test(csp) && /img-src 'self' data:/.test(csp) && !/script-src/.test(csp), "the /ia page's own policy lets its video and poster load, and still no scripts"); }
   // installed from our npm package (published by bossmann, 2026-11-09) or the .mcpb of our GitHub release; the page says which
   assert(/npm install -g caderno-mcp\n/.test(ia) && /npmjs\.com\/package\/caderno-mcp/.test(ia) && /publicado por <code>bossmann<\/code>/.test(ia) && /github\.com\/Bossmann007\/Campus\/releases\/download\/mcp-v[\d.]+\/caderno-mcp-[\d.]+\.mcpb/.test(ia) && /Não instale cópias com nome parecido/.test(ia), "the install is our npm package or our GitHub .mcpb, and the page says who publishes it");
-  assert(/<h2>1\. Crie um token no Canvas<\/h2>/.test(ia) && /\+ Novo token de acesso/.test(ia) && /Nunca cole o token/.test(ia) && /revogar o token a qualquer momento/.test(ia), "the /ia page: the token path in steps, never paste it in a chat, revoke any time");
+  assert(/<h2>2\. Ligue a ponte<\/h2>/.test(ia) && /caderno-mcp ponte &lt;id da extensão&gt;/.test(ia) && /sem token/.test(ia) && /<details class="box"><summary><b>Uso pessoal com token/.test(ia) && /nunca cole em chat/.test(ia) && /só para você/.test(ia), "the /ia page: the ponte in steps; the token only as a personal option, never pasted in a chat");
   assert(!/caderno-agente|Arquivo para a sua IA/.test(ia + pv), "the removed AI file is gone from the site");
-  for (const w of [/nuvem da empresa da IA/, /acesso <b>total<\/b>/, /3\(i\)/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
+  for (const w of [/nuvem da empresa da IA/, /acesso total/, /3\(i\)/, /só o seu usuário/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
   assert(/Caderno\+ MCP: conectar sua IA/.test(pv) && /aqui os dados saem do computador/.test(pv) && /única exceção é opcional/.test(pv), "privacy page: the MCP section and the exception in the summary"); }
 assert(/const KEEP = \[[^\]]*"checks"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /checks: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "the backup carries the checklists, validated on import");
 { // the backup carries only the student who is using Canvas now (other students of this Chrome stay out of the file)

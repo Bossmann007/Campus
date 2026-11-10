@@ -35,7 +35,7 @@ const listeners = {}, swSaved = [], local = {}, session = {};
 const area = o => ({ get: async k => Object.fromEntries([].concat(k).map(x => [x, o[x]])), set: async v => { Object.assign(o, v); }, remove: async k => { delete o[k]; } });
 let nextId = 100;
 const alarms = {}, notes = [], tabs = [];
-const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listeners.msg = f; } }, onStartup: { addListener() {} }, onInstalled: { addListener() {} } },
+const chromeSW = { runtime: { id: "me", getManifest: () => ({ version: "9" }), onMessage: { addListener: f => { listeners.msg = f; } }, onStartup: { addListener() {} }, onInstalled: { addListener() {} } },
   storage: { local: area(local), session: area(session), onChanged: { addListener: f => { listeners.storage = f; } } },
   alarms: { create: async (name, o) => { alarms[name] = o; }, getAll: async () => Object.keys(alarms).map(name => ({ name })), clear: async name => { delete alarms[name]; },
     onAlarm: { addListener: f => { listeners.alarm = f; } } },
@@ -44,7 +44,7 @@ const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listene
   action: { setBadgeText: async o => { local.badge = o.text; }, setTitle: async () => {}, setBadgeBackgroundColor: async () => {} },
   downloads: { onChanged: { addListener: f => { listeners.changed = f; } }, download: async o => { if (/boom/.test(o.filename)) throw new Error("Invalid filename"); swSaved.push(o); return nextId++; } } };
 const imported = [];   // importScripts("prefs.js") shares the worker's global scope: the test puts prefs.js in front instead
-const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro, nextMidnight, scheduleTick, restoreAlarms };")(chromeSW, f => imported.push(f));
+const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro, nextMidnight, scheduleTick, restoreAlarms, ponteAnswer, ponteUp, ponteDown };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
 const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
@@ -182,6 +182,24 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(C.centro(got, 7).now, 8, "the engine reads what the worker keeps");
   seen.length = 0; assert.strictEqual(await sw.centroCourse("7", fake("https://evil.example/lti")), null, "a form pointing anywhere else is never sent");
   assert(!seen.some(x => /evil/.test(x)), "nothing posted to another host");
+  { // the ponte: GETs to the MCP's allowlist only, with the browser's cookies; nothing else; big bodies refused
+    const asked = [], f = async (u, o) => { asked.push([u, o]); return { ok: true, status: 200, headers: { get: n => n === "Link" ? "<x>; rel=\"next\"" : null }, text: async () => /big/.test(u) ? "x".repeat(5e6 + 1) : "[1]" }; };
+    const g = await sw.ponteAnswer({ id: 3, op: "get", url: "https://pucpr.instructure.com/api/v1/courses?per_page=50" }, f);
+    assert(g.id === 3 && g.ok && g.body === "[1]" && /next/.test(g.link) && asked[0][1].method === "GET" && asked[0][1].credentials === "include" && asked[0][1].redirect === "error", "ponte get: the reply, with the browser's login");
+    for (const url of ["https://evil.example/api/v1/courses", "https://pucpr.instructure.com/api/v1/conversations", "https://pucpr.instructure.com/courses/1/files/2/download", "https://pucpr.instructure.com/api/v1/users/self/files", "https://a:b@pucpr.instructure.com/api/v1/courses", "nada"])
+      assert((await sw.ponteAnswer({ id: 4, op: "get", url }, f)).error, "ponte refuses " + url);
+    assert.strictEqual(asked.length, 1, "nothing refused reached the network");
+    assert(/grande demais/.test((await sw.ponteAnswer({ id: 5, op: "get", url: "https://pucpr.instructure.com/api/v1/courses/1/modules?big=1" }, f)).error), "a body over 5 MB is refused");
+    assert((await sw.ponteAnswer({ id: 6, op: "post", url: "https://pucpr.instructure.com/api/v1/courses" }, f)).error && (await sw.ponteAnswer({ id: 7, op: "centro", course: "1/../2" }, f)).error, "no other operation, no odd course id");
+    assert.deepStrictEqual(await sw.ponteAnswer({ id: 8, op: "ping" }, f), { id: 8, ok: true, v: "9" }, "ping");
+    // turning it on: one port even when the click and permissions.onAdded arrive together; off disconnects it
+    let ports = 0, cut = 0; chromeSW.permissions = { contains: async () => true };
+    chromeSW.runtime.connectNative = name => { ports++; assert.strictEqual(name, "br.caderno_plus.mcp"); return { onMessage: { addListener() {} }, onDisconnect: { addListener() {} }, postMessage() {}, disconnect() { cut++; } }; };
+    const [a1, a2] = await Promise.all([sw.ponteUp(), sw.ponteUp()]);
+    assert(a1 && a2 && ports === 1, "one native port for two calls at once: " + ports);
+    sw.ponteDown(); assert.strictEqual(cut, 1, "off disconnects the port"); await sw.ponteUp(); assert.strictEqual(ports, 2, "on again: a new port");
+    sw.ponteDown(); delete chromeSW.permissions; delete chromeSW.runtime.connectNative;
+    ok(); }
   const all = await sw.centroAll(5, ["7"], fake()); assert(local.centro && local.centro.user === 5 && local.centro.courses["7"] && all["7"], "stored per Canvas user");
   { // only the validated form's inputs go to the tool (never Canvas's own token elsewhere on the page); a failure keeps the last read
     let posted = null; const page = '<input name="authenticity_token" value="CANVAS-CSRF"><form action="' + T + '/lti" method="post"><input data-value="x" name="a" value="1"></form>';

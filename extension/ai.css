@@ -26,3 +26,7 @@ h2 { margin:26px 0 4px; font:500 19px/1.2 var(--serif); }
 .warn { margin:18px 0 0; padding:12px 14px; border-radius:12px; border:1px solid color-mix(in srgb, var(--coral) 40%, var(--line)); background:color-mix(in srgb, var(--coral) 7%, var(--bg)); font-size:13.5px; }
 .asks { grid-template-columns:repeat(4, 1fr); } @media (max-width:760px) { .asks { grid-template-columns:1fr 1fr; } }
 .steps3 span { font-weight:400; } .steps3 b { font-weight:650; }
+.btn.primary { background:var(--txt); color:var(--bg); border-color:var(--txt); } button.btn { font:inherit; cursor:pointer; }
+.steps3 .acts code { user-select:all; word-break:break-all; }
+.ponte-st { font-size:13px; color:var(--muted); } .ponte-st.on { color:#2F7D5B; font-weight:600; } .ponte-st.off { color:#A8650F; }
+.tok { margin:14px 0 0; } .tok summary { cursor:pointer; font-size:13.5px; color:var(--muted); }

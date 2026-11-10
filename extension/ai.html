@@ -6,15 +6,21 @@
     <header><b class="wm">Caderno<i>+</i></b><span class="tagl">Sua IA</span></header>
 
     <h1>Sua IA, com o seu Canvas.</h1>
-    <p class="lead">O Caderno+ MCP é um programinha que roda no seu computador e deixa o Claude, o ChatGPT desktop, o Gemini ou o Codex lerem o seu Canvas: quanto falta (com a fórmula do Centro de Notas), o que falta entregar, a semana, as notas, os quizzes, os avisos, os módulos e os professores. Sem servidor e sem arquivo: ele usa um token do seu Canvas guardado no cofre do sistema.</p>
+    <p class="lead">O Caderno+ MCP é um programinha que roda no seu computador e deixa o Claude, o ChatGPT desktop, o Gemini ou o Codex lerem o seu Canvas: quanto falta (com a fórmula do Centro de Notas), o que falta entregar, a semana, as notas, os quizzes, os avisos, os módulos e os professores. Sem token e sem servidor: ele pergunta para esta extensão, que lê o Canvas com o login do seu navegador.</p>
 
     <ol class="steps3 big">
-      <li><b>Crie um token no Canvas</b><span>Conta → Configurações → "+ Novo token de acesso". Finalidade: "Caderno+ MCP"; validade: o fim do semestre. Copie o token (ele só aparece uma vez).</span><span class="acts"><a class="btn" id="tokenPage" href="https://pucpr.instructure.com/profile/settings" target="_blank" rel="noopener noreferrer">Abrir configurações do Canvas ↗</a></span></li>
-      <li><b>Instale o Caderno+ MCP no app da sua IA</b><span>Claude Desktop: abra o arquivo .mcpb e cole o token na janela. Claude Code, Codex, Gemini CLI: o comando de login do Caderno+ MCP guarda o token no cofre do sistema (Mac, Windows, Linux). <em class="soon">beta</em></span><span class="acts"><a class="btn" id="howto" href="https://caderno-plus.vercel.app/ia" target="_blank" rel="noopener noreferrer">Passo a passo por app ↗</a></span></li>
-      <li><b>Pergunte</b><span>Use as perguntas abaixo, ou as suas; a matéria pode ser só um pedaço do nome ("banco", "imperativa"). A IA consulta o Canvas na hora, só leitura.</span></li>
+      <li><b>Instale o Caderno+ MCP no app da sua IA</b><span>Claude Desktop: abra o arquivo .mcpb e, quando ele pedir, cole o id da extensão (as letras do comando do passo 2). Claude Code, Codex, Gemini CLI e outros: <code>npm install -g caderno-mcp</code> e depois <code>caderno-mcp setup</code> mostra a linha para o seu app. <em class="soon">beta</em></span><span class="acts"><a class="btn" id="howto" href="https://caderno-plus.vercel.app/ia" target="_blank" rel="noopener noreferrer">Passo a passo por app ↗</a></span></li>
+      <li><b>Ligue a ponte</b><span>Rode este comando uma vez no terminal (ele registra a ponte no seu navegador) e clique em Ligar. O navegador pede para o Caderno+ "se comunicar com aplicativos nativos cooperativos": é a ponte.</span>
+        <span class="acts"><code id="cmd">caderno-mcp ponte …</code> <button class="btn" type="button" id="copyCmd">Copiar</button> <button class="btn primary" type="button" id="ponteOn">Ligar a ponte</button> <button class="btn" type="button" id="ponteOff" hidden>Desligar</button></span>
+        <span class="acts ponte-st" id="ponteSt" role="status"></span></li>
+      <li><b>Pergunte</b><span>Use as perguntas abaixo, ou as suas; a matéria pode ser só um pedaço do nome ("banco", "imperativa"). Deixe o navegador aberto: a IA consulta o Canvas na hora, só leitura.</span></li>
     </ol>
 
-    <div class="warn"><b>Cuidado com o token.</b> Ele dá acesso à sua conta do Canvas: nunca cole em chat nem mande para ninguém. O Caderno+ MCP só lê, e só fala com o Canvas da PUCPR e o Centro de Notas. Para cancelar, apague o token nas configurações do Canvas.</div>
+    <div class="warn"><b>O que a ponte faz.</b> Só leituras do Canvas da PUCPR e do Centro de Notas, pedidas pelo Caderno+ MCP do seu computador. Nada é enviado para servidor nosso; o que a IA consulta vai para o app de IA. Enquanto ligada, o processo de fundo do Caderno+ fica acordado. Para desligar: o botão Desligar acima (tira também a permissão); para tirar a ponte do computador, <code>caderno-mcp ponte remove</code>.</div>
+
+    <details class="tok"><summary>Uso pessoal com token (sem a ponte)</summary>
+      <p class="fine">Também dá para usar um token do Canvas (Conta → Configurações → "+ Novo token de acesso") guardado no cofre do sistema com <code>caderno-mcp login</code>. A documentação do Canvas não permite pedir isso a outros alunos: é só para você. Nunca cole o token em chat. <a href="https://pucpr.instructure.com/profile/settings" target="_blank" rel="noopener noreferrer">Abrir configurações do Canvas ↗</a></p>
+    </details>
 
     <h2>O que ela sabe responder</h2>
     <p class="fine">Clique numa pergunta para copiar.</p>

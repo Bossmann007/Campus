@@ -2,8 +2,8 @@
   "manifest_version": "0.3",
   "name": "caderno-mcp",
   "display_name": "Caderno+ · Canvas PUCPR",
-  "version": "1.1.0",
-  "description": "O seu Canvas da PUCPR para o Claude: quanto falta (com o Centro de Notas), prazos, notas, avisos, módulos e professores. Só leitura, com o seu token. Não oficial.",
+  "version": "1.2.0",
+  "description": "O seu Canvas da PUCPR para o Claude: quanto falta (com o Centro de Notas), prazos, notas, avisos, módulos e professores. Só leitura, sem token: pergunta para a extensão Caderno+, que lê com o seu login. Não oficial.",
   "author": {
     "name": "Enzo Bossmann"
   },
@@ -17,17 +17,24 @@
         "${__dirname}/server.js"
       ],
       "env": {
+        "CADERNO_EXT_ID": "${user_config.extension_id}",
         "CADERNO_MCPB_TOKEN": "${user_config.canvas_token}"
       }
     }
   },
   "user_config": {
+    "extension_id": {
+      "type": "string",
+      "title": "Id da extensão Caderno+",
+      "description": "Na extensão: Mais → Sua IA. Copie o id do comando (as 32 letras depois de \"ponte\"). Com ele, o Caderno+ MCP pergunta para a extensão, que lê o Canvas com o login do navegador: sem token.",
+      "required": false
+    },
     "canvas_token": {
       "type": "string",
-      "title": "Token do Canvas",
-      "description": "No Canvas: Conta → Configurações → \"+ Novo token de acesso\" (finalidade: Caderno+ MCP; validade até o fim do semestre). Cole aqui: fica no cofre do sistema. Nunca cole o token em chat, nem com a IA.",
+      "title": "Token do Canvas (opcional, só para uso pessoal)",
+      "description": "Deixe vazio para usar a ponte. Se preferir token: Canvas → Conta → Configurações → \"+ Novo token de acesso\". Fica no cofre do sistema. Nunca cole o token em chat.",
       "sensitive": true,
-      "required": true
+      "required": false
     }
   },
   "tools": [

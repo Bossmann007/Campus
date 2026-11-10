@@ -37,10 +37,22 @@ function makeHandler(getCanvas, scrub) {
 }
 
 async function main() {
-  let secret = null, canvas = null;
+  let secret = null, canvas = null, viaPonte = null;
   const scrub = s => scrubber(secret)(s);
   let reading = null;   // one read of the token for calls that arrive together (the bundle's env token is read once, then deleted)
-  const getCanvas = () => canvas || (reading = reading || readOnce().finally(() => { reading = null; }));
+  // The ponte first (the extension answers with the browser's login, no token), then the token from the vault (personal use).
+  const P = require("./ponte"), ponte = P.client();
+  // Claude Desktop's bundle: the extension id from its settings registers the ponte for the browsers found (once)
+  const extId = String(process.env.CADERNO_EXT_ID || "").trim(); delete process.env.CADERNO_EXT_ID;
+  if (P.validId(extId)) { try { const run = (c, a) => require("child_process").spawnSync(c, a, { stdio: "ignore" }).status === 0;   // every start: rewrites only what changed
+    if (!P.install(extId, { run }).length) process.stderr.write("caderno-mcp: ponte: nenhum navegador compatível encontrado\n"); } catch (e) { process.stderr.write("caderno-mcp: ponte: " + e.message + "\n"); } }
+  const tokenCanvas = () => canvas || (reading = reading || readOnce().finally(() => { reading = null; }));
+  const getCanvas = async () => {
+    if (await ponte.up()) return viaPonte || (viaPonte = makeCanvas(null, { ponte }));
+    const cv = await tokenCanvas();
+    if (cv.error && !secret) return { error: "O Caderno+ MCP não achou o navegador nem um token. Abra o navegador com a extensão Caderno+ e ligue a ponte na página Sua IA (Caderno+ → Mais → Sua IA). " + cv.error };
+    return cv;
+  };
   const readOnce = async () => {
     if (canvas) return canvas;
     const { token, from } = await vault.readToken();

@@ -151,7 +151,55 @@ async function centroAll(user, ids, f = fetch) {
   try { return await centroRun; } finally { centroRun = null; }
 }
 
+// Ponte (bridge/SPEC-ponte.md): the Caderno+ MCP asks, through its native host, and this worker reads Canvas with the
+// browser's login, so the student's AI needs no token. On only after the student grants "nativeMessaging" (Sua IA page);
+// while connected the worker stays alive (Chrome 105+). Only GETs to the MCP's own allowlist, and the Centro de Notas reader.
+const PONTE_HOST = "br.caderno_plus.mcp";
+const PONTE_ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/(assignments|modules|users|tabs|quizzes)$/, /^\/api\/v1\/announcements$/, /^\/api\/v1\/planner\/items$/];
+let ponte = null, ponteErr = "";
+async function ponteAnswer(m, f = fetch) {
+  const id = m && m.id;
+  try {
+    if (!m || typeof m !== "object") return { id, error: "pedido inválido" };
+    if (m.op === "ping") return { id, ok: true, v: chrome.runtime.getManifest().version };
+    if (m.op === "get") {
+      const u = new URL(String(m.url || ""));
+      if (u.origin !== CANVAS || !PONTE_ALLOW.some(re => re.test(u.pathname)) || u.username || u.password) return { id, error: "bloqueado: fora da lista de leitura" };
+      const r = await f(u.href, { method: "GET", credentials: "include", redirect: "error", headers: { Accept: "application/json" } }), body = await r.text();
+      if (body.length > 5e6) return { id, error: "resposta grande demais do Canvas" };
+      return { id, ok: r.ok, status: r.status, link: r.headers.get("Link"), body };
+    }
+    if (m.op === "centro") {
+      const c = String(m.course || ""); if (!/^\d{1,15}$/.test(c)) return { id, error: "matéria inválida" };
+      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return { id, ok: true, curso: null, aviso: "Centro de Notas não liberado: clique em Atualizar no botão do Caderno+" };
+      return { id, ok: true, curso: await centroCourse(c, f) };
+    }
+    return { id, error: "pedido desconhecido" };
+  } catch (e) { return { id, error: String(e && e.message || e).slice(0, 160) }; }
+}
+// one connection at a time: the click on Ligar and permissions.onAdded arrive together, and two ports would be two hosts
+let ponteOpening = null;
+const ponteUp = () => ponteOpening || (ponteOpening = ponteOpen().finally(() => { ponteOpening = null; }));
+function ponteDown() { const p = ponte; ponte = null; ponteErr = "desligada por você"; if (p) try { p.disconnect(); } catch (e) { /* closed */ } }
+async function ponteOpen() {
+  if (ponte) return true;
+  if (!chrome.runtime.connectNative || !chrome.permissions || !(await chrome.permissions.contains({ permissions: ["nativeMessaging"] }))) return false;
+  try { ponte = chrome.runtime.connectNative(PONTE_HOST); } catch (e) { ponte = null; ponteErr = String(e && e.message || e); return false; }
+  ponteErr = "";
+  const port = ponte;
+  port.onMessage.addListener(m => { ponteAnswer(m).then(r => { try { port.postMessage(r); } catch (e) { /* port closed */ } }); });
+  port.onDisconnect.addListener(() => { ponteErr = (chrome.runtime.lastError && chrome.runtime.lastError.message) || "desligada"; if (ponte === port) ponte = null; });
+  return true;
+}
+if (chrome.permissions && chrome.permissions.onAdded) chrome.permissions.onAdded.addListener(p => { if (p && Array.isArray(p.permissions) && p.permissions.includes("nativeMessaging")) ponteUp(); });
+ponteUp();   // every time the worker starts (browser start, an update): reconnects when the student turned the ponte on
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  // the extension's own pages (Sua IA): the ponte's state, and turning it on after the permission was granted
+  if (sender.id === chrome.runtime.id && typeof sender.url === "string" && sender.url.startsWith(chrome.runtime.getURL("")) && msg && msg.type === "ponte") {
+    (async () => { if (msg.off) ponteDown(); else if (msg.on) await ponteUp(); await new Promise(r => setTimeout(r, msg.on ? 400 : 0)); reply({ on: !!ponte, error: ponte ? "" : ponteErr, id: chrome.runtime.id }); })();
+    return true;
+  }
   if (sender.id !== chrome.runtime.id || sender.origin !== CANVAS || !msg) return;
   if (msg.type === "next") {
     const next = msg.date && /^\d{4}-\d\d-\d\d$/.test(msg.date) ? { date: msg.date, label: String(msg.label || "").slice(0, 80) } : null;

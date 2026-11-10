@@ -1,8 +1,9 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.3.4",
+  version: "6.4.0",
   items: [
+    "Sua IA sem token: a ponte deixa o Caderno+ MCP perguntar para a extensão, que lê o Canvas com o seu login. Ligue em Mais → Sua IA",
     "Avisos e fóruns: o botão Ativar tradução saiu",
     "Correção: nos avisos e fóruns, a barra de cima (tela dividida, busca, ordem, tradução) segue o tema; estava preta nos modos escuros",
     "Correção: a lista de fóruns, a busca de arquivos, as abas de Pessoas, os campos de escolha e os quizzes clássicos também deixaram de ficar pretos nos modos escuros",
