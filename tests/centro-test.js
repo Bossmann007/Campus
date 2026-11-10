@@ -121,6 +121,8 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert(big.status === "acima" && big.now === null && big.planned === 20, "points adding up past the top: no number, never a false garantido: " + JSON.stringify(big));
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], { total: 20 }, 7).now, 8.5, "told the top: 17 of 20 = 8,5");
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 2 }], {}, 7).status, "nao-da", "nothing left, below the meta");
+  { const sc = NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], null, 7);
+    assert(sc.scaled && sc.total === 20 && sc.now === 8.5 && sc.status === "garantido", "no rule at all: the Canvas points brought to 0-10 (17 of 20 = 8,5): " + JSON.stringify(sc)); }
   assert.strictEqual(NotasCore.custom(it, { off: ["a", "b", "c", "x"] }, 7).status, "vazio", "nothing counts");
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 2, score: 5 }], {}, 7).now, 2, "a score above the points is capped");
   assert.strictEqual(NotasCore.custom(null, null, 7).status, "vazio", "no items: no number");

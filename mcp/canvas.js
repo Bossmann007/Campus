@@ -218,16 +218,19 @@ function makeCanvas(token, opts = {}) {
       // student may have logged in on that browser since its last reading)
       let rules = {}; if (ponte) { try { const [got, me] = await Promise.all([ponte.rules(), getAll("/api/v1/users/self", 1)]); if (got.user != null && me && got.user === me.id) rules = got.rules; } catch (e) { rules = {}; } }
       const ownOf = cv => !!(rules[String(cv.id)] && rules[String(cv.id)].own);   // a course the student moved to their own rule
-      const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c && !ownOf(cv)));   // like the panel: every active course
+      const hasW = cv => Array.isArray(cv.weights) && cv.weights.length > 0, offPack = cv => ownOf(cv) || hasW(cv);   // the professor's weights in Canvas beat the transcribed Plano
+      const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c && !offPack(cv)));   // like the panel: every active course
       const grades = C.fromCanvas(d).grades, out = subs.map(c => {
         const st = C.courseState(c, grades, t, meta), nx = C.nextItem(st);
         return { source: "regras", id: c.id, name: c.name, earned: pts(st.earned), status: st.status, label: panelLabel(st), next: nx ? { date: nx.date, name: nx.name } : null };
       });
       // every other course of the term: the formula the professor set in the Centro de Notas
-      for (const cv of d.courses.filter(cv => !C.subjectOf(cv, true) || ownOf(cv)).slice(0, 15)) {
-        const base = { source: "centro", course_id: cv.id, untrusted_canvas_text: { name: clean(cv.name, 160) } };
+      for (const cv of d.courses.slice(0, 15)) {
+        const base = { source: "centro", course_id: cv.id, untrusted_canvas_text: { name: clean(cv.name, 160) } }, pack = C.subjectOf(cv, true), onPack = pack && !offPack(cv);
         let cu = null, err = null; if (!ownOf(cv)) { try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; } }   // the student's own rule wins over the Centro's formula
         const r0 = cu ? C.centro(cu, meta) : null;
+        if (onPack) { if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) continue;   // the professor's formula in the Centro beats the transcribed Plano
+          const i = out.findIndex(x => x.source === "regras" && x.id === pack.id); if (i >= 0) out.splice(i, 1); }
         if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) {   // as the panel: no formula, or one the student cannot see whole   // no formula: the student's own rule (from the extension, with the ponte), else the sum of the points
           const items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, group: x.group }));
           // the student's rule; else the professor's weights set in Canvas (weighted assignment groups), as the panel does

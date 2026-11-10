@@ -230,7 +230,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.11.0";
+  const EXT_LATEST = "6.12.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -429,6 +429,7 @@ const NotasCore = (() => {
     const off = new Set(rule && Array.isArray(rule.off) ? rule.off.map(String) : []), total = rule && Number(rule.total) > 0 && Number(rule.total) <= 1000 ? Number(rule.total) : 10;
     if (rule && rule.parts && typeof rule.parts === "object" && Object.keys(rule.parts).some(k => /^[A-E]$/.test(k) && Number(rule.parts[k] && rule.parts[k].w) > 0)) return customParts(Array.isArray(items) ? items : [], rule, meta, off);
     const counted = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)));
+    if (!rule) { const sum = counted.reduce((t, i) => t + Number(i.points), 0); if (sum > 10) return Object.assign(custom(items, { total: Math.min(1000, Math.ceil(sum * 100) / 100) }, meta), { scaled: true }); }   // no rule at all: the Canvas points, brought to 0-10
     if (!counted.length) return { status: "vazio", now: 0, need: null, open: 0, notYet: 0, counted: 0, total };
     let earned = 0, open = 0, planned = 0;
     for (const i of counted) { const p = Number(i.points); planned += p; if (i.score == null || !Number.isFinite(Number(i.score))) open += p; else earned += Math.min(p, Math.max(0, Number(i.score))); }

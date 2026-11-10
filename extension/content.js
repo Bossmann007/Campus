@@ -429,8 +429,10 @@
     const confirmed = !!TURMA_PREF && matched.some(c => C.turmaOf(c) === TURMA_PREF), other = TURMA_PREF === "outro" || (!!TURMA_PREF && !confirmed);
     const askTurma = matched.length > 0 && !confirmed && !other && matched.length < 3;
     const ownRule = c => { const r = myRules[courseOf[c.id]]; return !!(r && r.own); };   // the student chose to build this course's rule
-    const mine = (confirmed ? matched.filter(c => C.turmaOf(c) === TURMA_PREF) : !other && !askTurma ? matched : []).filter(c => !ownRule(c)), expired = C.expired(t), rules = mine.length > 0 && !expired;
-    for (const id of Object.keys(byCanvasId)) if (ownRule(byCanvasId[id])) delete byCanvasId[id];
+    ruleCache = cache;
+    const officialId = cid => !!(centroOf(cid) || canvasWeightsRule(cid)), official = c => !!courseOf[c.id] && officialId(courseOf[c.id]);   // the professor's formula (Centro) or weights (Canvas) beat the transcribed Plano
+    const mine = (confirmed ? matched.filter(c => C.turmaOf(c) === TURMA_PREF) : !other && !askTurma ? matched : []).filter(c => !ownRule(c) && !official(c)), expired = C.expired(t), rules = mine.length > 0 && !expired;
+    for (const id of Object.keys(byCanvasId)) if (ownRule(byCanvasId[id]) || officialId(id)) delete byCanvasId[id];
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
     const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
@@ -670,6 +672,7 @@
     .rule .ir.off .n { color:var(--muted); text-decoration:line-through; } .rule label.n { display:flex; gap:8px; align-items:center; cursor:pointer; } .rule label.n input { accent-color:var(--coral); flex:none; }
     .own-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; } .own-row .own-b { flex:none; }
     .c.scale { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; }
+    .card.ov { padding:12px 14px; } .ov h3 { margin:0 0 6px; } .ov .row .mid .c { white-space:normal; overflow:visible; line-height:1.35; }
     .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:13.5px; }
     .formula { padding:12px 14px; } .formula .acts { justify-content:flex-start; } .formula .from { opacity:.8; } .formula .res { font-weight:600; color:var(--fg); margin-top:8px; }
     .formula .lbl { margin-top:10px; } .formula .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .formula .chip { padding:3px 9px; border:1px solid var(--line); border-radius:999px; background:var(--bg); color:var(--fg); font:12px/1.3 var(--sans); cursor:pointer; } .formula .chip:hover { border-color:var(--coral); }
@@ -1115,79 +1118,76 @@
     if (st.status === "garantido") box.title = C.GARANTIDO_TIP;
     return box;
   }
-  function gradesView(a) {
-    const t = today(), out = [], list = C.stillCounts(a.mine, a.grades, t, T);
-    if (list.length) {
-      const u = list[0], d = days(u.item.date), card = toCampus("div", "card upnext", u.course.id), left = el("div", "mid");
-      left.append(el("div", "k", "Próxima avaliação que conta"), el("div", "t", u.item.name), el("div", "c", C.SHORT[u.course.id] + " · " + dmy(u.item.date) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias")));
-      card.append(left, needBig(u.st)); out.push(card);
+  // The dashboard's numbers, for any turma, each course from its best source: the student's own rule, the professor's
+  // formula in the Centro de Notas, the professor's weights in Canvas, the Plano de Ensino weights transcribed by
+  // Caderno+ (only where nothing official exists), else the sum of the Canvas points. The next delivery and what was
+  // handed in come from Canvas. The chips pick every course or one (prefs.kpiCourse).
+  const SRC = { aluno: "sua regra", centro: "fórmula do professor no Centro de Notas", canvas: "pesos que o professor pôs no Canvas", plano: "pesos do Plano de Ensino (transcritos pelo Caderno+)", soma: "soma dos pontos: confira na matéria" };
+  function gradesOverview(a, cache, clean) {
+    const out = [], t = today(), nowMs = Date.now(); ruleCache = cache;
+    const courses = cache.data.courses.filter(c => !hiddenNow.includes(String(c.id))), sem = a.rules ? C.semester(a.mine, a.grades, t, T) : null, U = [];
+    for (const cv of courses) {
+      const cid = String(cv.id), pack = a.byCanvasId[cid], acts = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused);
+      if (pack && sem) { const st = sem.states[pack.id];
+        U.push({ cid, name: C.SHORT[pack.id] || shortName(cv.name), src: "plano", now: Math.min(10, st.earned), need: st.status === "precisa" ? st.fraction * 10 : null, status: st.status === "depende-atrasadas" ? "faltam" : st.status,
+          items: sem.items.filter(x => x.course === pack).map(x => ({ s: x.s, date: x.item.date, tip: (C.SHORT[pack.id] || "") + " · " + x.item.name + " · " + dmy(x.item.date) })) }); continue; }
+      if (a.expired || !acts.length) continue;
+      const ownR = !!(myRules[cid] && myRules[cid].own), cr = ownR ? null : centroOf(cid), r = cr || customOf(cid), src = cr ? "centro" : r && r.mine ? "aluno" : r && r.canvasWeights ? "canvas" : "soma";   // the student's own rule first
+      const sure = r && !["erro", "acima", "vazio"].includes(r.status) && !r.unsure && r.now != null;
+      U.push({ cid, name: shortName(cv.name), src, now: sure ? r.now : null, need: sure && r.status === "precisa" ? r.need : null, scaled: r && r.scaled ? r.total : 0, status: !r ? "sem" : r.status === "erro" ? "erro" : r.status === "acima" ? "acima" : r.unsure ? "confira" : r.status, r,
+        items: acts.map(x => { const d = x.due ? C.localISO(new Date(x.due)) : "9999-12-31"; return { s: x.score != null ? "ok" : x.submitted ? "sent" : x.missing || (x.due && Date.parse(x.due) < nowMs) ? "late" : "next", date: d, tip: shortName(cv.name) + " · " + x.name + (x.due ? " · " + dmy(d) : "") }; }) });
     }
-    // The three numbers, for every subject ("Todas") or for the one the student picks in the chips above them (saved in
-    // prefs.kpiCourse); each number says which subject it is about.
-    const sem = C.semester(a.mine, a.grades, t, T), kpis = el("div", "kpis");
-    const kpi = (k, v, cls, sub) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (sub) d.appendChild(sub); kpis.appendChild(d); return d; };
-    const meterOf = x => { const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
-      fill.style.width = Math.min(100, x * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); return meter; };
-    // ok: graded; sent: handed in, grade not out yet; late: past its date with nothing; next: still to come
-    const trackOf = items => { const graded = items.filter(x => x.s === "ok").length, sent = items.filter(x => x.s === "sent").length, late = items.filter(x => x.s === "late").length, done = graded + sent, trk = el("div", "trk");
-      trk.setAttribute("aria-label", graded + " com nota, " + sent + " entregues esperando nota, " + late + " sem nota e com prazo vencido, " + (items.length - done - late) + " pela frente");
-      for (const x of items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "com nota" : x.s === "sent" ? "entregue, esperando a nota" : x.s === "late" ? "prazo vencido, sem nota" : "pela frente"); trk.appendChild(b); }
-      return { trk, done, sent }; };
-    const cnt = s => sem.counts[s] || 0;
-    const fillKpis = id => {
-      kpis.replaceChildren();
-      const c = a.mine.find(x => x.id === id);
-      if (c) {   // one subject
-        const st = sem.states[c.id], items = sem.items.filter(x => x.course.id === c.id), tr = trackOf(items), name = C.SHORT[c.id];
-        const g = el("div"); g.append(meterOf(st.earned), el("div", "c", name));
-        kpi("Garantido até agora", fmt(Math.floor(Math.min(10, st.earned) * 10) / 10, 1), null, g).title = "pontos garantidos de 10 em " + name + " · meta " + fmt(T, 1);
-        if (st.status === "garantido") kpi("Quanto falta", "0", "need t-ok", el("div", "c", name + ", garantido"));
-        else if (st.status === "nao-da") kpi("Quanto falta", "—", "need", el("div", "c", name + ", recuperação"));
-        else if (st.status === "depende-atrasadas") kpi("Quanto falta", "?", "need", el("div", "c", name + ", faltam notas antigas"));
-        else kpi("Quanto falta", up(st.fraction * 10, 1), "need", el("div", "c", name + ", em 10 no que falta"));
-        const e = el("div"); e.append(tr.trk, el("div", "c", name));
-        kpi("Entregues", tr.done + " de " + items.length, null, e);
-        return;
-      }
-      const g = el("div"); g.append(meterOf(sem.mean), el("div", "c", "média das " + a.mine.length + " matérias"));
-      kpi("Garantido até agora", fmt(Math.floor(sem.mean * 10) / 10, 1), null, g).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
-      // the tightest subject, but not the one the "Próxima avaliação" card already shows (no 9,0 twice)
-      const heroId = list.length ? list[0].course.id : null, open2 = a.mine.filter(c => c.id !== heroId && sem.states[c.id].status === "precisa").sort((x, y) => sem.states[y.id].fraction - sem.states[x.id].fraction)[0];
-      const tight = sem.tight && sem.tight.id !== heroId ? sem.tight : open2 || sem.tight;
-      if (tight) kpi(tight === sem.tight ? "Quanto falta" : "Depois dessa", up(sem.states[tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[tight.id] + (tight === sem.tight ? ", a mais apertada" : ", a próxima mais apertada")));
-      else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
-      else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
-      else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
-      const tr = trackOf(sem.items), e = el("div"); e.append(tr.trk, el("div", "c per", a.mine.map(c => { const it = sem.items.filter(x => x.course.id === c.id); return C.SHORT[c.id] + " " + it.filter(x => x.s === "ok" || x.s === "sent").length + "/" + it.length; }).join(" · ")));
-      kpi("Entregues", tr.done + " de " + sem.items.length, null, e);
+    if (!U.length) return out;
+    const byCid = new Map(U.map(u => [u.cid, u]));
+    // the next delivery: Canvas's own, by its official date
+    const nx = courses.flatMap(c => (c.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused && x.due && Date.parse(x.due) >= nowMs && !x.submitted && x.score == null).map(x => ({ c, x }))).sort((p, q) => Date.parse(p.x.due) - Date.parse(q.x.due))[0];
+    if (nx) { const card = el("a", "card upnext"), left = el("div", "mid"), dd = C.localISO(new Date(nx.x.due)), d = days(dd), u = byCid.get(String(nx.c.id)), big = el("div", "big");
+      if (typeof nx.x.url === "string" && nx.x.url.startsWith(location.origin + "/")) card.href = nx.x.url;
+      left.append(el("div", "k", "Próxima entrega"), el("div", "t", nx.x.name), el("div", "c", (u ? u.name : shortName(nx.c.name)) + " · " + dmy(dd) + " " + hhmm(nx.x.due) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias") + " · " + fmt(nx.x.points, 2) + " pts"));
+      if (u && u.need != null) big.append(el("b", "v t-" + (u.need > 8 ? "bad" : "warn"), up(u.need, 1)), el("span", null, "média que falta tirar (de 10)")); else if (u && u.status === "garantido") big.append(el("b", "v t-ok", "✓"), el("span", null, "meta garantida"));
+      card.append(left, big); out.push(card); }
+    if (clean) return out;
+    const kpis = el("div", "kpis"), kpi = (k, v, cls, subEl) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (subEl) d.appendChild(subEl); kpis.appendChild(d); };
+    const meterOf = x => { const m = el("div", "meter"), f = el("i"), g = el("b"); m.setAttribute("aria-hidden", "true"); f.style.width = Math.min(100, x * 10) + "%"; g.style.left = Math.min(99.5, T * 10) + "%"; m.append(f, g); return m; };
+    const trackOf = items => { const trk = el("div", "trk"), its = items.slice().sort((p, q) => p.date.localeCompare(q.date)), n = k => its.filter(x => x.s === k).length;
+      trk.setAttribute("aria-label", n("ok") + " com nota, " + n("sent") + " entregues esperando nota, " + n("late") + " sem nota e com prazo vencido, " + n("next") + " pela frente");
+      for (const x of its) { const b = el("i", x.s); b.dataset.tip = x.tip + " · " + (x.s === "ok" ? "com nota" : x.s === "sent" ? "entregue, esperando a nota" : x.s === "late" ? "prazo vencido, sem nota" : "pela frente"); trk.appendChild(b); }
+      return { trk, done: n("ok") + n("sent"), total: its.length }; };
+    const fill = cid => {
+      kpis.replaceChildren(); const one = cid && byCid.get(cid), list = one ? [one] : U, num = list.filter(u => u.now != null);
+      if (num.length) { const mean = num.reduce((s, u) => s + u.now, 0) / num.length, w = el("div"); w.append(meterOf(mean), el("div", "c", one ? one.name + " · " + SRC[one.src] : num.length === 1 ? "1 matéria com nota calculada" : "média das " + num.length + " matérias"));
+        kpi("Garantido até agora", fmt(Math.floor(mean * 10) / 10, 1), null, w); }
+      else kpi("Garantido até agora", "—", null, el("div", "c", one ? (one.status === "erro" ? "a fórmula tem um erro: abra a matéria" : "sem número: confira a regra na matéria") : "nenhuma matéria com nota calculada"));
+      const tight = list.filter(u => u.need != null).sort((p, q) => q.need - p.need)[0], rec = list.some(u => u.status === "nao-da"), anyFaltam = list.some(u => u.status === "faltam" || u.status === "confira" || u.status === "acima");
+      if (tight) kpi("Quanto falta", up(tight.need, 1), "need", el("div", "c", one ? one.name + ", em 10 no que falta" : tight.name + ", a mais apertada"));
+      else if (rec) kpi("Quanto falta", "—", "need", el("div", "c", one ? one.name + ", recuperação" : "recuperação em alguma matéria"));
+      else if (num.length && !anyFaltam) kpi("Quanto falta", "0", "need t-ok", el("div", "c", one ? one.name + ", garantido" : "tudo garantido"));
+      else kpi("Quanto falta", "?", "need", el("div", "c", one ? one.name + ", " + (one.status === "faltam" ? "faltam notas antigas" : "confira a regra na matéria") : "faltam notas ou regras: veja abaixo"));
+      const tr = trackOf(list.flatMap(u => u.items)), w2 = el("div"); w2.append(tr.trk, el("div", "c per", one ? one.name : U.map(u => { const k = trackOf(u.items); return u.name + " " + k.done + "/" + k.total; }).join(" · ")));
+      kpi("Entregues", tr.done + " de " + tr.total, null, w2);
     };
-    const pickId = a.mine.some(c => c.id === KPI_COURSE) ? KPI_COURSE : "", pick = el("div", "seg kpis-pick"), chips = [];
+    const pickId = U.some(u => u.cid === KPI_COURSE) ? KPI_COURSE : "", pick = el("div", "seg kpis-pick"), chips = [];
     pick.setAttribute("role", "radiogroup"); pick.setAttribute("aria-label", "Matéria dos números");
-    for (const [id, name] of [["", "Todas"]].concat(a.mine.map(c => [c.id, C.SHORT[c.id]]))) {
+    for (const [id, name] of [["", "Todas"]].concat(U.map(u => [u.cid, u.name]))) {
       const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(id === pickId)); b.dataset.id = id;
-      b.addEventListener("click", async () => {
-        KPI_COURSE = id; fillKpis(id);
-        for (const x of chips) x.setAttribute("aria-checked", String(x === b));
-        const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { kpiCourse: id }) });
-      });
+      b.addEventListener("click", async () => { KPI_COURSE = id; fill(id); for (const x of chips) x.setAttribute("aria-checked", String(x === b));
+        const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { kpiCourse: id }) }); });
       chips.push(b); pick.appendChild(b);
     }
-    radioKeys(chips);
-    fillKpis(pickId);
-    if (a.mine.length > 1) out.push(pick);
+    radioKeys(chips); fill(pickId);
+    if (U.length > 1) out.push(pick);
     out.push(kpis);
-    const tiles = el("div", "tiles");
-    for (const c of a.mine) {
-      const st = sem.states[c.id], nx = C.nextItem(st), tile = toCampus("div", "card tile", c.id), txt = el("span", "mid");
-      txt.append(el("span", "nm", C.SHORT[c.id]), el("span", "c", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), el("span", "pill " + C.statusTone(st), a.label(st)));
-      tile.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + a.label(st));
-      if (st.status === "garantido") tile.title = C.GARANTIDO_TIP;
-      tile.append(ring(st), txt); tiles.appendChild(tile);
-    }
-    out.push(tiles, el("div", "muted src", source(a.mine)));
+    // each course with its number and where it comes from
+    const sec = el("section", "card centro ov"), ul = el("ul"); sec.appendChild(el("h3", null, "Quanto falta"));
+    for (const u of U) { const li = el("li", "row"), txt = u.status === "erro" ? "a fórmula tem um erro: abra a matéria" : u.status === "acima" ? "os pontos passam do total: ajuste na matéria" : u.status === "confira" ? "confira a regra na matéria antes de contar com isso"
+        : u.status === "faltam" ? "faltam notas antigas" : u.status === "garantido" ? "meta garantida" : u.status === "nao-da" ? "nem com 10 no que falta" : u.need != null ? "precisa " + up(u.need, 1) + "/10 em média no que falta" : "sem número ainda";
+      li.append(el("span", "d", u.now == null ? "—" : fmt(Math.floor(u.now * 10) / 10, 1)), mid(u.name, "/courses/" + u.cid, txt + " · " + SRC[u.src] + (u.scaled ? " (" + fmt(u.scaled, u.scaled % 1 ? 1 : 0) + " pontos levados a 10)" : "")),
+        el("span", "pill " + (u.need != null ? (u.need > 8 ? "bad" : "warn") : u.status === "garantido" ? "ok" : u.status === "nao-da" ? "bad" : "nt"), u.need != null ? up(u.need, 1) : u.status === "garantido" ? "ok" : u.status === "nao-da" ? "rec." : u.status === "erro" ? "erro" : "confira"));
+      ul.appendChild(li); }
+    sec.append(ul, el("p", "c scale", "Meta " + fmt(T, T % 1 ? 1 : 0) + ". Cada matéria pela melhor fonte que tem: a sua regra, a fórmula do professor no Centro de Notas, os pesos que ele pôs no Canvas, os do Plano de Ensino (transcritos), ou a soma dos pontos. Na página da matéria você monta ou muda a sua."));
+    out.push(sec);
     return out;
   }
-
   // The turma(s) whose rule pack gave these numbers (rules/<term>/<turma>.json).
   const source = cs => "Pesos do Plano de Ensino " + TERM + " · não oficial, confira no Canvas";
   // Instead of the grade parts: why they are not there (term over, or another turma); null when there is nothing to say.
@@ -1351,47 +1351,7 @@
     if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
-    if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className))));
-      // the courses the student moved to their own rule leave the numbers above: listed here with that rule
-      ruleCache = cache; const own = a.expired ? [] : cache.data.courses.filter(c => myRules[String(c.id)] && myRules[String(c.id)].own && !hiddenNow.includes(String(c.id))).map(c => ({ c, r: customOf(String(c.id)) })).filter(x => x.r && x.r.status !== "vazio");
-      if (own.length) { const sec = el("section", "card centro own"), ul = el("ul"); sec.appendChild(el("h3", null, "Sua regra"));
-        for (const { c, r } of own) { const li = el("li", "row"); li.append(el("span", "d", r.now == null ? "—" : fmt(r.now, 1)), mid(shortName(c.name), "/courses/" + c.id, r.status === "erro" ? "a fórmula tem um erro: abra a matéria" : r.status === "acima" ? "os pontos passam do total: ajuste na matéria" : customText(r)), el("span", "pill " + (r.status === "acima" || r.status === "erro" ? "nt" : centroTone(r)), r.status === "erro" ? "erro" : customPill(r))); ul.appendChild(li); }
-        sec.appendChild(ul); box.appendChild(sec); } }
-    else if (why) {   // no rules of ours: the Centro de Notas formulas, course by course, when the professors set them
-      const off = hiddenNow;   // the courses taken off the dashboard in the popup
-      ruleCache = cache;
-      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r && x.r.status !== "vazio" && x.r.status !== "erro");   // a formula with an error says so on its course page   // an old term: its points are not this semester's
-      // any turma: the next assessment and the three numbers from official sources only (Canvas's activities and dates,
-      // the Centro de Notas formula, the student's own rule); nothing from a Plano transcribed by us
-      const courses = cache.data.courses.filter(c => !off.includes(String(c.id))), nowMs = Date.now(), byId = new Map(rows.map(x => [String(x.c.id), x]));
-      const acts = courses.flatMap(c => (c.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ c, x })));
-      const nx = acts.filter(({ x }) => x.due && Date.parse(x.due) >= nowMs && !x.submitted && x.score == null).sort((p, q) => Date.parse(p.x.due) - Date.parse(q.x.due))[0];
-      if (nx && !clean) { const card = el("a", "card upnext"), left = el("div", "mid"), d = days(C.localISO(new Date(nx.x.due))), row = byId.get(String(nx.c.id)), box2 = el("div", "big");
-        if (typeof nx.x.url === "string" && nx.x.url.startsWith(location.origin + "/")) card.href = nx.x.url;
-        left.append(el("div", "k", "Próxima entrega"), el("div", "t", nx.x.name), el("div", "c", shortName(nx.c.name) + " · " + dmy(C.localISO(new Date(nx.x.due))) + " " + hhmm(nx.x.due) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias") + " · " + fmt(nx.x.points, 2) + " pts"));
-        const r = row && row.r; if (r && r.status === "precisa" && !r.unsure) box2.append(el("b", "v t-" + centroTone(r), up(r.need, 1)), el("span", null, "média que falta tirar (de 10)")); else if (r && r.status === "garantido" && !r.unsure) box2.append(el("b", "v t-ok", "✓"), el("span", null, "meta garantida"));
-        card.append(left, box2); box.appendChild(card); }
-      if (rows.length && !clean) { const kp = el("div", "kpis"), num = rows.filter(x => x.r.now != null && x.r.status !== "acima" && !x.r.unsure);
-        const kpi = (k, v, cls, subEl) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (subEl) d.appendChild(subEl); kp.appendChild(d); };
-        if (num.length) { const mean = num.reduce((t, x) => t + Math.min(10, x.r.now), 0) / num.length, m = el("div", "meter"), f = el("i"), g = el("b"); m.setAttribute("aria-hidden", "true"); f.style.width = Math.min(100, mean * 10) + "%"; g.style.left = Math.min(99.5, T * 10) + "%"; m.append(f, g);
-          const w = el("div"); w.append(m, el("div", "c", "média de " + num.length + (num.length === 1 ? " matéria com nota calculada" : " matérias com nota calculada"))); kpi("Garantido até agora", fmt(Math.floor(mean * 10) / 10, 1), null, w); }
-        const tight = num.filter(x => x.r.status === "precisa").sort((p, q) => q.r.need - p.r.need)[0];
-        kpi("Quanto falta", tight ? up(tight.r.need, 1) : num.some(x => x.r.status === "nao-da") ? "—" : num.length ? "0" : "?", "need" + (!tight && num.length && !num.some(x => x.r.status === "nao-da") ? " t-ok" : ""), el("div", "c", tight ? shortName(tight.c.name) + ", a mais apertada" : num.some(x => x.r.status === "nao-da") ? "recuperação em alguma matéria" : num.length ? "tudo garantido" : "monte a regra na página da matéria"));
-        const trk = el("div", "trk"), st = ({ x }) => x.score != null ? "ok" : x.submitted ? "sent" : x.missing || (x.due && Date.parse(x.due) < nowMs) ? "late" : "next";
-        const sorted = acts.slice().sort((p, q) => String(p.x.due || "9").localeCompare(String(q.x.due || "9"))); let done = 0;
-        for (const it of sorted) { const s2 = st(it); if (s2 === "ok" || s2 === "sent") done++; const b = el("i", s2); b.dataset.tip = shortName(it.c.name) + " · " + it.x.name + (it.x.due ? " · " + dmy(C.localISO(new Date(it.x.due))) : "") + " · " + (s2 === "ok" ? "com nota" : s2 === "sent" ? "entregue, esperando a nota" : s2 === "late" ? "prazo vencido, sem entrega" : "pela frente"); trk.appendChild(b); }
-        const w2 = el("div"); w2.append(trk, el("div", "c per", courses.map(c => { const l = acts.filter(y => y.c === c); return l.length ? shortName(c.name) + " " + l.filter(y => ["ok", "sent"].includes(st(y))).length + "/" + l.length : ""; }).filter(Boolean).join(" · ")));
-        kpi("Entregues", done + " de " + acts.length, null, w2); box.appendChild(kp); }
-      if (rows.length) {
-        const sec = el("section", "card centro"), h = el("h3", null, "Quanto falta"), ul = el("ul");
-        sec.appendChild(h);
-        for (const { c, r, src } of rows) { const li = el("li", "row"), m = mid(shortName(c.name), "/courses/" + c.id, (r.status === "acima" ? "os pontos somam " + fmt(r.planned, 1) + ", mais que " + fmt(r.total, 0) + ": ajuste na matéria" : r.unsure ? "confira a regra na matéria antes de contar com isso" : r.status === "precisa" ? "precisa " + up(r.need, 1) + "/10 em média no que falta" + (r.approx ? " (aprox.)" : "") : r.status === "garantido" ? "meta garantida" : "recuperação")
-            + (src === "regra" ? " · " + (r.mine ? "sua regra" : r.canvasWeights ? "pesos que o professor pôs no Canvas" : "soma dos pontos: confira na matéria") : " · Centro de Notas"));
-          li.append(el("span", "d", r.now == null ? "—" : fmt(r.now, 1)), m, el("span", "pill " + (r.status === "acima" || r.unsure ? "nt" : centroTone(r)), src === "regra" ? customPill(r) : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.")); ul.appendChild(li); }
-        sec.append(ul, el("p", "c", "Meta " + fmt(T, T % 1 ? 1 : 0) + ". Pela fórmula do professor no Centro de Notas; sem fórmula, pela soma dos pontos do Canvas, que você ajusta na página da matéria (o que não vale nota sai da conta)."));
-        box.appendChild(sec);
-      } else box.append(el("div", "muted why", why));
-    }
+    if (prefs.grades) { const ov = gradesOverview(a, cache, clean); if (ov.length) box.append(...ov); else if (why) box.append(el("div", "muted why", why)); }
     box.appendChild(grid);
     { // when Canvas was read, at the foot of the panel (the course page says it in its header)
       const d = C.localISO(new Date(cache.at)), when = (d === today() ? "hoje" : ago(d)) + " às " + hhmm(new Date(cache.at).toISOString());

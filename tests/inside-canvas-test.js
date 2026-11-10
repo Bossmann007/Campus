@@ -418,13 +418,14 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.deepStrictEqual(kp.map(k => k.kids[1].textContent), [f1(Math.floor(sem.mean * 10) / 10),
     sem.tight ? up1(sem.states[sem.tight.id].fraction * 10) : cnt("depende-atrasadas") ? "?" : cnt("nao-da") ? "—" : "0", sem.done + " de " + sem.items.length], "KPI numbers are the core's");
   assert.strictEqual(all(gb).filter(e => e.parent && e.parent.className === "trk").length, sem.items.length, "one tracker block per item");
-  const nextCard = all(gb).find(e => /upnext/.test(e.className));
-  if (nx) assert(nextCard && nextCard.href === "/courses/" + cvOf(nx.course.id) && text(nextCard).includes(nx.item.name), "next card: the soonest assessment that still counts, opens its Canvas course");
-  else assert(!nextCard, "nothing left that counts: no next card");
-  const tiles = all(gb).filter(e => e.className === "card tile");
-  assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "/courses/" + cvOf(c.id)), "a tile per enrolled subject, each opening its Canvas course");
-  assert(tiles.every((t, i) => text(t).includes(C.SHORT[mine[i].id])), "tiles named like the calculator");
-  assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · não oficial, confira no Canvas") && !/Ciência da Computação/.test(text(gb)), "dashboard grades: source line, no course name");
+  const nextCard = all(gb).find(e => /upnext/.test(e.className)), cvAsg = gd.store.cache.data.courses.flatMap(c => c.assignments || []).filter(x => x.points > 0 && !x.excused && x.due && Date.parse(x.due) >= Date.now() && !x.submitted && x.score == null).sort((p, q) => Date.parse(p.due) - Date.parse(q.due))[0];
+  if (cvAsg) assert(nextCard && /Próxima entrega/.test(text(nextCard)) && text(nextCard).includes(cvAsg.name), "next card: the Canvas assignment due next, by its official date");
+  else assert(!nextCard, "nothing due in Canvas: no next card");
+  void nx;
+  const rows = all(gb).filter(e => e.className === "row" && e.parent && e.parent.parent && /centro/.test(e.parent.parent.className));
+  assert.deepStrictEqual(rows.map(r => all(r).find(e => e.tag === "a").href), mine.map(c => "/courses/" + cvOf(c.id)), "a Quanto falta row per enrolled subject, each opening its Canvas course");
+  assert(rows.every((r, i) => text(r).includes(C.SHORT[mine[i].id])), "rows named like the calculator");
+  assert(/pesos do Plano de Ensino \(transcritos pelo Caderno\+\)/.test(text(gb)) && !/Ciência da Computação/.test(text(gb)), "dashboard grades: each row says its source, no course name");
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
@@ -785,6 +786,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
       extraAsg: [{ name: "Prova RA1", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/71", submission: { score: 8 } }, { name: "Prova RA2", points_possible: 10, assignment_group_id: 2, html_url: "/courses/42/assignments/72", submission: { score: null } }] });
     const gt = text(g.anchor.kids.find(k => k.id === "cp-dash"));
     assert(/pesos que o professor pôs no Canvas/.test(gt), "the dashboard uses Canvas's group weights: " + gt.slice(0, 200));
+    const gp = await runContent("/", null, {}, { groups: [{ id: 1, name: "RA1", group_weight: 70 }, { id: 2, name: "RA2", group_weight: 30 }] }), gpt = text(gp.anchor.kids.find(k => k.id === "cp-dash"));
+    assert(/pesos que o professor pôs no Canvas/.test(gpt) && !/transcritos pelo Caderno/.test(gpt), "a subject with a ready-made Plano rule: the professor's Canvas weights win: " + gpt.slice(0, 300));
     ok(); }
   { // the official date: a Plano item that is a Canvas activity shows Canvas's due date; a Plano date the Plano itself does not confirm says so
     const dp = await runContent("/courses/71306", [], {}, { extraAsg: [{ name: "Entrega Pjbl Parte 3 - 18/11", points_possible: 1, due_at: "2027-01-05T15:00:00Z", html_url: "/courses/71306/assignments/13", submission: { score: null } }] });
