@@ -47,6 +47,7 @@ async function collectCanvasGrades(seen, known) {
     return ({ id: c.id, name: c.name, assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null,
       score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
       due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
+      excused: !!(a.submission && a.submission.excused) || a.omit_from_final_grade === true,   // dispensed, or left out of the final grade by the professor
       submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),
       online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),
       stats: a.score_statistics && typeof a.score_statistics.mean === "number"

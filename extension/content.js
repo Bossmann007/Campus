@@ -184,6 +184,25 @@
   async function loadCentro(user) { const { centro } = await chrome.storage.local.get("centro"); myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
   // quanto falta from the professor's formula in the Centro de Notas, for a course without our rules; null without a formula
   const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && ["garantido", "precisa", "nao-da"].includes(r.status) ? r : null; };   // sem-formula and incompleto: no number
+  // The student's own rule (C.custom) for a course with neither our rules nor a formula in the Centro de Notas: per Canvas
+  // user, per course, in chrome.storage.local "myRules": { <user>: { <course id>: { off: [item keys], total } } }.
+  // Without a saved rule every graded item counts, up to 10: the student unticks what is not graded.
+  let myRules = {}, rulesUser = null;
+  async function loadRules(user) { const { myRules: all } = await chrome.storage.local.get("myRules"); rulesUser = user; myRules = all && typeof all === "object" && all[user] && typeof all[user] === "object" ? all[user] : {}; return myRules; }
+  async function saveRule(user, courseId, rule) {
+    const { myRules: all } = await chrome.storage.local.get("myRules"), base = all && typeof all === "object" ? all : {};
+    const mine = Object.assign({}, base[user], { [courseId]: { off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 } });
+    myRules = mine; await chrome.storage.local.set({ myRules: Object.assign({}, base, { [user]: mine }) });
+  }
+  let ruleCache = null;   // the reading the items come from (set where the panels are drawn)
+  const ruleItems = courseId => { const cv = ruleCache && ruleCache.data && ruleCache.data.courses.find(x => String(x.id) === String(courseId));
+    return cv ? cv.assignments.filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, due: x.due })) : []; };
+  // Until the student confirms the rule (any change saves it), no "garantido" or "recuperação": the sum may miss items
+  // that are not in Canvas yet, or count extras
+  const customOf = courseId => { const items = ruleItems(courseId); if (!items.length) return null; const r = C.custom(items, myRules[courseId], T); if (r.status === "vazio") return null;
+    const mine = !!myRules[courseId]; return Object.assign(r, { mine, unsure: !mine && (r.status === "garantido" || r.status === "nao-da") }); };
+  const customPill = r => r.status === "acima" || r.unsure ? "confira" : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.";
+  const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
   const centroText = r => fmt(r.now, 1) + "/10 · " + (r.status === "garantido" ? "garantido" : r.status === "nao-da" ? "recuperação" : "precisa " + up(r.need, 1) + "/10" + (r.approx ? " (aprox.)" : ""));
   const centroTone = r => r.status === "garantido" ? "ok" : r.status === "nao-da" ? "bad" : r.need > 8 ? "bad" : "warn";
   // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
@@ -527,7 +546,7 @@
       --paper:var(--cp-paper,#FBF7EF); --track:color-mix(in srgb, var(--cp-line,#ECE4D3) 75%, var(--cp-paper,#FBF7EF)); --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
-    .box { position:relative; container:cp / inline-size; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
+    .box { position:relative; container:cp / inline-size; overflow-x:clip; overflow-clip-margin:6px; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
     .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
     .box > .card, .box > .kpis, .box > .tiles { margin-bottom:10px; }
@@ -557,6 +576,8 @@
     .ring.big { width:64px; height:64px; } .ring.big::after { inset:6px; } .ring.big b { font-size:17px; } .ring.big i::before { height:11px; }
     .cring { display:flex; align-items:center; gap:14px; padding:12px 14px; }
     .items { overflow:hidden; } .ir { display:grid; grid-template-columns:minmax(0,1fr) 56px 140px; gap:10px; align-items:center; padding:8px 12px; border-top:1px solid var(--line); }
+    .rule .ir.off .n { color:var(--muted); text-decoration:line-through; } .rule label.n { display:flex; gap:8px; align-items:center; cursor:pointer; } .rule label.n input { accent-color:var(--coral); flex:none; }
+    .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
     .ih { border-top:0; background:var(--track); font-size:11px; font-weight:600; color:var(--muted); padding:7px 12px; }
     .ir .n { display:flex; align-items:center; gap:8px; min-width:0; } .ir .n .pill { font-size:10.5px; line-height:18px; } .ir .dt { color:var(--muted); font-size:11.5px; }
     .ir .w { color:var(--muted); font-size:12px; } .ir .g { font:600 15px/1.2 var(--serif); } .ir .g small { font:500 11px var(--sans); color:var(--muted); } .ir .g.e { font:400 12px/1.3 var(--sans); color:var(--muted); }
@@ -711,6 +732,13 @@
     .box.head .meta { margin:0; padding:0 10px; height:22px; border-left:1px solid var(--line); }
     .box.head .pfold { margin:0; height:32px; padding:0 12px; border:0; border-left:1px solid var(--line); border-radius:0 10px 10px 0; background:none; font-size:12.5px; } .box.head .pfold:hover { background:var(--soft); color:var(--fg); transform:none; }
     .box.nohd { padding-top:14px; }
+    /* phones (Canvas in a mobile browser, with the bookmarklet or a mobile extension): nothing wider than the screen */
+    @media (max-width:600px) {
+      :host(.cp-headhost) { display:block; max-width:100%; margin:8px 0 0; }
+      .box.head .hd { flex-wrap:wrap; height:auto; row-gap:6px; padding:6px 6px 6px 10px; } .box.head .seg { margin:0 6px; } .box.head .meta, .box.head .pfold { border-left:0; }
+      h3 { flex-wrap:wrap; row-gap:4px; }
+      .hero { flex-wrap:wrap; } .hero .htxt { flex:1 1 100%; } .hteach { flex:1 1 100%; }
+    }
     .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
     .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold:not(.pnotes) { margin-left:auto; } .box.pfolded .pnotes { display:none; } .box.head .pnotes { border-radius:0; } .pnotes[aria-pressed="true"] { color:var(--coral); }
     .wl { display:none; }
@@ -732,6 +760,8 @@
     let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
     for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
     const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";
+    // a phone: Canvas keeps the greeting and its buttons on one row; the bar goes under the greeting instead of past the screen
+    if (typeof matchMedia === "function" && matchMedia("(max-width:600px)").matches && row.style && acts.style) { row.style.flexWrap = "wrap"; acts.style.flex = "1 1 100%"; acts.style.maxWidth = "100%"; acts.style.minWidth = "0"; }
     const root = shadow(host), wrap = el("div", "box head");
     styleRoot(root); wrap.appendChild(hd); root.append(wrap); at.prepend(host);
     return true;
@@ -1045,7 +1075,7 @@
   }
 
   // The turma(s) whose rule pack gave these numbers (rules/<term>/<turma>.json).
-  const source = cs => "Pesos do Plano de Ensino " + TERM + " · " + [...new Set(cs.map(C.turmaOf))].join(" / ") + " · não oficial, confira no Canvas";
+  const source = cs => "Pesos do Plano de Ensino " + TERM + " · não oficial, confira no Canvas";
   // Instead of the grade parts: why they are not there (term over, or another turma); null when there is nothing to say.
   const noRules = a => a.expired ? C.EXPIRED_NOTE
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
@@ -1195,8 +1225,9 @@
     // Canvas's header may render after us (we run at document end): the bar waits in the panel and moves up when it appears
     if (!headBar(hd)) { box.append(hd); window.cpHeadRetry = () => { if (!gone(hd) && headBar(hd)) { box.classList.add("nohd"); window.cpHeadRetry = null; } }; } else { box.classList.add("nohd"); window.cpHeadRetry = null; }
     if (a.askTurma) {   // a shared course matched: ask before using another turma's weights
-      const q = el("section", "card news ask-turma"), yes = el("button", "primary", "Sim, sou dessa turma"), no = el("button", null, "Não, sou de outro curso");
-      q.append(el("h3", null, "Você é da turma " + a.turma + "?"), el("div", "muted", "O Caderno+ tem os pesos do Plano de Ensino dessa turma. Se você é de outro curso, ele mostra a semana, os avisos e os arquivos, sem calcular notas."));
+      const q = el("section", "card news ask-turma"), yes = el("button", "primary", "Sim, são as minhas"), no = el("button", null, "Não, são outras");
+      const subs = C.COURSES.filter(c => C.turmaOf(c) === a.turma).map(c => C.SHORT[c.id]).join(", ");
+      q.append(el("h3", null, "Estas são as suas matérias? " + subs), el("div", "muted", "O Caderno+ tem os pesos do Plano de Ensino delas. Se não são as suas, o quanto falta usa o Centro de Notas e as regras que você montar."));
       const acts = el("div", "acts"); acts.append(yes, no); q.appendChild(acts); box.appendChild(q);
       const answer = async v => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { turma: v }) }); location.reload(); };
       yes.type = no.type = "button"; yes.addEventListener("click", () => answer(a.turma)); no.addEventListener("click", () => answer("outro"));
@@ -1207,13 +1238,15 @@
     if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
     else if (why) {   // no rules of ours: the Centro de Notas formulas, course by course, when the professors set them
       const off = hiddenNow;   // the courses taken off the dashboard in the popup
-      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => ({ c, r: centroOf(String(c.id)) })).filter(x => x.r);
+      ruleCache = cache;
+      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r);   // an old term: its points are not this semester's
       if (rows.length) {
         const sec = el("section", "card centro"), h = el("h3", null, "Quanto falta"), ul = el("ul");
-        h.appendChild(el("span", "pill nt", "Centro de Notas")); sec.appendChild(h);
-        for (const { c, r } of rows) { const li = el("li", "row"), m = mid(shortName(c.name), "/courses/" + c.id, r.status === "precisa" ? "precisa " + up(r.need, 1) + "/10 em média no que falta" + (r.approx ? " (aprox.)" : "") : r.status === "garantido" ? "meta garantida" : "recuperação");
-          li.append(el("span", "d", fmt(r.now, 1)), m, el("span", "pill " + centroTone(r), r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.")); ul.appendChild(li); }
-        sec.append(ul, el("p", "c", "Pela fórmula que o professor montou no Centro de Notas, meta " + fmt(T, T % 1 ? 1 : 0) + ". Matérias sem fórmula não aparecem."));
+        sec.appendChild(h);
+        for (const { c, r, src } of rows) { const li = el("li", "row"), m = mid(shortName(c.name), "/courses/" + c.id, (r.status === "acima" ? "os pontos somam " + fmt(r.planned, 1) + ", mais que " + fmt(r.total, 0) + ": ajuste na matéria" : r.unsure ? "confira a regra na matéria antes de contar com isso" : r.status === "precisa" ? "precisa " + up(r.need, 1) + "/10 em média no que falta" + (r.approx ? " (aprox.)" : "") : r.status === "garantido" ? "meta garantida" : "recuperação")
+            + (src === "regra" ? " · " + (r.mine ? "sua regra" : "soma dos pontos: confira na matéria") : " · Centro de Notas"));
+          li.append(el("span", "d", r.now == null ? "—" : fmt(r.now, 1)), m, el("span", "pill " + (r.status === "acima" || r.unsure ? "nt" : centroTone(r)), src === "regra" ? customPill(r) : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.")); ul.appendChild(li); }
+        sec.append(ul, el("p", "c", "Meta " + fmt(T, T % 1 ? 1 : 0) + ". Pela fórmula do professor no Centro de Notas; sem fórmula, pela soma dos pontos do Canvas, que você ajusta na página da matéria (o que não vale nota sai da conta)."));
         box.appendChild(sec);
       } else box.append(el("div", "muted why", why));
     }
@@ -1282,7 +1315,9 @@
   function coursePanel(courseId, a, cache, prefs) {
     const c = prefs.grades && a.has ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
     const cr = !c && prefs.grades ? centroOf(courseId) : null;   // no rules of ours: the professor's formula from the Centro de Notas
-    if (!c && !cr && !prefs.files) return;
+    ruleCache = cache;
+    const mr = !c && !cr && prefs.grades && !a.expired && ruleItems(courseId).length ? customOf(courseId) || { status: "vazio" } : null;   // neither: the student's own rule
+    if (!c && !cr && !mr && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
     // the course hero: its Canvas color, its name, the teacher (photo, Perguntar) and when Canvas was read
@@ -1310,6 +1345,33 @@
         range.addEventListener("input", show); lab.append(el("span", null, "Simular"), range); simC.append(lab, out); show();
         box.appendChild(simC);
       }
+    }
+    if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes
+      const items = ruleItems(courseId), rule = myRules[courseId] || { off: [], total: 10 }, off = new Set(rule.off || []);
+      const card = el("div", "card cring"), m = el("div", "mid");
+      m.append(el("div", "t", mr.status === "vazio" ? "Nada conta na nota ainda" : mr.status === "acima" ? "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0) : fmt(mr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+        el("div", "c", mr.status === "vazio" ? "Marque o que vale nota na lista abaixo." : mr.status === "acima" ? "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz)." : mr.unsure ? "Pela soma dos pontos daria " + (mr.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : customText(mr) + (mr.notYet > 0.001 ? " · " + fmt(mr.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
+        el("div", "c", (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
+      if (mr.status !== "vazio" && mr.status !== "acima" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
+      box.appendChild(card);
+      const ed = el("div", "card items rule"), th = el("div", "ir ih"); th.append(el("span", null, "Conta na nota?"), el("span", null, "Pontos"), el("span", null, "Nota"));
+      ed.appendChild(th);
+      const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
+      const save = async next => { await saveRule(cache.user, courseId, next); redraw(); };
+      for (const it of items) {
+        const row = el("div", "ir" + (off.has(it.key) ? " off" : "")), lab = el("label", "n"), ck = el("input");
+        ck.type = "checkbox"; ck.checked = !off.has(it.key); ck.setAttribute("aria-label", "Conta na nota: " + it.name);
+        ck.addEventListener("change", () => { const now = myRules[courseId] || rule, o = new Set(now.off || []); if (ck.checked) o.delete(it.key); else o.add(it.key); save({ off: [...o], total: now.total }); });   // the rule as stored now: a second quick click keeps the first
+        lab.append(ck, el("span", null, it.name));
+        row.append(lab, el("span", "w", fmt(it.points, 2)), el("span", "g", it.score == null ? "—" : fmt(it.score, 2)));
+        ed.appendChild(row);
+      }
+      const tl = el("label", "c tot"), ti = el("input"); ti.type = "number"; ti.min = "1"; ti.max = "1000"; ti.step = "0.5"; ti.value = String(rule.total || 10); ti.setAttribute("aria-label", "A nota vai até");
+      ti.addEventListener("change", () => { const v = Number(String(ti.value).replace(",", ".")); if (v > 0 && v <= 1000) save({ off: (myRules[courseId] || rule).off || [], total: v }); });
+      tl.append(el("span", null, "A nota vai até "), ti, el("span", null, " pontos (veja no Plano de Ensino)"));
+      ed.appendChild(tl);
+      if (myRules[courseId]) { const rs = el("button", "mini", "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); redraw(); }); ed.appendChild(rs); }
+      box.appendChild(ed);
     }
     courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
     teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;
@@ -1392,7 +1454,7 @@
     }
     const resend = async () => sendReminders(agenda(a, cache, await myMarks(cache.user)), prefs, cache);   // a tick or a dated item here changes the reminders
     const nb = notesBlock(cache, courseId, () => { if (btns.anot) btns.anot.textContent = "Anotações ✓"; }, resend);
-    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || nb.busy();
+    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || nb.busy() || (!!host.cpRoot && !!host.cpRoot.activeElement && /^(INPUT)$/.test(host.cpRoot.activeElement.tagName || ""));   // typing the rule's top: not redrawn under the cursor
     acts.appendChild(status);
     // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
     const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
@@ -1948,7 +2010,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   let cardWatch = null, livePrefs = null;
   async function draw(cache, prefs, again) {
     T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null; KPI_COURSE = typeof prefs.kpiCourse === "string" ? prefs.kpiCourse : "";
-    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user)]);   // side by side, not one after another
+    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user), loadRules(cache.user)]);   // side by side, not one after another
     let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel", "cp-cal"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }

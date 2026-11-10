@@ -1,6 +1,6 @@
 // Caderno+ service worker: saves the files the Canvas page asks for, keeps the days-to-next-exam number on the icon,
 // and shows the reminders (1 day and 1 hour before each deadline) the Canvas page hands over.
-importScripts("prefs.js");
+if (typeof importScripts === "function") importScripts("prefs.js");   // Chrome's service worker; Firefox loads prefs.js first (background.scripts)
 const CANVAS = "https://pucpr.instructure.com";
 const localISO = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const daysTo = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(localISO(new Date()) + "T00:00:00Z")) / 864e5);
@@ -246,7 +246,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 let line = Promise.resolve();
 const inLine = f => (line = line.then(f, f));
 // A file counts as downloaded only when Chrome finishes it; cancelled or failed ones stay "new".
-chrome.downloads.onChanged.addListener(ch => {
+if (chrome.downloads) chrome.downloads.onChanged.addListener(ch => {   // no downloads API on Firefox for Android
   const state = ch.state && ch.state.current;
   if (state !== "complete" && state !== "interrupted") return;
   return inLine(async () => {

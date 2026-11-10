@@ -12,7 +12,9 @@ const turmas = [...new Set(NotasCore.COURSES.map(c => NotasCore.turmaOf(c)).filt
 for (const t of turmas.concat(["outro"])) {
   const b = document.createElement("button"), name = document.createElement("b"), sub = document.createElement("span");
   b.type = "button"; b.setAttribute("role", "radio"); b.dataset.set = "turma"; b.dataset.value = t;
-  name.textContent = t === "outro" ? "Outro curso ou outra turma" : t; sub.textContent = t === "outro" ? "Sem as notas por enquanto; o resto funciona." : "Notas com os pesos do Plano de Ensino " + NotasCore.TERM.replace(/ /g, "");
+  // the turma is shown by its subjects, never by the course's name
+  const subs = NotasCore.COURSES.filter(c => NotasCore.turmaOf(c) === t).map(c => NotasCore.SHORT[c.id]).join(", ");
+  name.textContent = t === "outro" ? "Outras matérias" : subs; sub.textContent = t === "outro" ? "O quanto falta usa o Centro de Notas e as regras que você montar." : "Com os pesos do Plano de Ensino " + NotasCore.TERM.replace(/ /g, "");
   b.append(name, sub); $("turmas").appendChild(b);
 }
 

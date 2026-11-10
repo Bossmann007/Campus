@@ -62,10 +62,10 @@ $("refresh").addEventListener("click", async () => {
   $("status").textContent = "Atualiza na próxima página do Canvas.";
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
-const KEEP = ["hand", "marks", "tasks", "notes", "checks", "hidden", "prefs", "fold"];
+const KEEP = ["hand", "marks", "tasks", "notes", "checks", "myRules", "hidden", "prefs", "fold"];
 // Only the student using Canvas now: grades, ticks, tasks, notes and checklists are kept per Canvas user, and the file
 // carries that one slice (other students of this Chrome stay out of it). The look, the mode and the folds are the browser's.
-const backupOf = (got, user) => Object.assign({}, got, Object.fromEntries(["hand", "marks", "tasks", "notes", "checks"].map(k => [k, user != null && got[k] && typeof got[k] === "object" && got[k][user] !== undefined ? { [user]: got[k][user] } : {}])));
+const backupOf = (got, user) => Object.assign({}, got, Object.fromEntries(["hand", "marks", "tasks", "notes", "checks", "myRules"].map(k => [k, user != null && got[k] && typeof got[k] === "object" && got[k][user] !== undefined ? { [user]: got[k][user] } : {}])));
 $("export").addEventListener("click", async () => {
   const all = await chrome.storage.local.get(KEEP.concat("cache")), got = backupOf(Object.fromEntries(KEEP.map(k => [k, all[k]])), all.cache && all.cache.user != null ? all.cache.user : null);
   const body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
@@ -88,7 +88,8 @@ $("importFile").addEventListener("change", async () => {
   // merged per Canvas user (other students on this computer keep theirs); only well-formed values
   const str = (v, n) => typeof v === "string" && v.length <= n, iso = v => typeof v === "string" && /^\d{4}-\d\d-\d\d$/.test(v), obj = v => v && typeof v === "object" && !Array.isArray(v);
   const keepIf = (m, ok) => obj(m) ? Object.fromEntries(Object.entries(m).filter(([k, v]) => str(k, 60) && ok(v))) : {};
-  const per = { hand: u => keepIf(u, v => str(v, 12)), marks: u => keepIf(u, iso), notes: u => keepIf(u, v => str(v, 5000)),
+  const per = { myRules: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, r]) => /^\d{1,15}$/.test(k) && obj(r)).slice(0, 40).map(([k, r]) => [k, { off: (Array.isArray(r.off) ? r.off : []).filter(x => str(x, 300)).slice(0, 300), total: Number(r.total) > 0 && Number(r.total) <= 1000 ? Number(r.total) : 10 }])) : {},
+    hand: u => keepIf(u, v => str(v, 12)), marks: u => keepIf(u, iso), notes: u => keepIf(u, v => str(v, 5000)),
     checks: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, l]) => /^(\d{1,15}|painel)$/.test(k) && Array.isArray(l)).map(([k, l]) => [k, l.filter(x => x && str(x.id, 40) && str(x.t, 200) && (x.date === undefined || iso(x.date))).slice(0, 50).map(x => Object.assign({ id: x.id, t: x.t, done: x.done === true }, x.date ? { date: x.date } : {}))])) : {},
     tasks: u => Array.isArray(u) ? u.filter(t => t && str(t.id, 40) && str(t.title, 140) && (t.date === null || iso(t.date))).slice(0, 100).map(t => Object.assign({ id: t.id, title: t.title, date: t.date },
       Array.isArray(t.subs) ? { subs: t.subs.filter(s => s && str(s.t, 100)).slice(0, 10).map(s => ({ t: s.t, d: s.d === true })) } : {})) : [] };

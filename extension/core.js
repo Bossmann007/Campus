@@ -226,7 +226,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.4.0";
+  const EXT_LATEST = "6.5.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -318,6 +318,25 @@ const NotasCore = (() => {
   // - The tool's own final value wins: now is it, and the projection is shifted by what the visible formula misses.
   // - "total" adds raw points; the means use each leaf on 10 (a leaf not on 10 inside a mean: approx, the scale is a guess).
   // fill (optional, 0-10): also returns projected, the final with that grade on everything left (the course page simulator).
+  // The student's own rule, for a course without our rules and without a formula in the Centro de Notas: the Canvas
+  // items that count (the student unticks what is not graded), their points summed, the grade going up to "total"
+  // (10 unless the Plano de Ensino says otherwise). Points not yet in Canvas (total minus what is planned) count as left.
+  // items: [{ key, points, score (null = no grade) }]; rule: { off: [keys], total }. Returns
+  // { status: garantido | precisa | nao-da | vazio | acima, now (0-10), need (0-10, the same grade on everything left), open, notYet,
+  // counted, planned }. "acima": the counted points add up to more than the top, so the sum is not the grade (items scored
+  // on 10 each, or extras): no number until the student unticks what does not count or says how far the grade goes.
+  function custom(items, rule, meta) {
+    const off = new Set(rule && Array.isArray(rule.off) ? rule.off.map(String) : []), total = rule && Number(rule.total) > 0 && Number(rule.total) <= 1000 ? Number(rule.total) : 10;
+    const counted = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)));
+    if (!counted.length) return { status: "vazio", now: 0, need: null, open: 0, notYet: 0, counted: 0, total };
+    let earned = 0, open = 0, planned = 0;
+    for (const i of counted) { const p = Number(i.points); planned += p; if (i.score == null || !Number.isFinite(Number(i.score))) open += p; else earned += Math.min(p, Math.max(0, Number(i.score))); }
+    if (planned > total * 1.001) return { status: "acima", now: null, need: null, open, notYet: 0, counted: counted.length, total, planned: Math.round(planned * 100) / 100 };
+    const scale = 10 / total, notYet = Math.max(0, total - planned), left = open + notYet, now = Math.round(earned * scale * 100) / 100;
+    if (earned * scale >= meta - 1e-9) return { status: "garantido", now, need: 0, open, notYet, counted: counted.length, total };
+    const need = left > 0 ? (meta / scale - earned) / left * 10 : Infinity;
+    return { status: need > 10 ? "nao-da" : "precisa", now, need: need > 10 ? null : Math.round(need * 100) / 100, open, notYet, counted: counted.length, total };
+  }
   function centro(curso, meta, fill) {
     const none = st => ({ status: st, now: 0, need: null, left: [], approx: false });
     try {
@@ -384,6 +403,6 @@ const NotasCore = (() => {
       return Object.assign({ status: "precisa", now, need: Math.round(hi * 1000) / 100, left, approx }, extra);
     } catch (e) { return none("sem-formula"); }
   }
-  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();

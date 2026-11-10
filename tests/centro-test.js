@@ -111,4 +111,20 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   const r = centro(bad, 7); assert(["precisa", "nao-da", "garantido", "sem-formula", "incompleto"].includes(r.status) && Number.isFinite(r.now), "safe on odd input: " + JSON.stringify(r));
   ok();
 }
+{ // the student's own rule (NotasCore.custom): points that count, summed up to the top the Plano de Ensino gives
+  const it = [{ key: "a", points: 1.25, score: 1.1 }, { key: "b", points: 3, score: 3 }, { key: "c", points: 2, score: null }, { key: "x", points: 1, score: 0.5 }];
+  const r = NotasCore.custom(it, { off: ["x"] }, 7);
+  assert(r.status === "precisa" && r.now === 4.1 && Math.abs(r.need - 5.04) < 0.01 && r.open === 2 && Math.abs(r.notYet - 3.75) < 1e-9, "4,1 earned; 2,9 to go over 2 open + 3,75 not yet in Canvas: " + JSON.stringify(r));
+  assert(NotasCore.custom(it, { total: 20 }, 7).now === 2.3, "a top of 20 points scales to 10");
+  assert.strictEqual(NotasCore.custom(it, {}, 4).status, "garantido", "4,6 ≥ 4");
+  const big = NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], {}, 7);
+  assert(big.status === "acima" && big.now === null && big.planned === 20, "points adding up past the top: no number, never a false garantido: " + JSON.stringify(big));
+  assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], { total: 20 }, 7).now, 8.5, "told the top: 17 of 20 = 8,5");
+  assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 2 }], {}, 7).status, "nao-da", "nothing left, below the meta");
+  assert.strictEqual(NotasCore.custom(it, { off: ["a", "b", "c", "x"] }, 7).status, "vazio", "nothing counts");
+  assert.strictEqual(NotasCore.custom([{ key: "a", points: 2, score: 5 }], {}, 7).now, 2, "a score above the points is capped");
+  assert.strictEqual(NotasCore.custom(null, null, 7).status, "vazio", "no items: no number");
+  assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 6.995 }], {}, 7).status, "nao-da", "6,995 is not 7 (compared before rounding)");
+  ok();
+}
 console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");

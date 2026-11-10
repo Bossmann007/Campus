@@ -19,4 +19,15 @@ mkdir -p dist && out="dist/quanto-falta-extension-$v.zip" && rm -f "$out"
 (cd "$b" && zip -q -X -r "../../$out" $files)
 unzip -l "$out" | tail -n +4 | sed '$d' | sed '$d'
 cp "$out" dist/quanto-falta-extension.zip   # stable name for the site download link (releases/latest/download/...)
-echo "built $out (compacted, behavior tests passed) and dist/quanto-falta-extension.zip"
+# Firefox (desktop and Android, through addons.mozilla.org): the same files; MV3 there runs the worker as background
+# scripts (prefs.js first) and needs an add-on id
+fb=dist/build-firefox && rm -rf "$fb" && cp -R "$b" "$fb"
+python3 - "$fb/manifest.json" <<'PY'
+import json, sys
+p = sys.argv[1]; m = json.load(open(p))
+m["background"] = {"scripts": ["prefs.js", "background.js"]}
+m["browser_specific_settings"] = {"gecko": {"id": "caderno-plus@bossmann007.github.io", "strict_min_version": "128.0", "data_collection_permissions": {"required": ["none"]}}, "gecko_android": {"strict_min_version": "128.0"}}
+json.dump(m, open(p, "w"), ensure_ascii=False, indent=2)
+PY
+fout="dist/caderno-plus-firefox-$v.zip" && rm -f "$fout" && (cd "$fb" && zip -q -X -r "../../$fout" $files)
+echo "built $out (compacted, behavior tests passed), dist/quanto-falta-extension.zip and $fout"

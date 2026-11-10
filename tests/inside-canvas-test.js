@@ -415,7 +415,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const tiles = all(gb).filter(e => e.className === "card tile");
   assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "/courses/" + cvOf(c.id)), "a tile per enrolled subject, each opening its Canvas course");
   assert(tiles.every((t, i) => text(t).includes(C.SHORT[mine[i].id])), "tiles named like the calculator");
-  assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · Ciência da Computação, manhã · não oficial, confira no Canvas"), "dashboard grades: source line");
+  assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · não oficial, confira no Canvas") && !/Ciência da Computação/.test(text(gb)), "dashboard grades: source line, no course name");
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
@@ -427,7 +427,22 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // another turma (same course name, another Canvas id): no grade parts, one line saying why; the generic parts keep working
   const ot = await runContent("/", null, {}, { courseId: 42 }), ob = ot.anchor.kids.find(k => k.id === "cp-dash");
   assert(ob && !all(ob).some(e => /kpi|tile|upnext/.test(e.className)), "other turma: no grade parts");
-  assert(all(ob).some(e => e.className === "muted why" && e.textContent === "O Quanto falta ainda não tem as regras da sua turma."), "other turma: the muted line");
+  assert(/Quanto falta/.test(text(ob)) && /soma dos pontos: confira na matéria/.test(text(ob)) && !all(ob).some(e => e.className === "muted why"), "other turma: quanto falta by the sum of Canvas points, said so, to check on the course page");
+  { // the course page of that course: the student's rule (untick what is not graded, how far the grade goes), saved per user
+    const cp = await runContent("/courses/42", null, {}, { courseId: 42 }), pb = () => cp.anchor.kids.find(k => k.id === "qf-panel") || all(cp.body).find(k => k.id === "qf-panel") || all(cp.anchor).find(k => k.id === "qf-panel");
+    { const dash = await runContent("/", null, {}, { courseId: 42 }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
+      assert(!/meta garantida · soma dos pontos/.test(dt) && !/recuperação · soma dos pontos/.test(dt), "no garantido or recuperação from the plain sum before the student checks the rule"); }
+    const p0 = pb(); assert(p0 && /Soma dos pontos do Canvas/.test(text(p0)) && /A nota vai até/.test(text(p0)), "course page: the rule card and editor: " + (p0 ? text(p0).slice(0, 200) : "no panel"));
+    const boxes = () => all(pb()).filter(e => e.tag === "input" && e.type === "checkbox"), before = text(pb()).match(/(\d+,\d) de 10 agora/);
+    assert(boxes().length > 1 && boxes().every(b => b.checked), "every graded item counts by default");
+    const first = boxes()[0]; first.checked = false; await first.listeners.change(); await new Promise(r => setTimeout(r, 20));
+    const saved = cp.store.myRules && cp.store.myRules[5] && cp.store.myRules[5]["42"];
+    assert(saved && saved.off.length === 1 && saved.total === 10 && /Sua regra/.test(text(pb())) && !boxes()[0].checked, "unticked: saved for this user and this course, the card says it is your rule");
+    const tot = all(pb()).find(e => e.tag === "input" && e.type === "number"); tot.value = "20"; await tot.listeners.change(); await new Promise(r => setTimeout(r, 20));
+    assert.strictEqual(cp.store.myRules[5]["42"].total, 20, "the grade's top saved");
+    const back = all(pb()).find(e => e.textContent === "Voltar ao padrão"); await back.listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert(!cp.store.myRules[5]["42"] && /Soma dos pontos do Canvas/.test(text(pb())), "back to the default: the rule removed");
+    ok(); }
   assert.match(text(ob), /Próximos 7 dias/); assert.match(text(ob), /Prova adiada/, "week and announcements still shown");
   assert(!all(ob).some(e => e.tag === "button" && /rascunho/i.test(e.textContent)) && !/rascunho/i.test(text(ob)), "other turma: just the note, no draft button");
   assert(!/precisa|garantido|faltam|recuperação/.test(text(ot.header)), "no pill on the dashboard cards");
@@ -452,7 +467,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!all(ntb).some(e => e.textContent === "Nenhum aviso nos últimos 60 dias."), "and do not claim there were no announcements");
   // course panel: the source line; garantido explained as a reading of the grades
   const cp = await runContent("/courses/71306", [], {}), cpb = cp.anchor.kids.find(k => k.id === "qf-panel");
-  assert(all(cpb).some(e => e.className === "muted src" && /^Pesos do Plano de Ensino 2026\/2 · Ciência da Computação, manhã · não oficial, confira no Canvas$/.test(e.textContent)), "course panel: source line");
+  assert(all(cpb).some(e => e.className === "muted src" && /^Pesos do Plano de Ensino 2026\/2 · não oficial, confira no Canvas$/.test(e.textContent)), "course panel: source line");
   assert(all(cpb).filter(e => e.className === "big" && /garantido/.test(text(e))).every(e => e.title === C.GARANTIDO_TIP), "garantido tooltip: not official");
   assert.strictEqual(C.GARANTIDO_TIP, "Garantido pelas notas lançadas; não considera frequência nem recuperação"); ok();
 
@@ -912,12 +927,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
 
   // the turma: a shared course (one or two matches) is not proof; ask, and use the rules only after a yes
   const ask1 = await runContent("/", null, {}, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
-  assert(/Você é da turma Ciência da Computação, manhã\?/.test(text(ask1.anchor)) && !/\/10 · /.test(text(ask1.header)), "one matching course: ask, no grades yet");
+  assert(/Estas são as suas matérias\? Imperativa, /.test(text(ask1.anchor)) && !/Ciência da Computação/.test(text(ask1.anchor)) && !/\/10 · /.test(text(ask1.header)), "one matching course: ask, no grades yet");
   const askOther = await runContent("/", null, { prefs: { turma: "outro" } }, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
-  assert(!/Você é da turma/.test(text(askOther.anchor)) && !/\/10 · /.test(text(askOther.header)) && /ainda não tem as regras da sua turma/.test(text(askOther.anchor)), "another program: no question, no grades, the week and announcements stay");
+  assert(!/Estas são as suas matérias/.test(text(askOther.anchor)) && !/\/10 · /.test(text(askOther.header)) && /soma dos pontos: confira na matéria/.test(text(askOther.anchor)), "another program: no question, no Plano de Ensino grades, quanto falta by the sum of points, the week and announcements stay");
   const MORE6 = [{ id: 72009, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem" }, { id: 72011, name: "Conectividade (Turma 2º B) - 2026 / 2º Sem" }];
   const ask3 = await runContent("/", null, {}, { askTurma: true, more: MORE6 }); await new Promise(r => setTimeout(r, 20));
-  assert(!/Você é da turma/.test(text(ask3.anchor)) && /\/10 · /.test(text(ask3.header)), "three or more matching courses: the turma, no question");
+  assert(!/Estas são as suas matérias/.test(text(ask3.anchor)) && /\/10 · /.test(text(ask3.header)), "three or more matching courses: the turma, no question");
 
   // the classic dashboard header: a greeting with the first name, the date and what is coming (the title stays for screen readers)
   const lay = fakeEl("div"), flex = fakeEl("div"), titleItem = fakeEl("span"); titleItem.append(fakeEl("span")); flex.append(titleItem, fakeEl("span")); lay.append(flex);

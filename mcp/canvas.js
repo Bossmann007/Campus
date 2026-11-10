@@ -230,7 +230,7 @@ function makeCanvas(token, opts = {}) {
           untrusted_canvas_text: { name: clean(cv.name, 160), left: [...r.left].slice(0, 40).map(id => clean(String(names.get(id) || ""), 120)).filter(Boolean) } }));
       }
       if (!out.length) return { note: "Nenhuma matéria deste semestre no Canvas.", subjects: [] };
-      return { meta, turma: C.TURMA, note: NOTE, aviso: "source \"regras\": regras do Plano de Ensino da turma " + C.TURMA + "; source \"centro\": a fórmula que o professor pôs no Centro de Notas (need = a mesma nota de 0 a 10 em tudo o que falta; left = o que ainda não tem nota). Só notas do Canvas: as digitadas à mão no Caderno+ não entram aqui.",
+      return { meta, note: NOTE, aviso: "source \"regras\": os pesos do Plano de Ensino que o Caderno+ já tem para estas matérias; source \"centro\": a fórmula que o professor pôs no Centro de Notas (need = a mesma nota de 0 a 10 em tudo o que falta; left = o que ainda não tem nota). Só notas do Canvas: as digitadas à mão no Caderno+ não entram aqui.",
         subjects: out };
     },
     async grades(args = {}) {
