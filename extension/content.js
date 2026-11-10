@@ -589,6 +589,12 @@
   const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
   // the card columns from the cards shown (cpShown) and the box width (cpBoxW, kept by a ResizeObserver: reading clientWidth
   // right after drawing forced a layout of the whole page)
+  // The subject picked in the dashboard chips (KPI_COURSE): only its Canvas card shows; Todas shows them all again.
+  const pickCards = () => { if (typeof document === "undefined" || !document.querySelectorAll) return; const cards = [...document.querySelectorAll(".ic-DashboardCard")];
+    const idOf = card => { const l = card.querySelector('a[href*="/courses/"]'), m = l && /\/courses\/(\d+)/.exec(l.getAttribute("href")); return m ? m[1] : null; };
+    const pick = KPI_COURSE && cards.some(c => idOf(c) === KPI_COURSE) ? KPI_COURSE : "";
+    for (const card of cards) { const id = idOf(card); card.style.display = id && (hiddenNow.includes(id) || (pick && id !== pick)) ? "none" : ""; }
+    window.cpShown = cards.filter(c => c.style.display !== "none").length; setCols(); };
   const setCols = () => {
     const shown = window.cpShown || 0, root = document.documentElement, fit = window.cpBoxW ? Math.max(1, Math.floor((window.cpBoxW + 24) / 298)) : 4;
     const rows = shown ? Math.ceil(shown / Math.min(colsFor(shown), fit)) : 1, cols = shown ? Math.ceil(shown / rows) : 1;   // never one card alone on the last row
@@ -602,7 +608,7 @@
       card.dataset.qf = "1"; card.cpAdded = [];
       if (!m) continue;
       const id = m[1], c = a.byCanvasId[id];
-      card.style.display = ctx.hidden.includes(id) ? "none" : "";
+      card.style.display = ctx.hidden.includes(id) || (KPI_COURSE && KPI_COURSE !== id && a.term && document.querySelector('.ic-DashboardCard a[href*="/courses/' + KPI_COURSE + '"]')) ? "none" : "";   // the subject picked in the chips
       if (ctx.hidden.includes(id) || !prefs.grades) continue;
       if (!c || !a.rules || !a.has) {   // no Plano rule in use: the dashboard's own number (Centro de Notas, Canvas weights, the student's rule, the sum)
         const u = (nums = nums || new Map(courseNumbers(a, ctx.cache).U.map(x => [x.cid, x]))).get(id); if (!u || (u.now == null && u.need == null && u.status !== "nao-da")) continue;
@@ -644,6 +650,7 @@
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
     .box > .card, .box > .kpis, .box > .tiles { margin-bottom:10px; }
     .k { font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+    .nslot { display:contents; }
     .upnext { display:flex; align-items:center; gap:16px; padding:12px 14px; } .upnext .k { text-transform:none; letter-spacing:0; font-size:12px; font-weight:500; }
     .upnext .t, .cring .t { font:600 17px/1.25 var(--serif); letter-spacing:-.01em; margin:2px 0; overflow:hidden; text-overflow:ellipsis; } .upnext .mid, .cring .mid { flex:1; }
     .big { flex:none; text-align:right; } .big .v { display:block; font:500 30px/1 var(--serif); letter-spacing:-.02em; } .big span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
@@ -1163,17 +1170,20 @@
     return { U, courses };
   }
   function gradesOverview(a, cache, clean, prefs = {}) {
-    const out = [], nowMs = Date.now(); ruleCache = cache;
+    const out = [], nowMs = Date.now(); ruleCache = cache; let redrawOv = () => {};
     const { U, courses } = courseNumbers(a, cache);
+    const shownU = () => { const one = U.filter(u => u.cid === KPI_COURSE); return one.length ? one : U; };   // a subject picked in the chips: only it
     if (!U.length) return out;
     const byCid = new Map(U.map(u => [u.cid, u]));
     // the next delivery: Canvas's own, by its official date
-    const nx = courses.flatMap(c => (c.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused && x.due && Date.parse(x.due) >= nowMs && !x.submitted && x.score == null).map(x => ({ c, x }))).sort((p, q) => Date.parse(p.x.due) - Date.parse(q.x.due))[0];
+    const nextSlot = el("div", "nslot"), nextCard = () => { nextSlot.replaceChildren(); const only = shownU().length === 1 && U.length > 1 ? shownU()[0].cid : "";   // the picked subject's own next delivery
+    const nx = courses.filter(c => !only || String(c.id) === only).flatMap(c => (c.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused && x.due && Date.parse(x.due) >= nowMs && !x.submitted && x.score == null).map(x => ({ c, x }))).sort((p, q) => Date.parse(p.x.due) - Date.parse(q.x.due))[0];
     if (nx) { const card = el("a", "card upnext"), left = el("div", "mid"), dd = C.localISO(new Date(nx.x.due)), d = days(dd), u = byCid.get(String(nx.c.id)), big = el("div", "big");
       if (typeof nx.x.url === "string" && nx.x.url.startsWith(location.origin + "/")) card.href = nx.x.url;
       left.append(el("div", "k", "Próxima entrega"), el("div", "t", nx.x.name), el("div", "c", (u ? u.name : shortName(nx.c.name)) + " · " + dmy(dd) + " " + hhmm(nx.x.due) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias") + " · " + fmt(nx.x.points, 2) + " pts"));
       if (u && u.need != null) big.append(el("b", "v t-" + (u.need > 8 ? "bad" : "warn"), up(u.need, 1)), el("span", null, "média que falta tirar (de 10)")); else if (u && u.status === "garantido") big.append(el("b", "v t-ok", "✓"), el("span", null, "meta garantida"));
-      card.append(left, big); out.push(card); }
+      card.append(left, big); nextSlot.appendChild(card); } };
+    nextCard(); out.push(nextSlot);
     const kpis = el("div", "kpis"), kpi = (k, v, cls, subEl) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (subEl) d.appendChild(subEl); kpis.appendChild(d); };
     const meterOf = x => { const m = el("div", "meter"), f = el("i"), g = el("b"); m.setAttribute("aria-hidden", "true"); f.style.width = Math.min(100, x * 10) + "%"; g.style.left = Math.min(99.5, T * 10) + "%"; m.append(f, g); return m; };
     const trackOf = items => { const trk = el("div", "trk"), its = items.slice().sort((p, q) => p.date.localeCompare(q.date)), n = k => its.filter(x => x.s === k).length;
@@ -1197,7 +1207,8 @@
     pick.setAttribute("role", "radiogroup"); pick.setAttribute("aria-label", "Matéria dos números");
     for (const [id, name] of [["", "Todas"]].concat(U.map(u => [u.cid, u.name]))) {
       const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(id === pickId)); b.dataset.id = id;
-      b.addEventListener("click", async () => { KPI_COURSE = id; fill(id); for (const x of chips) x.setAttribute("aria-checked", String(x === b));
+      if (id) { b.title = "Clique duas vezes para abrir a matéria"; b.addEventListener("dblclick", () => location.assign("/courses/" + id)); }
+      b.addEventListener("click", async () => { KPI_COURSE = id; fill(id); redrawOv(); nextCard(); pickCards(); for (const x of chips) x.setAttribute("aria-checked", String(x === b));
         const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { kpiCourse: id }) }); });
       chips.push(b); pick.appendChild(b);
     }
@@ -1211,24 +1222,25 @@
     const valCell = u => el("span", "ovv pill " + u.tone, u.need != null ? up(u.need, 1) : u.status === "garantido" ? "✓" : u.status === "nao-da" ? "rec." : u.status === "erro" ? "erro" : "?");
     const scale = () => { const r = el("div", "ovr ovscale"), ax = el("div", "ovbar ovax"); for (const v of ["0", "5", "10"]) ax.appendChild(el("span", null, v)); r.setAttribute("aria-hidden", "true"); r.append(el("span"), ax, el("span", "ovv")); return r; };
     const VIEWS = {
-      barras: ["Barras", "nota garantida em cada matéria, de 0 a 10; o risco é a meta", () => { const rows = U.map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone), m = el("b");
+      barras: ["Barras", "nota garantida em cada matéria, de 0 a 10; o risco é a meta", () => { const rows = shownU().map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone), m = el("b");
           f.style.width = (u.now == null ? 0 : Math.min(100, u.now * 10)) + "%"; m.style.left = Math.min(99.5, T * 10) + "%"; bar.append(f, m); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
           if (u.now != null && u.now >= 1.2) bar.appendChild(el("span", "ovin", dn(u.now)));   // inside the bar only when it fits
           r.append(nameCell(u), bar, valCell(u)); return r; }); return rows.concat(scale()); }],
-      falta: ["Falta", "média que falta tirar (de 10) no que resta, da mais apertada para a mais folgada", () => U.slice().sort((p, q) => (q.need == null ? -1 : q.need) - (p.need == null ? -1 : p.need)).map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone);
+      falta: ["Falta", "média que falta tirar (de 10) no que resta, da mais apertada para a mais folgada", () => shownU().slice().sort((p, q) => (q.need == null ? -1 : q.need) - (p.need == null ? -1 : p.need)).map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone);
           f.style.width = (u.need != null ? Math.min(100, u.need * 10) : u.status === "nao-da" ? 100 : 0) + "%"; if (u.status === "nao-da") f.className = "bad hatch"; bar.append(f); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
           r.append(nameCell(u), bar, valCell(u)); return r; }).concat(scale())],
-      aneis: ["Anéis", "quanto de 10 já está garantido; no meio, o que falta tirar", () => { const g = el("div", "ovrings"); for (const u of U) { const c = el("a", "ovring"), ring = el("div", "rg"), mid = el("b", null, u.need != null ? up(u.need, 1) : u.status === "garantido" ? "✓" : u.status === "nao-da" ? "rec." : "?");
+      aneis: ["Anéis", "quanto de 10 já está garantido; no meio, o que falta tirar", () => { const g = el("div", "ovrings"); for (const u of shownU()) { const c = el("a", "ovring"), ring = el("div", "rg"), mid = el("b", null, u.need != null ? up(u.need, 1) : u.status === "garantido" ? "✓" : u.status === "nao-da" ? "rec." : "?");
           const pct = u.now == null ? 0 : Math.min(100, u.now * 10); ring.dataset.t = u.tone; ring.style.cssText = "--p:" + pct + "%;--m:" + Math.min(100, T * 10) + "%"; ring.appendChild(mid);
           c.href = "/courses/" + u.cid; c.dataset.tip = tipOf(u); c.setAttribute("aria-label", tipOf(u)); c.append(ring, el("span", "n", u.name), el("span", "c", (u.now == null ? "—" : dn(u.now)) + " garantido"));
           g.appendChild(c); } return [g]; }],
-      entregas: ["Entregas", "cada quadradinho é uma atividade: verde com nota, verde claro entregue, laranja vencida, cinza pela frente", () => U.map(u => { const r = el("div", "ovr"), tr = trackOf(u.items); tr.trk.classList ? tr.trk.classList.add("ovtrk") : (tr.trk.className += " ovtrk");
+      entregas: ["Entregas", "cada quadradinho é uma atividade: verde com nota, verde claro entregue, laranja vencida, cinza pela frente", () => shownU().map(u => { const r = el("div", "ovr"), tr = trackOf(u.items); tr.trk.classList ? tr.trk.classList.add("ovtrk") : (tr.trk.className += " ovtrk");
           r.append(nameCell(u), tr.trk, el("span", "ovv pill nt", tr.done + "/" + tr.total)); return r; })],
-      lista: ["Lista", "o mesmo em texto", () => { const ul = el("ul"); for (const u of U) { const li = el("li", "row"), txt = u.status === "erro" ? "a fórmula tem um erro: abra a matéria" : u.status === "acima" ? "os pontos passam do total: ajuste na matéria" : u.status === "confira" ? "confira a regra na matéria antes de contar com isso"
+      lista: ["Lista", "o mesmo em texto", () => { const ul = el("ul"); for (const u of shownU()) { const li = el("li", "row"), txt = u.status === "erro" ? "a fórmula tem um erro: abra a matéria" : u.status === "acima" ? "os pontos passam do total: ajuste na matéria" : u.status === "confira" ? "confira a regra na matéria antes de contar com isso"
           : u.status === "faltam" ? "faltam notas antigas" : u.status === "garantido" ? "meta garantida" : u.status === "nao-da" ? "nem com 10 no que falta" : u.need != null ? "precisa " + up(u.need, 1) + "/10 em média no que falta" : "sem número ainda";
           li.append(el("span", "d", u.now == null ? "—" : dn(u.now)), mid(u.full, "/courses/" + u.cid, txt + " · " + SRC[u.src] + (u.scaled ? " (" + fmt(u.scaled, u.scaled % 1 ? 1 : 0) + " pontos levados a 10)" : "")), valCell(u)); ul.appendChild(li); } return [ul]; }],
     };
-    const cap = el("p", "c scale ovcap"), show = m => { body.replaceChildren(...VIEWS[m][2]()); body.dataset.mode = m; cap.textContent = VIEWS[m][1] + ". Meta " + fmt(T, T % 1 ? 1 : 0) + ". Passe o mouse para ver de onde vem cada número; na página da matéria você monta ou muda a sua regra.";
+    let curMode = "barras"; redrawOv = () => show(curMode);
+    const cap = el("p", "c scale ovcap"), show = m => { curMode = m; body.replaceChildren(...VIEWS[m][2]()); body.dataset.mode = m; cap.textContent = VIEWS[m][1] + ". Meta " + fmt(T, T % 1 ? 1 : 0) + ". Passe o mouse para ver de onde vem cada número; na página da matéria você monta ou muda a sua regra.";
       for (const b of modeBtns) b.setAttribute("aria-checked", String(b.dataset.m === m)); };
     seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Como mostrar o quanto falta");
     const mode0 = VIEWS[prefs.ovMode] ? prefs.ovMode : "barras";

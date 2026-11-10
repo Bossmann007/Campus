@@ -777,6 +777,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const one = chips[1]; await one.listeners.click(); await new Promise(r => setTimeout(r, 10));
     assert(mFull2.store.prefs.kpiCourse === one.dataset.id && one["aria-checked"] === "true" && chips[0]["aria-checked"] === "false", "a subject picked and saved");
     const kt = text(kp(mFull2)); assert(kt.split(one.textContent).length - 1 >= 3 && !/média das/.test(kt), "every number names the picked subject: " + kt.slice(0, 200));
+    { const nc = all(mFull2.anchor).find(e => /upnext/.test(e.className || "")); assert(!nc || text(nc).includes(one.textContent), "the next delivery is the picked subject's (or none)"); }
+    const ovRows = all(mFull2.anchor).filter(e => e.className === "ovr"); assert(ovRows.length === 1 && text(ovRows[0]).includes(one.textContent), "the quanto falta chart shows only the picked subject");
+    one.listeners.dblclick(); assert(/\/courses\/\d+$/.test(String(mFull2.env.location.assigned)) && String(mFull2.env.location.assigned).endsWith(one.dataset.id), "a double click on the subject opens its course page");
+    await chips[0].listeners.click(); await new Promise(r => setTimeout(r, 10)); assert(all(mFull2.anchor).filter(e => e.className === "ovr").length === 3, "Todas: every subject again");
+    await one.listeners.click(); await new Promise(r => setTimeout(r, 10));
     const again = await runContent("/", null, { prefs: { kpiCourse: one.dataset.id } }, { more: MORE });
     assert(pickOf(again).kids[1]["aria-checked"] === "true", "the pick comes back on the next page");
     const stale = await runContent("/", null, { prefs: { kpiCourse: "nao-existe" } }, { more: MORE });
