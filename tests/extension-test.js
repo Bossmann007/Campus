@@ -133,7 +133,8 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   store.tasks = { 9: [{ id: "a", title: "do outro", date: null }] };
   pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09", subs: [{ t: "passo", d: true, x: 1 }, { t: 7 }, null] }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
-  assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
+  assert.strictEqual(store.hand[5]["abd:s3"], "1", "import: the backup's grade"); assert(!("x" in store.hand[5]), "import: well-formed grades only");
+  assert(Object.keys(store.hand[5]).length >= 1, "import: merged into what the student has (grades typed after the backup stay)"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
   assert.deepStrictEqual(store.tasks[5][0].subs, [{ t: "passo", d: true }], "import: a task keeps its well-formed steps");
   assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
   store.cache = Object.assign({}, store.cache, { user: 5 });

@@ -180,7 +180,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.deepStrictEqual(seen, ["GET C/api/v1/courses/7/tabs", "GET C/api/v1/courses/7/external_tools/sessionless_launch?id=2157", "GET C/courses/7/external_tools/2157?launch=1", "POST T/lti", "GET T/lti/finalize", "GET T/curso/7"], "the launch, step by step");
   assert(got && got.colunas[0].tipo_calculo === "media_ponderada" && got.grupos[0].grupo_colunas[0].coluna.notas[0].nota === "8,00" && !/Colega|estudante/.test(JSON.stringify(got)), "kept: the formula and the student's grade; dropped: classmates and ids");
   assert.strictEqual(C.centro(got, 7).now, 8, "the engine reads what the worker keeps");
-  seen.length = 0; assert.strictEqual(await sw.centroCourse("7", fake("https://evil.example/lti")), null, "a form pointing anywhere else is never sent");
+  seen.length = 0; await assert.rejects(sw.centroCourse("7", fake("https://evil.example/lti")), /formulário/, "a form pointing anywhere else is never sent (an error: the last reading stays)");
   assert(!seen.some(x => /evil/.test(x)), "nothing posted to another host");
   { // the ponte: GETs to the MCP's allowlist only, with the browser's cookies; nothing else; big bodies refused
     const asked = [], f = async (u, o) => { asked.push([u, o]); return { ok: true, status: 200, headers: { get: n => n === "Link" ? "<x>; rel=\"next\"" : null }, text: async () => /big/.test(u) ? "x".repeat(5e6 + 1) : "[1]" }; };
@@ -188,8 +188,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(g.id === 3 && g.ok && g.body === "[1]" && /next/.test(g.link) && asked[0][1].method === "GET" && asked[0][1].credentials === "include" && asked[0][1].redirect === "error", "ponte get: the reply, with the browser's login");
     for (const url of ["https://evil.example/api/v1/courses", "https://pucpr.instructure.com/api/v1/conversations", "https://pucpr.instructure.com/courses/1/files/2/download", "https://pucpr.instructure.com/api/v1/users/self/files", "https://a:b@pucpr.instructure.com/api/v1/courses", "nada"])
       assert((await sw.ponteAnswer({ id: 4, op: "get", url }, f)).error, "ponte refuses " + url);
+    for (const url of ["https://pucpr.instructure.com/api/v1/courses/1/users?enrollment_type[]=student", "https://pucpr.instructure.com/api/v1/courses/1/users?enrollment_type[]=teacher&include[]=email", "https://pucpr.instructure.com/api/v1/courses?as_user_id=9"])
+      assert((await sw.ponteAnswer({ id: 9, op: "get", url }, f)).error, "ponte refuses the query " + url);
+    assert(!(await sw.ponteAnswer({ id: 10, op: "get", url: "https://pucpr.instructure.com/api/v1/courses/1/users?enrollment_type[]=teacher&per_page=20" }, f)).error, "the teachers query the MCP sends passes");
+    asked.length = 1;
     assert.strictEqual(asked.length, 1, "nothing refused reached the network");
-    assert(/grande demais/.test((await sw.ponteAnswer({ id: 5, op: "get", url: "https://pucpr.instructure.com/api/v1/courses/1/modules?big=1" }, f)).error), "a body over 5 MB is refused");
+    assert(/grande demais/.test((await sw.ponteAnswer({ id: 5, op: "get", url: "https://pucpr.instructure.com/api/v1/courses/1/modules?bookmark=big" }, f)).error), "a body over 5 MB is refused");
     assert((await sw.ponteAnswer({ id: 6, op: "post", url: "https://pucpr.instructure.com/api/v1/courses" }, f)).error && (await sw.ponteAnswer({ id: 7, op: "centro", course: "1/../2" }, f)).error, "no other operation, no odd course id");
     assert.deepStrictEqual(await sw.ponteAnswer({ id: 8, op: "ping" }, f), { id: 8, ok: true, v: "9" }, "ping");
     // turning it on: one port even when the click and permissions.onAdded arrive together; off disconnects it
@@ -208,6 +212,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(posted === "a=1", "posted only the form's own fields: " + posted);
     const broken = async u => { throw new Error("offline " + u); };
     await sw.centroAll(5, ["7"], broken); assert(local.centro.courses["7"] && local.centro.courses["7"].colunas.length, "a failed read keeps the course's last Centro de Notas");
+    const down = async (u, o) => u === T + "/lti" ? { ok: false, status: 503, text: async () => "" } : fake()(u, o);
+    await sw.centroAll(5, ["7"], down); assert(local.centro.courses["7"] && local.centro.courses["7"].colunas.length, "the tool answering 503 keeps the last reading too (it was overwritten with null)");
   }
   ok();
 }

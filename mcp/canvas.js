@@ -229,8 +229,9 @@ function makeCanvas(token, opts = {}) {
         let cu = null, err = null; if (!ownOf(cv)) { try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; } }   // the student's own rule wins over the Centro's formula
         const r0 = cu ? C.centro(cu, meta) : null;
         if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) {   // as the panel: no formula, or one the student cannot see whole   // no formula: the student's own rule (from the extension, with the ponte), else the sum of the points
-          const rule = rules[String(cv.id)], items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), points: x.points, score: x.score == null ? null : x.score }));
+          const rule = rules[String(cv.id)], items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score }));   // the name: a written formula finds its activities by it
           const r = items.length ? C.custom(items, rule, meta) : null;
+          if (r && r.status === "erro") { out.push({ source: "regra-do-aluno", course_id: cv.id, status: "erro", label: "a fórmula que o aluno escreveu tem um erro: " + clean(String((r.errors || [])[0] || ""), 160), untrusted_canvas_text: { name: clean(cv.name, 160) } }); continue; }
           if (r && r.status !== "vazio") {
             const unsure = !rule && (r.status === "garantido" || r.status === "nao-da");
             out.push({ source: rule ? "regra-do-aluno" : "soma-dos-pontos", course_id: cv.id, status: unsure ? "confira" : r.status, now: r.now, need: r.need,

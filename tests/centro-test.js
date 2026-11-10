@@ -169,4 +169,17 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.deepStrictEqual(Object.keys(NotasCore.fromCanvas(mk(true)).grades).filter(k => /pending/i.test(k)), [], "the pending mark is not a grade key (no backup, no count)");
   ok();
 }
+{ // the general blindspot pass: rounding never shows a need lower or a grade higher; soma, Final, "#", commas
+  const A = (name, points, score) => ({ key: name, name, points, score });
+  const r1 = NotasCore.custom([A("A", 10, 7.3996), A("B", 10, null)], { formula: "Final = 50% A + 50% B" }, 7);
+  assert(r1.need >= 6.6004 && r1.need <= 6.61, "need rounded up (6,6004 → 6,61, never 6,60): " + r1.need);
+  assert.strictEqual(NotasCore.custom([A("A", 10, 6.96)], {}, 7).now, 6.96, "6,96 is kept, not 7,0");
+  assert.strictEqual(NotasCore.custom([A("PjBL 2", 3, 3)], { formula: "Final = soma(PjBL 2, Somativa RA2)" }, 7).status, "erro", "soma of something not in Canvas without \"de N\": an error, never a false garantido");
+  const sm = NotasCore.custom([A("PjBL 2", 3, 3)], { formula: "Final = soma(PjBL 2, Somativa RA2) de 10" }, 7);
+  assert(sm.status === "precisa" && sm.now === 3 && Math.abs(sm.need - 5.72) < 0.02, "with de 10 the points not in Canvas yet are left: " + JSON.stringify(sm).slice(0, 120));
+  assert.strictEqual(NotasCore.custom([A("P1", 10, 10), A("P2", 10, 0)], { formula: "RA1 = 100% P1\nFinal = 50% RA1 + 50% P2" }, 7).now, 5, "the Final line is the final grade wherever it is");
+  assert.strictEqual(NotasCore.custom([A("Lista #2", 10, 10), A("Prova", 10, 0)], { formula: "Final = 50% Lista #2 + 50% Prova" }, 7).now, 5, "a # inside a name is part of the name");
+  assert(NotasCore.custom([A("Prova 1, parte A", 10, 10), A("Prova 2", 10, 4)], { formula: "Final = média(Prova 1, parte A, Prova 2)" }, 7).errors.some(e => /duas vezes/.test(e)), "a comma in a title that splits one activity in two: said");
+  ok();
+}
 console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");

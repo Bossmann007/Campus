@@ -123,27 +123,28 @@ async function centroCourse(id, f = fetch) {
   const tab = Array.isArray(tabs) && tabs.find(t => t && t.label === "Centro de Notas" && t.type === "external"), tid = tab && /\/external_tools\/(\d+)/.exec(String(tab.html_url || ""));
   if (!tid) return null;
   const sl = await json(CANVAS + "/api/v1/courses/" + id + "/external_tools/sessionless_launch?id=" + tid[1]);
-  if (!sl || typeof sl.url !== "string" || !sl.url.startsWith(CANVAS + "/")) return null;
+  if (!sl || typeof sl.url !== "string" || !sl.url.startsWith(CANVAS + "/")) throw new Error("lançamento do Centro de Notas inválido");   // a failure keeps the last reading
   const page = await (await f(sl.url)).text(), form = /<form\b[^>]*\saction="([^"]+)"[^>]*>([\s\S]*?)<\/form>/.exec(page);
-  if (!form || unesc(form[1]) !== CENTRO + "/lti") return null;   // only PUCPR's tool, never another address the page names
+  if (!form || unesc(form[1]) !== CENTRO + "/lti") throw new Error("formulário do Centro de Notas mudou");   // only PUCPR's tool, never another address the page names
   const body = new URLSearchParams();   // only the inputs of that form (never Canvas's own tokens elsewhere on the page)
   for (const m of form[2].matchAll(/<input\b[^>]*>/g)) { const n = /\sname="([^"]*)"/.exec(m[0]), v = /\svalue="([^"]*)"/.exec(m[0]); if (n) body.append(unesc(n[1]), v ? unesc(v[1]) : ""); }
   const lti = await f(CENTRO + "/lti", { method: "POST", body, credentials: "include" });
-  if (!lti.ok) return null;
+  if (!lti.ok) throw new Error("Centro de Notas respondeu " + lti.status);
   const dp = /data-page="([^"]+)"/.exec(await lti.text()); let ver = ""; try { ver = dp ? String(JSON.parse(unesc(dp[1])).version || "") : ""; } catch (e) { /* no version */ }
   const fin = await json(CENTRO + "/lti/finalize", { headers: { "X-Requested-With": "XMLHttpRequest", Accept: "application/json" }, credentials: "include" });
-  if (!fin || fin.status !== "success" || !/^\/curso\/\d{1,15}$/.test(String(fin.redirect_url))) return null;
+  if (!fin || fin.status !== "success" || !/^\/curso\/\d{1,15}$/.test(String(fin.redirect_url))) throw new Error("Centro de Notas não abriu a matéria");
   const d = await json(CENTRO + fin.redirect_url, { headers: { "X-Inertia": "true", "X-Inertia-Version": ver, "X-Requested-With": "XMLHttpRequest" }, credentials: "include" });
   return slimCentro(d && d.props && d.props.curso);
 }
 // every course of the reading, one after another; stored per Canvas user in "centro" (the panels repaint when it lands).
 // A course that failed this time (network, the tool asleep) keeps what was read before; one run at a time (one tool session).
-let centroRun = null;
+let centroRun = null, centroQueue = Promise.resolve();
+const centroOne = (id, f) => { const p = centroQueue.then(() => centroCourse(id, f)); centroQueue = p.catch(() => {}); return p; };   // the tool keeps one session per browser
 async function centroAll(user, ids, f = fetch) {
   if (centroRun) return centroRun;
   centroRun = (async () => {
     const { centro } = await chrome.storage.local.get("centro"), old = centro && centro.user === user && centro.courses ? centro.courses : {}, courses = {};
-    for (const id of ids) { try { courses[id] = await centroCourse(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
+    for (const id of ids) { try { courses[id] = await centroOne(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
     for (const id of Object.keys(courses)) if (courses[id] === undefined) delete courses[id];
     await chrome.storage.local.set({ centro: { user, at: Date.now(), courses } });
     return courses;
@@ -169,6 +170,9 @@ async function ponteAnswer(m, f = fetch) {
     if (m.op === "get") {
       const u = new URL(String(m.url || ""));
       if (u.origin !== CANVAS || !PONTE_ALLOW.some(re => re.test(u.pathname)) || u.username || u.password) return { id, error: "bloqueado: fora da lista de leitura" };
+      // the query too: the teachers only on /users (never classmates or e-mails), and only the keys the MCP sends
+      const keys = [...u.searchParams.keys()], OKQ = /^(per_page|page|include\[\]|enrollment_state|enrollment_type\[\]|start_date|end_date|context_codes\[\]|active_only|latest_only|order|state\[\]|bookmark)$/;
+      if (keys.some(k => !OKQ.test(k)) || (/\/users$/.test(u.pathname) && (u.searchParams.getAll("enrollment_type[]").join() !== "teacher" || u.searchParams.has("include[]")))) return { id, error: "bloqueado: pedido fora do que o Caderno+ MCP faz" };
       const r = await f(u.href, { method: "GET", credentials: "include", redirect: "error", headers: { Accept: "application/json" } }), body = await r.text();
       if (body.length > 5e6) return { id, error: "resposta grande demais do Canvas" };
       return { id, ok: r.ok, status: r.status, link: r.headers.get("Link"), body };
@@ -176,7 +180,7 @@ async function ponteAnswer(m, f = fetch) {
     if (m.op === "centro") {
       const c = String(m.course || ""); if (!/^\d{1,15}$/.test(c)) return { id, error: "matéria inválida" };
       if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return { id, ok: true, curso: null, aviso: "Centro de Notas não liberado: clique em Atualizar no botão do Caderno+" };
-      return { id, ok: true, curso: await centroCourse(c, f) };
+      return { id, ok: true, curso: await centroOne(c, f) };
     }
     return { id, error: "pedido desconhecido" };
   } catch (e) { return { id, error: String(e && e.message || e).slice(0, 160) }; }

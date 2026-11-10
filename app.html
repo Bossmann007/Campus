@@ -754,7 +754,7 @@ const NotasCore = (() => {
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { id:cidOf(c.id), name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
-        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
+        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, excused:a.excused === true, flagged:"missing" in a,
         submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false,
         stats:a.stats && typeof a.stats === "object" && [a.stats.mean, a.stats.min, a.stats.max].every(x => num(x) !== null) ? { mean:a.stats.mean, min:a.stats.min, max:a.stats.max } : null })) };
     });
@@ -787,9 +787,10 @@ const NotasCore = (() => {
         if (!cv) { missing.push({ key:k, reason:cvs.length > 1 ? "a matéria aparece em mais de uma turma no Canvas: lance à mão" : "matéria não veio do Canvas" }); continue; }
         const parts = (rule.avg || rule.sum || [rule.one]).map(n => cv.assignments.filter(a => a.name.includes(n)));
         if (parts.some(p => p.length !== 1)) { missing.push({ key:k, reason:"avaliação não está no Canvas (ou aparece repetida)" }); continue; }
-        const got = parts.map(p => p[0]);
+        const got = parts.map(p => p[0]).filter(a => !(rule.avg && a.excused));   // a dispensed part leaves an average
+        if (!got.length) { missing.push({ key:k, reason:"todas as partes foram dispensadas no Canvas" }); continue; }
         if (rule.one && got[0].due) dates[k] = got[0].due;   // Canvas due date of a single-assignment item
-        if (got.some(a => a.score === null)) { if (got.some(a => a.score === null && a.submitted)) (grades[PENDING] = grades[PENDING] || {})[k] = true; missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
+        if (got.some(a => a.score === null)) { /* pending only when nothing of it is missing */ if (got.some(a => a.score === null && a.submitted) && !got.some(a => a.score === null && a.missing)) (grades[PENDING] = grades[PENDING] || {})[k] = true; missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
         const pts = a => rule.pts && !(a.points > 0) ? rule.pts : a.points;
         if (got.some(a => !(pts(a) > 0))) { missing.push({ key:k, reason:"avaliação sem pontuação no Canvas" }); continue; }
         if (rule.one && got[0].stats && pts(got[0]) > 0) {   // class mean/min/max on the item's own scale
@@ -815,7 +816,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.8.1";
+  const EXT_LATEST = "6.9.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -908,6 +909,7 @@ const NotasCore = (() => {
   // - The tool's own final value wins: now is it, and the projection is shifted by what the visible formula misses.
   // - "total" adds raw points; the means use each leaf on 10 (a leaf not on 10 inside a mean: approx, the scale is a guess).
   // fill (optional, 0-10): also returns projected, the final with that grade on everything left (the course page simulator).
+  const ceil2 = x => Math.ceil(x * 100 - 1e-9) / 100, floor2 = x => Math.floor(x * 100 + 1e-9) / 100;   // a need never shown lower, a grade never higher
   // The student's own rule, for a course without our rules and without a formula in the Centro de Notas: the Canvas
   // items that count (the student unticks what is not graded), their points summed, the grade going up to "total"
   // (10 unless the Plano de Ensino says otherwise). Points not yet in Canvas (total minus what is planned) count as left.
@@ -931,10 +933,10 @@ const NotasCore = (() => {
       const ny = Math.max(0, top - pl); counted += its.length; open += o; notYet += ny;
       now += w * e / top * 10; gain += w * (o + ny) / top * 10; parts.push({ id: k, w: Number(P[k].w), now: Math.round(e / top * 1000) / 100, top, planned: pl });
     }
-    const shown = Math.round(now * 100) / 100;
+    const shown = floor2(now);
     if (now >= meta - 1e-9) return { status: "garantido", now: shown, need: 0, open, notYet, counted, total: 10, parts };
     const need = gain > 0 ? (meta - now) / gain * 10 : Infinity;
-    return { status: need > 10 ? "nao-da" : "precisa", now: shown, need: need > 10 ? null : Math.round(need * 100) / 100, open, notYet, counted, total: 10, parts };
+    return { status: need > 10 ? "nao-da" : "precisa", now: shown, need: need > 10 ? null : ceil2(need), open, notYet, counted, total: 10, parts };
   }
   // The student's formula, written the way the Plano de Ensino writes it, one line per part:
   //   Final = 40% RA1 + 60% RA2          (weights in %, or 0,4 RA1; they are normalised when they do not add to 100)
@@ -949,7 +951,7 @@ const NotasCore = (() => {
   function formulaParse(text) {
     const lines = [], errors = [];
     String(text || "").split(/\r?\n|;/).slice(0, 60).forEach((raw, n) => {
-      const s = raw.replace(/#.*/, "").trim(); if (!s) return;
+      const s = /^\s*#/.test(raw) ? "" : raw.trim(); if (!s) return;   // a comment is a line that starts with # ("Lista #2" stays a name)
       const m = /^([^=]{1,80})=(.{1,600})$/.exec(s); if (!m) { errors.push("linha " + (n + 1) + ": falta o \"=\" (ex.: Final = 40% RA1 + 60% RA2)"); return; }
       const name = m[1].trim(), rhs = m[2].trim();
       const fn = /^(m[eé]dia|soma)\s*\((.*)\)\s*(?:de\s+([\d.,]+))?$/i.exec(rhs);
@@ -973,6 +975,9 @@ const NotasCore = (() => {
   // items: [{ key, name, points, score }]. Returns custom()'s fields plus leaves: [{ name, items: [names], missing }] and errors.
   function formulaEval(text, items, meta) {
     const { lines, errors } = formulaParse(text), byName = new Map(lines.map(l => [foldName(l.name), l]));
+    // the final grade: the line called Final (or Nota final, Média final), else the one no other line uses, else the first
+    if (lines.length) { const used = new Set(lines.flatMap(l => l.terms.map(t => foldName(t.ref)))), named = lines.find(l => /^(nota |media )?final$/.test(foldName(l.name)));
+      const top = named || lines.find(l => !used.has(foldName(l.name))) || lines[0]; lines.splice(lines.indexOf(top), 1); lines.unshift(top); }
     const out = (status, extra) => Object.assign({ status, now: null, need: null, open: 0, notYet: 0, counted: 0, total: 10, leaves: [], errors }, extra);
     if (errors.length || !lines.length) return out("erro");
     const acts = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0), leaves = new Map();
@@ -986,21 +991,24 @@ const NotasCore = (() => {
         return { v: got / of * 10, pts: got, top: of }; }
       if (seen.has(l)) throw new Error("a parte \"" + l.name + "\" usa ela mesma");
       const s2 = new Set(seen).add(l), kids = l.terms.map(t => Object.assign({ w: t.w }, val(t.ref, x, s2)));
-      if (l.op === "sum") { const pts = kids.reduce((s, k) => s + (k.pts == null ? (k.top || 0) * x : k.pts), 0), top = l.top || kids.reduce((s, k) => s + (k.top || 0), 0);
-        return { v: top > 0 ? Math.min(10, pts / top * 10) : 0, pts, top }; }
+      if (l.op === "sum") {   // points added up; what is not in Canvas yet (a missing name, or the top above the known points) is left
+        const known = kids.reduce((s, k) => s + (k.top || 0), 0), got = kids.reduce((s, k) => s + (k.pts == null ? 0 : k.pts), 0);
+        if (kids.some(k => k.top == null) && !l.top) throw new Error("\"" + l.name + "\" soma algo que ainda não está no Canvas: diga quantos pontos ela vale com \"de N\" (ex.: soma(...) de 5)");
+        const top = l.top || known; return { v: top > 0 ? Math.min(10, (got + x * Math.max(0, top - known)) / top * 10) : 0, pts: got + x * Math.max(0, top - known), top }; }
       if (l.op === "avg") return { v: kids.reduce((s, k) => s + k.v, 0) / kids.length };
       const W = kids.reduce((s, k) => s + k.w, 0); return { v: W > 0 ? kids.reduce((s, k) => s + k.w * k.v, 0) / W : 0 };
     };
     let now, best;
     try { now = val(lines[0].name, 0, new Set()).v; best = val(lines[0].name, 1, new Set()).v; } catch (e) { errors.push(String(e.message)); return out("erro"); }
     const lv = [...leaves.values()], counted = lv.reduce((s, l) => s + l.items.length, 0);
+    for (const l of lines) { const seen = new Map(); for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref)); for (const a of lf ? lf.items : []) { if (seen.has(a) && seen.get(a) !== t.ref) errors.push("\"" + a.name + "\" entrou duas vezes em " + l.name + " (por \"" + seen.get(a) + "\" e \"" + t.ref + "\"): um nome com vírgula? use um pedaço sem vírgula"); seen.set(a, t.ref); } } }
     const open = acts.filter(a => lv.some(l => l.items.includes(a)) && (a.score == null || !Number.isFinite(Number(a.score)))).length;
     const extra = { leaves: lv.map(l => ({ name: l.name, items: l.items.map(a => a.name), missing: l.missing })), counted, open, notYet: lv.filter(l => l.missing).length, weights: lines.filter(l => l.op === "w" && Math.abs(l.terms.reduce((s, t) => s + t.w, 0) - 100) > 0.5).map(l => l.name) };
-    const shown = Math.round(now * 100) / 100;
+    const shown = floor2(now);
     if (now >= meta - 1e-9) return out("garantido", Object.assign(extra, { now: shown, need: 0 }));
     if (best < meta - 1e-9) return out("nao-da", Object.assign(extra, { now: shown }));
     let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (val(lines[0].name, mid, new Set()).v >= meta - 1e-9) hi = mid; else lo = mid; }
-    return out("precisa", Object.assign(extra, { now: shown, need: Math.round(hi * 1000) / 100 }));
+    return out("precisa", Object.assign(extra, { now: shown, need: ceil2(hi * 10) }));
   }
   function custom(items, rule, meta) {
     if (rule && typeof rule.formula === "string" && rule.formula.trim()) return formulaEval(rule.formula, items, meta);   // the student's own formula wins
@@ -1011,10 +1019,10 @@ const NotasCore = (() => {
     let earned = 0, open = 0, planned = 0;
     for (const i of counted) { const p = Number(i.points); planned += p; if (i.score == null || !Number.isFinite(Number(i.score))) open += p; else earned += Math.min(p, Math.max(0, Number(i.score))); }
     if (planned > total * 1.001) return { status: "acima", now: null, need: null, open, notYet: 0, counted: counted.length, total, planned: Math.round(planned * 100) / 100 };
-    const scale = 10 / total, notYet = Math.max(0, total - planned), left = open + notYet, now = Math.round(earned * scale * 100) / 100;
+    const scale = 10 / total, notYet = Math.max(0, total - planned), left = open + notYet, now = floor2(earned * scale);
     if (earned * scale >= meta - 1e-9) return { status: "garantido", now, need: 0, open, notYet, counted: counted.length, total };
     const need = left > 0 ? (meta / scale - earned) / left * 10 : Infinity;
-    return { status: need > 10 ? "nao-da" : "precisa", now, need: need > 10 ? null : Math.round(need * 100) / 100, open, notYet, counted: counted.length, total };
+    return { status: need > 10 ? "nao-da" : "precisa", now, need: need > 10 ? null : ceil2(need), open, notYet, counted: counted.length, total };
   }
   function centro(curso, meta, fill) {
     const none = st => ({ status: st, now: 0, need: null, left: [], approx: false });
@@ -1079,7 +1087,7 @@ const NotasCore = (() => {
       if (at(0) >= T - 1e-9) return Object.assign({ status: "garantido", now, need: 0, left, approx }, extra);
       if (!left.length || at(1) < T - 1e-9) return Object.assign({ status: "nao-da", now, need: null, left, approx }, extra);
       let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (at(mid) >= T - 1e-9) hi = mid; else lo = mid; }
-      return Object.assign({ status: "precisa", now, need: Math.round(hi * 1000) / 100, left, approx }, extra);
+      return Object.assign({ status: "precisa", now, need: Math.ceil(hi * 1000 - 1e-9) / 100, left, approx }, extra);
     } catch (e) { return none("sem-formula"); }
   }
   return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, formulaParse, formulaEval, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,

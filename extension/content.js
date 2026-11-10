@@ -192,6 +192,7 @@
   async function loadRules(user) { const { myRules: all } = await chrome.storage.local.get("myRules"); rulesUser = user; myRules = all && typeof all === "object" && all[user] && typeof all[user] === "object" ? all[user] : {}; return myRules; }
   async function saveRule(user, courseId, rule) {
     const { myRules: all } = await chrome.storage.local.get("myRules"), base = all && typeof all === "object" ? all : {};
+    if (rule && rule.merge) { const stored = base[user] && base[user][courseId]; rule = Object.assign({}, stored, rule); delete rule.merge; }   // a change onto the rule as stored now
     const parts = {}, part = {};
     for (const k of ["A", "B", "C"]) { const x = rule.parts && rule.parts[k]; if (x && Number(x.w) > 0) parts[k] = Object.assign({ w: Math.min(100, Number(x.w)) }, Number(x.top) > 0 ? { top: Math.min(1000, Number(x.top)) } : {}); }
     for (const [key, k] of Object.entries(rule.part || {}).slice(0, 300)) if (/^[ABC]$/.test(k)) part[String(key).slice(0, 300)] = k;
@@ -241,11 +242,11 @@
     ta.setAttribute("aria-label", key === "painel" ? "Minhas anotações" : "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
     pad.append(ta, saved);
     let tm = 0, typed = 0;
-    const store = async () => {
+    const store = async () => { try {
       const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
       const v = String(ta.value || "").slice(0, 5000); if (v) mine[key] = v; else delete mine[key];
       await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
-    };
+    } catch (e) { saved.textContent = "Não salvou (a extensão foi atualizada?): copie o texto e recarregue a página."; } };   // never a silent loss
     ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
     chrome.storage.local.get("notes").then(({ notes }) => {
       const v = notes && notes[cache.user] && notes[cache.user][key];
@@ -417,6 +418,36 @@
   // Deadlines from the Canvas planner (every course) plus our exams that are not in Canvas, from today on. marks: what the
   // student ticked as done here (never written to Canvas); done is what Canvas says (handed in, graded).
   const shortName = name => String(name || "").split(" (")[0].split(" - ")[0];
+  // The course programs (Canvas's "Resumo do curso" on each Programa page): every assignment of the term with a due date,
+  // from the reading itself (no request), plus the courses' calendar events (read once per page, 10 courses a request).
+  // Same keys as the planner ("assignment:<id>", "calendar_event:<id>"), so nothing shows twice.
+  let progEvents = null;
+  function programa(a, cache, marks, courseId) {
+    const out = [], idOf = u => { const m = /\/assignments\/(\d+)/.exec(String(u || "")); return m ? m[1] : null; };
+    for (const cv of (cache.data && cache.data.courses) || []) {
+      if (courseId && String(cv.id) !== String(courseId)) continue;
+      for (const x of cv.assignments || []) { if (!x || !x.due || Number.isNaN(Date.parse(x.due))) continue;
+        const id = idOf(x.url), key = id ? "assignment:" + id : "prog:" + cv.id + ":" + x.name;
+        out.push({ key, cid: cv.id, mine: !!(marks && marks[key]), title: String(x.name || ""), course: (a.byCanvasId[cv.id] && a.byCanvasId[cv.id].name) || shortName(cv.name), ours: a.byCanvasId[cv.id] || null,
+          task: true, date: C.localISO(new Date(x.due)), due: x.due, url: typeof x.url === "string" && x.url.startsWith(location.origin + "/") ? x.url : null, done: !!(x.submitted || x.score != null || x.excused), late: !!x.missing, prog: true }); }
+    }
+    for (const e of progEvents || []) if (!courseId || String(e.cid) === String(courseId)) out.push(Object.assign({ mine: !!(marks && marks[e.key]) }, e));
+    return out;
+  }
+  async function loadProgEvents(cache) {
+    if (progEvents) return progEvents;
+    const ids = ((cache.data && cache.data.courses) || []).map(c => String(c.id)).filter(x => /^\d{1,15}$/.test(x)), got = [];
+    for (let i = 0; i < ids.length; i += 10) {
+      const q = ids.slice(i, i + 10).map(id => "context_codes[]=course_" + id).join("&");
+      try { const evs = await getAll("/api/v1/calendar_events?type=event&all_events=true&per_page=100&" + q, 3);
+        for (const e of Array.isArray(evs) ? evs : []) { const cid = /^course_(\d+)$/.exec(String(e.context_code || "")); if (!cid || !e.start_at || !e.id) continue;
+          const cv = cache.data.courses.find(c => String(c.id) === cid[1]);
+          got.push({ key: "calendar_event:" + e.id, cid: cid[1], title: String(e.title || "").slice(0, 200), course: cv ? shortName(cv.name) : "", ours: null, task: false, date: C.localISO(new Date(e.start_at)), due: e.all_day ? null : e.start_at,
+            url: typeof e.html_url === "string" && e.html_url.startsWith(location.origin + "/") ? e.html_url : null, done: false, late: false, prog: true, exam: /prova|avalia[cç][aã]o|exame/i.test(String(e.title || "")) }); } }
+      catch (e) { /* the events are extra: the assignments are already there */ }
+    }
+    progEvents = got; return got;
+  }
   function agenda(a, cache, marks) {
     const short = (name, id) => { const c = a.byCanvasId[id]; return c ? c.name : shortName(name); };
     const out = [];
@@ -1272,12 +1303,12 @@
       // the courses the student moved to their own rule leave the numbers above: listed here with that rule
       ruleCache = cache; const own = a.expired ? [] : cache.data.courses.filter(c => myRules[String(c.id)] && myRules[String(c.id)].own && !hiddenNow.includes(String(c.id))).map(c => ({ c, r: customOf(String(c.id)) })).filter(x => x.r && x.r.status !== "vazio");
       if (own.length) { const sec = el("section", "card centro own"), ul = el("ul"); sec.appendChild(el("h3", null, "Sua regra"));
-        for (const { c, r } of own) { const li = el("li", "row"); li.append(el("span", "d", r.now == null ? "—" : fmt(r.now, 1)), mid(shortName(c.name), "/courses/" + c.id, r.status === "acima" ? "os pontos passam do total: ajuste na matéria" : customText(r)), el("span", "pill " + (r.status === "acima" ? "nt" : centroTone(r)), customPill(r))); ul.appendChild(li); }
+        for (const { c, r } of own) { const li = el("li", "row"); li.append(el("span", "d", r.now == null ? "—" : fmt(r.now, 1)), mid(shortName(c.name), "/courses/" + c.id, r.status === "erro" ? "a fórmula tem um erro: abra a matéria" : r.status === "acima" ? "os pontos passam do total: ajuste na matéria" : customText(r)), el("span", "pill " + (r.status === "acima" || r.status === "erro" ? "nt" : centroTone(r)), r.status === "erro" ? "erro" : customPill(r))); ul.appendChild(li); }
         sec.appendChild(ul); box.appendChild(sec); } }
     else if (why) {   // no rules of ours: the Centro de Notas formulas, course by course, when the professors set them
       const off = hiddenNow;   // the courses taken off the dashboard in the popup
       ruleCache = cache;
-      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r && x.r.status !== "vazio");   // an old term: its points are not this semester's
+      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r && x.r.status !== "vazio" && x.r.status !== "erro");   // a formula with an error says so on its course page   // an old term: its points are not this semester's
       if (rows.length) {
         const sec = el("section", "card centro"), h = el("h3", null, "Quanto falta"), ul = el("ul");
         sec.appendChild(h);
@@ -1357,7 +1388,7 @@
     ruleCache = cache;
     const mr = !c && !cr && prefs.grades && !a.expired && ruleItems(courseId).length ? customOf(courseId) || { status: "vazio" } : null;   // neither (or chosen): the student's own rule
     const ownBtn = () => { const b = el("button", "mini own-b", "Montar minha própria regra"); b.type = "button"; b.title = "Usar os pontos do Canvas desta matéria, com o que você tira da conta e os pesos que você puser, no lugar desta regra";
-      b.addEventListener("click", async () => { await saveRule(cache.user, courseId, { off: [], total: 10, own: true }); location.reload(); }); return b; };
+      b.addEventListener("click", async () => { await saveRule(cache.user, courseId, { merge: true, own: true }); location.reload(); }); return b; };   // keeps a formula written before
     if (!c && !cr && !mr && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
@@ -1407,7 +1438,7 @@
         + "# Com pesos, como no Plano de Ensino:\n# Final = 40% RA1 + 60% RA2\n# RA1 = 75% Prova do RA1 + 25% Exercícios\n# Exercícios = média(TDE 1, TDE 2, PBL01)";
       ta.value = rule.formula || sample; ta.rows = Math.min(14, Math.max(5, ta.value.split("\n").length + 1)); ta.spellcheck = false; ta.setAttribute("aria-label", "Fórmula da nota desta matéria");
       apply.type = ex.type = "button";
-      apply.addEventListener("click", async () => { await saveRule(cache.user, courseId, Object.assign({}, myRules[courseId] || rule, { formula: String(ta.value).slice(0, 4000) })); redraw(); });
+      apply.addEventListener("click", async () => { await saveRule(cache.user, courseId, { merge: true, formula: String(ta.value).slice(0, 4000), own: own || undefined }); redraw(); });
       ex.addEventListener("click", () => { ta.value = sample; });
       acts.append(apply, ex);
       ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Escreva como no Plano de Ensino: pesos em % (Final = 40% RA1 + 60% RA2), média(...) ou soma(...) de N. Os nomes que não são partes são atividades do Canvas."), ta, acts);
@@ -1559,11 +1590,12 @@
     const build = () => {
       const seen = new Set(); items = [];
       const rule = c ? c.items.filter(it => it.date).map(it => { const key = "qf:" + C.key(c, it); return { key, mine: !!marks[key], title: it.name, date: it.date, exam: it.exam, task: !it.exam, url: null, rule: true }; }) : [];
-      for (const x of agenda(a, cache, marks).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(rule)) {
+      for (const x of agenda(a, cache, marks).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(programa(a, cache, marks, courseId), rule)) {
         const k = x.date + "|" + fold(x.title).slice(0, 24); if (seen.has(k)) continue; seen.add(k); items.push(x);
       }
     };
     build();
+    if (!progEvents) loadProgEvents(cache).then(() => { build(); if (typeof draw === "function") draw(); }, () => {});   // this course's calendar events too
     const sec = el("section", "card mcal"), left = el("div", "mc-l"), right = el("div", "mc-r"), head = el("div", "mc-h"), prev = el("button", null, "‹"), next = el("button", null, "›"), title = el("b");
     prev.type = next.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
     head.append(prev, title, next); const grid = el("div", "mc-g"); left.append(head, grid); sec.append(left, right);
@@ -1953,7 +1985,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     for (let d = new Date(Number(first), 7, 1); C.localISO(d) <= C.TERM_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(C.localISO(d).slice(0, 7));
     let cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : months[0];
     { const home = cur, hostEl = document.getElementById("cp-cal"); if (hostEl) hostEl.cpBusy = () => cur !== home; }   // a new reading redraws the calendar, but not under a student looking at another month
-    const extra = {}, base = agenda(a, cache, marks);
+    const extra = {}; let base = agenda(a, cache, marks).concat(programa(a, cache, marks));   // the planner and every course program
     const ruleItems = (a.rules ? a.mine : []).flatMap(c => c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, course: C.SHORT[c.id] || c.name, date: it.date, exam: it.exam, task: !it.exam, url: courseOf[c.id] ? location.origin + "/courses/" + courseOf[c.id] : null, rule: true })));
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
     const nav = el("span", "calnav"), prev = el("button", null, "‹"), next = el("button", null, "›"), now = el("button", null, "Hoje"), title = el("b", "calt");
@@ -1962,7 +1994,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     const natB = el("button", "find natv", prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"); natB.type = "button";
     natB.addEventListener("click", async () => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { nativeCal: !prefs.nativeCal }) }); prefs = cpPrefs(Object.assign({}, prefs, { nativeCal: !prefs.nativeCal })); natB.textContent = prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"; setTimeout(() => window.dispatchEvent && window.dispatchEvent(new Event("resize")), 60); });   // Canvas's calendar measures itself when shown
     hd.appendChild(natB);
-    const grid = el("div", "card cal"), legend = el("div", "muted src", "Prazos do Canvas, provas do Plano de Ensino e as suas tarefas · clique para abrir");
+    const grid = el("div", "card cal"), legend = el("div", "muted src", "O programa de cada matéria (as atividades e os eventos do Canvas), as provas do Plano de Ensino e as suas tarefas · clique para abrir");
     box.append(hd, grid, legend);
     const itemsOf = ym => {
       const seen = new Set(), out = [];
@@ -1970,6 +2002,9 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
         if (!x.date || x.date.slice(0, 7) !== ym) continue;
         const k = (x.rule ? x.course + x.date : x.key);
         if (x.rule && base.some(y => y.exam && y.date === x.date && y.ours && (C.SHORT[y.ours.id] || "") === x.course)) continue;
+        // a Plano item that the program already has on that day ("RA2 · AS 07 (grupo)" and Canvas's "AS 07"): once
+        if (x.rule) { const n = fold(String(x.title).replace(/^RA\d+\s*·\s*/, "").replace(/\(.*?\)/g, "")).trim();
+          if (n && base.some(y => !y.rule && y.date === x.date && ((y.ours && (C.SHORT[y.ours.id] || "") === x.course) || y.course === x.course) && (fold(y.title).includes(n) || n.includes(fold(y.title).trim())))) continue; }
         if (seen.has(k)) continue; seen.add(k); out.push(x);
       }
       return out.sort((p, q) => (p.due || p.date).localeCompare(q.due || q.date));
@@ -2008,6 +2043,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     next.addEventListener("click", () => { const i = months.indexOf(cur); if (i < months.length - 1) { cur = months[i + 1]; draw(); load(cur); } });
     now.addEventListener("click", () => { cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : cur; draw(); });
     draw(); load(cur);
+    loadProgEvents(cache).then(() => { base = agenda(a, cache, marks).concat(programa(a, cache, marks)); draw(); }, () => {});   // the courses' calendar events, when they arrive
   }
 
   // Canvas login and logout pages (the content script runs on every pucpr.instructure.com page): the next student may be
@@ -2139,7 +2175,8 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       let greetTries = 0;
       window.cpGreet = () => { if (++greetTries > 12 || (document.querySelector && document.querySelector(".cp-greet"))) { window.cpGreet = null; return; } greet(agenda(a, cache, marks)); };
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
-      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpRepaint ? window.cpRepaint() : window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed: the panel and the cards again
+      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centroOff && !ch.centroOff.newValue) { centroOff = false; for (const h of ["cp-dash", "qf-panel"]) { const x = document.getElementById(h), r = x && x.cpRoot; for (const o of r && r.querySelectorAll ? r.querySelectorAll(".centro-ask") : []) o.remove(); } }   // allowed: the offer goes at once
+        if (ch.centro) loadCentro(cache.user).then(() => window.cpRepaint ? window.cpRepaint() : window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
