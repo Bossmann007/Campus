@@ -47,11 +47,11 @@ const QFFiles = (() => {
     return safeName(ours ? ours.name : canvasName.split(" (")[0].split(" - ")[0]) || "Curso";
   }
   // Downloads-relative path, or null when the file must not be saved (blocked type or too big).
-  function target(canvasName, file, courses, canvas, cid) {
+  function target(canvasName, file, courses, canvas, cid, root = "PUCPR") {
     const name = safeName(file.display_name || file.filename);
     if (!name || file.size > MAX_BYTES) return null;
     const k = kind(name);
-    return "PUCPR/" + courseFolder(canvasName, courses, canvas, cid) + "/" + (k ? k + "/" : "") + name;
+    return root + "/" + courseFolder(canvasName, courses, canvas, cid) + "/" + (k ? k + "/" : "") + name;
   }
   return { kind, safeName, courseFolder, target, MAX_BYTES };
 })();

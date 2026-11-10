@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Caderno+ · Sua IA</title><link rel="stylesheet" href="onboarding.css"><link rel="stylesheet" href="ai.css"></head>
+<body>
+  <main class="ob ai">
+    <header><b class="wm">Caderno<i>+</i></b><span class="tagl">Sua IA</span></header>
+
+    <h1>Sua IA, com o seu Canvas.</h1>
+    <p class="lead">O Caderno+ MCP é um programinha que roda no seu computador e deixa o Claude, o ChatGPT desktop, o Gemini ou o Codex lerem o seu Canvas: quanto falta (com a fórmula do Centro de Notas), o que falta entregar, a semana, as notas, os quizzes, os avisos, os módulos e os professores. Sem token e sem servidor: ele pergunta para esta extensão, que lê o Canvas com o login do seu navegador.</p>
+
+    <ol class="steps3 big">
+      <li><b>Instale o Caderno+ MCP no app da sua IA</b><span>Claude Desktop: abra o arquivo .mcpb e, quando ele pedir, cole o id da extensão (as letras do comando do passo 2). Claude Code, Codex, Gemini CLI e outros: <code>npm install -g caderno-mcp</code> e depois <code>caderno-mcp setup</code> mostra a linha para o seu app. <em class="soon">beta</em></span><span class="acts"><a class="btn" id="howto" href="https://caderno-plus.vercel.app/ia" target="_blank" rel="noopener noreferrer">Passo a passo por app ↗</a></span></li>
+      <li><b>Ligue a ponte</b><span>Rode este comando uma vez no terminal (ele registra a ponte no seu navegador) e clique em Ligar. O navegador pede para o Caderno+ "se comunicar com aplicativos nativos cooperativos": é a ponte.</span>
+        <span class="acts"><code id="cmd">caderno-mcp ponte …</code> <button class="btn" type="button" id="copyCmd">Copiar</button> <button class="btn primary" type="button" id="ponteOn">Ligar a ponte</button> <button class="btn" type="button" id="ponteOff" hidden>Desligar</button></span>
+        <span class="acts ponte-st" id="ponteSt" role="status"></span></li>
+      <li><b>Pergunte</b><span>Use as perguntas abaixo, ou as suas; a matéria pode ser só um pedaço do nome ("banco", "imperativa"). Deixe o navegador aberto: a IA consulta o Canvas na hora, só leitura.</span></li>
+    </ol>
+
+    <div class="warn"><b>O que a ponte faz.</b> Só leituras do Canvas da PUCPR e do Centro de Notas, pedidas pelo Caderno+ MCP do seu computador. Nada é enviado para servidor nosso; o que a IA consulta vai para o app de IA. Enquanto ligada, o processo de fundo do Caderno+ fica acordado. Para desligar: o botão Desligar acima (tira também a permissão); para tirar a ponte do computador, <code>caderno-mcp ponte remove</code>.</div>
+
+    <details class="tok"><summary>Uso pessoal com token (sem a ponte)</summary>
+      <p class="fine">Também dá para usar um token do Canvas (Conta → Configurações → "+ Novo token de acesso") guardado no cofre do sistema com <code>caderno-mcp login</code>. A documentação do Canvas não permite pedir isso a outros alunos: é só para você. Nunca cole o token em chat. <a href="https://pucpr.instructure.com/profile/settings" target="_blank" rel="noopener noreferrer">Abrir configurações do Canvas ↗</a></p>
+    </details>
+
+    <h2>O que ela sabe responder</h2>
+    <p class="fine">Clique numa pergunta para copiar.</p>
+    <div class="asks" id="asks">
+      <button type="button" data-q="Quanto eu preciso tirar em cada matéria para passar?"><b>Quanto falta</b><span>Quanto eu preciso tirar em cada matéria para passar?</span></button>
+      <button type="button" data-q="O que vence nos próximos 7 dias? Separe provas e entregas."><b>Próximos dias</b><span>O que vence nos próximos 7 dias?</span></button>
+      <button type="button" data-q="Quais notas já saíram em Banco de Dados?"><b>Notas</b><span>Quais notas já saíram em Banco de Dados?</span></button>
+      <button type="button" data-q="Tem aviso novo de algum professor?"><b>Avisos</b><span>Tem aviso novo de algum professor?</span></button>
+      <button type="button" data-q="Em que módulo está o material de JOIN?"><b>Módulos</b><span>Em que módulo está o material de JOIN?</span></button>
+      <button type="button" data-q="O que eu ainda não entreguei? Separe o que já está atrasado do que ainda dá tempo."><b>Pendências</b><span>O que eu ainda não entreguei?</span></button>
+      <button type="button" data-q="Quais quizzes tem em Conectividade e quantas tentativas eu tenho em cada um?"><b>Quizzes</b><span>Quantas tentativas tenho nos quizzes?</span></button>
+      <button type="button" data-q="Monte um plano de estudo para esta semana com as minhas entregas e provas, começando pelo que vale mais nota."><b>Plano da semana</b><span>Monte um plano de estudo para esta semana.</span></button>
+    </div>
+    <p class="fine" id="copied" role="status"></p>
+
+    <p class="fine">A sua IA recebe o que ela consultar para responder: veja a privacidade do app dela. O Caderno+ (a extensão) não envia nada para servidor nenhum.</p>
+  </main>
+  <script src="ai.js"></script>
+</body>
+</html>

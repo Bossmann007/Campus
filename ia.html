@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Conectar sua IA · Caderno+</title>
+<meta name="description" content="Conecte o Claude, o ChatGPT desktop, o Gemini ou o Codex ao seu Canvas da PUCPR pela extensão Caderno+: sem token, só leitura.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Caderno+">
+<meta property="og:title" content="Conectar sua IA ao Canvas · Caderno+">
+<meta property="og:description" content="Conecte o Claude, o ChatGPT desktop, o Gemini ou o Codex ao seu Canvas da PUCPR pela extensão Caderno+: sem token, só leitura.">
+<meta property="og:url" content="https://caderno-plus.vercel.app/ia">
+<meta property="og:image" content="https://caderno-plus.vercel.app/media/ia-poster.png">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%3E%3Crect%20x=%221%22%20y=%221%22%20width=%2230%22%20height=%2230%22%20rx=%227%22%20fill=%22%231D2433%22/%3E%3Cpath%20fill=%22%23FBF7EF%22%20d=%22M18.71%2019.77Q18.7%2020.58%2018.26%2021.39Q17.82%2022.21%2017%2022.89Q16.17%2023.58%2014.99%2023.99Q13.81%2024.4%2012.3%2024.4Q9.84%2024.4%208.04%2023.34Q6.25%2022.28%205.28%2020.4Q4.3%2018.52%204.3%2016.09Q4.3%2014.24%204.88%2012.7Q5.45%2011.16%206.5%2010.01Q7.54%208.87%208.95%208.23Q10.35%207.6%2012%207.6Q13.15%207.6%2013.86%207.82Q14.58%208.05%2014.99%208.27Q15.4%208.5%2015.64%208.5Q15.93%208.5%2016.08%208.3Q16.23%208.1%2016.39%207.91Q16.55%207.71%2016.83%207.71Q17.04%207.71%2017.17%207.85Q17.31%207.98%2017.4%208.28L18.6%2012.22Q18.68%2012.48%2018.55%2012.69Q18.42%2012.9%2018.16%2012.95Q17.88%2013.01%2017.66%2012.9Q17.45%2012.79%2017.32%2012.52Q16.71%2011.15%2015.96%2010.34Q15.21%209.54%2014.34%209.19Q13.48%208.83%2012.47%208.83Q11.46%208.83%2010.61%209.29Q9.77%209.76%209.15%2010.61Q8.53%2011.47%208.2%2012.67Q7.86%2013.87%207.86%2015.36Q7.86%2017.65%208.57%2019.25Q9.29%2020.84%2010.52%2021.66Q11.75%2022.48%2013.34%2022.48Q14.86%2022.48%2015.98%2021.76Q17.11%2021.03%2017.73%2019.71Q17.86%2019.45%2018.02%2019.36Q18.18%2019.28%2018.37%2019.31Q18.54%2019.33%2018.63%2019.45Q18.71%2019.57%2018.71%2019.77Z%22/%3E%3Cpath%20d=%22M24.5%209v6.6M21.2%2012.3h6.6%22%20fill=%22none%22%20stroke=%22%23E2482B%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20transform=%22rotate%28-6%2024.5%2012.3%29%22/%3E%3C/svg%3E">
+<style>
+  @font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(/fonts/fraunces-latin-500-normal.woff2) format("woff2"); }
+  @font-face { font-family:"Fraunces"; font-style:italic; font-weight:400; font-display:swap; src:url(/fonts/fraunces-latin-400-italic.woff2) format("woff2"); }
+  :root { --paper:#FBF7EF; --ink:#1D2433; --muted:#5F6675; --line:#ECE4D3; --coral:#E2482B; --coral-ink:#C03A1F; --sunk:#F4EEE3; --logo-tile:#1D2433; --logo-c:#FBF7EF; color-scheme:light;
+          --serif:"Fraunces","Iowan Old Style","New York",Georgia,serif; }
+  @media (prefers-color-scheme:dark) { :root { --paper:#141925; --ink:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --coral:#F0603F; --coral-ink:#FF8D72; --sunk:#222938; --logo-tile:#F3EDE1; --logo-c:#1D2433; color-scheme:dark; } }
+  body { margin:0; font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+  main { max-width:680px; margin:0 auto; padding:40px 24px 72px; }
+  .home { display:inline-flex; align-items:center; gap:9px; font:500 19px/1 var(--serif); letter-spacing:-.02em; color:var(--ink); text-decoration:none; margin-bottom:56px; }
+  .home i { font-style:normal; color:var(--coral); }
+  .logo .lt { fill:var(--logo-tile); } .logo .lc { fill:var(--logo-c); } .logo .lp { fill:none; stroke:var(--coral); stroke-width:2.4; stroke-linecap:round; }
+  h1 { font:500 clamp(36px,6vw,48px)/1.05 var(--serif); letter-spacing:-.035em; margin:0 0 12px; }
+  h2 { font:500 22px/1.25 var(--serif); letter-spacing:-.015em; margin:40px 0 6px; padding-top:20px; border-top:1px solid var(--line); }
+  a { color:var(--coral-ink); text-decoration-color:color-mix(in srgb, var(--coral) 40%, transparent); text-underline-offset:3px; }
+  a:hover { text-decoration-color:var(--coral); }
+  code { font:13.5px "SF Mono",ui-monospace,Menlo,monospace; background:var(--sunk); border:1px solid var(--line); border-radius:6px; padding:1px 5px; }
+  .muted { color:var(--muted); }
+  :focus-visible { outline:2px solid var(--coral); outline-offset:3px; border-radius:4px; }
+  .box { border:1px solid var(--line); background:var(--sunk); border-radius:12px; padding:14px 18px; margin:18px 0; }
+  .box.warn { border-color:color-mix(in srgb, var(--coral) 45%, var(--line)); }
+  .soon { display:inline-block; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--coral-ink); border:1px solid currentColor; border-radius:999px; padding:0 8px; margin-left:6px; vertical-align:2px; }
+  pre { font:13px/1.5 "SF Mono",ui-monospace,Menlo,monospace; background:var(--sunk); border:1px solid var(--line); border-radius:10px; padding:10px 12px; overflow-x:auto; white-space:pre; }
+  ol li, ul li { margin:6px 0; }
+  .film { margin:18px 0 8px; border:1px solid var(--line, #ECE4D3); border-radius:14px; overflow:hidden; } .film video { display:block; width:100%; height:auto; aspect-ratio:16/9; } .film figcaption { padding:8px 14px; font-size:13px; color:var(--muted, #5F6675); }
+</style>
+</head>
+<body><main>
+<a class="home" href="/"><svg class="logo" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><span>Caderno<i>+</i></span></a>
+<h1>Conectar sua IA ao Canvas</h1>
+<p class="muted">Caderno+ MCP · um programa separado da extensão · não oficial · <span class="soon">beta</span></p>
+<figure class="film"><video src="/media/ia.mp4" poster="/media/ia-poster.png" controls autoplay muted loop playsinline preload="metadata" aria-label="Vídeo: instalar o Caderno+ MCP no terminal, ligar a ponte com a extensão e perguntar à IA quanto falta em cada matéria"></video><figcaption>Os três passos em 16 segundos, com notas de exemplo.</figcaption></figure>
+
+<p>Com o Caderno+ MCP, a sua IA (Claude, ChatGPT desktop, Gemini CLI, Codex, Claude Code e outras) consegue responder "quanto falta em cada matéria?", "o que eu ainda não entreguei?" e "o que vence esta semana?" com os seus dados do Canvas da PUCPR. Ele roda <b>no seu computador</b> e pergunta para a <b>extensão Caderno+</b>, que lê o Canvas com o login do seu navegador: <b>sem token</b>, sem arquivo de dados e sem servidor nosso no meio. Só lê: não entrega trabalho, não responde quiz, não manda mensagem, não marca nada.</p>
+
+<div class="box warn">
+<p><b>Antes de conectar, saiba:</b></p>
+<ul>
+<li>O que a IA consulta (notas, prazos, títulos de avisos e módulos, nomes das matérias) vai para o app de IA e, por ele, para a nuvem da empresa da IA (por exemplo, a Anthropic no Claude). Fica no histórico da conversa.</li>
+<li>A IA consulta sozinha durante a conversa, sem pedir a cada vez (as consultas só leem). Títulos escritos no Canvas podem ter nomes de professores ou colegas.</li>
+<li>O navegador precisa estar aberto, com o Caderno+, e você logado no Canvas. Enquanto a ponte estiver ligada, o processo de fundo do Caderno+ fica acordado.</li>
+<li>A ponte só aceita leituras de uma lista fixa de endereços do Canvas e do Centro de Notas. Ela fica num canal do seu computador que só o seu usuário abre; programas que rodam com o seu próprio usuário conseguem usá-la.</li>
+<li>É uma ferramenta não oficial. A política de API da Instructure (dona do Canvas), item 3(i), proíbe acessar o Canvas por servidores MCP que ela não aprovou, e o Caderno+ MCP não é aprovado pela Instructure nem pela PUCPR. Use por sua conta. (A documentação do Canvas não permite que um app usado por várias pessoas peça um token criado à mão; por isso a ponte não usa token. OAuth exigiria uma chave da PUCPR.)</li>
+</ul>
+</div>
+
+<h2>1. Instale o Caderno+ MCP no app da IA <span class="soon">beta</span></h2>
+<div class="box warn"><p><b>Versão beta, só por estes caminhos.</b> Instale só o arquivo desta página ou o pacote <code>caderno-mcp</code> do npm, publicado por <code>bossmann</code> (<a href="https://www.npmjs.com/package/caderno-mcp" rel="noopener noreferrer">npmjs.com/package/caderno-mcp</a>). Não instale cópias com nome parecido.</p></div>
+
+<h3>Claude Desktop (Mac e Windows)</h3>
+<p>Baixe <a href="https://github.com/Bossmann007/Campus/releases/download/mcp-v1.3.1/caderno-mcp-1.3.1.mcpb" rel="noopener noreferrer">caderno-mcp-1.3.1.mcpb</a> e abra com dois cliques. O Claude pede o <b>id da extensão</b>: copie da página Sua IA do Caderno+ (Mais → Sua IA). Com ele, o Caderno+ MCP registra a ponte no seu navegador sozinho.</p>
+
+<h3>Outros apps (ChatGPT desktop, Codex, Gemini CLI, Claude Code, Cursor, VS Code)</h3>
+<p>Precisam do <a href="https://nodejs.org/" rel="noopener noreferrer">Node.js</a> 18 ou mais novo. No terminal (o comando da ponte, com o seu id, está pronto para copiar na página Sua IA do Caderno+):</p>
+<pre><code>npm install -g caderno-mcp
+caderno-mcp ponte &lt;id da extensão&gt;
+caderno-mcp setup</code></pre>
+<p>O <code>ponte</code> registra a ponte nos navegadores que você tem (Chrome, Brave, Edge, Chromium): um arquivo de registro do navegador, nenhum dado seu. O <code>setup</code> mostra a linha de configuração pronta para cada app; cole a do seu. O ChatGPT desktop usa a mesma configuração do Codex (<code>~/.codex/config.toml</code>).</p>
+
+<h2>2. Ligue a ponte</h2>
+<p>Na extensão: <b>Mais → Sua IA → Ligar a ponte</b>. O navegador pede para o Caderno+ "se comunicar com aplicativos nativos cooperativos": é a ponte. Depois, <code>caderno-mcp ponte status</code> diz se está tudo ligado.</p>
+
+<h3>Só pela web (ChatGPT web, Claude web, Gemini app)</h3>
+<p>Não funcionam: esses apps só falam com servidores na internet, e o Caderno+ MCP fica no seu computador de propósito. No ChatGPT, use o app desktop.</p>
+
+<h2>3. Pergunte</h2>
+<p>"Quanto falta em cada matéria?", "o que vence esta semana?", "o que eu ainda não entreguei?", "quantas tentativas tenho no quiz de Conectividade?", "quais avisos novos?", "quais módulos tem em Banco de Dados?". Pode chamar a matéria pelo nome, sem acento ou só por um pedaço ("banco", "imperativa"). O Caderno+ MCP lê só o Canvas da PUCPR (pucpr.instructure.com) e o Centro de Notas, e os números de "quanto falta" seguem as mesmas regras do painel do Caderno+.</p>
+
+<h2>Parar</h2>
+<p><code>caderno-mcp ponte remove</code> tira a ponte dos navegadores; remova também o Caderno+ MCP do app (no Claude Desktop, em Configurações → Extensões).</p>
+
+<details class="box"><summary><b>Uso pessoal com token (sem a ponte)</b></summary>
+<p>Para usar sem o navegador aberto, dá para guardar um token do Canvas seu (Conta → Configurações → + Novo token de acesso) no cofre do sistema com <code>caderno-mcp login</code>. A documentação do Canvas não permite pedir isso a outros alunos: é só para você. O token dá acesso total à sua conta; nunca cole em chat. Revogue no Canvas quando quiser; <code>caderno-mcp logout</code> apaga do cofre. Com a ponte ligada, ela é usada primeiro.</p>
+</details>
+
+<p class="muted">Veja também a <a href="/privacidade">política de privacidade</a>. Código aberto: <a href="https://github.com/Bossmann007/Campus" rel="noopener noreferrer">github.com/Bossmann007/Campus</a>.</p>
+</main></body>
+</html>

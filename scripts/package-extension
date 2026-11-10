@@ -1,11 +1,33 @@
 #!/bin/sh
 # Build the Chrome Web Store upload: dist/quanto-falta-extension-<version>.zip with only the extension files.
+# The scripts go in compacted (no comments or extra spaces, ASCII only, names kept: readable, not obfuscated): the
+# source each Canvas tab keeps in memory drops from two bytes per character to one and to about 3/4 of the text.
+# The compacted copy must pass the behavior tests (tests/inside-canvas-test.js with EXT_DIR) before it is zipped.
 set -eu
 cd "$(dirname "$0")/.."
 ./scripts/verify >/dev/null
 v=$(python3 -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
+b=dist/build && rm -rf "$b" && mkdir -p "$b"
+files="manifest.json popup.html popup.css popup.js onboarding.html onboarding.css onboarding.js ai.html ai.css ai.js prefs.js theme.js collect.js core.js files.js notes.js content.js background.js icons fonts"
+(cd extension && cp -R $files "../$b/")
+for f in "$b"/*.js; do
+  npx -y esbuild@0.25.10 "$f" --minify-whitespace --minify-syntax --charset=ascii --legal-comments=none --target=chrome120 --log-level=warning --outfile="$f.min" && mv "$f.min" "$f"
+  node --check "$f"
+done
+EXT_DIR="$b" TZ=America/Sao_Paulo node tests/inside-canvas-test.js >/dev/null || { echo "the compacted copy fails the behavior tests"; exit 1; }
 mkdir -p dist && out="dist/quanto-falta-extension-$v.zip" && rm -f "$out"
-(cd extension && zip -q -X -r "../$out" manifest.json popup.html popup.css popup.js prefs.js theme.js collect.js core.js files.js content.js background.js icons fonts)
+(cd "$b" && zip -q -X -r "../../$out" $files)
 unzip -l "$out" | tail -n +4 | sed '$d' | sed '$d'
 cp "$out" dist/quanto-falta-extension.zip   # stable name for the site download link (releases/latest/download/...)
-echo "built $out and dist/quanto-falta-extension.zip"
+# Firefox (desktop and Android, through addons.mozilla.org): the same files; MV3 there runs the worker as background
+# scripts (prefs.js first) and needs an add-on id
+fb=dist/build-firefox && rm -rf "$fb" && cp -R "$b" "$fb"
+python3 - "$fb/manifest.json" <<'PY'
+import json, sys
+p = sys.argv[1]; m = json.load(open(p))
+m["background"] = {"scripts": ["prefs.js", "background.js"]}
+m["browser_specific_settings"] = {"gecko": {"id": "caderno-plus@bossmann007.github.io", "strict_min_version": "128.0", "data_collection_permissions": {"required": ["none"]}}, "gecko_android": {"strict_min_version": "128.0"}}
+json.dump(m, open(p, "w"), ensure_ascii=False, indent=2)
+PY
+fout="dist/caderno-plus-firefox-$v.zip" && rm -f "$fout" && (cd "$fb" && zip -q -X -r "../../$fout" $files)
+echo "built $out (compacted, behavior tests passed), dist/quanto-falta-extension.zip and $fout"

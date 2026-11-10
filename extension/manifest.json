@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Caderno+ · PUCPR",
-  "version": "3.0.1",
+  "version": "6.6.0",
   "description": "O Canvas da PUCPR melhorado: semana, avisos, lembretes, busca, tema escuro, quanto falta e arquivos. Não oficial.",
   "action": {
     "default_popup": "popup.html",
@@ -19,6 +19,12 @@
   ],
   "host_permissions": [
     "https://pucpr.instructure.com/*"
+  ],
+  "optional_permissions": [
+    "nativeMessaging"
+  ],
+  "optional_host_permissions": [
+    "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -42,9 +48,10 @@
         "collect.js",
         "core.js",
         "files.js",
+        "notes.js",
         "content.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     }
   ],
   "content_security_policy": {
@@ -56,7 +63,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "homepage_url": "https://falta-quanto.vercel.app/",
+  "homepage_url": "https://caderno-plus.vercel.app/",
   "web_accessible_resources": [
     {
       "resources": [

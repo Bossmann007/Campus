@@ -1,14 +1,14 @@
 // Extension inside Canvas: core.js is app.html's core, file routing, the service worker's download guard, and content.js
 // run against a mocked Canvas (dashboard pill, course panel, files download through the service worker).
 const assert = require("assert"), fs = require("fs"), path = require("path");
-const root = path.join(__dirname, ".."), dir = path.join(root, "extension");
+const root = path.join(__dirname, ".."), dir = process.env.EXT_DIR || path.join(root, "extension");   // EXT_DIR: the packaged (compacted) copy
 const read = f => fs.readFileSync(path.join(dir, f), "utf8");
 let n = 0; const ok = s => { n++; };
 const f1 = x => x.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), up1 = x => f1(Math.ceil(x * 10 - 1e-9) / 10);
 
 // core.js is a copy of app.html's core block
 const core = fs.readFileSync(path.join(root, "app.html"), "utf8").match(/<script id="core">([\s\S]*?)<\/script>/)[1].replace(/^\n+|\n+$/g, "");
-assert.strictEqual(read("core.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), core, "extension/core.js is stale: run scripts/sync-ext-core"); ok();
+if (!process.env.EXT_DIR) assert.strictEqual(read("core.js").split("\n").slice(1).join("\n").replace(/\n+$/, ""), core, "extension/core.js is stale: run scripts/sync-ext-core"); ok();
 assert(!["app.html", "app-ui.js", "app-boot.js"].some(f => fs.existsSync(path.join(dir, f))), "no separate calculator page in the extension: it lives in Canvas");
 const C = new Function(read("core.js") + "\nreturn NotasCore;")();
 assert.strictEqual(C.EXT_LATEST, JSON.parse(read("manifest.json")).version, "EXT_LATEST matches the manifest"); ok();
@@ -35,7 +35,7 @@ const listeners = {}, swSaved = [], local = {}, session = {};
 const area = o => ({ get: async k => Object.fromEntries([].concat(k).map(x => [x, o[x]])), set: async v => { Object.assign(o, v); }, remove: async k => { delete o[k]; } });
 let nextId = 100;
 const alarms = {}, notes = [], tabs = [];
-const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listeners.msg = f; } }, onStartup: { addListener() {} }, onInstalled: { addListener() {} } },
+const chromeSW = { runtime: { id: "me", getManifest: () => ({ version: "9" }), onMessage: { addListener: f => { listeners.msg = f; } }, onStartup: { addListener() {} }, onInstalled: { addListener() {} } },
   storage: { local: area(local), session: area(session), onChanged: { addListener: f => { listeners.storage = f; } } },
   alarms: { create: async (name, o) => { alarms[name] = o; }, getAll: async () => Object.keys(alarms).map(name => ({ name })), clear: async name => { delete alarms[name]; },
     onAlarm: { addListener: f => { listeners.alarm = f; } } },
@@ -44,9 +44,13 @@ const chromeSW = { runtime: { id: "me", onMessage: { addListener: f => { listene
   action: { setBadgeText: async o => { local.badge = o.text; }, setTitle: async () => {}, setBadgeBackgroundColor: async () => {} },
   downloads: { onChanged: { addListener: f => { listeners.changed = f; } }, download: async o => { if (/boom/.test(o.filename)) throw new Error("Invalid filename"); swSaved.push(o); return nextId++; } } };
 const imported = [];   // importScripts("prefs.js") shares the worker's global scope: the test puts prefs.js in front instead
-const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone };")(chromeSW, f => imported.push(f));
+const sw = new Function("chrome", "importScripts", read("prefs.js") + "\n" + read("background.js") + "\nreturn { okDownload, nextMonday8, summary, focusDone, centroCourse, centroAll, slimCentro, nextMidnight, scheduleTick, restoreAlarms, ponteAnswer, ponteUp, ponteDown };")(chromeSW, f => imported.push(f));
 assert.deepStrictEqual(imported, ["prefs.js"]);
 assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download?verifier=x", filename: "PUCPR/BD/Slides/a.pdf" }));
+const cpFolder = new Function(read("prefs.js") + "\nreturn cpFolder;")();
+assert.strictEqual(cpFolder("Faculdade/2026-2"), "Faculdade/2026-2"); assert.strictEqual(cpFolder("../etc"), "etc"); assert.strictEqual(cpFolder("a/b/c/d"), "PUCPR", "more than 3 levels: the default");
+assert.strictEqual(cpFolder('x<>:"|?*y'), "xy"); assert.strictEqual(cpFolder(""), "PUCPR"); assert.strictEqual(cpFolder("nul/Aulas."), "nul_/Aulas", "Windows-reserved names and trailing dots fixed");
+assert(sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "Faculdade/BD/a.pdf" }, "Faculdade") && !sw.okDownload({ url: "https://pucpr.instructure.com/files/1/download", filename: "PUCPR/BD/a.pdf" }, "Faculdade"), "only inside the student's folder");
 for (const bad of [{ url: "https://evil.example/a", filename: "PUCPR/a.pdf" }, { url: "https://pucpr.instructure.com/x", filename: "Documents/a.pdf" },
   { url: "https://pucpr.instructure.com/x", filename: "PUCPR/../a.pdf" }, { url: "javascript:alert(1)", filename: "PUCPR/a" }, { url: "https://pucpr.instructure.com/x", filename: "PUCPR//a" }])
   assert(!sw.okDownload(bad), JSON.stringify(bad));
@@ -81,11 +85,14 @@ const PLANNER = [
   { plannable_type: "announcement", plannable_id: 4, plannable: { title: "Aviso" }, plannable_date: isoIn(0) + "T13:00:00Z", context_name: BD, course_id: 71306, submissions: false }];
 async function runContent(pathname, files, preStore, opts = {}) {
   const header = fakeEl("div"), card = fakeEl("div"), anchor = fakeEl("div"), sent = [], store = Object.assign({}, preStore);
+  if (!opts.askTurma) store.prefs = Object.assign({ turma: "Ciência da Computação, manhã" }, store.prefs);   // the student confirmed the turma (its own tests below)
   anchor.prepend = function (c) { c.parent = this; this.kids.unshift(c); byId[c.id] = c; };
   const menu = fakeEl("ul"), body = fakeEl("body"), winListeners = {}, alerts = [];
   const byId = { content: anchor, menu };
   if (opts.classic) byId.DashboardCard_Container = { id: "DashboardCard_Container" };
   if (opts.tray) byId["nav-tray-portal"] = opts.tray;
+  if (opts.mods) byId.context_modules = opts.mods;
+  if (opts.nav) { byId["section-tabs"] = opts.nav; opts.nav.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; }; }
   card.querySelector = sel => sel.startsWith("a[") ? { getAttribute: () => "/courses/" + (opts.courseId || 71306) } : header;
   body.appendChild = function (c) { this.append(c); byId[c.id] = c; return c; };
   menu.insertBefore = function (c, ref) { c.parent = this; this.kids.push(c); byId[c.id] = c; };
@@ -94,7 +101,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   Object.defineProperty(gname, "parentNode", { get() { return this.parent; } }); Object.defineProperty(gname, "nextSibling", { get() { return this.parent.kids[this.parent.kids.indexOf(this) + 1] || null; } });
   gcard.querySelector = sel => sel === "[data-cp-grade]" ? all(gcard).find(e => e["data-cp-grade"]) || null : /-name"\]$/.test(sel) ? gname : null;
   const tabContent = fakeEl("div"), cols = fakeEl("div"); if (opts.widgetCols || opts.classic) { tabContent.append(cols); anchor.append(tabContent); }
-  tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); };
+  tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); if (c.id) byId[c.id] = c; };   // found by id like any element of the page
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
     querySelector: sel => sel === ".ic-Dashboard-header__layout" ? (opts.header || null) : (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
@@ -131,12 +138,79 @@ async function runContent(pathname, files, preStore, opts = {}) {
   if (opts.tall) Object.assign(env.window, { innerHeight: 800, scrollTo(o) { this.scrolled = o; } });
   const history = { replaceState: (a, b, url) => { env.location.hash = ""; } };
   const src = opts.src || read("prefs.js") + "\n" + read("collect.js") + "\n" + read("core.js") + "\n" + read("files.js") + "\n" + read("content.js");
-  new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
-    class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date);
+  new Function("window", "location", "document", "chrome", "fetch", "MutationObserver", "TextEncoder", "btoa", "history", "alert", "addEventListener", "Date", "sessionStorage", src)(env.window, env.location, doc, opts.src ? undefined : chrome, fetch,
+    class { observe() {} disconnect() {} }, TextEncoder, btoa, history, m => alerts.push(m), env.window.addEventListener, opts.Date || Date, opts.session);   // each run is a new tab: no session storage unless the test hands one
   await new Promise(r => setTimeout(r, 30));
   return { header, anchor, sent, store, menu, body, env, winListeners, alerts, fetches, cols, gcard };
 }
 (async () => {
+{ // an update or a browser restart drops the alarms: the worker puts the reminders back from what it stored, without
+  // waiting for a Canvas page to send the list again (a tab that already sent it does not resend the same list)
+  const soon = Date.now() + 3600e3, past = Date.now() - 3600e3;
+  local.reminders = { ["r|assignment:1|" + soon]: { title: "Entrega: Lista 3", body: "BD · em 1 hora", url: "https://pucpr.instructure.com/" }, ["r|assignment:2|" + past]: { title: "velho", body: "", url: "" }, "r|bad|x": { title: "x" } };
+  for (const k of Object.keys(alarms)) delete alarms[k];
+  await sw.restoreAlarms();
+  assert(alarms["r|assignment:1|" + soon] && alarms["r|assignment:1|" + soon].when === soon, "a reminder still to come gets its alarm back");
+  assert(!alarms["r|assignment:2|" + past] && !alarms["r|bad|x"], "past or malformed ones are not scheduled");
+  local.prefs = { remind: false }; for (const k of Object.keys(alarms)) delete alarms[k]; await sw.restoreAlarms();
+  assert.strictEqual(Object.keys(alarms).length, 0, "reminders switched off: nothing restored"); local.prefs = {}; delete local.reminders;
+  ok();
+}
+{ // the icon's day count changes at midnight: the worker wakes once a day for it, not every hour
+  const noon = new Date(2026, 10, 9, 12, 0, 0).getTime(), mid = sw.nextMidnight(noon), d = new Date(mid);
+  assert(mid > noon && mid - noon < 13 * 3600e3 && d.getDate() === 10 && d.getHours() === 0 && d.getMinutes() === 1, "the next local midnight (00:01)");
+  sw.scheduleTick(); assert(alarms.tick && alarms.tick.when > Date.now() && alarms.tick.periodInMinutes === undefined, "one alarm at the next midnight, not a repeating hourly one");
+  delete alarms.tick; await listeners.alarm({ name: "tick" }); assert(alarms.tick && alarms.tick.when > Date.now(), "after it fires the next midnight is scheduled");
+  ok();
+}
+{ // Centro de Notas: the tab, the launch, PUCPR's tool only, its page data slimmed (no classmates, no student name)
+  const T = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io", seen = [];
+  const curso = { estudantes: [{ nome_estudante: "Colega" }], grupos: [{ id_grupo: 1, nome_grupo: "RA1", grupo_colunas: [{ coluna: { id_coluna: 5, nome_coluna: "Prova", tipo_coluna: "padrao", atividade: { pontos_possiveis: 10 }, notas: [{ nota: "8,00", id_estudante: 9 }] } }] }],
+    colunas: [{ id_coluna: 9, nome_coluna: "Nota Final", tipo_coluna: "final", tipo_calculo: "media_ponderada", notas: [], colunas_associadas_pai: [{ id_coluna: 5, pivot: { peso_coluna_filho: 100 } }] }] };
+  const res = (body, ok = true) => ({ ok, status: ok ? 200 : 500, text: async () => typeof body === "string" ? body : JSON.stringify(body) });
+  const fake = (action = T + "/lti") => async (u, o) => { seen.push((o && o.method || "GET") + " " + u.replace(T, "T").replace("https://pucpr.instructure.com", "C"));
+    if (/\/tabs$/.test(u)) return res([{ label: "Centro de Notas", type: "external", html_url: "/courses/7/external_tools/2157" }]);
+    if (/sessionless_launch\?id=2157$/.test(u)) return res({ url: "https://pucpr.instructure.com/courses/7/external_tools/2157?launch=1" });
+    if (/launch=1/.test(u)) return res('<form action="' + action + '" method="post"><input name="oauth_signature" value="a&amp;b"><input type="hidden" name="custom_canvas_course_id" value="7"></form>');
+    if (u === T + "/lti") return res('<div id="app" data-page="{&quot;component&quot;:&quot;UserLoading&quot;,&quot;version&quot;:&quot;v9&quot;}"></div>');
+    if (u === T + "/lti/finalize") return res({ status: "success", redirect_url: "/curso/7" });
+    if (u === T + "/curso/7") return res(o && o.headers && o.headers["X-Inertia"] === "true" && o.headers["X-Inertia-Version"] === "v9" ? { props: { curso } } : {}, true);
+    return res("", false); };
+  const got = await sw.centroCourse("7", fake());
+  assert.deepStrictEqual(seen, ["GET C/api/v1/courses/7/tabs", "GET C/api/v1/courses/7/external_tools/sessionless_launch?id=2157", "GET C/courses/7/external_tools/2157?launch=1", "POST T/lti", "GET T/lti/finalize", "GET T/curso/7"], "the launch, step by step");
+  assert(got && got.colunas[0].tipo_calculo === "media_ponderada" && got.grupos[0].grupo_colunas[0].coluna.notas[0].nota === "8,00" && !/Colega|estudante/.test(JSON.stringify(got)), "kept: the formula and the student's grade; dropped: classmates and ids");
+  assert.strictEqual(C.centro(got, 7).now, 8, "the engine reads what the worker keeps");
+  seen.length = 0; assert.strictEqual(await sw.centroCourse("7", fake("https://evil.example/lti")), null, "a form pointing anywhere else is never sent");
+  assert(!seen.some(x => /evil/.test(x)), "nothing posted to another host");
+  { // the ponte: GETs to the MCP's allowlist only, with the browser's cookies; nothing else; big bodies refused
+    const asked = [], f = async (u, o) => { asked.push([u, o]); return { ok: true, status: 200, headers: { get: n => n === "Link" ? "<x>; rel=\"next\"" : null }, text: async () => /big/.test(u) ? "x".repeat(5e6 + 1) : "[1]" }; };
+    const g = await sw.ponteAnswer({ id: 3, op: "get", url: "https://pucpr.instructure.com/api/v1/courses?per_page=50" }, f);
+    assert(g.id === 3 && g.ok && g.body === "[1]" && /next/.test(g.link) && asked[0][1].method === "GET" && asked[0][1].credentials === "include" && asked[0][1].redirect === "error", "ponte get: the reply, with the browser's login");
+    for (const url of ["https://evil.example/api/v1/courses", "https://pucpr.instructure.com/api/v1/conversations", "https://pucpr.instructure.com/courses/1/files/2/download", "https://pucpr.instructure.com/api/v1/users/self/files", "https://a:b@pucpr.instructure.com/api/v1/courses", "nada"])
+      assert((await sw.ponteAnswer({ id: 4, op: "get", url }, f)).error, "ponte refuses " + url);
+    assert.strictEqual(asked.length, 1, "nothing refused reached the network");
+    assert(/grande demais/.test((await sw.ponteAnswer({ id: 5, op: "get", url: "https://pucpr.instructure.com/api/v1/courses/1/modules?big=1" }, f)).error), "a body over 5 MB is refused");
+    assert((await sw.ponteAnswer({ id: 6, op: "post", url: "https://pucpr.instructure.com/api/v1/courses" }, f)).error && (await sw.ponteAnswer({ id: 7, op: "centro", course: "1/../2" }, f)).error, "no other operation, no odd course id");
+    assert.deepStrictEqual(await sw.ponteAnswer({ id: 8, op: "ping" }, f), { id: 8, ok: true, v: "9" }, "ping");
+    // turning it on: one port even when the click and permissions.onAdded arrive together; off disconnects it
+    let ports = 0, cut = 0; chromeSW.permissions = { contains: async () => true };
+    chromeSW.runtime.connectNative = name => { ports++; assert.strictEqual(name, "br.caderno_plus.mcp"); return { onMessage: { addListener() {} }, onDisconnect: { addListener() {} }, postMessage() {}, disconnect() { cut++; } }; };
+    const [a1, a2] = await Promise.all([sw.ponteUp(), sw.ponteUp()]);
+    assert(a1 && a2 && ports === 1, "one native port for two calls at once: " + ports);
+    sw.ponteDown(); assert.strictEqual(cut, 1, "off disconnects the port"); await sw.ponteUp(); assert.strictEqual(ports, 2, "on again: a new port");
+    sw.ponteDown(); delete chromeSW.permissions; delete chromeSW.runtime.connectNative;
+    ok(); }
+  const all = await sw.centroAll(5, ["7"], fake()); assert(local.centro && local.centro.user === 5 && local.centro.courses["7"] && all["7"], "stored per Canvas user");
+  { // only the validated form's inputs go to the tool (never Canvas's own token elsewhere on the page); a failure keeps the last read
+    let posted = null; const page = '<input name="authenticity_token" value="CANVAS-CSRF"><form action="' + T + '/lti" method="post"><input data-value="x" name="a" value="1"></form>';
+    const f2 = async (u, o) => /launch=1/.test(u) ? res(page) : u === T + "/lti" ? (posted = String(o.body), res('<div data-page="{}"></div>')) : fake()(u, o);
+    await sw.centroCourse("7", f2);
+    assert(posted === "a=1", "posted only the form's own fields: " + posted);
+    const broken = async u => { throw new Error("offline " + u); };
+    await sw.centroAll(5, ["7"], broken); assert(local.centro.courses["7"] && local.centro.courses["7"].colunas.length, "a failed read keeps the course's last Centro de Notas");
+  }
+  ok();
+}
   assert.strictEqual(await ask({ type: "download", items }, { id: "me", origin: "https://evil.example" }), "no reply", "messages from other origins are ignored");
   assert.strictEqual(await ask({ type: "download", items }, { id: "other", origin: "https://pucpr.instructure.com" }), "no reply", "messages from other extensions are ignored");
   assert.deepStrictEqual(await ask({ type: "download", items }, CANVAS_TAB), { done: [1, 4] }, "bad URL skipped, a throwing download does not stop the rest");
@@ -171,7 +245,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await newBtn.listeners.click(); await new Promise(r => setTimeout(r, 20));
   const dl = course.sent.find(m => m.type === "download");
   assert.deepStrictEqual(dl.items, [{ id: 1, url: "https://pucpr.instructure.com/files/1/download?verifier=a", filename: "PUCPR/Arquitetura de Banco de Dados/Slides/Aula 1.pdf" }]);
-  assert.strictEqual(course.store.cache.user, 5, "cache tagged with the Canvas user"); ok();
+  assert.strictEqual(course.store.cache.user, 5, "cache tagged with the Canvas user");
+  const own = await runContent("/courses/71306", [{ id: 1, display_name: "Aula 1.pdf", url: "/files/1/download?verifier=a", size: 5 }], { prefs: { dlFolder: "Faculdade/2026-2" } });
+  const ownHost = own.anchor.kids.find(k => k.id === "qf-panel");
+  await all(ownHost).find(e => e.textContent === "Baixar arquivos da matéria").listeners.click(); await new Promise(r => setTimeout(r, 20));
+  assert.match(text(ownHost), /vão para Downloads\/Faculdade\/2026-2/);
+  await all(ownHost).find(e => /^Baixar 1 novo$/.test(e.textContent)).listeners.click(); await new Promise(r => setTimeout(r, 20));
+  assert.strictEqual(own.sent.find(m => m.type === "download").items[0].filename, "Faculdade/2026-2/Arquitetura de Banco de Dados/Slides/Aula 1.pdf", "into the student's own folder"); ok();
 
   const hidden = await runContent("/courses/71306/modules", null);   // Files tab hidden: module files
   const b2 = all(hidden.anchor).find(e => e.textContent === "Baixar arquivos da matéria");
@@ -299,7 +379,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   key("k"); const q2 = all(sr.body.kids.find(k => k.id === "cp-search")).find(e => e.className === "pal-q");
   q2.listeners.keydown({ key: "Escape", preventDefault() {} }); assert(!sr.body.kids.some(k => k.id === "cp-search"), "Esc closes it");
   const noFind = await runContent("/", null, { prefs: { search: false } });
-  assert(!noFind.winListeners.keydown && !all(noFind.anchor).some(e => e.className === "find"), "switched off in the popup: no shortcut, no button");
+  if (noFind.winListeners.keydown) noFind.winListeners.keydown({ key: "k", ctrlKey: true, preventDefault() {}, stopPropagation() {} });
+  assert(!noFind.body.kids.some(k => k.id === "cp-search") && !all(noFind.anchor).some(e => e.className === "find"), "switched off in the popup: Ctrl+K does nothing, no button");
   const bye = await runContent("/logout", null, { search: { user: 5, at: Date.now(), items: [] }, cache: {} });
   assert(!bye.store.search && !bye.store.cache, "logging out forgets the search index too"); ok();
 
@@ -334,7 +415,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const tiles = all(gb).filter(e => e.className === "card tile");
   assert.deepStrictEqual(tiles.map(t => t.href), mine.map(c => "/courses/" + cvOf(c.id)), "a tile per enrolled subject, each opening its Canvas course");
   assert(tiles.every((t, i) => text(t).includes(C.SHORT[mine[i].id])), "tiles named like the calculator");
-  assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · Ciência da Computação, manhã · não oficial, confira no Canvas"), "dashboard grades: source line");
+  assert(all(gb).some(e => e.className === "muted src" && e.textContent === "Pesos do Plano de Ensino 2026/2 · não oficial, confira no Canvas") && !/Ciência da Computação/.test(text(gb)), "dashboard grades: source line, no course name");
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
@@ -346,7 +427,31 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // another turma (same course name, another Canvas id): no grade parts, one line saying why; the generic parts keep working
   const ot = await runContent("/", null, {}, { courseId: 42 }), ob = ot.anchor.kids.find(k => k.id === "cp-dash");
   assert(ob && !all(ob).some(e => /kpi|tile|upnext/.test(e.className)), "other turma: no grade parts");
-  assert(all(ob).some(e => e.className === "muted why" && e.textContent === "O Quanto falta ainda não tem as regras da sua turma."), "other turma: the muted line");
+  assert(/Quanto falta/.test(text(ob)) && /soma dos pontos: confira na matéria/.test(text(ob)) && !all(ob).some(e => e.className === "muted why"), "other turma: quanto falta by the sum of Canvas points, said so, to check on the course page");
+  { // the course page of that course: the student's rule (untick what is not graded, how far the grade goes), saved per user
+    const cp = await runContent("/courses/42", null, {}, { courseId: 42 }), pb = () => cp.anchor.kids.find(k => k.id === "qf-panel") || all(cp.body).find(k => k.id === "qf-panel") || all(cp.anchor).find(k => k.id === "qf-panel");
+    { const dash = await runContent("/", null, {}, { courseId: 42 }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
+      assert(!/meta garantida · soma dos pontos/.test(dt) && !/recuperação · soma dos pontos/.test(dt), "no garantido or recuperação from the plain sum before the student checks the rule"); }
+    const p0 = pb(); assert(p0 && /Soma dos pontos do Canvas/.test(text(p0)) && /A nota vai até/.test(text(p0)), "course page: the rule card and editor: " + (p0 ? text(p0).slice(0, 200) : "no panel"));
+    const boxes = () => all(pb()).filter(e => e.tag === "input" && e.type === "checkbox"), before = text(pb()).match(/(\d+,\d) de 10 agora/);
+    assert(boxes().length > 1 && boxes().every(b => b.checked), "every graded item counts by default");
+    const first = boxes()[0]; first.checked = false; await first.listeners.change(); await new Promise(r => setTimeout(r, 20));
+    const saved = cp.store.myRules && cp.store.myRules[5] && cp.store.myRules[5]["42"];
+    assert(saved && saved.off.length === 1 && saved.total === 10 && /Sua regra/.test(text(pb())) && !boxes()[0].checked, "unticked: saved for this user and this course, the card says it is your rule");
+    const tot = all(pb()).find(e => e.tag === "input" && e.type === "number"); tot.value = "20"; await tot.listeners.change(); await new Promise(r => setTimeout(r, 20));
+    assert.strictEqual(cp.store.myRules[5]["42"].total, 20, "the grade's top saved");
+    // weights by part: turn on, put items in parts A and B, weigh them; the card says each part
+    await all(pb()).find(e => e.textContent === "Usar pesos por parte").listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert.deepStrictEqual(cp.store.myRules[5]["42"].parts, { A: { w: 50 }, B: { w: 50 } }, "two parts of 50% to start");
+    const sels = () => all(pb()).filter(e => e.tag === "select"); assert(sels().length === boxes().length, "a part picker per item");
+    sels()[1].value = "A"; await sels()[1].listeners.change(); await new Promise(r => setTimeout(r, 20));
+    sels()[2].value = "B"; await sels()[2].listeners.change(); await new Promise(r => setTimeout(r, 20));
+    const keys = Object.keys(cp.store.myRules[5]["42"].part); assert(keys.length === 2 && Object.values(cp.store.myRules[5]["42"].part).sort().join() === "A,B", "items saved in their parts, the first change kept");
+    const wA = all(pb()).find(e => e["aria-label"] === "Peso da parte A em %"); wA.value = "40"; await wA.listeners.change(); await new Promise(r => setTimeout(r, 20));
+    assert(cp.store.myRules[5]["42"].parts.A.w === 40 && cp.store.myRules[5]["42"].parts.B.w === 50 && /parte A \(40%\)/.test(text(pb())), "weights saved, the card shows each part: " + text(pb()).slice(0, 300));
+    const back = all(pb()).find(e => e.textContent === "Voltar ao padrão"); await back.listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert(!cp.store.myRules[5]["42"] && /Soma dos pontos do Canvas/.test(text(pb())), "back to the default: the rule removed");
+    ok(); }
   assert.match(text(ob), /Próximos 7 dias/); assert.match(text(ob), /Prova adiada/, "week and announcements still shown");
   assert(!all(ob).some(e => e.tag === "button" && /rascunho/i.test(e.textContent)) && !/rascunho/i.test(text(ob)), "other turma: just the note, no draft button");
   assert(!/precisa|garantido|faltam|recuperação/.test(text(ot.header)), "no pill on the dashboard cards");
@@ -371,7 +476,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!all(ntb).some(e => e.textContent === "Nenhum aviso nos últimos 60 dias."), "and do not claim there were no announcements");
   // course panel: the source line; garantido explained as a reading of the grades
   const cp = await runContent("/courses/71306", [], {}), cpb = cp.anchor.kids.find(k => k.id === "qf-panel");
-  assert(all(cpb).some(e => e.className === "muted src" && /^Pesos do Plano de Ensino 2026\/2 · Ciência da Computação, manhã · não oficial, confira no Canvas$/.test(e.textContent)), "course panel: source line");
+  assert(all(cpb).some(e => e.className === "muted src" && /^Pesos do Plano de Ensino 2026\/2 · não oficial, confira no Canvas$/.test(e.textContent)), "course panel: source line");
   assert(all(cpb).filter(e => e.className === "big" && /garantido/.test(text(e))).every(e => e.title === C.GARANTIDO_TIP), "garantido tooltip: not official");
   assert.strictEqual(C.GARANTIDO_TIP, "Garantido pelas notas lançadas; não considera frequência nem recuperação"); ok();
 
@@ -380,6 +485,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const reads = r => r.fetches.filter(u => !/\/(files|modules)\?|\/users\?enrollment_type/.test(u));   // what changed (hourly) and the teachers (daily) have their own tests   // "what changed" reads files and modules at most once an hour (its own test)
   const cold = await runContent("/", null);
   assert.deepStrictEqual(reads(cold).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 6 calls, /courses once");
+  const KEEP_P = ["plannable_type", "plannable_id", "plannable_date", "plannable", "html_url", "course_id", "context_name", "submissions", "planner_override"];
+  assert(cold.store.cache.planner.length && cold.store.cache.planner.every(p => Object.keys(p).every(k => KEEP_P.includes(k)) && (!p.plannable || Object.keys(p.plannable).join() === "title")), "the stored planner keeps only what the week reads");
   const warm = await runContent("/", null, cold.store);
   assert.deepStrictEqual(reads(warm), ["/api/v1/users/self"], "warm, no user id in the page: only the user is confirmed (1 call)");
   const warmEnv = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"5"}' }] });
@@ -397,6 +504,17 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(oldFirst.store.cache.at, st10.cache.at, "(Canvas has not answered yet)");
   await new Promise(r => setTimeout(r, 400));
   assert(oldFirst.store.cache.at > st10.cache.at && dashes().length === 1 && dashes()[0] !== undefined, "new reading saved and drawn in place of the old panel");
+  // an update (older version in the reading): drawn at once from it, read again behind
+  const upd = Object.assign({}, cold.store, { cache: Object.assign({}, cold.store.cache, { v: "3.0.0", at: Date.now() }) });
+  const updRun = await runContent("/", null, upd, { scripts: pageEnv, slow: 80 });
+  assert.strictEqual(all(updRun.anchor).filter(e => e.id === "cp-dash").length, 1, "after an update the panel is drawn from the last reading, not after Canvas answers");
+  await new Promise(r => setTimeout(r, 400));
+  assert(updRun.store.cache.v === C.EXT_LATEST && reads(updRun).length === 5, "and the reading is redone in the background");
+  // a failed reading (Canvas throttled or down) keeps the lock a minute: the next page shows the last reading, no new burst
+  const failed = await runContent("/", null, st10, { scripts: pageEnv, failCourses: true }); await new Promise(r => setTimeout(r, 50));
+  assert(failed.store.refreshing > 0, "a failed reading leaves the lock");
+  const afterFail = await runContent("/", null, failed.store, { scripts: pageEnv });
+  assert.strictEqual(reads(afterFail).length, 0, "the next page within a minute does not read everything again");
   const lockedSlow = await runContent("/", null, {}, { slow: 40 });
   assert.strictEqual(all(lockedSlow.anchor).filter(e => e.id === "cp-dash").length, 0, "no reading at all: waits for Canvas");
   await new Promise(r => setTimeout(r, 250));
@@ -507,7 +625,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].indexOf(label)];
   assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
   assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
-  assert(/A seguir nesta matéria/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
+  assert.strictEqual(np.store.ctab, undefined, "opening the page writes nothing: the tab is saved only when the student picks one");
+  assert(/A seguir/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).filter(e => /^mc-day/.test(e.className)).length >= 28 && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
   assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
   await tabB("Anotações").listeners.click(); await new Promise(r => setTimeout(r, 5));
   const ta = all(paneOf("Anotações")).find(e => e.tag === "textarea");
@@ -519,8 +638,82 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!pane2.hidden && all(pane2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, on the same tab");
   ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed");
+  { const ck = () => all(paneOf("Anotações")).find(e => /card notes chk/.test(e.className)), cf = () => all(ck()).find(e => e.tag === "form");
+    assert(ck() && /Checklist da matéria/.test(text(ck())), "a checklist under the note");
+    all(cf()).find(e => e.tag === "input").value = "  refazer a lista 3 "; await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+    all(cf()).find(e => e.tag === "input").value = "   "; await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+    const mine = np.store.checks[5][71306];
+    assert(mine.length === 1 && mine[0].t === "refazer a lista 3" && !mine[0].done && /refazer a lista 3/.test(text(ck())), "added, trimmed, blank ignored, saved per user and course");
+    await all(ck()).find(e => /^Marcar: /.test(e["aria-label"] || (e.getAttribute && e.getAttribute("aria-label")) || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
+    assert(np.store.checks[5][71306][0].done === true, "ticked");
+    await all(ck()).find(e => /^Apagar: /.test(e["aria-label"] || (e.getAttribute && e.getAttribute("aria-label")) || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
+    assert.deepStrictEqual(np.store.checks[5], {}, "deleted: removed");
+    const ins = all(cf()).filter(e => e.tag === "input"); ins[0].value = "lista 4"; ins[1].value = isoIn(2); await cf().listeners.submit({ preventDefault() {} }); await new Promise(r => setTimeout(r, 15));
+    assert(np.store.checks[5][71306][0].date === isoIn(2) && !ins[1].value, "a day goes with the item");
+    const r2 = np.sent.filter(m => m.type === "remind").pop();
+    assert(r2 && r2.items.some(i => i.title === "Lembrete: lista 4"), "a dated item on the course page gets its reminder at once"); }
   await tabB("Materiais").listeners.click(); await new Promise(r => setTimeout(r, 20));
-  assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened"); ok();
+  assert(np.fetches.some(u => u.startsWith("/api/v1/courses/71306/modules?include[]=items")) && /Módulos/.test(text(paneOf("Materiais"))), "Materiais reads the modules when opened");
+  np.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 5));
+  assert(!paneOf("Anotações").hidden && paneOf("Materiais").hidden, "Alt+N opens the course's Anotações");
+  { // the dashboard: the checklist's dated items in the 7 days, ticked there; Alt+N or the bar's button opens the column
+    const dsh = await runContent("/", null, { checks: { 5: { painel: [{ id: "p1", t: "imprimir resumo", done: false, date: isoIn(1) }, { id: "p2", t: "sem dia", done: false }], 71306: [{ id: "c1", t: "refazer lista", done: false, date: isoIn(2) }] } } });
+    await new Promise(r => setTimeout(r, 20));
+    const lab = e => e["aria-label"] || "";
+    assert(all(dsh.anchor).some(e => /^imprimir resumo · Meu checklist/.test(lab(e))) && all(dsh.anchor).some(e => /^refazer lista · /.test(lab(e))) && !all(dsh.anchor).some(e => /^sem dia · /.test(lab(e))), "dated checklist items (dashboard and course) in the 7 days, undated ones not");
+    await all(dsh.anchor).find(e => lab(e) === "Marcar como feito: imprimir resumo").listeners.click({ preventDefault() {} }); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.checks[5].painel[0].done === true && !dsh.store.marks, "ticked in the week: done in the checklist itself");
+    const nbtn = all(dsh.header).concat(all(dsh.anchor)).find(e => e.textContent === "Anotações" && e.tag === "button");
+    assert(nbtn, "Anotações in the bar");
+    const rem = dsh.sent.filter(m => m.type === "remind").pop();
+    assert(rem && rem.items.some(i => i.title === "Lembrete: refazer lista") && !rem.items.some(i => /^Entrega: (refazer lista|imprimir resumo)/.test(i.title)), "the student's own items remind as Lembrete, not Entrega");
+    dsh.winListeners.keydown({ key: "˜", code: "KeyN", altKey: true, target: { tagName: "TEXTAREA" }, preventDefault() { throw new Error("typing was blocked"); }, stopPropagation() {} }); await new Promise(r => setTimeout(r, 20));
+    dsh.winListeners.keydown({ key: "x", code: "KeyN", altKey: true, composedPath: () => [{ tagName: "DIV", cpRoot: { activeElement: { tagName: "INPUT" } } }], preventDefault() { throw new Error("typing was blocked"); }, stopPropagation() {} }); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.notesOpen === undefined, "Alt+N inside a field (Canvas's, or ours behind a closed root) is the student's typing (Option+N is the tilde on a Mac)");
+    dsh.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.notesOpen === true && nbtn["aria-pressed"] === "true", "Alt+N opens the column (kept open)");
+    await nbtn.listeners.click(); await new Promise(r => setTimeout(r, 20));
+    assert(dsh.store.notesOpen === false, "the button closes it"); }
+  ok();
+
+  { // the service worker is not woken for nothing: the same reminders and next exam are sent once per tab session
+    const mem = {}, session = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };
+    {
+      const one = await runContent("/", null, {}, { session }); await new Promise(r => setTimeout(r, 20));
+      assert(one.sent.some(m => m.type === "remind") && one.sent.some(m => m.type === "next"), "the first page of the tab sends both");
+      const two = await runContent("/", null, one.store, { session }); await new Promise(r => setTimeout(r, 20));
+      assert(!two.sent.some(m => m.type === "remind" || m.type === "next"), "the next page, nothing changed: no message (the worker stays asleep)");
+      const three = await runContent("/", null, Object.assign({}, one.store, { tasks: { 5: [{ id: "t9", title: "novo lembrete", date: isoIn(2) }] } }), { session }); await new Promise(r => setTimeout(r, 20));
+      assert(three.sent.some(m => m.type === "remind" && m.items.some(i => /novo lembrete/.test(i.title))), "something changed: sent again");
+    }
+    ok(); }
+  { // the narrow week list is built only when it is shown (a wide panel never pays for it)
+    const cbs = []; let disp = "none";
+    global.ResizeObserver = class { constructor(f) { cbs.push(f); } observe() {} disconnect() {} }; global.getComputedStyle = () => ({ display: disp });
+    try {
+      const lazy = await runContent("/", null, {}), wl = all(lazy.anchor).find(e => e.className === "wl");
+      assert(wl && wl.kids.length === 0, "wide: the hidden list stays empty");
+      disp = "block"; for (const f of cbs) { try { f([]); } catch (e) { /* another observer of the page */ } }
+      assert(wl.kids.length > 0 && all(wl).some(e => e.className === "dh"), "narrow: filled when it shows, grouped by day");
+    } finally { delete global.ResizeObserver; delete global.getComputedStyle; }
+    ok(); }
+  { // two students on one Chrome: the turma confirmed and the courses taken off the dashboard belong to each Canvas user
+    const envOf = id => [{ textContent: 'ENV = {"current_user_id":"' + id + '"}' }];
+    const a1 = await runContent("/", null, { prefs: { turma: "outro", mode: "foco" }, hidden: ["71306"] }, { scripts: envOf(5) }); await new Promise(r => setTimeout(r, 20));
+    assert(a1.store.mineOf === 5 && a1.store.prefs.turma === "outro" && a1.store.hidden[0] === "71306", "the first student keeps what was already chosen (no reset on update)");
+    const b1 = await runContent("/", null, a1.store, { scripts: envOf(8), selfId: 8 }); await new Promise(r => setTimeout(r, 20));
+    assert(b1.store.mineOf === 8 && !b1.store.prefs.turma && (!b1.store.hidden || b1.store.hidden.length === 0), "another student starts clean: asked the turma again, no hidden courses: " + JSON.stringify([b1.store.prefs.turma, b1.store.hidden]));
+    assert.strictEqual(b1.store.prefs.mode, "foco", "the look and the mode are the browser's, not the student's");
+    b1.store.prefs = Object.assign({}, b1.store.prefs, { turma: "Outra turma" }); b1.store.hidden = ["999"];
+    const a2 = await runContent("/", null, b1.store, { scripts: envOf(5) }); await new Promise(r => setTimeout(r, 20));
+    assert(a2.store.mineOf === 5 && a2.store.prefs.turma === "outro" && a2.store.hidden[0] === "71306", "back to the first student: their turma and hidden courses return");
+    assert(a2.store.byUser && a2.store.byUser[8] && a2.store.byUser[8].turma === "Outra turma" && a2.store.byUser[8].hidden[0] === "999", "and the second student's are kept for next time");
+    ok(); }
+  { // 6.0: no file for the AI any more (the MCP reads Canvas with the student's token): nothing written, nothing asked
+    const run = await runContent("/", null, { prefs: { agentFile: true } }); await new Promise(r => setTimeout(r, 30));
+    assert(!run.sent.some(m => m.type === "agentFile") && !JSON.stringify(run.store).includes("caderno-agente"), "no AI file, even with the old switch saved");
+    assert.strictEqual(await ask({ type: "agentFile", data: { a: 1 } }, CANVAS_TAB), "no reply", "the worker no longer writes it");
+    ok(); }
 
   // unread Canvas messages on the dashboard (subject and who), read with the rest; a failure never blocks the panel
   const ib = await runContent("/", null, {}, { inbox: [{ subject: "Dúvida RA3", participants: [{ id: 5, name: "Eu mesmo" }, { id: 7, name: "Prof. Ana" }, { id: 8, name: "Aluno" }], last_message_at: new Date().toISOString(), last_message: "segredo" }] });
@@ -546,6 +739,23 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const mClean = await runContent("/", null, { prefs: { mode: "limpo" } });
   assert(/Garantido até agora/.test(text(mFull.anchor)) && !/Garantido até agora/.test(text(mClean.anchor)) && /Próximos 7 dias/.test(text(mClean.anchor)), "limpo: no KPI row, the week stays");
   assert(/Prova adiada/.test(text(mClean.anchor)) && !/Bem-vindos/.test(text(mClean.anchor)), "limpo: only unread announcements");
+  { // the three numbers: every subject by default (each says which), or one picked in the chips, saved, gone in limpo
+    const pickOf = r => all(r.anchor).find(e => /kpis-pick/.test(e.className || "")), kp = r => all(r.anchor).find(e => /^kpis$/.test(e.className || ""));
+    const MORE = [{ id: 72009, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem" }, { id: 72005, name: "Resolução de Problemas de Natureza Discreta (Turma 2º B) - 2026 / 2º Sem" }];
+    const mOne = mFull; assert(!pickOf(mOne), "one subject only: no chips (Todas would be the same)");
+    const mFull2 = await runContent("/", null, {}, { more: MORE }), chips = pickOf(mFull2).kids;
+    assert(chips[0].textContent === "Todas" && chips[0]["aria-checked"] === "true" && chips.length === 4 && !pickOf(mClean), "chips: Todas first and checked, one per subject; none in limpo");
+    assert(/média das \d+ matérias/.test(text(kp(mFull2))) && /a mais apertada|tudo garantido|recuperação|faltam notas/.test(text(kp(mFull2))) && /\d+\/\d+ · /.test(text(kp(mFull2))), "Todas: the mean says it is a mean, the need names its subject, Entregues per subject");
+    assert(chips[0].tabIndex === 0 && chips[1].tabIndex === -1, "one Tab stop in the chips");
+    chips[0].listeners.keydown({ key: "ArrowRight", preventDefault() {} }); assert(chips[1].tabIndex === 0 && chips[0].tabIndex === -1, "the arrow moves to the next chip");
+    const one = chips[1]; await one.listeners.click(); await new Promise(r => setTimeout(r, 10));
+    assert(mFull2.store.prefs.kpiCourse === one.dataset.id && one["aria-checked"] === "true" && chips[0]["aria-checked"] === "false", "a subject picked and saved");
+    const kt = text(kp(mFull2)); assert(kt.split(one.textContent).length - 1 >= 3 && !/média das/.test(kt), "every number names the picked subject: " + kt.slice(0, 200));
+    const again = await runContent("/", null, { prefs: { kpiCourse: one.dataset.id } }, { more: MORE });
+    assert(pickOf(again).kids[1]["aria-checked"] === "true", "the pick comes back on the next page");
+    const stale = await runContent("/", null, { prefs: { kpiCourse: "nao-existe" } }, { more: MORE });
+    assert(pickOf(stale).kids[0]["aria-checked"] === "true" && /média das/.test(text(kp(stale))), "a subject no longer in the panel falls back to Todas");
+  }
   const mFocus = await runContent("/", null, { prefs: { mode: "foco" } }), ft = all(mFocus.anchor).filter(e => e.tag !== "style").map(e => e.textContent).join(" | ");
   assert(/Agora \| 2 coisas/.test(ft) && /\d\d\/\d\d[ |]+Relatório/.test(ft) && /Lista 3/.test(ft) && !/Próximos 7 dias|Avisos|Garantido até agora|Quiz feito/.test(ft), "foco: only what to do now: " + ft.slice(0, 200));
   const segB = all(mFull.anchor).find(e => e.role === "radio" && e.textContent === "Foco");
@@ -555,6 +765,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the popup changes the mode: the panel follows at once (no reload, no fight with the header switch)
   const sync = await runContent("/", null); await sync.env.window.cpPrefsChanged({ mode: "foco" }); await new Promise(r => setTimeout(r, 15));
   assert(/Agora/.test(text(sync.anchor)) && all(sync.anchor).filter(e => e.id === "cp-dash").length === 1, "the panel redraws in the popup's mode");
+  { const live = await runContent("/", null); assert(/Minhas tarefas/.test(text(live.anchor)), "tasks card on");
+    await live.env.window.cpPrefsChanged({ tasks: false }); await new Promise(r => setTimeout(r, 30));
+    assert(!/Minhas tarefas/.test(text(live.anchor)) && all(live.anchor).filter(e => e.id === "cp-dash").length === 1, "a panel switch in the popup (tasks off) redraws at once, one panel"); }
 
   // Canvas's widget dashboard: ours goes inside it, above its widgets; its Avisos widget replaces ours; "Só Caderno+" hides its widgets
   const WENV = [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }];
@@ -579,6 +792,20 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(tk.store.tasks[5].length === 1 && tk.store.tasks[5][0].title === "imprimir resumo" && tk.store.tasks[5][0].date === isoIn(1) && tk.store.tasks[9], "saved per user, the day read from the words");
   assert(all(tk.anchor).some(e => /^ev /.test(e.className) && /^imprimir resumo · Minha tarefa/.test(e["aria-label"] || "")), "a task with a day shows in the week");
   assert(tk.sent.filter(m => m.type === "remind").pop().items.some(i => /imprimir resumo/.test(i.title)), "and gets a reminder");
+  { // steps inside a task: added from "+", ticked, counted in the task's line, deleted; ten at most
+    const lab = re => all(tcard()).find(e => re.test(e["aria-label"] || "")), nap = () => new Promise(r => setTimeout(r, 15));
+    const addStep = async v => { lab(/^Adicionar passo em: imprimir/).listeners.click(); lab(/^Novo passo de: imprimir/).value = v;
+      await all(tcard()).filter(e => e.tag === "form").find(f => / step$/.test(f.className)).listeners.submit({ preventDefault() {} }); await nap(); };
+    await addStep("ler o capítulo 3"); await addStep("  "); await addStep("fazer os exercícios");
+    assert.deepStrictEqual(tk.store.tasks[5][0].subs, [{ t: "ler o capítulo 3", d: false }, { t: "fazer os exercícios", d: false }], "two steps saved inside the task, the blank one ignored");
+    assert.match(text(tcard()), /minha tarefa · 0 de 2 passos/, "the task line counts its steps");
+    await lab(/^Marcar passo como feito: ler/).listeners.click(); await nap();
+    assert(tk.store.tasks[5][0].subs[0].d === true && /1 de 2 passos/.test(text(tcard())) && lab(/^Desmarcar passo: ler/), "a step ticked");
+    await lab(/^Apagar passo: fazer/).listeners.click(); await nap();
+    assert(tk.store.tasks[5][0].subs.length === 1 && tk.store.tasks[5].length === 1, "a step deleted, the task stays");
+    for (let i = 0; i < 12; i++) if (lab(/^Adicionar passo em: imprimir/)) { lab(/^Adicionar passo em: imprimir/).listeners.click(); const inp = lab(/^Novo passo de: imprimir/); if (!inp) break; await addStep("p" + i); }
+    assert.strictEqual(tk.store.tasks[5][0].subs.length, 10, "ten steps at most");
+  }
   await all(tcard()).find(e => /^Marcar como feito: imprimir/.test(e["aria-label"] || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
   assert(/ dn$/.test(all(tcard()).find(e => /^row/.test(e.className) && /imprimir/.test(text(e))).className), "ticked: greyed");
   await all(tcard()).find(e => /^Apagar: imprimir/.test(e["aria-label"] || "")).listeners.click(); await new Promise(r => setTimeout(r, 15));
@@ -608,6 +835,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const again = await runContent("/", [], { snap: wc.store.snap, changes: wc.store.changes, cache: wc.store.cache }, { scripts: pageEnv });
   await new Promise(r => setTimeout(r, 40));
   assert(!again.fetches.some(u => /\/(files|modules)\?/.test(u)) && netReads === 2, "files and modules read at most once an hour (one GET each per course)");
+  assert.strictEqual(again.store.snap, wc.store.snap, "nothing changed: the snapshot is not written again (every write wakes the service worker and every open tab)");
   const noCh = await runContent("/", null, { snap: oldSnap, prefs: { changes: false } }); await new Promise(r => setTimeout(r, 40));
   assert(!all(noCh.anchor).some(e => /changes/.test(e.className)) && !noCh.fetches.some(u => /\/(files|modules)\?/.test(u)), "switched off: no card, no extra reads"); ok();
 
@@ -626,7 +854,37 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const clHost = cl.cols.parent.kids.find(k => k.id === "cp-dash");
   assert(clHost && cl.cols.parent.kids.indexOf(clHost) === cl.cols.parent.kids.indexOf(cl.cols) - 1, "between the header and Canvas's course cards");
   assert(!all(clHost).some(e => e.className === "card tile") && /\d+[,\d]*\/10 · /.test(text(cl.header)), "no tiles of ours; Canvas's cards say X/10 and what is needed");
-  assert(!all(clHost).some(e => /^Esconder|^Mostrar|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes and the meta");
+  assert(!all(clHost).some(e => /^Esconder \d|^Mostrar \d|^Só Caderno|^Buscar/.test(e.textContent || "")), "the header keeps only the modes, the meta and the fold");
+  { // Anotações on the classic dashboard: always above, beside our panel, whatever the order of clicks; the panel keeps
+    // the column's height so Canvas's cards start below it (they used to wrap around the column after a mode switch)
+    const ids = r => r.cols.parent.kids.filter(k => !k.removed).map(k => k.id || "cards").filter(x => /cp-notes|cp-dash|cards/.test(x)).join(" ");
+    const nt = await runContent("/", null, {}, { classic: true }); await new Promise(r => setTimeout(r, 30));
+    nt.winListeners.keydown({ key: "n", code: "KeyN", altKey: true, preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 30));
+    assert.strictEqual(ids(nt), "cp-notes cp-dash cards", "opened after the panel: the column goes before the panel, not between it and the cards");
+    await nt.env.window.cpPrefsChanged({ mode: "foco" }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(nt), "cp-notes cp-dash cards", "after a mode switch (the panel is rebuilt): the same order, one column, one panel");
+    const dashNow = nt.cols.parent.kids.find(k => k.id === "cp-dash" && !k.removed);
+    assert(/px$/.test(String(dashNow.style.minHeight || "")), "the rebuilt panel keeps room for the column: " + dashNow.style.minHeight);
+    await nt.env.window.cpPrefsChanged({ mode: "completo" }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(nt), "cp-notes cp-dash cards", "and back");
+    const pre = await runContent("/", null, { notesOpen: true }, { classic: true }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(pre), "cp-notes cp-dash cards", "open from the start: the same order");
+    const cf = await runContent("/", null, { notesOpen: true, prefs: { cardsFirst: true } }, { classic: true }); await new Promise(r => setTimeout(r, 40));
+    assert.strictEqual(ids(cf), "cp-notes cards cp-dash", "cards first: the column beside the cards, the panel below");
+    assert(!cf.cols.parent.kids.find(k => k.id === "cp-dash").style.minHeight, "cards first: no reserved height on the panel");
+    ok(); }
+  const pf = await runContent("/", null); await new Promise(r => setTimeout(r, 20));
+  const pfBox = () => all(pf.anchor).find(e => /^box/.test(e.className)), pfB = all(pf.anchor).find(e => /^pfold/.test(e.className) && !/pnotes/.test(e.className));
+  assert(pfB && pfB.textContent === "Esconder ▴" && !/pfolded/.test(pfBox().className), "the panel open, with Esconder");
+  await pfB.listeners.click(); await new Promise(r => setTimeout(r, 10));
+  assert(/pfolded/.test(pfBox().className) && pf.store.panelFold === true && pfB.textContent === "Mostrar ▾", "folded to its bar, kept");
+  const pfOff = await runContent("/", null, { prefs: { dash: false } }); await new Promise(r => setTimeout(r, 20));
+  assert(!all(pfOff.anchor).some(e => e.id === "cp-dash") && /\/10 · /.test(text(pfOff.header)), "panel switched off in the popup: gone, the cards keep their grades");
+  const clTop = await runContent("/", null, { prefs: { cardsFirst: true } }, { classic: true }); await new Promise(r => setTimeout(r, 30));
+  const topHost = clTop.cols.parent.kids.find(k => k.id === "cp-dash");
+  assert(topHost && clTop.cols.parent.kids.indexOf(topHost) === clTop.cols.parent.kids.indexOf(clTop.cols) + 1, "cards first: our panel right below Canvas's cards");
+  await clTop.env.window.cpPrefsChanged({ cardsFirst: false }); await new Promise(r => setTimeout(r, 20));
+  assert(clTop.cols.parent.kids.indexOf(topHost) === clTop.cols.parent.kids.indexOf(clTop.cols) - 1, "switched off in the popup: back above the cards, at once");
   const clW = await runContent("/", null, {}, { classic: true, scripts: [{ textContent: 'ENV = {"current_user_id":"5","widget_dashboard":true}' }] });
   assert(/Prova adiada/.test(text(clW.anchor)), "back on the classic dashboard (the widget flag stays true): our announcements show");
   // the Cursos tray (left menu): our pill on our subjects, courses taken off the dashboard left out
@@ -643,6 +901,53 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(/\/10 · /.test(text(r1)) && /Tirar do painel/.test(text(r2)) && !/\/10/.test(text(r2)), "pill on ours, the button on every course");
   await all(r2).find(e => e.textContent === "Tirar do painel").listeners.click(); await new Promise(r => setTimeout(r, 10));
   assert(cpage.store.hidden.includes("88") && /Mostrar no painel/.test(text(r2)), "taken off the dashboard from the course list");
+  // the course menu: items hidden one by one per course, edited with an eye per item
+  const mkTab = cls => { const li = fakeEl("li"), a = fakeEl("a"); a.className = cls; a.classList = cls.split(" "); a.textContent = cls; li.append(a);
+    Object.defineProperty(a, "parentNode", { get() { return this.parent; } }); li.querySelector = () => all(li).find(e => /cp-eye/.test(e.className)) || null; return { li, a }; };
+  const tabs3 = ["home active", "announcements", "context_external_tool_9"].map(mkTab), navEl = fakeEl("ul"); tabs3.forEach(t => navEl.append(t.li)); navEl.querySelectorAll = () => tabs3.map(t => t.a);
+  const cn = await runContent("/courses/71306/modules", null, { navHide: { 71306: ["context_external_tool_9", "bad;}"] } }, { nav: navEl }); await new Promise(r => setTimeout(r, 30));
+  const hideCss = cn.body.kids.find(k => k.id === "cp-navhide").textContent;
+  assert(/li:has\(> a\.context_external_tool_9\) \{ display:none/.test(hideCss) && !/bad/.test(hideCss), "a hidden tab is hidden (odd keys ignored)");
+  const editB = all(navEl).find(e => e.tag === "button" && /^Editar menu \(1 escondido\)$/.test(e.textContent));
+  editB.listeners.click(); const eyes = all(navEl).filter(e => /cp-eye/.test(e.className));
+  assert(eyes.length === 2 && /off/.test(eyes[1].className) && !all(tabs3[0].li).some(e => /cp-eye/.test(e.className)), "editing: an eye per item (not on Página inicial), the hidden one marked");
+  await eyes[0].listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(cn.store.navHide[71306].sort(), ["announcements", "context_external_tool_9"], "hidden per course, saved");
+  const openTab = cn.body.kids.find(k => k.id === "cp-navopen");
+  assert(openTab && openTab.style.display === "none", "the menu shows by default; the reopen tab waits");
+  const cn2 = await runContent("/courses/71306", null, { navFold: true }, { nav: (() => { const n = fakeEl("ul"); n.querySelectorAll = () => []; return n; })() }); await new Promise(r => setTimeout(r, 30));
+  assert(cn2.body.kids.find(k => k.id === "cp-navopen").style.display === "", "folded last time: folded, with the › tab to bring it back");
+  const cn3 = await runContent("/courses/71306", null, { prefs: { mode: "foco" } }, { nav: (() => { const n = fakeEl("ul"); n.querySelectorAll = () => []; return n; })() }); await new Promise(r => setTimeout(r, 30));
+  assert(cn3.body.kids.find(k => k.id === "cp-navopen").style.display === "" && cn3.store.navFold === undefined, "Foco folds the course menu by itself, without saving it");
+
+  // modules: whole modules or single items hidden one by one per course
+  const wrap = fakeEl("div"), modsEl = fakeEl("div"); wrap.append(modsEl);
+  Object.defineProperty(modsEl, "parentNode", { get() { return this.parent; } });
+  const mod = fakeEl("div"), modHead = fakeEl("div"), item = fakeEl("li"), row = fakeEl("div");
+  mod.id = "context_module_7"; mod.classList = { contains: c => c === "context_module" }; item.id = "context_module_item_70"; item.classList = { contains: () => false };
+  mod.append(modHead); item.append(row); modsEl.append(mod, item);
+  mod.querySelector = () => modHead; item.querySelector = () => row;
+  modHead.querySelector = () => all(modHead).find(e => /cp-eye/.test(e.className)) || null; row.querySelector = () => all(row).find(e => /cp-eye/.test(e.className)) || null;
+  modsEl.querySelectorAll = sel => sel === ".context_module" ? [mod] : [item];
+  const mh = await runContent("/courses/71306/modules", null, { modHide: { 71306: ["context_module_item_70", "x;}"] } }, { mods: modsEl }); await new Promise(r => setTimeout(r, 30));
+  const modCss = mh.body.kids.find(k => k.id === "cp-modhide").textContent;
+  assert(/#context_module_item_70 \{ display:none/.test(modCss) && !/#x;/.test(modCss), "a hidden item is hidden (odd keys ignored)");
+  const mEdit = all(wrap).find(e => e.tag === "button" && /^Editar módulos \(1 escondido\)$/.test(e.textContent));
+  mEdit.listeners.click();
+  const modEye = all(modHead).find(e => /cp-eye/.test(e.className)), itemEye = all(row).find(e => /cp-eye/.test(e.className));
+  assert(modEye && itemEye && /off/.test(itemEye.className) && modEye.title === "Esconder o módulo", "editing: an eye on the module and on the item");
+  await modEye.listeners.click({ preventDefault() {}, stopPropagation() {} }); await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(mh.store.modHide[71306].sort(), ["context_module_7", "context_module_item_70"], "a whole module hidden too, saved per course");
+
+  // the turma: a shared course (one or two matches) is not proof; ask, and use the rules only after a yes
+  const ask1 = await runContent("/", null, {}, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
+  assert(/Estas são as suas matérias\? Imperativa, /.test(text(ask1.anchor)) && !/Ciência da Computação/.test(text(ask1.anchor)) && !/\/10 · /.test(text(ask1.header)), "one matching course: ask, no grades yet");
+  const askOther = await runContent("/", null, { prefs: { turma: "outro" } }, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
+  assert(!/Estas são as suas matérias/.test(text(askOther.anchor)) && !/\/10 · /.test(text(askOther.header)) && /soma dos pontos: confira na matéria/.test(text(askOther.anchor)), "another program: no question, no Plano de Ensino grades, quanto falta by the sum of points, the week and announcements stay");
+  const MORE6 = [{ id: 72009, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem" }, { id: 72011, name: "Conectividade (Turma 2º B) - 2026 / 2º Sem" }];
+  const ask3 = await runContent("/", null, {}, { askTurma: true, more: MORE6 }); await new Promise(r => setTimeout(r, 20));
+  assert(!/Estas são as suas matérias/.test(text(ask3.anchor)) && /\/10 · /.test(text(ask3.header)), "three or more matching courses: the turma, no question");
+
   // the classic dashboard header: a greeting with the first name, the date and what is coming (the title stays for screen readers)
   const lay = fakeEl("div"), flex = fakeEl("div"), titleItem = fakeEl("span"); titleItem.append(fakeEl("span")); flex.append(titleItem, fakeEl("span")); lay.append(flex);
   lay.firstElementChild = flex; flex.firstElementChild = titleItem; titleItem.prepend = function (c) { c.parent = this; this.kids.unshift(c); };
@@ -681,6 +986,22 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // course cards: our pill under Canvas's title (Canvas's own ⋮ menu untouched); courses unticked in the popup leave the dashboard
   const cd = await runContent("/", null, { hidden: [] });
   assert(/\d+[,\d]*\/10 · /.test(text(cd.header)) && !all(cd.header).some(e => e.tag === "button"), "a pill, and no buttons of ours on the card");
+  { // a course without rules of ours (another turma or program): the pill comes from the Centro de Notas formula
+    const curso = { grupos: [{ id_grupo: 1, grupo_colunas: [{ coluna: { id_coluna: 5, tipo_coluna: "padrao", atividade: { pontos_possiveis: 10 }, notas: [{ nota: "4,00" }] } }, { coluna: { id_coluna: 6, tipo_coluna: "padrao", atividade: { pontos_possiveis: 10 }, notas: [] } }] }],
+      colunas: [{ id_coluna: 9, tipo_coluna: "final", tipo_calculo: "media_ponderada", notas: [{ nota: "2,00" }], colunas_associadas_pai: [{ id_coluna: 5, pivot: { peso_coluna_filho: 50 } }, { id_coluna: 6, pivot: { peso_coluna_filho: 50 } }] }] };
+    const other = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+    assert(/2,0\/10 · precisa 10,0\/10/.test(text(other.header)), "no rules: the Centro de Notas formula on the card (2 + 0,5 × x ≥ 7 → x = 10): " + text(other.header));
+    assert(other.sent.some(m => m.type === "centro" && m.user === 5 && m.ids.includes(99901)), "a fresh reading asks the worker for the Centro de Notas");
+    assert(all(other.anchor).some(e => /card centro/.test(e.className || "")), "no rules: the dashboard lists quanto falta from the Centro de Notas");
+    const noF = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: { grupos: [], colunas: [{ id_coluna: 9, tipo_coluna: "final" }] } } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+    assert(!/\/10 · /.test(text(noF.header)), "no formula in the Centro de Notas: no number invented");
+    curso.grupos[0].grupo_colunas[1].coluna.nome_coluna = "Prova final";
+    const cp = await runContent("/courses/99901", [], { centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+    const cph = cp.anchor.kids[0];
+    assert(cph && /2,0 de 10 agora/.test(text(cph)) && /precisa 10,0\/10 em média no que falta/.test(text(cph)) && /Falta: Prova final/.test(text(cph)), "the course page: now, the need and what is left, from the Centro de Notas: " + (cph && text(cph)).slice(0, 200));
+    const rng = all(cph).find(e => e.tag === "input" && e.type === "range"), simOut = all(cph).find(e => e.className === "t" && /tirando/.test(e.textContent));
+    assert(rng && simOut && /tirando 10,0 no que falta, você fica com 7,0 ✓/.test(simOut.textContent), "the simulator starts at the need and shows the final: " + (simOut && simOut.textContent));
+  }
   const cdh = await runContent("/", null, { hidden: ["71306"] });
   assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing");
   cd.env.window.cpHiddenChanged(["71306"]); assert(!/\/10 · /.test(text(cd.header)), "unticked in the popup: off at once, no reload"); ok();
@@ -701,9 +1022,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(reads(freed).length, 6, "a lock left by a closed tab expires after a minute"); assert.strictEqual(freed.store.refreshing, undefined, "lock released");
   // SSO or cookie switch: no user id in the page, a fresh reading of A, but the session is B → nothing of A is drawn
   const toB = await runContent("/", null, Object.assign({}, cold.store, { who: { id: 5, at: Date.now() } }), { selfId: 8, failCourses: true });
-  assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert.strictEqual(toB.anchor.kids.length, 0, "nothing of A drawn"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");
+  assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert(!all(toB.anchor).some(e => /kpi|week|cring/.test(e.className || "")) && all(toB.anchor).some(e => /trouble/.test(e.className || "")), "nothing of A drawn, only why Canvas could not be read"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");
   const lockB = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 5000 }), { selfId: 8, failCourses: true });
-  assert(lockB.store.cache === undefined && lockB.anchor.kids.length === 0, "the other-tab lock path does not show A's reading to B either");
+  assert(lockB.store.cache === undefined && !/Banco de Dados|Arquitetura/.test(text(lockB.anchor)), "the other-tab lock path does not show A's reading to B either");
   const fromPage = await runContent("/", null, {}, { scripts: [{ textContent: 'ENV = {"current_user_id":"5","x":1}' }] });
   assert(!fromPage.fetches.includes("/api/v1/users/self") && fromPage.store.cache.user === 5, "user id printed in the page: no /users/self");
   const switched = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"8"}' }] });
@@ -738,6 +1059,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   plannerFails = true;
   const noPlan = await runContent("/", null); plannerFails = false;
   assert.doesNotMatch(text(noPlan.anchor), /Próximos 7 dias/, "planner down: no week");
+  assert.match(text(noPlan.anchor), /Não consegui ler os prazos do Canvas agora/, "planner down: the panel says so (Canvas's own list is not hidden then: the class that hides it needs our week)");
   assert(!noPlan.sent.some(m => m.type === "remind"), "planner down: the reminders already set are kept"); assert.match(text(noPlan.anchor), /Prova adiada/, "announcements still shown"); ok();
 
   // theme.js: class on <html> from the setting, live when the popup changes it
@@ -764,25 +1086,51 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(lk.cls.has("cp-look") && lk.cls.has("cp-look-nav") && /--ic-brand-primary:#E2482B !important/.test(lookCss()) && /--ic-brand-global-nav-bgd:var\(--cp-menu\)/.test(lookCss()), "default: the Caderno look and menu");
   assert(!/font-family/.test(lookCss()) && !/Fraunces/.test(lookCss()), "no font forced on Canvas (InstUI sets its own; mixed families looked broken)");
   assert(/\.ic-DashboardCard \{ border-radius:14px/.test(lookCss()), "cards rounded");
+  assert(/--cp-on-accent:#FFFFFF;/.test(lookCss()) && /--ic-brand-button--primary-text:#FFFFFF !important/.test(lookCss()), "Caderno: white text over the coral accent");
+  { const mk = theme("off", false); await new Promise(r => setTimeout(r, 5)); mk.listen.change({ prefs: { newValue: { look: "marca" } } }, "local");
+    const css = mk.styles.find(x => x.id === "cp-look").textContent;
+    assert(/--cp-accent:#E0A800; --cp-on-accent:#1C1C1C;/.test(css) && /--ic-brand-button--primary-text:#1C1C1C !important/.test(css), "Marca-texto: dark text over the yellow accent (white was 2:1)"); }
   assert(/\.ic-DashboardCard__box__container \{ text-align:center/.test(lookCss()) && !/\.ic-DashboardCard \{ display:flex/.test(lookCss()) && !/__header_hero, \.ic-DashboardCard__header_image \{ height/.test(lookCss()), "Canvas's own card layout kept, rows only centered (no forced sizes)");
-  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false, navHide: false }), "kept for the next first paint");
+  assert.strictEqual(lk.ls["cp-look"], JSON.stringify({ theme: "off", look: "caderno", bg: "liso", bgColor: "", nav: "tema", mode: "completo", native: true, cardImg: true, nativeCal: false, navHide: false }), "kept for the next first paint");
   assert(!/translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()), "the left menu stays by default");
+  assert(!/background-attachment:fixed/.test(lookCss()), "plain background by default");
+  lk.listen.change({ prefs: { newValue: { look: "oceano" } } }, "local");
+  assert(/--cp-paper:#E2EDF9;/.test(lookCss()), "Oceano paints a light blue page");
+  lk.listen.change({ prefs: { newValue: { look: "oceano", bgColor: "#FBE6EC" } } }, "local");
+  assert(/--cp-paper:#FBE6EC;/.test(lookCss()), "the student's own background color wins over the look's");
+  lk.listen.change({ prefs: { newValue: { look: "oceano", bgColor: "red;}" } } }, "local");
+  assert(/--cp-paper:#E2EDF9;/.test(lookCss()), "only a #RRGGBB color is taken");
+  const dkT = theme("dark", false); await new Promise(r => setTimeout(r, 5)); dkT.listen.change({ prefs: { newValue: { theme: "dark", look: "oceano" } } }, "local");
+  const dkCss = dkT.styles.find(x => x.id === "cp-look").textContent;
+  assert(/--cp-paper:#E2EDF9; --cp-card:color-mix\(in srgb, #E2EDF9 94%, #000\);/.test(dkCss), "dark Oceano: page and cards from the same blue, not neutral gray");
+  lk.listen.change({ prefs: { newValue: { bg: "quadriculado" } } }, "local");
+  assert(/#right-side, \.ic-Dashboard-header, [^{]*\{ background-image:linear-gradient\(90deg/.test(lookCss()) && /background-size:24px 24px !important; background-attachment:fixed/.test(lookCss()), "a background pattern on every page layer, fixed so they line up");
+  assert(/\.ic-Dashboard-header :is\(div, span, header\):not\(\.cp-host, button \*, \[role="button"\] \*\)\) \{ background-image:/.test(lookCss()), "the dashboard header (its React box paints white) carries the same background");
+  lk.listen.change({ prefs: { newValue: { look: "original", bg: "quadriculado" } } }, "local");
+  assert(!/background-attachment:fixed/.test(lookCss()), "Original keeps Canvas's own background");
   lk.listen.change({ prefs: { newValue: { navHide: true } } }, "local");
   assert(/\.ic-app-header \{ transform:translateX\(calc\(-100% \+ 10px\)\)/.test(lookCss()) && /\.ic-app-header:is\(:hover, :focus-within\) \{ transform:none/.test(lookCss()) && /\.ic-Layout-wrapper \{ margin-left:10px !important/.test(lookCss()) && /:has\(#nav-tray-portal \[role="dialog"\]\) \.ic-app-header \{ transform:none/.test(lookCss()), "menu hidden: a strip that opens on hover or focus, the page takes the room");
   lk.listen.change({ prefs: { newValue: {} } }, "local");
-  assert(/cp-has-panel \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
+  assert(/cp-has-week \[data-testid="widget-container-course-work-combined-widget"\] \{ display:none/.test(lookCss()) && !/section\[role="region"\]\[data-testid\^="widget-"\]/.test(lookCss()), "widget dashboard: our week replaces its Course work widget; the rest is left to Canvas");
+  assert(/#right-side \.button-sidebar-wide \{ display:flex/.test(lookCss()) && /ToDoSidebarItem, \.to-do-list > li, \.group_list > li, \.event/.test(lookCss()) && /context-course_"\] #right-side :is\(\.ToDoSidebarItem__Title \+ span/.test(lookCss()), "the course page's right column: buttons and items as cards, the repeated course name hidden");
+  { const css = lookCss(), svgs = new Set(css.match(/url\("data:image\/svg\+xml[^"]*"\)/g) || []);
+    assert(/#section-tabs a\.announcements::before \{ -webkit-mask-position:-32px 0; mask-position:-32px 0; \}/.test(css) && /a\[class\*="context_external_tool"\]::before \{ -webkit-mask-position:-240px 0/.test(css), "an icon per course menu item (tools too), each a cell of the sprite");
+    assert(svgs.size === 1 && /viewBox='0 0 256 16'/.test([...svgs][0]) && ([...svgs][0].match(/<path /g) || []).length === 16, "one SVG image for the whole menu (each SVG image in CSS is a document for the browser): " + svgs.size); }
   assert(/:is\(#my_courses_table, #past_enrollments_table/.test(lookCss()) && /#nav-tray-portal li \{/.test(lookCss()) && !/:root\.cp-look \.ic-Table/.test(lookCss()), "table look only on the Cursos and Grupos lists (the grades page is left alone)");
   assert(/menu-list-item--active \.ic-app-header__menu-list-link \{ background:#E2482B !important/.test(lookCss()), "the active menu item takes the look (over the PUCPR purple)");
   lk.listen.change({ prefs: { newValue: { native: false } } }, "local"); assert(/cp-has-panel \[data-testid="widget-columns"\] \{ display:none/.test(lookCss()), "Canvas's widgets off: hidden");
   const dk = theme("dark", false); await new Promise(r => setTimeout(r, 5));
-  assert(/--cp-paper:#FFFFFF; --cp-card:#F3F3F3/.test(dk.styles.find(x => x.id === "cp-look").textContent), "dark: neutral paper under the inversion (no mud)");
+  assert(/--cp-paper:#F7EFDF; --cp-card:color-mix\(in srgb, #F7EFDF 94%, #000\)/.test(dk.styles.find(x => x.id === "cp-look").textContent), "dark Caderno: the cream turns into a warm dark, cards from it");
+  dk.listen.change({ prefs: { newValue: { theme: "dark", look: "grafite" } } }, "local");
+  assert(/--cp-paper:#FFFFFF; --cp-card:#F3F3F3/.test(dk.styles.find(x => x.id === "cp-look").textContent), "dark Grafite: neutral gray");
   lk.listen.change({ prefs: { newValue: { mode: "limpo" } } }, "local");
   assert(lk.cls.has("cp-mode-limpo") && /#right-side-wrapper, #right-side, #footer/.test(lookCss()) && !/:is\(#DashboardCard_Container/.test(lookCss()), "limpo: Canvas clutter hidden, cards kept");
   assert(lk.cls.has("cp-dash-page") && /:root\.cp-dash-page :is\(#right-side-wrapper/.test(lookCss()), "the clutter rules apply on the dashboard only");
   const quizPage = theme("off", false, undefined, undefined, { path: "/courses/1/quizzes/2/take", mode: "limpo" }); await new Promise(r => setTimeout(r, 5));
   assert(!quizPage.cls.has("cp-dash-page"), "a quiz page keeps its side column (timer, questions)");
   lk.listen.change({ prefs: { newValue: { mode: "foco" } } }, "local");
-  assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && /cp-dash-page\.cp-has-panel :is\(#DashboardCard_Container/.test(lookCss()), "foco: the cards go too, only once our panel is drawn");
+  assert(/:root\.cp-course-page #right-side-wrapper \{ display:none/.test(lookCss()) && /#footer, \.ic-app-footer/.test(lookCss()), "Limpo/Foco reach the course pages: no side column on home/modules, no footers");
+  assert(lk.cls.has("cp-mode-foco") && !lk.cls.has("cp-mode-limpo") && !/#DashboardCard_Container[^{]*\{ display:none/.test(lookCss()), "foco: the course cards stay");
   lk.listen.change({ prefs: { newValue: { cardImg: false } } }, "local");
   assert(/__header_image \{ background-image:none/.test(lookCss()), "cards without pictures");
   lk.listen.change({ prefs: { newValue: { look: "original", nav: "original" } } }, "local");
@@ -806,13 +1154,13 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the bookmarklet on the site: the extension's page scripts, bundled with an in-memory chrome stand-in
   const lit = fs.readFileSync(path.join(root, "index.html"), "utf8").match(/\/\*CP-BM\*\/("(?:[^"\\]|\\.)*")\/\*CP-BM\*\//);
   assert(lit, "bookmarklet source on index.html"); const bm = JSON.parse(lit[1]);
-  let at = 0; for (const f of ["prefs.js", "collect.js", "core.js", "files.js", "content.js"]) { const i = bm.indexOf(read(f), at); assert(i > at, f + " bundled as is, in order: run scripts/sync-bookmarklet"); at = i; }
+  let at = 0; if (!process.env.EXT_DIR) for (const f of ["prefs.js", "collect.js", "core.js", "files.js", "content.js"]) { const i = bm.indexOf(read(f), at); assert(i > at, f + " bundled as is, in order: run scripts/sync-bookmarklet"); at = i; }
   new Function(bm);   // valid code
   const bmDash = await runContent("/", null, {}, { src: bm });
   assert.match(text(bmDash.anchor), /Próximos 7 dias/); assert.match(text(bmDash.anchor), /Prova adiada/);
   assert(!bmDash.menu.kids.length, "no menu item in the bookmarklet");
   const bmCourse = await runContent("/courses/71306", [], {}, { src: bm });
-  assert.match(text(bmCourse.anchor), /garantidos de 10/);
+  assert(!/garantidos de 10/.test(text(bmCourse.anchor)), "the bookmarklet keeps no turma answer: no grades from another turma");
   assert(!all(bmCourse.anchor).some(e => /^Baixar|^Abrir no Caderno|^Anotações/.test(e.textContent)), "no downloads, no calculator page and no notes in the bookmarklet");
   const bmOther = await runContent("/profile", null, {}, { src: bm });
   assert.strictEqual(bmOther.alerts.length, 1, "elsewhere it asks for the dashboard or a course"); ok();

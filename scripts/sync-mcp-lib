@@ -1,0 +1,7 @@
+#!/bin/sh
+# Copy the extension's reader and rules into mcp/lib, so the npm package and the .mcpb bundle work outside this repo.
+set -e
+cd "$(dirname "$0")/.."
+mkdir -p mcp/lib
+cp extension/core.js extension/collect.js mcp/lib/
+echo "mcp/lib up to date"

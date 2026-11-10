@@ -1,15 +1,15 @@
 // Caderno+ service worker: saves the files the Canvas page asks for, keeps the days-to-next-exam number on the icon,
 // and shows the reminders (1 day and 1 hour before each deadline) the Canvas page hands over.
-importScripts("prefs.js");
+if (typeof importScripts === "function") importScripts("prefs.js");   // Chrome's service worker; Firefox loads prefs.js first (background.scripts)
 const CANVAS = "https://pucpr.instructure.com";
 const localISO = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const daysTo = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(localISO(new Date()) + "T00:00:00Z")) / 864e5);
 
-// Only Canvas file links, only into Downloads/PUCPR/..., never outside it.
-function okDownload(it) {
+// Only Canvas file links, only into the student's folder inside Downloads (prefs.dlFolder, "PUCPR" by default), never outside it.
+function okDownload(it, root = "PUCPR") {
   if (!it || typeof it.url !== "string" || typeof it.filename !== "string") return false;
   let u; try { u = new URL(it.url); } catch (e) { return false; }
-  return u.origin === CANVAS && /^PUCPR\/[^/]/.test(it.filename) && !it.filename.split("/").some(p => p === "" || p === "." || p === "..");
+  return u.origin === CANVAS && it.filename.startsWith(root + "/") && it.filename.length > root.length + 1 && !it.filename.split("/").some(p => p === "" || p === "." || p === "..");
 }
 
 async function showNext() {
@@ -51,13 +51,25 @@ function nextMonday8(now = new Date()) {
   let add = (8 - d.getDay()) % 7; if (add === 0 && now.getTime() >= d.getTime()) add = 7;
   d.setDate(d.getDate() + add); return d.getTime();
 }
+// The icon counts the days to the next exam: that only changes at midnight, so the worker is woken once a day for it
+// (it used to wake every hour, around the clock). Not a repeating alarm: each one schedules the next local midnight.
+const nextMidnight = (now = Date.now()) => { const d = new Date(now); d.setHours(24, 1, 0, 0); return d.getTime(); };
+const scheduleTick = () => chrome.alarms.create("tick", { when: nextMidnight() });
+// Chrome drops alarms on an extension update (and may on a restart): the reminders come back from the stored list, whose
+// names carry their time ("r|<key>|<when>"). A Canvas page sends the list again only when it changes.
+async function restoreAlarms() {
+  const { reminders, prefs } = await chrome.storage.local.get(["reminders", "prefs"]);
+  if (!reminders || typeof reminders !== "object" || !cpPrefs(prefs).remind) return;
+  const now = Date.now(), have = new Set((await chrome.alarms.getAll()).map(a => a.name));
+  for (const name of Object.keys(reminders).slice(0, 200)) { const when = Number(name.split("|").pop()); if (name.startsWith("r|") && Number.isFinite(when) && when > now && !have.has(name)) await chrome.alarms.create(name, { when }); }
+}
 const scheduleWeek = () => chrome.alarms.create("week", { when: nextMonday8(), periodInMinutes: 7 * 24 * 60 });
 async function summary(alarm) {
   const { upcoming = [], prefs, shown = {} } = await chrome.storage.local.get(["upcoming", "prefs", "shown"]);
   if (!cpPrefs(prefs).summary || Date.now() - alarm.scheduledTime > 12 * 36e5) return;
   const t = localISO(new Date()), end = localISO(new Date(Date.now() + 6 * 864e5)), wk = upcoming.filter(x => x.date >= t && x.date <= end);
-  const exams = wk.filter(x => /^Prova: /.test(x.title)), tasks = wk.length - exams.length, WD = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-  const parts = [tasks ? tasks + (tasks === 1 ? " entrega" : " entregas") : "", exams.length ? exams.length + (exams.length === 1 ? " prova" : " provas") : ""].filter(Boolean);
+  const exams = wk.filter(x => /^Prova: /.test(x.title)), own = wk.filter(x => /^Lembrete: /.test(x.title)).length, tasks = wk.length - exams.length - own, WD = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  const parts = [tasks ? tasks + (tasks === 1 ? " entrega" : " entregas") : "", exams.length ? exams.length + (exams.length === 1 ? " prova" : " provas") : "", own ? own + (own === 1 ? " lembrete" : " lembretes") : ""].filter(Boolean);
   const id = "w|" + Date.now(), keep = Object.entries(shown).slice(-30); keep.push([id, CANVAS + "/"]);
   await chrome.storage.local.set({ shown: Object.fromEntries(keep) });
   chrome.notifications.create(id, { type: "basic", iconUrl: "icons/icon128.png", title: "Sua semana: " + (parts.join(" e ") || "nada marcado"),
@@ -87,7 +99,111 @@ async function grades(items) {
   await chrome.storage.local.set({ shown: Object.fromEntries(keep) });
 }
 
+// Centro de Notas (PUCPR's grade tool, an LTI tab in every course), read the way Canvas opens it, with the student's own
+// session: the course's tab -> sessionless launch -> the signed form -> the tool's session -> its page data (Inertia JSON).
+// One course at a time (the tool keeps one session per browser), only this exact host, and only what the engine needs is
+// kept: columns, formulas, weights and the student's own grades; no classmates, no student name.
+const CENTRO = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io";
+const unesc = s => s.replace(/&(amp|lt|gt|quot|#39|#x27);/g, m => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&#x27;": "'" })[m]);
+function slimCentro(cu) {
+  if (!cu || typeof cu !== "object") return null;
+  const num = x => typeof x === "number" && Number.isFinite(x) ? x : null;
+  const col = c => c && typeof c === "object" ? { id_coluna: c.id_coluna, nome_coluna: String(c.nome_coluna || "").slice(0, 120), tipo_coluna: String(c.tipo_coluna || ""), tipo_calculo: c.tipo_calculo ? String(c.tipo_calculo) : null,
+    publicacao_nota: c.publicacao_nota ? 1 : 0, atividade: c.atividade ? { pontos_possiveis: num(Number(c.atividade.pontos_possiveis)), omitir_nota_final: c.atividade.omitir_nota_final ? 1 : 0 } : null,
+    notas: (Array.isArray(c.notas) ? c.notas : []).slice(0, 1).map(n => ({ nota: n && n.nota != null ? String(n.nota).slice(0, 12) : null })),
+    colunas_associadas_pai: (Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []).slice(0, 60).map(k => ({ id_coluna: k && k.id_coluna, tipo_coluna: k && String(k.tipo_coluna || ""),
+      pivot: { peso_coluna_filho: k && k.pivot ? num(Number(k.pivot.peso_coluna_filho)) : null }, grupos: (k && Array.isArray(k.grupos) ? k.grupos : []).slice(0, 2).map(g => ({ id_grupo: g && g.id_grupo })) })) } : null;
+  return { grupos: (Array.isArray(cu.grupos) ? cu.grupos : []).slice(0, 30).map(g => ({ id_grupo: g && g.id_grupo, nome_grupo: String(g && g.nome_grupo || "").slice(0, 80),
+      grupo_colunas: (g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []).slice(0, 120).map(gc => ({ coluna: col(gc && gc.coluna) })).filter(gc => gc.coluna) })),
+    colunas: (Array.isArray(cu.colunas) ? cu.colunas : []).slice(0, 10).map(col).filter(Boolean) };
+}
+async function centroCourse(id, f = fetch) {
+  const json = async (u, o) => { const r = await f(u, o); if (!r.ok) throw new Error(String(r.status)); return JSON.parse((await r.text()).replace(/^while\(1\);/, "")); };
+  const tabs = await json(CANVAS + "/api/v1/courses/" + id + "/tabs");
+  const tab = Array.isArray(tabs) && tabs.find(t => t && t.label === "Centro de Notas" && t.type === "external"), tid = tab && /\/external_tools\/(\d+)/.exec(String(tab.html_url || ""));
+  if (!tid) return null;
+  const sl = await json(CANVAS + "/api/v1/courses/" + id + "/external_tools/sessionless_launch?id=" + tid[1]);
+  if (!sl || typeof sl.url !== "string" || !sl.url.startsWith(CANVAS + "/")) return null;
+  const page = await (await f(sl.url)).text(), form = /<form\b[^>]*\saction="([^"]+)"[^>]*>([\s\S]*?)<\/form>/.exec(page);
+  if (!form || unesc(form[1]) !== CENTRO + "/lti") return null;   // only PUCPR's tool, never another address the page names
+  const body = new URLSearchParams();   // only the inputs of that form (never Canvas's own tokens elsewhere on the page)
+  for (const m of form[2].matchAll(/<input\b[^>]*>/g)) { const n = /\sname="([^"]*)"/.exec(m[0]), v = /\svalue="([^"]*)"/.exec(m[0]); if (n) body.append(unesc(n[1]), v ? unesc(v[1]) : ""); }
+  const lti = await f(CENTRO + "/lti", { method: "POST", body, credentials: "include" });
+  if (!lti.ok) return null;
+  const dp = /data-page="([^"]+)"/.exec(await lti.text()); let ver = ""; try { ver = dp ? String(JSON.parse(unesc(dp[1])).version || "") : ""; } catch (e) { /* no version */ }
+  const fin = await json(CENTRO + "/lti/finalize", { headers: { "X-Requested-With": "XMLHttpRequest", Accept: "application/json" }, credentials: "include" });
+  if (!fin || fin.status !== "success" || !/^\/curso\/\d{1,15}$/.test(String(fin.redirect_url))) return null;
+  const d = await json(CENTRO + fin.redirect_url, { headers: { "X-Inertia": "true", "X-Inertia-Version": ver, "X-Requested-With": "XMLHttpRequest" }, credentials: "include" });
+  return slimCentro(d && d.props && d.props.curso);
+}
+// every course of the reading, one after another; stored per Canvas user in "centro" (the panels repaint when it lands).
+// A course that failed this time (network, the tool asleep) keeps what was read before; one run at a time (one tool session).
+let centroRun = null;
+async function centroAll(user, ids, f = fetch) {
+  if (centroRun) return centroRun;
+  centroRun = (async () => {
+    const { centro } = await chrome.storage.local.get("centro"), old = centro && centro.user === user && centro.courses ? centro.courses : {}, courses = {};
+    for (const id of ids) { try { courses[id] = await centroCourse(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
+    for (const id of Object.keys(courses)) if (courses[id] === undefined) delete courses[id];
+    await chrome.storage.local.set({ centro: { user, at: Date.now(), courses } });
+    return courses;
+  })();
+  try { return await centroRun; } finally { centroRun = null; }
+}
+
+// Ponte (bridge/SPEC-ponte.md): the Caderno+ MCP asks, through its native host, and this worker reads Canvas with the
+// browser's login, so the student's AI needs no token. On only after the student grants "nativeMessaging" (Sua IA page);
+// while connected the worker stays alive (Chrome 105+). Only GETs to the MCP's own allowlist, and the Centro de Notas reader.
+const PONTE_HOST = "br.caderno_plus.mcp";
+const PONTE_ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/(assignments|modules|users|tabs|quizzes)$/, /^\/api\/v1\/announcements$/, /^\/api\/v1\/planner\/items$/];
+let ponte = null, ponteErr = "";
+async function ponteAnswer(m, f = fetch) {
+  const id = m && m.id;
+  try {
+    if (!m || typeof m !== "object") return { id, error: "pedido inválido" };
+    if (m.op === "ping") return { id, ok: true, v: chrome.runtime.getManifest().version };
+    if (m.op === "rules") {   // the student's own rules (courses without a formula), for the Canvas user of the last reading only
+      const { cache, myRules } = await chrome.storage.local.get(["cache", "myRules"]), user = cache && cache.user;
+      return { id, ok: true, user: user == null ? null : user, rules: user != null && myRules && typeof myRules === "object" && myRules[user] && typeof myRules[user] === "object" ? myRules[user] : {} };
+    }
+    if (m.op === "get") {
+      const u = new URL(String(m.url || ""));
+      if (u.origin !== CANVAS || !PONTE_ALLOW.some(re => re.test(u.pathname)) || u.username || u.password) return { id, error: "bloqueado: fora da lista de leitura" };
+      const r = await f(u.href, { method: "GET", credentials: "include", redirect: "error", headers: { Accept: "application/json" } }), body = await r.text();
+      if (body.length > 5e6) return { id, error: "resposta grande demais do Canvas" };
+      return { id, ok: r.ok, status: r.status, link: r.headers.get("Link"), body };
+    }
+    if (m.op === "centro") {
+      const c = String(m.course || ""); if (!/^\d{1,15}$/.test(c)) return { id, error: "matéria inválida" };
+      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return { id, ok: true, curso: null, aviso: "Centro de Notas não liberado: clique em Atualizar no botão do Caderno+" };
+      return { id, ok: true, curso: await centroCourse(c, f) };
+    }
+    return { id, error: "pedido desconhecido" };
+  } catch (e) { return { id, error: String(e && e.message || e).slice(0, 160) }; }
+}
+// one connection at a time: the click on Ligar and permissions.onAdded arrive together, and two ports would be two hosts
+let ponteOpening = null;
+const ponteUp = () => ponteOpening || (ponteOpening = ponteOpen().finally(() => { ponteOpening = null; }));
+function ponteDown() { const p = ponte; ponte = null; ponteErr = "desligada por você"; if (p) try { p.disconnect(); } catch (e) { /* closed */ } }
+async function ponteOpen() {
+  if (ponte) return true;
+  if (!chrome.runtime.connectNative || !chrome.permissions || !(await chrome.permissions.contains({ permissions: ["nativeMessaging"] }))) return false;
+  try { ponte = chrome.runtime.connectNative(PONTE_HOST); } catch (e) { ponte = null; ponteErr = String(e && e.message || e); return false; }
+  ponteErr = "";
+  const port = ponte;
+  port.onMessage.addListener(m => { ponteAnswer(m).then(r => { try { port.postMessage(r); } catch (e) { /* port closed */ } }); });
+  port.onDisconnect.addListener(() => { ponteErr = (chrome.runtime.lastError && chrome.runtime.lastError.message) || "desligada"; if (ponte === port) ponte = null; });
+  return true;
+}
+if (chrome.permissions && chrome.permissions.onAdded) chrome.permissions.onAdded.addListener(p => { if (p && Array.isArray(p.permissions) && p.permissions.includes("nativeMessaging")) ponteUp(); });
+ponteUp();   // every time the worker starts (browser start, an update): reconnects when the student turned the ponte on
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  // the extension's own pages (Sua IA): the ponte's state, and turning it on after the permission was granted
+  if (sender.id === chrome.runtime.id && typeof sender.url === "string" && sender.url.startsWith(chrome.runtime.getURL("")) && msg && msg.type === "ponte") {
+    (async () => { if (msg.off) ponteDown(); else if (msg.on) await ponteUp(); await new Promise(r => setTimeout(r, msg.on ? 400 : 0)); reply({ on: !!ponte, error: ponte ? "" : ponteErr, id: chrome.runtime.id }); })();
+    return true;
+  }
   if (sender.id !== chrome.runtime.id || sender.origin !== CANVAS || !msg) return;
   if (msg.type === "next") {
     const next = msg.date && /^\d{4}-\d\d-\d\d$/.test(msg.date) ? { date: msg.date, label: String(msg.label || "").slice(0, 80) } : null;
@@ -102,15 +218,25 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     grades(msg.items).then(() => reply({ ok: true }));
     return true;
   }
+  // read the Centro de Notas of these courses (from the panel's reading); at most once an hour per user (formulas change
+  // rarely and each read is six requests per course); Atualizar in the popup forces it
+  if (msg.type === "centro" && Array.isArray(msg.ids) && typeof msg.user === "number") {
+    (async () => {
+      const ids = msg.ids.map(String).filter(x => /^\d{1,15}$/.test(x)).slice(0, 15), { centro } = await chrome.storage.local.get("centro");
+      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return reply({ ok: false, permission: false });   // asked once, from Atualizar in the popup
+      if (centro && centro.user === msg.user && Date.now() - centro.at < 60 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
+      await centroAll(msg.user, ids); reply({ ok: true });
+    })().catch(() => reply({ ok: false }));
+    return true;
+  }
   if (msg.type === "download" && Array.isArray(msg.items)) {
     (async () => {
-      const done = [];
+      const done = [], root = cpFolder(cpPrefs((await chrome.storage.local.get("prefs")).prefs).dlFolder);
       for (const it of msg.items.slice(0, 300)) {
-        if (!okDownload(it)) continue;
+        if (!okDownload(it, root)) continue;
         try {
           const did = await chrome.downloads.download({ url: it.url, filename: it.filename, conflictAction: "uniquify", saveAs: false });
-          const { pending = {} } = await chrome.storage.session.get("pending");
-          pending[did] = it.id; await chrome.storage.session.set({ pending });
+          await inLine(async () => { const { pending = {} } = await chrome.storage.session.get("pending"); pending[did] = it.id; await chrome.storage.session.set({ pending }); });
           done.push(it.id);
         } catch (e) { /* one bad file does not stop the rest */ }
       }
@@ -119,19 +245,32 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
 });
+// The lists of downloads under way and done are read, changed and written one at a time: many small files finishing
+// together used to overwrite each other's entry, and those files came back as "new" and were downloaded twice.
+let line = Promise.resolve();
+const inLine = f => (line = line.then(f, f));
 // A file counts as downloaded only when Chrome finishes it; cancelled or failed ones stay "new".
-chrome.downloads.onChanged.addListener(async ch => {
+if (chrome.downloads) chrome.downloads.onChanged.addListener(ch => {   // no downloads API on Firefox for Android
   const state = ch.state && ch.state.current;
   if (state !== "complete" && state !== "interrupted") return;
-  const { pending = {} } = await chrome.storage.session.get("pending"), fileId = pending[ch.id];
-  if (fileId === undefined) return;
-  delete pending[ch.id]; await chrome.storage.session.set({ pending });
-  if (state !== "complete") return;
-  const { dl } = await chrome.storage.local.get("dl"), have = Array.isArray(dl) ? dl : [];
-  if (!have.includes(fileId)) await chrome.storage.local.set({ dl: [...have, fileId] });
+  return inLine(async () => {
+    const { pending = {} } = await chrome.storage.session.get("pending"), fileId = pending[ch.id];
+    if (fileId === undefined) return;
+    delete pending[ch.id]; await chrome.storage.session.set({ pending });
+    if (state !== "complete") return;
+    const { dl } = await chrome.storage.local.get("dl"), have = Array.isArray(dl) ? dl : [];
+    if (!have.includes(fileId)) await chrome.storage.local.set({ dl: [...have, fileId] });
+  });
 });
-chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); });
-chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create("tick", { periodInMinutes: 60 }); scheduleWeek(); showNext(); });
+chrome.runtime.onStartup.addListener(() => { showNext(); scheduleWeek(); scheduleTick(); restoreAlarms(); });
+chrome.runtime.onInstalled.addListener(details => {
+  scheduleTick(); scheduleWeek(); showNext(); restoreAlarms();   // also replaces the hourly "tick" of older versions
+  if (details && details.reason === "update") {   // 6.0: the file for the AI is gone (the MCP uses a token): its keys go too
+    chrome.storage.local.remove(["agentAt", "agentErr", "agentPath"]);
+    chrome.storage.local.get("prefs").then(({ prefs }) => { if (prefs && "agentFile" in prefs) { const p = Object.assign({}, prefs); delete p.agentFile; chrome.storage.local.set({ prefs: p }); } });
+  }
+  if (details && details.reason === "install") { chrome.storage.local.set({ notesSeen: chrome.runtime.getManifest().version }); chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }); }   // first install: the onboarding, not the Novidades
+});
 // Foco (started in the popup): the end of a study block or a break.
 async function focusDone(alarm) {
   await chrome.storage.local.remove("focus");
@@ -139,7 +278,7 @@ async function focusDone(alarm) {
   chrome.notifications.create("f|" + Date.now(), { type: "basic", iconUrl: "icons/icon128.png", title: study ? "25 minutos de foco: hora da pausa" : "Pausa acabou",
     message: study ? "Levante, beba água. Abra o Caderno+ para mais uma rodada depois de 5 minutos." : "Bora voltar: mais 25 minutos de foco?", priority: 2 });
 }
-chrome.alarms.onAlarm.addListener(a => a.name.startsWith("r|") ? notify(a) : a.name === "week" ? summary(a) : a.name.startsWith("focus|") ? focusDone(a) : showNext());   // "tick": the icon counts down even when Canvas is not opened
+chrome.alarms.onAlarm.addListener(a => a.name.startsWith("r|") ? notify(a) : a.name === "week" ? summary(a) : a.name.startsWith("focus|") ? focusDone(a) : (scheduleTick(), showNext()));   // "tick": the icon counts down even when Canvas is not opened
 chrome.notifications.onClicked.addListener(async id => {
   const { shown = {} } = await chrome.storage.local.get("shown");
   if (typeof shown[id] === "string" && shown[id].startsWith(CANVAS + "/")) chrome.tabs.create({ url: shown[id] });

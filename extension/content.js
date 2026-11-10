@@ -9,6 +9,8 @@
   const VERSION = chrome.runtime.getManifest().version;
   const EXT = !!chrome.runtime.getURL;   // the extension (the bookmarklet keeps nothing after a reload)
   let T = 7;   // the meta (goal), from the popup or the dashboard; 7 by default
+  let KPI_COURSE = "";   // prefs.kpiCourse: the subject the three dashboard numbers are about ("" = every subject)
+  let TURMA_PREF = null;   // prefs.turma: the turma the student confirmed, "outro" for another program, null when not asked yet
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
   const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -19,10 +21,26 @@
   const addDays = n => C.localISO(new Date(Date.now() + n * 864e5));
   const days = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(today() + "T00:00:00Z")) / 864e5);
 
+  // f over xs, at most n at a time, results in order: Canvas throttles a burst of requests (403), so side reads stay small
+  const pool = (xs, n, f) => { let i = 0; const out = []; return Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => { while (i < xs.length) { const k = i++; out[k] = await f(xs[k], k); } })).then(() => out); };
+  // One Canvas GET: 20 s at most; a throttle (403 "Rate Limit Exceeded", 429) or a passing 5xx is tried again twice, later.
+  async function canvasGet(url) {
+    for (let i = 0; ; i++) {
+      const ctl = typeof AbortController === "function" ? new AbortController() : null, t = ctl ? setTimeout(() => ctl.abort(), 20000) : 0;
+      try {
+        const r = await fetch(url, Object.assign({ credentials: "same-origin", headers: { Accept: "application/json" } }, ctl ? { signal: ctl.signal } : {}));
+        const left = r.headers && r.headers.get ? parseFloat(r.headers.get("X-Rate-Limit-Remaining")) : NaN;
+        if ((r.status === 429 || [502, 503, 504].includes(r.status) || (r.status === 403 && left <= 0)) && i < 2) { if (r.body && r.body.cancel) r.body.cancel().catch(() => {}); await new Promise(res => setTimeout(res, 1200 * (i + 1))); continue; }
+        const body = await r.text();   // the whole answer inside the 20 s
+        return { ok: r.ok, status: r.status, headers: r.headers, text: async () => body };
+      } catch (e) { if (i < 2) { await new Promise(res => setTimeout(res, 800 * (i + 1))); continue; } throw new Error(e && e.name === "AbortError" ? "o Canvas demorou demais" : "sem conexão com o Canvas"); }
+      finally { clearTimeout(t); }
+    }
+  }
   async function getAll(url, pages = Infinity) {   // pages: stop after that many (the inbox reads only the first)
     const out = [];
     while (url && pages-- > 0) {
-      const r = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
+      const r = await canvasGet(url);
       if (!r.ok) throw new Error("o Canvas respondeu " + r.status);
       const body = JSON.parse((await r.text()).replace(/^while\(1\);/, ""));
       if (Array.isArray(body)) out.push(...body); else return body;
@@ -39,46 +57,83 @@
     for (const sc of (document.scripts || [])) { const m = /"current_user_id":"?(\d+)/.exec(sc.textContent || ""); if (m) return Number(m[1]); }
     return null;
   }
-  async function whoAmI() {
+  async function whoAmI(cache) {   // cache: the stored reading, already read by the caller
     let id = pageUser();
     if (!id) { try { id = (await getAll("/api/v1/users/self")).id; } catch (e) { await forget(); throw e; } }
-    const { cache } = await chrome.storage.local.get("cache");
     if (cache && cache.user !== id) await forget();
+    await ownerIs(id);
     return id;
+  }
+  // The turma confirmed and the courses taken off the dashboard belong to a Canvas user ("mineOf" says whose the current
+  // ones are). Another student on this Chrome starts clean (asked the turma again, nothing hidden) and each one gets
+  // theirs back ("byUser"). The look and the mode are the browser's. The first run adopts what is already there.
+  let ownerSwapped = false;
+  async function ownerIs(id) {
+    const { mineOf, prefs, hidden, byUser } = await chrome.storage.local.get(["mineOf", "prefs", "hidden", "byUser"]);
+    if (mineOf === id) return;
+    if (mineOf == null) { await chrome.storage.local.set({ mineOf: id }); return; }
+    const stash = Object.assign({}, byUser && typeof byUser === "object" ? byUser : {}), p = Object.assign({}, prefs);
+    stash[mineOf] = { turma: p.turma || null, hidden: Array.isArray(hidden) ? hidden.map(String).slice(0, 200) : [] };
+    const mine = stash[id] && typeof stash[id] === "object" ? stash[id] : {};
+    if (mine.turma) p.turma = String(mine.turma); else delete p.turma;
+    delete stash[id];
+    await chrome.storage.local.set({ mineOf: id, byUser: stash, prefs: p, hidden: Array.isArray(mine.hidden) ? mine.hidden.map(String) : [] });
+    ownerSwapped = true;
   }
   // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
   const forget = async () => {
     await chrome.storage.local.remove(["cache", "search", "teachers", "ccolors"]);
+    try { if (typeof sessionStorage !== "undefined") { sessionStorage.removeItem("cp-sent-remind"); sessionStorage.removeItem("cp-sent-next"); } } catch (e) { /* no storage */ }
     chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
     chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
   };
   // Canvas export + course ids, cached for 10 minutes so moving between pages does not re-read everything. One tab reads at a
   // time: while another tab is reading (lock under a minute old), this one uses the last reading. An older reading of the same
-  // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas).
-  async function load(onFresh) {
-    const user = await whoAmI();
-    const { cache, refreshing } = await chrome.storage.local.get(["cache", "refreshing"]);
-    const mine = cache && cache.v === VERSION && cache.user === user;
-    if (mine && Date.now() - cache.at < TTL) return cache;
+  // user is shown at once and the new one is handed to onFresh when it lands (the page does not wait for Canvas). A reading
+  // made by an older version of the extension (same format, collect's data.v) counts as old, never as missing: an update
+  // does not leave the panel waiting for a whole new reading.
+  async function load(onFresh, pre) {   // pre: { cache, refreshing } read with the prefs (the reading, often large, is read once)
+    const got = pre || await chrome.storage.local.get(["cache", "refreshing"]), user = await whoAmI(got.cache);
+    const cache = got.cache && got.cache.user === user ? got.cache : null, refreshing = got.refreshing;
+    const mine = cache && cache.user === user && cache.data && cache.data.v === 1, now = mine && cache.v === VERSION;
+    if (now && Date.now() - cache.at < TTL) return cache;
     if (mine && refreshing && Date.now() - refreshing < LOCK) return cache;
-    if (mine && onFresh) { refresh(user).then(onFresh, () => {}); return cache; }
-    return refresh(user);
+    const known = mine && Array.isArray(cache.data.courses) ? cache.data.courses.map(c => c.id) : [];   // the head start for the assignments (collect.js)
+    if (mine && onFresh) { refresh(user, known).then(onFresh, e => oops("atualizar a leitura", e)); return cache; }   // the old reading stays; the failure is kept for the popup
+    return refresh(user, known);
   }
-  async function refresh(user) {
+  // A planner item kept with only what agenda() reads: the raw Canvas object carries the whole assignment (about a third
+  // of the stored reading), copied to every tab on each change and held in memory by each page.
+  const slimPlan = p => !p || typeof p !== "object" ? null : { plannable_type: p.plannable_type, plannable_id: p.plannable_id, plannable_date: p.plannable_date,
+    plannable: p.plannable ? { title: p.plannable.title } : null, html_url: p.html_url, course_id: p.course_id, context_name: p.context_name,
+    submissions: p.submissions ? { submitted: !!p.submissions.submitted, graded: !!p.submissions.graded, excused: !!p.submissions.excused, missing: !!p.submissions.missing } : p.submissions,
+    planner_override: p.planner_override ? { marked_complete: !!p.planner_override.marked_complete } : null };
+  async function refresh(user, known) {
     await chrome.storage.local.set({ refreshing: Date.now() });
     try {
       const inbox = getAll("/api/v1/conversations?scope=unread&per_page=5", 1).then(list => list.slice(0, 5).map(m => ({ subject: String(m.subject || "(sem assunto)").slice(0, 140),
         from: (Array.isArray(m.participants) ? m.participants : []).filter(x => x && x.name && x.id !== user).map(x => x.name).slice(0, 2).join(", ").slice(0, 80), at: m.last_message_at || null })), () => null);   // unread messages (subject and who), read alongside
       const plan = getAll("/api/v1/planner/items?start_date=" + addDays(-7) + "&end_date=" + addDays(15) + "&per_page=100").catch(() => null);   // the week and the reminders, read alongside the grades
-      const got = {}, data = await collectCanvasGrades(got);
-      if (data.error) { if (/ 401$/.test(data.error)) await forget(); throw new Error(data.error); }
+      const got = {}, data = await collectCanvasGrades(got, known);
+      if (data.error) {   // a 401 on one request can be "not allowed": the reading is forgotten only when /users/self says logged out
+        if (/ 401$/.test(data.error)) { let out = false; try { await getAll("/api/v1/users/self"); } catch (e) { out = / 401$/.test(String(e && e.message)); } if (out) await forget(); }
+        throw new Error(data.error);
+      }
+      if (data.courses.some(c => c.failed)) {   // one course did not answer: its last assignments stay (no false "new" items, no lost grades)
+        const { cache: old } = await chrome.storage.local.get("cache");
+        for (const c of data.courses) if (c.failed) { const o = old && old.user === user && old.data && Array.isArray(old.data.courses) ? old.data.courses.find(x => x.id === c.id) : null; if (o && Array.isArray(o.assignments)) c.assignments = o.assignments; }
+        oops("ler uma matéria", new Error(data.courses.filter(c => c.failed).length + " matéria(s) sem resposta do Canvas"));
+      }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
       const planner = await plan;
       await newGrades(user, data);
-      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner : null, inbox: await inbox };
+      const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner.map(slimPlan) : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh });
+      await chrome.storage.local.remove(["refreshing", "lastError"]);   // a reading that worked: the old error is over
+      // the Centro de Notas of the term's courses, read by the worker behind (the cards repaint when it lands)
+      if (EXT) chrome.runtime.sendMessage({ type: "centro", user, ids: (data.courses || []).map(c => c.id) }).catch(() => {});
       return fresh;
-    } finally { await chrome.storage.local.remove("refreshing"); }
+    } catch (e) { await chrome.storage.local.set({ refreshing: Date.now() }); throw e; }   // failed (throttled, Canvas down): the lock stays a minute, so each page does not read everything again
   }
   // Ticked as done, per Canvas user: { <user>: { <planner key>: <due day> } } in chrome.storage.local "marks"; kept 30 days.
   async function myMarks(user) {
@@ -124,12 +179,122 @@
   }
   // Own tasks (not from Canvas), per Canvas user in chrome.storage.local "tasks": [{ id, title, date|null }]; done = a tick.
   let myTasks = [];
-  async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
-  async function saveTasks(user, list) {
-    const { tasks } = await chrome.storage.local.get("tasks"), all = tasks && typeof tasks === "object" ? tasks : {};
-    myTasks = list.slice(0, 100); await chrome.storage.local.set({ tasks: Object.assign({}, all, { [user]: myTasks }) });
+  // The Centro de Notas read by the worker, per Canvas user ("centro": { user, at, courses: { <course id>: curso | null } }).
+  let myCentro = {};
+  async function loadCentro(user) { const { centro } = await chrome.storage.local.get("centro"); myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
+  // quanto falta from the professor's formula in the Centro de Notas, for a course without our rules; null without a formula
+  const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && ["garantido", "precisa", "nao-da"].includes(r.status) ? r : null; };   // sem-formula and incompleto: no number
+  // The student's own rule (C.custom) for a course with neither our rules nor a formula in the Centro de Notas: per Canvas
+  // user, per course, in chrome.storage.local "myRules": { <user>: { <course id>: { off: [item keys], total } } }.
+  // Without a saved rule every graded item counts, up to 10: the student unticks what is not graded.
+  let myRules = {}, rulesUser = null;
+  async function loadRules(user) { const { myRules: all } = await chrome.storage.local.get("myRules"); rulesUser = user; myRules = all && typeof all === "object" && all[user] && typeof all[user] === "object" ? all[user] : {}; return myRules; }
+  async function saveRule(user, courseId, rule) {
+    const { myRules: all } = await chrome.storage.local.get("myRules"), base = all && typeof all === "object" ? all : {};
+    const parts = {}, part = {};
+    for (const k of ["A", "B", "C"]) { const x = rule.parts && rule.parts[k]; if (x && Number(x.w) > 0) parts[k] = Object.assign({ w: Math.min(100, Number(x.w)) }, Number(x.top) > 0 ? { top: Math.min(1000, Number(x.top)) } : {}); }
+    for (const [key, k] of Object.entries(rule.part || {}).slice(0, 300)) if (/^[ABC]$/.test(k)) part[String(key).slice(0, 300)] = k;
+    const mine = Object.assign({}, base[user], { [courseId]: Object.assign({ off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 }, Object.keys(parts).length ? { parts, part } : {}) });
+    myRules = mine; await chrome.storage.local.set({ myRules: Object.assign({}, base, { [user]: mine }) });
   }
-  const addTask = (user, title, date) => saveTasks(user, myTasks.concat([{ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(title).trim().slice(0, 140), date: date || null }]));
+  let ruleCache = null;   // the reading the items come from (set where the panels are drawn)
+  const ruleItems = courseId => { const cv = ruleCache && ruleCache.data && ruleCache.data.courses.find(x => String(x.id) === String(courseId));
+    return cv ? cv.assignments.filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, due: x.due })) : []; };
+  // Until the student confirms the rule (any change saves it), no "garantido" or "recuperação": the sum may miss items
+  // that are not in Canvas yet, or count extras
+  const customOf = courseId => { const items = ruleItems(courseId); if (!items.length) return null; const r = C.custom(items, myRules[courseId], T); if (r.status === "vazio" && !r.parts) return null;
+    const mine = !!myRules[courseId]; return Object.assign(r, { mine, unsure: !mine && (r.status === "garantido" || r.status === "nao-da") }); };
+  const customPill = r => r.status === "acima" || r.unsure ? "confira" : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.";
+  const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
+  const centroText = r => fmt(r.now, 1) + "/10 · " + (r.status === "garantido" ? "garantido" : r.status === "nao-da" ? "recuperação" : "precisa " + up(r.need, 1) + "/10" + (r.approx ? " (aprox.)" : ""));
+  const centroTone = r => r.status === "garantido" ? "ok" : r.status === "nao-da" ? "bad" : r.need > 8 ? "bad" : "warn";
+  // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
+  // the dated ones join the week like Minhas tarefas. chrome.storage.local "checks"; 50 items of 200 chars per list.
+  let myChecks = {};
+  async function loadChecks(user) {
+    const { checks } = await chrome.storage.local.get("checks"), mine = checks && typeof checks === "object" ? checks[user] : null, out = {};
+    if (mine && typeof mine === "object") for (const k of Object.keys(mine)) if (Array.isArray(mine[k])) out[k] = mine[k].filter(x => x && x.id && typeof x.t === "string");
+    myChecks = out; return out;
+  }
+  let checkQ = Promise.resolve();   // one write at a time (a tick in the week and one in the list)
+  const editChecks = (user, key, f) => (checkQ = checkQ.catch(() => {}).then(async () => {
+    const { checks } = await chrome.storage.local.get("checks"), all = checks && typeof checks === "object" ? checks : {}, mine = Object.assign({}, all[user]);
+    const next = f(Array.isArray(mine[key]) ? mine[key].filter(x => x && x.id && typeof x.t === "string") : []).slice(0, 50);
+    if (next.length) mine[key] = next; else delete mine[key];
+    await chrome.storage.local.set({ checks: Object.assign({}, all, { [user]: mine }) }); await loadChecks(user); return next;
+  }));
+  // a tick from the week or a course's A seguir: checklist items change their own list, the rest go to the marks
+  async function tick(user, x, on) {
+    if (!x.chk) return setMark(user, x, on);
+    await editChecks(user, x.chk[0], l => l.map(y => y.id === x.chk[1] ? Object.assign({}, y, { done: on }) : y));
+    return myMarks(user);
+  }
+  // Anotações: a note and a checklist for one key (a course id, or "painel" on the dashboard), only on this computer
+  // (chrome.storage.local "notes" and "checks", per Canvas user), saved as you type. onChange: a checklist edit (the week).
+  function notesBlock(cache, key, hasNote, onChange) {
+    const pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
+    ta.setAttribute("aria-label", key === "painel" ? "Minhas anotações" : "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
+    pad.append(ta, saved);
+    let tm = 0, typed = 0;
+    const store = async () => {
+      const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
+      const v = String(ta.value || "").slice(0, 5000); if (v) mine[key] = v; else delete mine[key];
+      await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
+    };
+    ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
+    chrome.storage.local.get("notes").then(({ notes }) => {
+      const v = notes && notes[cache.user] && notes[cache.user][key];
+      if (typeof v === "string" && v) { ta.value = v; if (hasNote) hasNote(); }
+    });
+    // the checklist: with a day, the item shows in the dashboard's 7 days (and its reminders)
+    const chk = el("div", "card notes chk"), form = el("form", "add"), cin = el("input"), din = el("input"), add = el("button", "primary", "Adicionar"), ul = el("ul");
+    cin.type = "text"; cin.placeholder = "Novo item (ex.: refazer a lista 3)"; cin.setAttribute("aria-label", "Novo item do checklist"); cin.maxLength = 200;
+    din.type = "date"; din.setAttribute("aria-label", "Dia (opcional: aparece nos próximos 7 dias)"); din.title = "Com dia, aparece nos próximos 7 dias do painel"; add.type = "submit";
+    form.append(cin, din, add); chk.append(el("h3", null, key === "painel" ? "Meu checklist" : "Checklist da matéria"), form, ul);
+    const edit = async f => { await editChecks(cache.user, key, f); draw(); if (onChange) onChange(); };
+    const draw = () => {
+      const items = myChecks[key] || []; ul.replaceChildren();
+      if (!items.length) { ul.appendChild(el("li", "muted", "Nada ainda. Com dia, o item aparece nos próximos 7 dias do painel.")); return; }
+      for (const x of items.slice().sort((p, q) => (!!p.done - !!q.done) || String(p.date || "9").localeCompare(String(q.date || "9")))) {
+        const li = el("li", "row" + (x.done ? " dn" : "")), end = el("span", "end"), ck = el("button", "ck", "✓"), del = el("button", "ck del", "×");
+        ck.type = del.type = "button"; ck.setAttribute("aria-pressed", String(!!x.done)); ck.setAttribute("aria-label", (x.done ? "Desmarcar: " : "Marcar: ") + x.t); del.setAttribute("aria-label", "Apagar: " + x.t);
+        ck.addEventListener("click", () => edit(l => l.map(y => y.id === x.id ? Object.assign({}, y, { done: !y.done }) : y)));
+        del.addEventListener("click", () => edit(l => l.filter(y => y.id !== x.id)));
+        end.append(ck, del); li.append(el("span", "d", x.date ? cap(dayLabel(x.date)) : "sem dia"), el("span", "n", x.t), end); ul.appendChild(li);
+      }
+    };
+    form.addEventListener("submit", e => { e.preventDefault(); const t = String(cin.value || "").trim().slice(0, 200); if (!t) return;
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(din.value || "") ? din.value : null; cin.value = ""; din.value = "";
+      edit(l => l.concat(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t, done: false }, date ? { date } : {}))); });
+    cin.addEventListener("input", () => { typed = Date.now(); });   // no redraw under the student's typing
+    loadChecks(cache.user).then(draw);
+    watchStore(ch => {   // ticked in the week, or changed in another tab
+      if (gone(ul)) return false;
+      if (ch.checks) loadChecks(cache.user).then(draw);
+      const v = ch.notes && ch.notes.newValue && ch.notes.newValue[cache.user] && ch.notes.newValue[cache.user][key];
+      if (ch.notes && Date.now() - typed > 3000 && (ta.getRootNode ? ta.getRootNode().activeElement !== ta : true)) ta.value = typeof v === "string" ? v : "";   // never under the student's typing
+    });
+    return { nodes: [pad, chk], ta, busy: () => Date.now() - typed < 30000 };
+  }
+  // Our panels' shadow roots are closed (page scripts cannot read the notes); the root stays on the host for our own code,
+  // in the extension's isolated world, which the page never sees.
+  const shadow = host => { const r = host.attachShadow({ mode: "closed" }); host.cpRoot = r; return r; };
+  // One chrome.storage listener per page for the blocks drawn on it; a block that left the page returns false and is dropped.
+  const onStore = new Set(); let storeHooked = false;
+  function watchStore(f) {
+    onStore.add(f);
+    if (storeHooked || !chrome.storage.onChanged) return; storeHooked = true;
+    chrome.storage.onChanged.addListener((ch, area) => { if (area === "local") for (const g of [...onStore]) if (g(ch) === false) onStore.delete(g); });
+  }
+  const gone = n => n.isConnected === false;
+  async function loadTasks(user) { const { tasks } = await chrome.storage.local.get("tasks"); const l = tasks && typeof tasks === "object" ? tasks[user] : null; myTasks = Array.isArray(l) ? l.filter(t => t && t.id && t.title) : []; return myTasks; }
+  // f: the change, applied to what is stored now (another tab may have added a task since this page loaded)
+  async function saveTasks(user, f) {
+    const { tasks } = await chrome.storage.local.get("tasks"), all = tasks && typeof tasks === "object" ? tasks : {};
+    const cur = Array.isArray(all[user]) ? all[user].filter(t => t && t.id && t.title) : [];
+    myTasks = f(cur).slice(0, 100); await chrome.storage.local.set({ tasks: Object.assign({}, all, { [user]: myTasks }) });
+  }
+  const addTask = (user, title, date) => saveTasks(user, l => l.concat([{ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: String(title).trim().slice(0, 140), date: date || null }]));
   // "estudar cap 5 sex" -> title + the next friday; also hoje, amanhã, segunda..domingo, dd/mm
   function parseWhen(text) {
     const words = String(text).trim().split(/\s+/), last = (words[words.length - 1] || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -152,12 +317,15 @@
     const now = { at: Date.now(), netAt: hourOld ? Date.now() : old.netAt, asg: {}, ann: [], files: {}, mods: {} };
     for (const c of cache.data.courses) now.asg[c.id] = c.assignments.map(x => x.name);
     now.ann = (cache.data.announcements || []).map(x => x.url || x.title);
-    for (const c of cache.data.courses) {
-      if (!hourOld) { now.files[c.id] = old.files[c.id]; now.mods[c.id] = old.mods[c.id]; continue; }
-      try { now.files[c.id] = (await getAll("/api/v1/courses/" + c.id + "/files?sort=created_at&order=desc&per_page=15", 1)).map(f => [f.id, String(f.display_name || "arquivo").slice(0, 120)]); } catch (e) { now.files[c.id] = old && old.files[c.id]; }
-      try { now.mods[c.id] = (await getAll("/api/v1/courses/" + c.id + "/modules?per_page=50", 1)).map(m => [m.id, String(m.name || "módulo").slice(0, 120)]); } catch (e) { now.mods[c.id] = old && old.mods[c.id]; }
-    }
-    await chrome.storage.local.set({ snap: Object.assign({}, snap, { [user]: now }) });
+    await pool(cache.data.courses, 3, async c => {   // three courses at a time, both lists together, not 2 x 6 calls in a row
+      if (!hourOld) { now.files[c.id] = old.files[c.id]; now.mods[c.id] = old.mods[c.id]; return; }
+      await Promise.all([
+        getAll("/api/v1/courses/" + c.id + "/files?sort=created_at&order=desc&per_page=15", 1).then(l => { now.files[c.id] = l.map(f => [f.id, String(f.display_name || "arquivo").slice(0, 120)]); }, () => { now.files[c.id] = old && old.files[c.id]; }),
+        getAll("/api/v1/courses/" + c.id + "/modules?per_page=50", 1).then(l => { now.mods[c.id] = l.map(m => [m.id, String(m.name || "módulo").slice(0, 120)]); }, () => { now.mods[c.id] = old && old.mods[c.id]; })]);
+    });
+    // written only when something differs: every write wakes the service worker and reaches every open tab
+    const same = old && JSON.stringify([old.netAt, old.asg, old.ann, old.files, old.mods]) === JSON.stringify([now.netAt, now.asg, now.ann, now.files, now.mods]);
+    if (!same) await chrome.storage.local.set({ snap: Object.assign({}, snap, { [user]: now }) });
     if (!old) return false;
     const items = [], t = Date.now(), byName = {};
     for (const c of cache.data.courses) {
@@ -188,6 +356,17 @@
     if (items.length > 8) ul.appendChild(el("li", "muted", "+" + (items.length - 8) + " outras"));
     sec.appendChild(ul); return sec;
   }
+  // Novidades da versão (notes.js), once after an update; "Entendi" stores the version read.
+  async function notesCard() {
+    if (typeof CP_NOTES !== "object" || !CP_NOTES || !Array.isArray(CP_NOTES.items)) return null;
+    const { notesSeen } = await chrome.storage.local.get("notesSeen");
+    if (notesSeen === CP_NOTES.version) return null;
+    const sec = el("section", "card news wnew"), h = el("h3", null, "Novidades da v" + CP_NOTES.version), ok = el("button", "mini", "Entendi ✓");
+    ok.type = "button"; ok.addEventListener("click", async () => { await chrome.storage.local.set({ notesSeen: CP_NOTES.version }); sec.remove(); });
+    h.appendChild(ok); sec.appendChild(h);
+    const ul = el("ul"); for (const t of CP_NOTES.items) ul.appendChild(el("li", "row nt-i", t)); sec.appendChild(ul);
+    return sec;
+  }
   const courseOf = {};   // subject id -> Canvas course id, filled by analyse()
   // Our subjects are paired to Canvas courses by course id (the rules are for one turma). rules: the student is in that turma
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
@@ -195,18 +374,37 @@
   function analyse(cache, hand) {
     const canvas = C.fromCanvas(cache.data).grades, grades = Object.assign({}, hand || {}, canvas), t = today(), byCanvasId = {};
     for (const x of cache.ids) { const c = C.subjectOf(x, true); if (c) { byCanvasId[x.id] = c; courseOf[c.id] = String(x.id); } }
-    const mine = C.COURSES.filter(c => courseOf[c.id]), expired = C.expired(t), rules = mine.length > 0 && !expired;
+    // Our rules are for one turma. Canvas courses shared with other programs (Ética, for example) carry the same course id, so
+    // a match alone is not proof: the student confirms the turma (onboarding or the question on the dashboard). Without an
+    // answer, three or more matching courses count as the turma; fewer ask first.
+    const matched = C.COURSES.filter(c => courseOf[c.id]), turma = matched.length ? C.turmaOf(matched[0]) : null;
+    const confirmed = !!TURMA_PREF && matched.some(c => C.turmaOf(c) === TURMA_PREF), other = TURMA_PREF === "outro" || (!!TURMA_PREF && !confirmed);
+    const askTurma = matched.length > 0 && !confirmed && !other && matched.length < 3;
+    const mine = confirmed ? matched.filter(c => C.turmaOf(c) === TURMA_PREF) : !other && !askTurma ? matched : [], expired = C.expired(t), rules = mine.length > 0 && !expired;
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
     const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
     const has = rules && Object.keys(grades).length > 0;   // no matched course, term over or no grade read: no grade parts
-    return { grades, canvas, hand: hand || {}, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
+    return { askTurma, turma, grades, canvas, hand: hand || {}, byCanvasId: rules ? byCanvasId : {}, mine, state, label, tone: C.statusTone, upcoming, has, rules, expired, term: cache.data.courses.length > 0 };
   }
 
   // The icon number: days to the next exam that still matters.
+  // A message to the service worker wakes its whole process, so the same thing is not sent twice from a tab: the last
+  // payload of each kind is remembered for the tab's session (and the day), and only a change is sent. A new tab sends
+  // once again, which also covers alarms the browser dropped on a restart.
+  const fresh = (kind, payload) => {
+    try {
+      if (typeof sessionStorage === "undefined") return true;
+      let h = 5381; const str = today() + JSON.stringify(payload); for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) | 0;
+      const key = "cp-sent-" + kind, v = String(h >>> 0);
+      if (sessionStorage.getItem(key) === v) return false;
+      sessionStorage.setItem(key, v);
+    } catch (e) { /* no storage: send */ }
+    return true;
+  };
   function sendNext(a) {
-    const u = a.upcoming.find(x => x.item.exam && x.st.status !== "garantido");
-    chrome.runtime.sendMessage({ type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" }).catch(() => {});
+    const u = a.upcoming.find(x => x.item.exam && x.st.status !== "garantido"), msg = { type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" };
+    if (fresh("next", msg)) chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   // Deadlines from the Canvas planner (every course) plus our exams that are not in Canvas, from today on. marks: what the
@@ -228,6 +426,11 @@
       const key = "own:" + t.id, done = !!(marks && marks[key]);
       out.push({ key, own: true, mine: done, title: t.title, course: "Minha tarefa", ours: null, task: true, date: t.date, due: null, url: null, done: false, late: t.date < today() });
     }
+    for (const k of Object.keys(myChecks)) for (const x of myChecks[k]) if (x.date) {
+      const ci = k !== "painel" && cache.ids.find(i => String(i.id) === k), course = k === "painel" ? "Meu checklist" : (a.byCanvasId[k] && a.byCanvasId[k].name) || (ci ? shortName(ci.name) : "Checklist");
+      out.push({ key: "chk:" + k + ":" + x.id, chk: [k, x.id], own: true, cid: k === "painel" ? null : k, mine: !!x.done, title: x.t, course, ours: (k !== "painel" && a.byCanvasId[k]) || null, task: true, date: x.date, due: null,
+        url: k === "painel" ? null : location.origin + "/courses/" + k + "#anot", done: false, late: x.date < today() });
+    }
     for (const u of a.upcoming) if (u.item.exam && !out.some(x => x.ours === u.course && x.date === u.item.date))
       out.push({ key: "qf:" + C.key(u.course, u.item), title: u.item.name, course: u.course.name, ours: u.course, date: u.item.date, due: null, url: null, done: false, late: false, exam: u });
     return out.sort((x, y) => (x.due || x.date + "T12:00:00").localeCompare(y.due || y.date + "T12:00:00"));
@@ -241,8 +444,9 @@
     if ((prefs.remind || prefs.summary) && !cache.planner) return;
     const t = today(), end = addDays(14);
     const items = prefs.remind || prefs.summary ? list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= end).slice(0, 60)
-      .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
-    chrome.runtime.sendMessage({ type: "remind", items, alarms: prefs.remind }).catch(() => {});   // the Monday summary reads the list too
+      .map(x => ({ key: x.key, title: (x.exam ? "Prova: " : x.own ? "Lembrete: " : "Entrega: ") + x.title, course: x.course, due: x.due, date: x.date, url: x.url })) : [];
+    const msg = { type: "remind", items, alarms: prefs.remind };
+    if (fresh("remind", msg)) chrome.runtime.sendMessage(msg).catch(() => {});   // the Monday summary reads the list too
   }
 
   // The deadlines and exams from today on as a calendar file (.ics) for Google Agenda, Outlook or the phone.
@@ -277,7 +481,8 @@
   const firstName = () => { for (const sc of (document.scripts || [])) { const m = /"current_user":\{[^}]*?"display_name":"([^"]+)"/.exec(sc.textContent || ""); if (m) return m[1].split(/\s+/)[0]; } return ""; };
   const WD_FULL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
   function greet(list) {
-    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null, item = layout && layout.firstElementChild && layout.firstElementChild.firstElementChild;
+    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null;
+    const first = layout && layout.firstElementChild, item = first && (first.tagName === "H1" ? (layout.querySelector(".cp-greet-box") || (() => { const b = el("div", "cp-greet-box"); layout.insertBefore(b, first); b.appendChild(first); return b; })()) : first.firstElementChild);   // a plain <h1> title: wrapped, so the rule hiding it applies
     if (!item || item.querySelector(".cp-greet")) return;
     const h = new Date().getHours(), hi = h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite", name = firstName();
     const t = today(), soon = list.filter(x => (x.task || x.exam) && !fin(x) && x.date >= t && x.date <= addDays(6)), todays = soon.filter(x => x.date === t && !x.exam).length, exam = soon.find(x => x.exam);
@@ -292,6 +497,13 @@
   // Course cards: the status pill on our subjects (inside Canvas's card content, under its title) and courses the student took
   // off the dashboard (popup). Canvas's own card menu (⋮, color, nickname) stays untouched. ctx: { prefs, hidden }.
   const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
+  // the card columns from the cards shown (cpShown) and the box width (cpBoxW, kept by a ResizeObserver: reading clientWidth
+  // right after drawing forced a layout of the whole page)
+  const setCols = () => {
+    const shown = window.cpShown || 0, root = document.documentElement, fit = window.cpBoxW ? Math.max(1, Math.floor((window.cpBoxW + 24) / 298)) : 4;
+    const rows = shown ? Math.ceil(shown / Math.min(colsFor(shown), fit)) : 1, cols = shown ? Math.ceil(shown / rows) : 1;   // never one card alone on the last row
+    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(cols));
+  };
   function decorateCards(a, again, ctx) {
     const prefs = ctx.prefs;
     if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); delete card.dataset.qf; }
@@ -301,25 +513,43 @@
       if (!m) continue;
       const id = m[1], c = a.byCanvasId[id];
       card.style.display = ctx.hidden.includes(id) ? "none" : "";
-      if (ctx.hidden.includes(id) || !c || !prefs.grades || !a.rules) continue;
-      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+      if (ctx.hidden.includes(id) || !prefs.grades) continue;
+      if (!c || !a.rules) {   // no rules of ours for this course: the professor's formula from the Centro de Notas, when there is one
+        const r = centroOf(id); if (!r) continue;
+        const p = pill(centroText(r), centroTone(r)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+        p.title = "Caderno+ · fórmula do Centro de Notas, meta " + fmt(T, T % 1 ? 1 : 0) + (r.approx ? " · aproximado: parte da fórmula está escondida para o aluno" : "");
+        card.cpAdded.push(p); head.appendChild(p); continue;
+      }
+      const st = a.state(c);   // with the ring, the pill says only what is still needed
+      const p = pill(prefs.cardPct ? a.label(st) : earnedText(st) + "/10 · " + a.label(st), a.tone(st)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
       p.title = st.status === "garantido" ? C.GARANTIDO_TIP : "Caderno+ · pesos do Plano de Ensino, meta " + fmt(T, T % 1 ? 1 : 0);
       card.cpAdded.push(p); head.appendChild(p);
+      const top = prefs.cardPct && card.querySelector(".ic-DashboardCard__header");
+      if (top) {   // what is guaranteed, as a ring on the top left of the card's picture
+        const col = { ok: "#2F7D5B", warn: "#A8650F", bad: "#C2361F" }[a.tone(st)] || "#A8650F", pct = Math.floor(Math.min(10, st.earned) * 10);   // guaranteed: never rounded up
+        const ring = el("div"), num = el("b", null, pct + "%");
+        ring.className = "cp-card-ring"; ring.title = pct + "% garantido de 10 · " + p.title; ring.setAttribute("aria-label", pct + "% garantido");
+        ring.style.cssText = "position:absolute;top:10px;left:12px;z-index:2;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(" + col + " " + pct + "%, rgba(255,255,255,.45) 0);box-shadow:0 2px 10px rgba(0,0,0,.22)";
+        num.style.cssText = "display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--cp-card,#fff);color:" + col + ";font:700 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:-.02em";
+        ring.appendChild(num); card.cpAdded.push(ring); top.appendChild(ring);
+      }
     }
-    const shown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length, root = document.documentElement;
-    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(colsFor(shown)));
+    window.cpShown = [...document.querySelectorAll(".ic-DashboardCard")].filter(c => c.style.display !== "none").length;
+    const box = document.getElementById("DashboardCard_Container"), RO = typeof ResizeObserver === "function";
+    if (box && RO && window.cpBoxObs !== box) { window.cpBoxObs = box; new ResizeObserver(es => { const w = es[0].target.clientWidth; if (w) { window.cpBoxW = w; setCols(); } }).observe(box); }   // read after layout: free
+    else if (!RO) window.cpBoxW = box ? box.clientWidth : 0;
+    setCols();
+    if (!RO && !window.cpColsResize && typeof window.addEventListener === "function") { window.cpColsResize = 1; let t = 0; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => window.cpCards && window.cpCards(gradeA), 200); }); }
   }
 
 
   const CSS = `
     :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
-      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, #fff); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, #fff);
-      --paper:var(--cp-paper,#FBF7EF); --track:#F1EBDF; --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
+      --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --coral-ink:var(--cp-accent-ink,var(--cp-accent,#E2482B)); --on-coral:var(--cp-on-accent,#fff); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, var(--cp-card,#fff)); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, var(--cp-card,#fff));
+      --paper:var(--cp-paper,#FBF7EF); --track:color-mix(in srgb, var(--cp-line,#ECE4D3) 75%, var(--cp-paper,#FBF7EF)); --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
       --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
       font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
-    :host-context(html.cp-dark) { --fg:#F3EDE1; --muted:#A9AFBC; --line:#2A3242; --bg:#1B2130; --soft:#222938; --ring:#F0603F; --coral:#F0603F; --tile:#F3EDE1; --tile-c:#1D2433; --band1:#3B2220; --band2:#2A2129;
-      --paper:#141925; --track:#2A3242; --ok:#6CC59A; --warn:#E6B15C; --bad:#FF876C; --ok-s:#24493A; --warn-s:#4A3B22; --bad-s:#5A2E29; --lift:0 8px 20px -12px rgba(0,0,0,.6); }
-    .box { position:relative; container:cp / inline-size; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
+    .box { position:relative; container:cp / inline-size; overflow-x:clip; overflow-clip-margin:6px; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
     .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
     .box > .card, .box > .kpis, .box > .tiles { margin-bottom:10px; }
@@ -327,12 +557,12 @@
     .upnext { display:flex; align-items:center; gap:16px; padding:12px 14px; } .upnext .k { text-transform:none; letter-spacing:0; font-size:12px; font-weight:500; }
     .upnext .t, .cring .t { font:600 17px/1.25 var(--serif); letter-spacing:-.01em; margin:2px 0; overflow:hidden; text-overflow:ellipsis; } .upnext .mid, .cring .mid { flex:1; }
     .big { flex:none; text-align:right; } .big .v { display:block; font:500 30px/1 var(--serif); letter-spacing:-.02em; } .big span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
-    .v.t-ok { color:var(--ok); } .v.t-warn { color:var(--warn); } .v.t-bad { color:var(--coral); }
-    .kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-    .kpi { padding:10px 12px 12px; min-width:0; } .kpi .v { font:500 24px/1.15 var(--serif); letter-spacing:-.02em; margin:2px 0 4px; } .kpi .v.need { color:var(--coral); } .kpi .v.need.t-ok { color:var(--ok); }
+    .v.t-ok { color:var(--ok); } .v.t-warn { color:var(--warn); } .v.t-bad { color:var(--bad); }
+    .kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; } .seg.kpis-pick { display:flex; flex-wrap:wrap; width:fit-content; max-width:100%; margin:0 0 8px; } .kpi .c { margin-top:6px; } .kpi .c.per { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.45; }
+    .kpi { padding:10px 12px 12px; min-width:0; } .kpi .v { font:500 24px/1.15 var(--serif); letter-spacing:-.02em; margin:2px 0 4px; } .kpi .v.need { color:var(--warn); } .kpi .v.need.t-ok { color:var(--ok); }
     .meter { position:relative; height:6px; margin-top:6px; border-radius:99px; background:var(--track); }
     .meter i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--fg); } .meter b { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); }
-    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--coral); }
+    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--warn); }
     .trk i:hover { outline:1.5px solid var(--fg); outline-offset:1px; }
     [data-tip]::after { content:attr(data-tip); position:absolute; z-index:6; left:50%; bottom:calc(100% + 8px); width:max-content; max-width:240px; padding:6px 9px; border-radius:7px; background:var(--fg); color:var(--bg);
       font:500 12px/1.35 var(--sans); box-shadow:0 10px 24px -10px rgba(29,36,51,.5); opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,3px); transition:opacity .12s, transform .12s, visibility 0s .12s; }
@@ -349,6 +579,9 @@
     .ring.big { width:64px; height:64px; } .ring.big::after { inset:6px; } .ring.big b { font-size:17px; } .ring.big i::before { height:11px; }
     .cring { display:flex; align-items:center; gap:14px; padding:12px 14px; }
     .items { overflow:hidden; } .ir { display:grid; grid-template-columns:minmax(0,1fr) 56px 140px; gap:10px; align-items:center; padding:8px 12px; border-top:1px solid var(--line); }
+    .rule .ir.off .n { color:var(--muted); text-decoration:line-through; } .rule label.n { display:flex; gap:8px; align-items:center; cursor:pointer; } .rule label.n input { accent-color:var(--coral); flex:none; }
+    .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:12.5px; } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
+    .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
     .ih { border-top:0; background:var(--track); font-size:11px; font-weight:600; color:var(--muted); padding:7px 12px; }
     .ir .n { display:flex; align-items:center; gap:8px; min-width:0; } .ir .n .pill { font-size:10.5px; line-height:18px; } .ir .dt { color:var(--muted); font-size:11.5px; }
     .ir .w { color:var(--muted); font-size:12px; } .ir .g { font:600 15px/1.2 var(--serif); } .ir .g small { font:500 11px var(--sans); color:var(--muted); } .ir .g.e { font:400 12px/1.3 var(--sans); color:var(--muted); }
@@ -357,13 +590,13 @@
     @container cp (max-width:560px) { .kpis { grid-template-columns:minmax(0,1fr); } .upnext .t { font-size:15px; } .big .v { font-size:26px; } .ir { grid-template-columns:minmax(0,1fr) 40px 104px; } }
     @container cp (max-width:420px) { .tiles { grid-template-columns:minmax(0,1fr); } .cring .ring { display:none; } }
     .hd { display:flex; align-items:center; gap:8px; margin:0 -14px 12px; padding:10px 14px; border-bottom:1px solid var(--line); }
-    .hd b { font:600 15px/1 var(--serif); letter-spacing:-.01em; } .hd b i { font-style:normal; color:var(--coral); }
+    .hd b { font:600 15px/1 var(--serif); letter-spacing:-.01em; } .hd b i { font-style:normal; color:var(--coral-ink); }
     .brand { margin-left:auto; font-size:12px; font-weight:600; color:var(--muted); }
     .mk { position:relative; flex:none; width:18px; height:18px; border-radius:4.5px; background:var(--tile); }
     .mk::before { content:"C"; position:absolute; left:2.5px; top:0; font:600 14px/18px var(--serif); color:var(--tile-c); }
     .mk::after { content:""; position:absolute; right:2px; top:3px; width:5px; height:5px;
       background:linear-gradient(var(--coral),var(--coral)) center/100% 1.6px no-repeat, linear-gradient(var(--coral),var(--coral)) center/1.6px 100% no-repeat; }
-    .muted { color:var(--muted); font-size:12.5px; } .muted.src { margin:-2px 0 10px; font-size:11.5px; } .acts + .muted.src, .items + .muted.src { margin-top:8px; } .muted.why { margin:0 0 10px; }
+    .muted { color:var(--muted); font-size:12.5px; } .muted.read { margin:10px 2px 0; font-size:11.5px; text-align:right; } .muted.src { margin:-2px 0 10px; font-size:11.5px; } .acts + .muted.src, .items + .muted.src { margin-top:8px; } .muted.why { margin:0 0 10px; }
     h3 { margin:0 0 6px; font:600 17px/1.3 var(--serif); letter-spacing:-.01em; display:flex; gap:8px; align-items:center; }
     .lbl { margin:12px 0 2px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
     .pill { flex:none; padding:0 8px; border-radius:999px; font:600 11.5px/20px var(--sans); white-space:nowrap; }
@@ -382,21 +615,23 @@
     button.primary { background:var(--fg); color:var(--bg); border-color:var(--fg); } button.primary:hover:not(:disabled) { background:var(--fg); border-color:var(--fg); box-shadow:0 2px 0 var(--coral); }
     button:disabled { opacity:.5; cursor:default; }
     a { color:inherit; text-decoration:none; } a:hover { text-decoration:underline; text-decoration-color:var(--coral); text-underline-offset:3px; }
-    :is(a, button):focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:6px; }
+    :is(a, button, input, textarea, select):focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:6px; }   /* fields too: some reset everything with all:unset */
     .grid { display:grid; gap:10px; }
     @container cp (min-width:760px) { .news > ul { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:32px; } }
+    @container cp (min-width:1240px) { .news > ul { grid-template-columns:repeat(3, minmax(0,1fr)); column-gap:24px; } }   /* wide screens: the date stays near its line */
+    .news .row { margin:0 -8px; padding:5px 8px; border-radius:10px; transition:background-color .15s; } .news .row:hover { background:var(--soft); }
     .empty { padding:14px 12px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); font:italic 14px/1.4 var(--serif); text-align:center; }
     .late { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:4px 0 12px; }
     .late .ev { max-width:240px; } .late .evw { flex:none; }
     .tl { position:relative; margin-top:6px; }
     .heads, .lanes, .rules { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
     .heads .dh { padding:0 6px 6px; font-size:11.5px; font-weight:600; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .heads .we { color:var(--muted); font-weight:500; } .heads .today { color:var(--coral); }
+    .heads .we { color:var(--muted); font-weight:500; } .heads .today { color:var(--coral-ink); }
     .rules { position:absolute; left:0; right:0; top:24px; bottom:0; border-top:1px solid var(--line); }
     .rules > span { border-left:1px solid var(--line); } .rules > span:last-of-type { border-right:1px solid var(--line); }
     .rules > span.today { background:color-mix(in srgb, var(--coral) 5%, transparent); }
     .band { position:absolute; top:0; bottom:0; background:var(--band2); border-left:2px solid var(--band1); border-right:2px solid var(--band1); }
-    .band b { position:absolute; left:7px; bottom:5px; font:700 10px/1 var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--coral); white-space:nowrap; }
+    .band b { position:absolute; left:7px; bottom:5px; font:700 10px/1 var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--coral-ink); white-space:nowrap; }
     .now { position:absolute; top:-3px; bottom:0; width:2px; margin-left:-1px; background:var(--coral); border-radius:2px; }
     .now::before { content:""; position:absolute; top:-3px; left:-3px; width:8px; height:8px; border-radius:50%; background:var(--coral); }
     .lanes { position:relative; padding:10px 0 12px; } .banded .lanes { padding-bottom:26px; }
@@ -410,7 +645,7 @@
     .col .ev.more { padding:4px 7px; text-align:center; background:var(--soft); color:var(--fg); border-color:var(--line); }
     .ev:hover, .ev:focus-visible { z-index:4; transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); text-decoration:none; } .ev:active { transform:scale(.98); } .ev:focus-visible { outline:2px solid var(--ring); border-radius:7px; }
     .ev.ok { background:#E2F1E9; color:#1F5C42; border-color:#BFE0CC; } .ev.wa { background:#FBEFD6; color:#744405; border-color:#F0D9A8; }
-    .ev.ex { background:var(--coral); color:#fff; } .ev.in { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:3px solid var(--fg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
+    .ev.ex { background:var(--coral); color:var(--on-coral); } .ev.in { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:3px solid var(--fg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
     .tip { position:absolute; left:0; bottom:calc(100% + 7px); z-index:5; display:grid; gap:1px; width:max-content; max-width:260px; padding:7px 10px; border-radius:8px;
       background:var(--fg); color:var(--bg); font:500 12px/1.4 var(--sans); white-space:normal; text-align:left; box-shadow:0 10px 24px -10px rgba(29,36,51,.5);
       opacity:0; visibility:hidden; transform:translateY(3px); pointer-events:none; transition:opacity .12s, transform .12s, visibility 0s .12s; }
@@ -421,7 +656,7 @@
     .ck { position:absolute; top:-7px; right:-5px; z-index:3; width:20px; height:20px; padding:0; border-radius:50%; font:700 11px/18px var(--sans); text-align:center; color:var(--muted); background:var(--bg); border:1px solid var(--line);
       opacity:0; transition:opacity .12s, background-color .15s, color .15s; }
     .evw:hover .ck, .ck:focus-visible, .ck[aria-pressed="true"], .row .ck { opacity:1; } .ck[aria-pressed="true"] { background:var(--ok); border-color:var(--ok); color:var(--bg); }
-    .row .ck { position:static; margin-right:6px; } .end { display:flex; align-items:center; } .row.dn .n { color:var(--muted); text-decoration:line-through; }
+    .row .ck { position:static; margin-right:6px; } .mc-i .ck { position:static; opacity:1; } .end { display:flex; align-items:center; } .row.dn .n { color:var(--muted); text-decoration:line-through; }
     .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
     .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
@@ -429,14 +664,15 @@
     .seg { display:inline-flex; margin-left:12px; padding:2px; border-radius:999px; background:var(--track); }
     .seg button { padding:3px 10px; border:0; border-radius:999px; background:none; font-size:12px; color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
-    .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:96px minmax(0,1fr) auto; }
+    .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:112px minmax(0,1fr) auto; }
     .natv + .find, .find + .natv { margin-left:8px; } .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
     .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
     .pal-q { all:unset; box-sizing:border-box; display:block; width:100%; padding:14px 16px; font:500 16px/1.3 var(--sans); color:var(--fg); border-bottom:1px solid var(--line); }
     .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
     .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
-    .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral-ink); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .wnew .nt-i { display:block; padding-left:16px; position:relative; } .wnew .nt-i::before { content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--coral); }
     .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
     .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
     .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
@@ -446,8 +682,10 @@
     .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }
+    .side { padding:12px; } .side-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font:600 15px/1.2 var(--serif); } .side .notes:first-of-type { margin-top:0; }
+    .chk h3 { margin:0 0 6px; } .chk .add { grid-template-columns:minmax(0,1fr) 140px auto; } .side .chk .add { grid-template-columns:1fr auto; } .side .chk .add input[type=text] { grid-column:1 / -1; } .side .chk .row { grid-template-columns:64px minmax(0,1fr) auto; } .chk ul { list-style:none; margin:0; padding:0; } .chk .row { grid-template-columns:76px minmax(0,1fr) auto; border-top:1px solid var(--line); padding:5px 0; } .chk .row:first-child { border-top:0; }
     .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
-    .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
+    .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .tasks .row.sub { padding-top:2px; padding-bottom:2px; border-top:0; font-size:.94em; } .tasks .row.sub .add { grid-column:2 / -1; margin:0; grid-template-columns:minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
     .meta { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
     .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
@@ -455,17 +693,19 @@
     .cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; padding:0; overflow:hidden; background:var(--line); }
     .cwd { padding:8px 10px; background:var(--soft); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
     .cday { min-height:118px; padding:6px; background:var(--bg); display:flex; flex-direction:column; gap:4px; min-width:0; } .cday.off { background:var(--soft); } .cday.we { background:color-mix(in srgb, var(--soft) 55%, var(--bg)); }
-    .cday .cn { font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:#fff; }
+    .cday .cn { display:inline-grid; place-items:center; height:24px; font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:var(--on-coral); }
     .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
     .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
     .av img { width:100%; height:100%; object-fit:cover; display:block; }
+    :host-context(html.cp-dark) :is(img, .band-c) { filter:invert(1) hue-rotate(180deg); }   /* the panel darkens with the page (same inversion); photos and the course color stay true */
     .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .news .row > .d:first-child { min-width:96px; } .d.lt { color:var(--bad); font-weight:600; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
     .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
-    .ask-b { margin-left:0 !important; color:var(--coral) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
-    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); overflow:hidden; }
-    .band-c { position:absolute; left:0; right:0; top:0; height:5px; background:var(--coral); } .htxt { flex:1; min-width:0; }
+    .ask-b { margin-left:0 !important; color:var(--coral-ink) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
+    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
+    .centro-sim { display:grid; gap:6px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
+    .band-c { position:absolute; left:0; right:0; top:0; height:4px; background:var(--coral); } .htxt { flex:1; min-width:0; }
     .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 21px/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .hs { margin-top:3px; color:var(--muted); font-size:12.5px; } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
     .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:12px; background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
@@ -475,24 +715,87 @@
     .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:11.5px; font-weight:650; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
     .mi { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:6px 4px; border-top:1px solid var(--line); }
+    .mcal { display:grid; grid-template-columns:260px minmax(0,1fr); gap:20px; padding:14px; }
+    .mc-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; } .mc-h b { font:600 14px/1 var(--serif); text-transform:capitalize; }
+    .mc-h button { width:26px; height:26px; padding:0; border-radius:8px; font-size:14px; }
+    .mc-g { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; } .mc-w { text-align:center; font-size:10.5px; font-weight:600; color:var(--muted); padding:2px 0 4px; }
+    .mc-day { position:relative; display:grid; place-items:center; height:34px; padding:0; border:0; border-radius:8px; background:none; font:500 12.5px/1 var(--sans); color:var(--fg); }
+    .mc-day:hover:not(:disabled) { background:var(--soft); transform:none; } .mc-day.has { font-weight:700; } .mc-day.on { background:var(--fg); color:var(--bg); }
+    .mc-day.today > span:first-child { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--coral); }
+    .mc-dots { position:absolute; bottom:3px; left:0; right:0; display:flex; justify-content:center; gap:2px; } .mc-dots i, .mc-i > i { width:5px; height:5px; border-radius:50%; background:var(--warn); }
+    .mc-dots i.ex, .mc-i.ex > i { background:var(--coral); } .mc-dots i.ok, .mc-i.ok > i { background:var(--ok); }
+    .mc-k { display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:4px 0 8px; }
+    .mc-i { display:grid; grid-template-columns:8px 78px minmax(0,1fr) 20px; gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--line); } .mc-i:first-of-type { border-top:0; }
+    .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:12px; color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
+    @container cp (max-width:620px) { .mcal { grid-template-columns:minmax(0,1fr); } }
+    :host(.cp-headhost) { display:inline-block; margin:0 8px 0 0; vertical-align:middle; }
+    .box.head { container-type:normal; border:0; background:none; box-shadow:none; padding:0; }
+    .box.head .hd { margin:0; gap:0; height:42px; box-sizing:border-box; padding:4px 4px 4px 12px; border:1px solid var(--line); border-radius:14px; background:var(--bg); box-shadow:0 1px 2px rgba(29,36,51,.06); }
+    .box.head .hd b { margin-left:8px; }
+    .box.head .seg { margin:0 10px 0 14px; } .box.head .seg button { padding:5px 12px; font-size:12.5px; }
+    .box.head .meta { margin:0; padding:0 10px; height:22px; border-left:1px solid var(--line); }
+    .box.head .pfold { margin:0; height:32px; padding:0 12px; border:0; border-left:1px solid var(--line); border-radius:0 10px 10px 0; background:none; font-size:12.5px; } .box.head .pfold:hover { background:var(--soft); color:var(--fg); transform:none; }
+    .box.nohd { padding-top:14px; }
+    /* phones (Canvas in a mobile browser, with the bookmarklet or a mobile extension): nothing wider than the screen */
+    @media (max-width:600px) {
+      :host(.cp-headhost) { display:block; max-width:100%; margin:8px 0 0; }
+      .box.head .hd { flex-wrap:wrap; height:auto; row-gap:6px; padding:6px 6px 6px 10px; } .box.head .seg { margin:0 6px; } .box.head .meta, .box.head .pfold { border-left:0; }
+      h3 { flex-wrap:wrap; row-gap:4px; }
+      .hero { flex-wrap:wrap; } .hero .htxt { flex:1 1 100%; } .hteach { flex:1 1 100%; }
+    }
+    .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
+    .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold:not(.pnotes) { margin-left:auto; } .box.pfolded .pnotes { display:none; } .box.head .pnotes { border-radius:0; } .pnotes[aria-pressed="true"] { color:var(--coral-ink); }
     .wl { display:none; }
-    @container cp (max-width:520px) { .tl { display:none; } .wl { display:block; } }
+    @container cp (max-width:760px) { .tl { display:none; } .wl { display:block; } }
     @media (prefers-reduced-motion:reduce) { button, .ev, .tip, a.card, [data-tip]::after { transition:none; } a.card:hover, a.card:active { transform:none; } button:hover:not(:disabled), button:active:not(:disabled), .ev:hover, .ev:focus-visible, .ev:active { transform:none; } }
-    :host-context(html.cp-dark) .ok { background:#173229; color:#8FD8B3; } :host-context(html.cp-dark) .warn { background:#33291A; color:#F0C67E; }
-    :host-context(html.cp-dark) .bad { background:#3A1F1D; color:#FFA28C; }
-    :host-context(html.cp-dark) .ev.ok { background:#173229; color:#8FD8B3; border-color:#25493A; } :host-context(html.cp-dark) .ev.wa { background:#33291A; color:#F0C67E; border-color:#4A3B22; }
-    :host-context(html.cp-dark) .ev.bd { background:#3A1F1D; color:#FFA28C; border-color:#5A2E29; } :host-context(html.cp-dark) .ev.ex { color:#1B1210; } :host-context(html.cp-dark) .trk i.ok { background:var(--ok); }`;
+    `;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  // a row of radio buttons: one Tab stop, the arrows move and choose (as the popup's own groups and the course tabs)
+  // id: a group the click redraws (the mode switch): the new one takes the focus back (radioFocus)
+  let radioAgain = null;
+  const radioOn = x => (x.getAttribute ? x.getAttribute("aria-checked") : x["aria-checked"]) === "true";
+  const radioKeys = (list, id) => {
+    if (id && radioAgain === id) { radioAgain = null; const c = list.find(radioOn); if (c && c.focus) setTimeout(() => c.focus(), 0); }
+    list.forEach((b, i) => {
+      b.tabIndex = radioOn(b) || (i === 0 && !list.some(radioOn)) ? 0 : -1;
+      b.addEventListener("focus", () => list.forEach(x => { x.tabIndex = x === b ? 0 : -1; }));   // a click focuses the button: the Tab stop follows it
+      b.addEventListener("keydown", e => { const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0; if (!d) return;
+        e.preventDefault(); const nx = list[(i + d + list.length) % list.length]; list.forEach(x => { x.tabIndex = x === nx ? 0 : -1; }); if (nx.focus) nx.focus(); if (id) radioAgain = id; if (nx.click) nx.click(); });
+    });
+  };
   const mark = () => { const m = el("span", "mk"); m.setAttribute("aria-hidden", "true"); return m; };   // the logo tile, drawn in CSS
   const wordmark = () => { const b = el("b", null, "Caderno"); b.appendChild(el("i", null, "+")); b.setAttribute("aria-label", "Caderno+"); return b; };
 
   // A panel in a shadow root at the top of the page content; null when it is already there or the page has no content area.
+  // the Caderno+ bar in the classic dashboard header (title item, actions): in front of Canvas's buttons, its switch to the
+  // new view hidden (the ⋮ menu stays)
+  function headBar(hd) {
+    const layout = document.querySelector ? document.querySelector(".ic-Dashboard-header__layout") : null, row = layout && layout.firstElementChild;
+    const acts = row && row.tagName !== "H1" && row.children && row.children.length > 1 ? row.lastElementChild : null;
+    if (!acts) return false;
+    const old = document.getElementById("cp-head"); if (old) old.remove();   // a redraw builds a new panel: one bar, the live one
+    let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
+    for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
+    const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";
+    // a phone: Canvas keeps the greeting and its buttons on one row; the bar goes under the greeting instead of past the screen
+    if (typeof matchMedia === "function" && matchMedia("(max-width:600px)").matches && row.style && acts.style) { row.style.flexWrap = "wrap"; acts.style.flex = "1 1 100%"; acts.style.maxWidth = "100%"; acts.style.minWidth = "0"; }
+    const root = shadow(host), wrap = el("div", "box head");
+    styleRoot(root); wrap.appendChild(hd); root.append(wrap); at.prepend(host);
+    return true;
+  }
+  // Our CSS parsed once and shared by every panel (constructable stylesheet); a <style> per root where that is missing.
+  let sheet = null;
+  const styleRoot = root => {
+    try { if (!sheet && typeof CSSStyleSheet === "function" && "adoptedStyleSheets" in root) { sheet = new CSSStyleSheet(); sheet.replaceSync(CSS); } } catch (e) { sheet = null; }
+    try { if (sheet) { root.adoptedStyleSheets = [sheet]; return; } } catch (e) { sheet = null; }
+    const st = el("style"); st.textContent = CSS; root.append(st);
+  };
   function panelHost(id) {
     const anchor = document.getElementById("content");
     if (document.getElementById(id) || !anchor) return null;
     const host = el("div", "cp-host"); host.id = id;
-    const root = host.attachShadow({ mode: "open" }), box = el("div", "box"), style = el("style");
-    style.textContent = CSS; root.append(style, box); anchor.prepend(host);
+    const root = shadow(host), box = el("div", "box");
+    styleRoot(root); root.append(box); anchor.prepend(host);
     return box;
   }
   // Placement: on the classic dashboard, right above its course cards (#DashboardCard_Container, outside its React root);
@@ -502,11 +805,22 @@
   // the widget dashboard is on screen: its ENV flag, and not the classic dashboard (whose cards container is in the page
   // HTML; the flag stays true after the student switches back to the old view)
   const widgetDash = () => widgets != null ? widgets : (widgets = !document.getElementById("DashboardCard_Container") && [...(document.scripts || [])].some(sc => /"widget_dashboard":true/.test(sc.textContent || "")));
+  let cardsFirst = false;   // prefs.cardsFirst: Canvas's course cards above our panel
   function placeDash() {
     const host = document.getElementById("cp-dash"), q = sel => document.querySelector ? document.querySelector(sel) : null;
-    const cols = q("#DashboardCard_Container");   // the classic dashboard: right above its cards (outside its React root); the widget dashboard keeps ours at the top of #content
-    if (!host || !cols || !cols.parentNode || host.nextSibling === cols) return;
-    cols.parentNode.insertBefore(host, cols);
+    const cols = q("#DashboardCard_Container");   // the classic dashboard: next to its cards (outside its React root); the widget dashboard keeps ours at the top of #content
+    if (!host || !cols || !cols.parentNode) return;
+    host.style.marginTop = cardsFirst ? "8px" : "";
+    if (cardsFirst) { if (cols.nextSibling !== host) cols.parentNode.insertBefore(host, cols.nextSibling); }
+    else if (host.nextSibling !== cols) cols.parentNode.insertBefore(host, cols);
+    fitNotes();
+  }
+  // The Anotações column floats at the top right, beside our panel: the panel keeps at least the column's height, so
+  // Canvas's cards always start below it at full width (a short panel, as in Foco, used to let the cards wrap around it).
+  // Cards first: the column is beside the cards and the panel, below them, needs no room.
+  function fitNotes() {
+    const n = document.getElementById("cp-notes"), d = document.getElementById("cp-dash");
+    if (d && d.style) d.style.minHeight = n && !cardsFirst ? ((n.offsetHeight || 420) + 44) + "px" : "";
   }
   // Its "Notas do curso" widget shows Canvas's current score (only what is graded, without the Plano de Ensino weights, so
   // 92% halfway through the term). On our subjects the card keeps its picture and gets our numbers instead: points
@@ -548,7 +862,10 @@
     const root = document.getElementById("content");
     if (!root || dashWatch || typeof MutationObserver === "undefined") return;
     let t = 0;
-    dashWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); }, 120); });
+    const ours = n => n && n.nodeType === 1 && (/^cp-|^qf-/.test(n.id || "") || (n.classList && n.classList.contains("cp-host")));
+    dashWatch = new MutationObserver(recs => {   // our own panels moving in and out do not count
+      if (recs.every(r => ours(r.target) || [...r.addedNodes, ...r.removedNodes].every(ours))) return;
+      clearTimeout(t); t = setTimeout(() => { placeDash(); enhanceGradeCards(); if (window.cpHeadRetry) window.cpHeadRetry(); if (window.cpGreet) window.cpGreet(); }, 120); });
     dashWatch.observe(root, { childList: true, subtree: true });
     placeDash(); enhanceGradeCards();
   }
@@ -658,18 +975,27 @@
     tl.className = "tl" + (runs.length ? " banded" : "");
     tl.append(heads, rules, lanes);
 
-    const wl = el("ul", "wl");   // the narrow fallback: grouped by day
-    let group = null, rows = null;
-    for (const x of next) {
-      const g = cap(dayLabel(x.date));
-      if (g !== group) { group = g; const day = el("li", "day"); rows = el("ul"); day.append(el("div", "dh", g), rows); wl.appendChild(day); }
-      const right = el("span", "end"), ck = check(x);
-      if (ck) right.appendChild(ck);
-      right.appendChild(x.done ? el("span", "pill ok", "entregue") : x.mine ? el("span", "pill ok", "feito") : x.exam ? el("span", "pill " + (prefs.grades ? needTone(x.exam) : "nt"), prefs.grades ? need(x.exam) : "prova") : el("span"));
-      const li = el("li", "row" + (fin(x) ? " dn" : ""));
-      li.append(el("span", "d", x.due ? hhmm(x.due) : "–"), mid(name(x), x.url, x.course), right);
-      rows.appendChild(li);
-    }
+    // the narrow fallback, grouped by day: built only when it is shown (on a wide panel it stays an empty, hidden list:
+    // a third of the panel's elements were this list, never seen)
+    const wl = el("ul", "wl"); let filled = false;
+    const fill = () => {
+      if (filled) return; filled = true;
+      let group = null, rows = null;
+      for (const x of next) {
+        const g = cap(dayLabel(x.date));
+        if (g !== group) { group = g; const day = el("li", "day"); rows = el("ul"); day.append(el("div", "dh", g), rows); wl.appendChild(day); }
+        const right = el("span", "end"), ck = check(x);
+        if (ck) right.appendChild(ck);
+        right.appendChild(x.done ? el("span", "pill ok", "entregue") : x.mine ? el("span", "pill ok", "feito") : x.exam ? el("span", "pill " + (prefs.grades ? needTone(x.exam) : "nt"), prefs.grades ? need(x.exam) : "prova") : el("span"));
+        const li = el("li", "row" + (fin(x) ? " dn" : ""));
+        li.append(el("span", "d", x.due ? hhmm(x.due) : "–"), mid(name(x), x.url, x.course), right);
+        rows.appendChild(li);
+      }
+    };
+    if (typeof ResizeObserver === "function" && typeof getComputedStyle === "function") {
+      const ro = new ResizeObserver(() => { if (getComputedStyle(wl).display !== "none") { fill(); ro.disconnect(); } });   // after layout, and again when the panel narrows
+      ro.observe(sec);
+    } else fill();
     sec.append(tl, wl);
     return sec;
   }
@@ -701,22 +1027,58 @@
       left.append(el("div", "k", "Próxima avaliação que conta"), el("div", "t", u.item.name), el("div", "c", C.SHORT[u.course.id] + " · " + dmy(u.item.date) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias")));
       card.append(left, needBig(u.st)); out.push(card);
     }
+    // The three numbers, for every subject ("Todas") or for the one the student picks in the chips above them (saved in
+    // prefs.kpiCourse); each number says which subject it is about.
     const sem = C.semester(a.mine, a.grades, t, T), kpis = el("div", "kpis");
     const kpi = (k, v, cls, sub) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (sub) d.appendChild(sub); kpis.appendChild(d); return d; };
-    const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
-    fill.style.width = Math.min(100, sem.mean * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal);
-    kpi("Garantido até agora", fmt(Math.floor(sem.mean * 10) / 10, 1), null, meter).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
+    const meterOf = x => { const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
+      fill.style.width = Math.min(100, x * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); return meter; };
+    const trackOf = items => { const done = items.filter(x => x.s === "ok").length, late = items.filter(x => x.s === "late").length, trk = el("div", "trk");
+      trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
+      for (const x of items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
+      return { trk, done }; };
     const cnt = s => sem.counts[s] || 0;
-    // the tightest subject, but not the one the "Próxima avaliação" card already shows (no 9,0 twice)
-    const heroId = list.length ? list[0].course.id : null, open2 = a.mine.filter(c => c.id !== heroId && sem.states[c.id].status === "precisa").sort((x, y) => sem.states[y.id].fraction - sem.states[x.id].fraction)[0];
-    const tight = sem.tight && sem.tight.id !== heroId ? sem.tight : open2 || sem.tight;
-    if (tight) kpi(tight === sem.tight ? "Quanto falta" : "Depois dessa", up(sem.states[tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[tight.id] + (tight === sem.tight ? ", a mais apertada" : ", a próxima mais apertada")));
-    else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
-    else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
-    else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
-    const trk = el("div", "trk"); trk.setAttribute("aria-label", sem.done + " lançadas, " + sem.late + " sem nota, " + (sem.items.length - sem.done - sem.late) + " pela frente");
-    for (const x of sem.items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
-    kpi("Entregues", sem.done + " de " + sem.items.length, null, trk);
+    const fillKpis = id => {
+      kpis.replaceChildren();
+      const c = a.mine.find(x => x.id === id);
+      if (c) {   // one subject
+        const st = sem.states[c.id], items = sem.items.filter(x => x.course.id === c.id), tr = trackOf(items), name = C.SHORT[c.id];
+        const g = el("div"); g.append(meterOf(st.earned), el("div", "c", name));
+        kpi("Garantido até agora", fmt(Math.floor(Math.min(10, st.earned) * 10) / 10, 1), null, g).title = "pontos garantidos de 10 em " + name + " · meta " + fmt(T, 1);
+        if (st.status === "garantido") kpi("Quanto falta", "0", "need t-ok", el("div", "c", name + ", garantido"));
+        else if (st.status === "nao-da") kpi("Quanto falta", "—", "need", el("div", "c", name + ", recuperação"));
+        else if (st.status === "depende-atrasadas") kpi("Quanto falta", "?", "need", el("div", "c", name + ", faltam notas antigas"));
+        else kpi("Quanto falta", up(st.fraction * 10, 1), "need", el("div", "c", name + ", em 10 no que falta"));
+        const e = el("div"); e.append(tr.trk, el("div", "c", name));
+        kpi("Entregues", tr.done + " de " + items.length, null, e);
+        return;
+      }
+      const g = el("div"); g.append(meterOf(sem.mean), el("div", "c", "média das " + a.mine.length + " matérias"));
+      kpi("Garantido até agora", fmt(Math.floor(sem.mean * 10) / 10, 1), null, g).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
+      // the tightest subject, but not the one the "Próxima avaliação" card already shows (no 9,0 twice)
+      const heroId = list.length ? list[0].course.id : null, open2 = a.mine.filter(c => c.id !== heroId && sem.states[c.id].status === "precisa").sort((x, y) => sem.states[y.id].fraction - sem.states[x.id].fraction)[0];
+      const tight = sem.tight && sem.tight.id !== heroId ? sem.tight : open2 || sem.tight;
+      if (tight) kpi(tight === sem.tight ? "Quanto falta" : "Depois dessa", up(sem.states[tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[tight.id] + (tight === sem.tight ? ", a mais apertada" : ", a próxima mais apertada")));
+      else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
+      else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
+      else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
+      const tr = trackOf(sem.items), e = el("div"); e.append(tr.trk, el("div", "c per", a.mine.map(c => { const it = sem.items.filter(x => x.course.id === c.id); return C.SHORT[c.id] + " " + it.filter(x => x.s === "ok").length + "/" + it.length; }).join(" · ")));
+      kpi("Entregues", tr.done + " de " + sem.items.length, null, e);
+    };
+    const pickId = a.mine.some(c => c.id === KPI_COURSE) ? KPI_COURSE : "", pick = el("div", "seg kpis-pick"), chips = [];
+    pick.setAttribute("role", "radiogroup"); pick.setAttribute("aria-label", "Matéria dos números");
+    for (const [id, name] of [["", "Todas"]].concat(a.mine.map(c => [c.id, C.SHORT[c.id]]))) {
+      const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(id === pickId)); b.dataset.id = id;
+      b.addEventListener("click", async () => {
+        KPI_COURSE = id; fillKpis(id);
+        for (const x of chips) x.setAttribute("aria-checked", String(x === b));
+        const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { kpiCourse: id }) });
+      });
+      chips.push(b); pick.appendChild(b);
+    }
+    radioKeys(chips);
+    fillKpis(pickId);
+    if (a.mine.length > 1) out.push(pick);
     out.push(kpis);
     const tiles = el("div", "tiles");
     for (const c of a.mine) {
@@ -731,7 +1093,7 @@
   }
 
   // The turma(s) whose rule pack gave these numbers (rules/<term>/<turma>.json).
-  const source = cs => "Pesos do Plano de Ensino " + TERM + " · " + [...new Set(cs.map(C.turmaOf))].join(" / ") + " · não oficial, confira no Canvas";
+  const source = cs => "Pesos do Plano de Ensino " + TERM + " · não oficial, confira no Canvas";
   // Instead of the grade parts: why they are not there (term over, or another turma); null when there is nothing to say.
   const noRules = a => a.expired ? C.EXPIRED_NOTE
     : a.term && !a.rules ? "O Quanto falta ainda não tem as regras da sua turma." : null;
@@ -774,49 +1136,152 @@
       const ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(done)); ck.setAttribute("aria-label", (done ? "Desmarcar: " : "Marcar como feito: ") + t.title);
       ck.addEventListener("click", async () => { await setMark(cache.user, { key: "own:" + t.id, date: t.date || addDays(0) }, !done); redraw(); });
       const del = el("button", "ck del", "×"); del.type = "button"; del.setAttribute("aria-label", "Apagar: " + t.title);
-      del.addEventListener("click", async () => { await saveTasks(cache.user, myTasks.filter(x => x.id !== t.id)); redraw(); });
-      end.append(ck, del);
-      li.append(el("span", "d", t.date ? cap(dayLabel(t.date)) : "sem dia"), mid(t.title, null, done ? "feita" : t.date && t.date < today() ? "atrasada" : "minha tarefa"), end);
-      ul.appendChild(li);
+      del.addEventListener("click", async () => { await saveTasks(cache.user, l => l.filter(x => x.id !== t.id)); redraw(); });
+      // steps of a task: { t, d } each, ten at most, kept inside the task
+      const subs = Array.isArray(t.subs) ? t.subs.filter(s => s && s.t) : [], left = subs.filter(s => !s.d).length;
+      const change = f => saveTasks(cache.user, l => l.map(x => x.id === t.id ? Object.assign({}, x, { subs: f(Array.isArray(x.subs) ? x.subs.filter(s => s && s.t) : []).slice(0, 10) }) : x)).then(redraw);
+      const at = (l, i, s) => l[i] && l[i].t === s.t ? i : l.findIndex(x => x.t === s.t);   // another tab may have moved the steps: the same text, not just the same place
+      const plus = el("button", "ck", "+"); plus.type = "button"; plus.setAttribute("aria-label", "Adicionar passo em: " + t.title);
+      end.append(plus, ck, del);
+      li.append(el("span", "d", t.date ? cap(dayLabel(t.date)) : "sem dia"), mid(t.title, null, (done ? "feita" : t.date && t.date < today() ? "atrasada" : "minha tarefa") + (subs.length ? " · " + (subs.length - left) + " de " + subs.length + " passos" : "")), end);
+      ul.appendChild(li); let tail = li;
+      subs.forEach((s, i) => {
+        const sl = el("li", "row sub" + (s.d ? " dn" : "")), se = el("span", "end");
+        const sk = el("button", "ck", "✓"); sk.type = "button"; sk.setAttribute("aria-pressed", String(!!s.d)); sk.setAttribute("aria-label", (s.d ? "Desmarcar passo: " : "Marcar passo como feito: ") + s.t);
+        sk.addEventListener("click", () => change(l => { const k = at(l, i, s); return l.map((x, j) => j === k ? { t: x.t, d: !s.d } : x); }));
+        const sd = el("button", "ck del", "×"); sd.type = "button"; sd.setAttribute("aria-label", "Apagar passo: " + s.t);
+        sd.addEventListener("click", () => change(l => { const k = at(l, i, s); return l.filter((x, j) => j !== k); }));
+        se.append(sk, sd); sl.append(el("span", "d", ""), mid(s.t), se); ul.appendChild(sl); tail = sl;
+      });
+      plus.addEventListener("click", () => {
+        if (li.cpStep || subs.length >= 10) return; li.cpStep = true;
+        const fl = el("li", "row sub"), f = el("form", "add step"), si = el("input"), sb = el("button", "primary", "Adicionar passo");
+        si.type = "text"; si.placeholder = "Passo (ex.: ler o capítulo 3)"; si.setAttribute("aria-label", "Novo passo de: " + t.title); si.maxLength = 100; sb.type = "submit";
+        f.addEventListener("submit", e => { e.preventDefault(); const v = String(si.value || "").trim().slice(0, 100); if (v) change(l => l.concat([{ t: v, d: false }])); });
+        f.append(si, sb); fl.appendChild(f); tail.after ? tail.after(fl) : ul.appendChild(fl); if (si.focus) si.focus();
+      });
     }
     if (list.length) sec.appendChild(ul); else sec.appendChild(el("div", "muted", "Coisas que não estão no Canvas: estudar, imprimir, levar material. Com dia, entram na semana e nos lembretes."));
     foldable(sec, h, "tasks"); return sec;
   }
+  // Anotações on the dashboard: a column beside Canvas's course cards (the right sidebar our panel hides), opened from the
+  // bar's Anotações button or Alt+N, kept open ("notesOpen"). Built once per page: a redraw of the panel keeps what is typed.
+  function notesSide(cache, show) {
+    let host = document.getElementById("cp-notes");
+    const fit = () => { const r = document.documentElement; if (r && r.classList) r.classList.toggle("cp-notes-open", !!show); if (window.cpCards && gradeA) window.cpCards(gradeA); };   // the cards' columns follow the narrower box
+    if (!show) { if (host) host.remove(); fit(); fitNotes(); return; }
+    if (host) { fitNotes(); return; }
+    const cols = document.querySelector ? document.querySelector("#DashboardCard_Container") : null;   // as placeDash finds it
+    host = el("div", "cp-host cp-noteshost"); host.id = "cp-notes";
+    const root = shadow(host), box = el("div", "box side"), h = el("div", "side-h"), close = el("button", "mini", "Fechar ×");
+    close.type = "button"; close.setAttribute("aria-label", "Fechar as anotações"); close.addEventListener("click", () => toggleNotes(false));
+    h.append(el("b", null, "Anotações"), close);
+    const nb = notesBlock(cache, "painel", null, () => window.cpRedraw && window.cpRedraw());
+    box.append(h, ...nb.nodes); styleRoot(root); root.append(box);
+    host.cpBusy = nb.busy; host.cpFocus = () => nb.ta.focus && nb.ta.focus();
+    if (cols && cols.parentNode) {   // always before our panel when it sits above the cards (never between the panel and the cards)
+      const dash = document.getElementById("cp-dash"), ref = !cardsFirst && dash && (dash.parentNode || dash.parent) === cols.parentNode ? dash : cols;
+      host.style.cssText = "float:right;width:300px;max-width:32%;margin:28px 0 12px 18px;position:relative;z-index:1"; cols.parentNode.insertBefore(host, ref);
+      if (typeof ResizeObserver === "function") new ResizeObserver(() => { if (gone(host)) return; fitNotes(); }).observe(host);   // the checklist grows: the panel follows
+    }
+    else { const c = document.getElementById("content"); if (!c) return; c.prepend(host); }
+    fit(); fitNotes();
+  }
+  let notesCache = null;
+  async function toggleNotes(on) {
+    const open = on != null ? on : !document.getElementById("cp-notes");
+    if (notesCache) notesSide(notesCache, open);   // the page first, so a second quick click sees the new state
+    const b = window.cpNotesBtn; if (b) b.setAttribute("aria-pressed", String(open));
+    const h = document.getElementById("cp-notes"); if (open && on == null && h && h.cpFocus) h.cpFocus();
+    await chrome.storage.local.set({ notesOpen: open });
+  }
+  let hiddenNow = [];
   function dashPanel(a, cache, prefs, marks, rec, onMode) {
     const mode = prefs.mode, clean = mode === "limpo";
     const grades = prefs.grades && a.has, why = prefs.grades && noRules(a), week = prefs.week && cache.planner, news = prefs.news && Array.isArray(cache.data.announcements);
+    if (!prefs.dash && !a.askTurma) return;   // the student switched the Caderno+ panel off in the popup (the cards keep their grades); the turma question still shows
     if (!grades && !why && !week && !news && !(prefs.newgrades && rec && rec.length) && mode !== "foco") return;
     const box = panelHost("cp-dash");
     if (!box) return;
-    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
+    if (document.documentElement && document.documentElement.classList) {
+      document.documentElement.classList.add("cp-has-panel");   // Foco hides Canvas's cards only when ours are there
+      // Canvas's own deadlines (its side column, its work widget) go away only when ours are really on screen: with the
+      // week switched off, or the planner unread, the student would see no deadlines at all
+      document.documentElement.classList.toggle("cp-has-week", !!cache.planner && (!!prefs.week || mode === "foco"));
+    }
+    // a panel the student is typing in (a new task) is not rebuilt under the cursor by a reading that lands
+    { const hostEl = document.getElementById("cp-dash"); if (hostEl) hostEl.cpBusy = () => { const ae = hostEl.cpRoot && hostEl.cpRoot.activeElement; return !!ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName || "") && !!ae.value; }; }
     const grid = el("div", "grid");
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
-    const seg = el("div", "seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
+    const seg = el("div", "seg"), segBs = []; seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Modo do painel");
     for (const [k, label] of MODES) {
       const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(mode === k));
       b.title = { completo: "Tudo do Caderno+", limpo: "Só o que importa, sem a bagunça do Canvas", foco: "Só o que fazer agora" }[k];
-      if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b);
+      if (onMode) b.addEventListener("click", () => { if (mode !== k) onMode(k); }); seg.appendChild(b); segBs.push(b);
     }
+    radioKeys(segBs, "mode");
     hd.appendChild(seg);
+    // fold: the panel shrinks to this bar (kept in chrome.storage.local "panelFold") and opens again
+    const foldB = el("button", "pfold"); foldB.type = "button";
+    const setFold = async (on, save) => { box.classList ? box.classList.toggle("pfolded", on) : (box.className = box.className.replace(/ pfolded/, "") + (on ? " pfolded" : ""));
+      if (/nohd/.test(box.className) && box.getRootNode && box.getRootNode().host) box.getRootNode().host.style.display = on ? "none" : "";
+      foldB.textContent = on ? "Mostrar ▾" : "Esconder ▴"; foldB.setAttribute("aria-expanded", String(!on)); foldB.title = on ? "Abrir o painel do Caderno+" : "Recolher o painel do Caderno+";
+      if (save) await chrome.storage.local.set({ panelFold: on }); };
+    foldB.addEventListener("click", () => setFold(!/pfolded/.test(box.className), true));
+    chrome.storage.local.get("panelFold").then(({ panelFold }) => setFold(panelFold === true, false));
+    // Anotações beside the cards (Alt+N)
+    const notesB = el("button", "pfold pnotes", "Anotações"); notesB.type = "button"; notesB.title = "Suas anotações e checklist, ao lado dos cards (Alt+N)"; notesB.setAttribute("aria-pressed", "false");
+    notesB.addEventListener("click", () => toggleNotes()); window.cpNotesBtn = notesB; notesCache = cache;
+    if (EXT) chrome.storage.local.get("notesOpen").then(({ notesOpen }) => { notesB.setAttribute("aria-pressed", String(notesOpen === true)); notesSide(cache, notesOpen === true); });
     // the meta (goal) every number is computed against
     const meta = el("span", "meta"), dn = el("button", null, "−"), upb = el("button", null, "+"), mv = el("b", null, fmt(T, T % 1 ? 1 : 0));
     dn.type = upb.type = "button"; dn.setAttribute("aria-label", "Meta menor"); upb.setAttribute("aria-label", "Meta maior"); meta.title = "A nota que você quer em cada matéria";
     const step = d => { if (onMode) onMode(mode, Math.min(10, Math.max(5, T + d))); };   // onMode sets T before any wait, so quick clicks add up
     dn.addEventListener("click", () => step(-0.5)); upb.addEventListener("click", () => step(0.5));
-    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.appendChild(meta);
-    box.append(hd);
+    meta.append(el("span", null, "Meta"), dn, mv, upb); hd.append(meta); if (EXT) hd.appendChild(notesB); hd.appendChild(foldB);
+    // on the classic dashboard the bar sits in Canvas's header, next to the greeting, where "Alternar para a nova
+    // visualização" was; folding then hides the whole panel. Elsewhere (widget dashboard) it stays on top of the panel.
+    // Canvas's header may render after us (we run at document end): the bar waits in the panel and moves up when it appears
+    if (!headBar(hd)) { box.append(hd); window.cpHeadRetry = () => { if (!gone(hd) && headBar(hd)) { box.classList.add("nohd"); window.cpHeadRetry = null; } }; } else { box.classList.add("nohd"); window.cpHeadRetry = null; }
+    if (a.askTurma) {   // a shared course matched: ask before using another turma's weights
+      const q = el("section", "card news ask-turma"), yes = el("button", "primary", "Sim, são as minhas"), no = el("button", null, "Não, são outras");
+      const subs = C.COURSES.filter(c => C.turmaOf(c) === a.turma).map(c => C.SHORT[c.id]).join(", ");
+      q.append(el("h3", null, "Estas são as suas matérias? " + subs), el("div", "muted", "O Caderno+ tem os pesos do Plano de Ensino delas. Se não são as suas, o quanto falta usa o Centro de Notas e as regras que você montar."));
+      const acts = el("div", "acts"); acts.append(yes, no); q.appendChild(acts); box.appendChild(q);
+      const answer = async v => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { turma: v }) }); location.reload(); };
+      yes.type = no.type = "button"; yes.addEventListener("click", () => answer(a.turma)); no.addEventListener("click", () => answer("outro"));
+    }
+    if (!prefs.dash) return;   // panel switched off: only the turma question
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
     if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
-    else if (why) box.append(el("div", "muted why", why));
+    else if (why) {   // no rules of ours: the Centro de Notas formulas, course by course, when the professors set them
+      const off = hiddenNow;   // the courses taken off the dashboard in the popup
+      ruleCache = cache;
+      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r && x.r.status !== "vazio");   // an old term: its points are not this semester's
+      if (rows.length) {
+        const sec = el("section", "card centro"), h = el("h3", null, "Quanto falta"), ul = el("ul");
+        sec.appendChild(h);
+        for (const { c, r, src } of rows) { const li = el("li", "row"), m = mid(shortName(c.name), "/courses/" + c.id, (r.status === "acima" ? "os pontos somam " + fmt(r.planned, 1) + ", mais que " + fmt(r.total, 0) + ": ajuste na matéria" : r.unsure ? "confira a regra na matéria antes de contar com isso" : r.status === "precisa" ? "precisa " + up(r.need, 1) + "/10 em média no que falta" + (r.approx ? " (aprox.)" : "") : r.status === "garantido" ? "meta garantida" : "recuperação")
+            + (src === "regra" ? " · " + (r.mine ? "sua regra" : "soma dos pontos: confira na matéria") : " · Centro de Notas"));
+          li.append(el("span", "d", r.now == null ? "—" : fmt(r.now, 1)), m, el("span", "pill " + (r.status === "acima" || r.unsure ? "nt" : centroTone(r)), src === "regra" ? customPill(r) : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.")); ul.appendChild(li); }
+        sec.append(ul, el("p", "c", "Meta " + fmt(T, T % 1 ? 1 : 0) + ". Pela fórmula do professor no Centro de Notas; sem fórmula, pela soma dos pontos do Canvas, que você ajusta na página da matéria (o que não vale nota sai da conta)."));
+        box.appendChild(sec);
+      } else box.append(el("div", "muted why", why));
+    }
     box.appendChild(grid);
+    { // when Canvas was read, at the foot of the panel (the course page says it in its header)
+      const d = C.localISO(new Date(cache.at)), when = (d === today() ? "hoje" : ago(d)) + " às " + hhmm(new Date(cache.at).toISOString());
+      box.appendChild(el("div", "muted read", "Lido do Canvas " + when + " · o botão Atualizar da extensão lê de novo")); }
+    if (prefs.week && !cache.planner) grid.appendChild(el("div", "muted why", "Não consegui ler os prazos do Canvas agora. A lista de tarefas do próprio Canvas continua ao lado; tento de novo na próxima leitura."));
     if (week) {
       let sec = null;
       const draw = () => { const nx = weekView(agenda(a, cache, marks), prefs, mark); if (sec) { grid.insertBefore(nx, sec); sec.remove(); } else grid.appendChild(nx); sec = nx; };
-      const mark = async (x, on) => { marks = await setMark(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
+      const mark = async (x, on) => { marks = await tick(cache.user, x, on); draw(); sendReminders(agenda(a, cache, marks), prefs, cache); };
       draw();
     }
     if (prefs.changes) { const ch = changesCard(cache, rec, () => onMode && onMode(mode)); if (ch) grid.prepend(ch); }
+    notesCard().then(nc => { if (nc) grid.prepend(nc); });
     if (!prefs.native && widgetDash() && !clean) {   // with Canvas's widgets hidden, every course stays one click away (extension courses too)
       const sec = el("section", "card news courses"), h = el("h3", null, "Todas as matérias"), ul = el("ul");
       for (const x of cache.ids) { const li = el("li", "row"); li.append(el("span"), mid(shortName(x.name), location.origin + "/courses/" + x.id, String(x.name).slice(0, 120)), el("span")); ul.appendChild(li); }
@@ -868,14 +1333,92 @@
   // and grade or what it needs, and the actions (files download, open Caderno+ on this subject).
   function coursePanel(courseId, a, cache, prefs) {
     const c = prefs.grades && a.has ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
-    if (!c && !prefs.files) return;
+    const cr = !c && prefs.grades ? centroOf(courseId) : null;   // no rules of ours: the professor's formula from the Centro de Notas
+    ruleCache = cache;
+    const mr = !c && !cr && prefs.grades && !a.expired && ruleItems(courseId).length ? customOf(courseId) || { status: "vazio" } : null;   // neither: the student's own rule
+    if (!c && !cr && !mr && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
     // the course hero: its Canvas color, its name, the teacher (photo, Perguntar) and when Canvas was read
     const hero = el("div", "hero"), band = el("div", "band-c"), title = el("div", "ht"), heroSub = el("div", "hs"), teach = el("div", "hteach");
     title.append(mark(), el("b", null, shortName(cv ? cv.name : document.title)));
     heroSub.textContent = (c ? "meta " + fmt(T, T % 1 ? 1 : 0) + " · " : "") + "lido do Canvas " + ago(C.localISO(new Date(cache.at)));
+    const official = c && prefs.grades ? centroOf(courseId) : null;   // with our rules too: the Centro de Notas number beside them, to compare
+    if (official) heroSub.textContent += " · Centro de Notas: " + fmt(official.now, 1) + " agora" + (official.status === "precisa" ? ", precisa " + up(official.need, 1) + (official.approx ? " (aprox.)" : "") : official.status === "garantido" ? ", garantido" : official.status === "nao-da" ? ", recuperação" : "");
     const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
+    if (!c && prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again
+      if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); } }); });
+    if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
+      const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
+      for (const g of Array.isArray(myCentro[courseId].grupos) ? myCentro[courseId].grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
+      m.append(el("div", "t", fmt(cr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+        el("div", "c", cr.status === "garantido" ? "meta garantida pela fórmula do professor" : cr.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "precisa " + up(cr.need, 1) + "/10 em média no que falta" + (cr.approx ? " (aproximado: parte da fórmula está escondida para o aluno e pode contar outras atividades)" : "")),
+        el("div", "c", "Falta: " + (cr.left.map(id => names.get(id)).filter(Boolean).slice(0, 8).join(", ") || "nada lançado em aberto") + " · fórmula do Centro de Notas"));
+      card.append(m, el("span", "pill " + centroTone(cr), cr.status === "garantido" ? "garantido" : cr.status === "nao-da" ? "recuperação" : "precisa " + up(cr.need, 1)));
+      box.appendChild(card);
+      if (cr.left.length) {   // simulate: the same grade on everything left, and the final it gives (nothing is saved)
+        const simC = el("div", "card centro-sim"), lab = el("label", "c"), range = el("input"), out = el("b", "t");
+        range.type = "range"; range.min = "0"; range.max = "10"; range.step = "0.5"; range.value = String(Math.min(10, Math.max(0, Math.ceil((cr.need != null ? cr.need : 7) * 2) / 2)));
+        range.setAttribute("aria-label", "Nota no que falta");
+        const show = () => { const p = C.centro(myCentro[courseId], T, Number(range.value)); out.textContent = "tirando " + fmt(Number(range.value), 1) + " no que falta, você fica com " + fmt(p.projected, 1) + (p.projected >= T ? " ✓" : ""); };
+        range.addEventListener("input", show); lab.append(el("span", null, "Simular"), range); simC.append(lab, out); show();
+        box.appendChild(simC);
+      }
+    }
+    if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes
+      const items = ruleItems(courseId), rule = myRules[courseId] || { off: [], total: 10 }, off = new Set(rule.off || []);
+      const card = el("div", "card cring"), m = el("div", "mid");
+      m.append(el("div", "t", mr.status === "vazio" ? (mr.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " passou dos pontos dela" : "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0)) : fmt(mr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+        el("div", "c", mr.status === "vazio" ? (mr.parts ? (mr.emptyPart ? "A parte " + mr.emptyPart + " ainda não tem atividade: escolha a parte de cada atividade na lista (ou diga quantos pontos ela vale)." : "Escolha a parte de cada atividade na lista abaixo.") : "Marque o que vale nota na lista abaixo.")
+          : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " soma " + fmt(mr.planned, 1) + " pontos, mais que os " + fmt(mr.total, 1) + " dela: tire o que não vale nota ou aumente os pontos da parte " + mr.part + "." : "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz).") : mr.unsure ? "Pela soma dos pontos daria " + (mr.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : customText(mr) + (mr.notYet > 0.001 ? " · " + fmt(mr.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
+        el("div", "c", mr.parts && mr.parts.length ? "Sua regra: " + mr.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + fmt(p.now, 1) + "/10").join(" · ") + (mr.emptyPart ? " · a parte " + mr.emptyPart + " não tem atividade" : "")
+          : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
+      if (mr.status !== "vazio" && mr.status !== "acima" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
+      box.appendChild(card);
+      const ed = el("div", "card items rule"), th = el("div", "ir ih"); th.append(el("span", null, "Conta na nota?"), el("span", null, "Pontos"), el("span", null, "Nota"));
+      ed.appendChild(th);
+      const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
+      const cur = () => myRules[courseId] || rule;   // the rule as stored now (a second quick change keeps the first)
+      const save = async change => { await saveRule(cache.user, courseId, Object.assign({}, cur(), change)); redraw(); };
+      const weighted = !!(rule.parts && Object.keys(rule.parts).length);
+      for (const it of items) {
+        const row = el("div", "ir" + (off.has(it.key) ? " off" : "")), lab = el("label", "n"), ck = el("input");
+        ck.type = "checkbox"; ck.checked = !off.has(it.key); ck.setAttribute("aria-label", "Conta na nota: " + it.name);
+        ck.addEventListener("change", () => { const o = new Set(cur().off || []); if (ck.checked) o.delete(it.key); else o.add(it.key); save({ off: [...o] }); });
+        lab.append(ck, el("span", null, it.name));
+        if (weighted) {   // which part of the Plano de Ensino this item belongs to
+          const ps = el("select", "part"); ps.setAttribute("aria-label", "Parte de " + it.name);
+          for (const k of ["", "A", "B", "C"]) { const o = el("option", null, k ? "Parte " + k : "fora"); o.value = k; if (((rule.part || {})[it.key] || "") === k) o.selected = true; ps.appendChild(o); }
+          ps.addEventListener("change", () => { const pt = Object.assign({}, cur().part); if (ps.value) pt[it.key] = ps.value; else delete pt[it.key]; save({ part: pt }); });
+          lab.appendChild(ps);
+        }
+        row.append(lab, el("span", "w", fmt(it.points, 2)), el("span", "g", it.score == null ? "—" : fmt(it.score, 2)));
+        ed.appendChild(row);
+      }
+      const tl = el("label", "c tot"), ti = el("input"); ti.type = "number"; ti.min = "1"; ti.max = "1000"; ti.step = "0.5"; ti.value = String(rule.total || 10); ti.setAttribute("aria-label", "A nota vai até");
+      ti.addEventListener("change", () => { const v = Number(String(ti.value).replace(",", ".")); if (v > 0 && v <= 1000) save({ off: (myRules[courseId] || rule).off || [], total: v }); });
+      tl.append(el("span", null, "A nota vai até "), ti, el("span", null, " pontos (veja no Plano de Ensino)"));
+      if (!weighted) ed.appendChild(tl);
+      // weights by part: "RA1 40%, RA2 60%"; each part's top defaults to the points of its items
+      const pw = el("div", "c tot parts"), parts = rule.parts || {};
+      pw.appendChild(el("span", null, weighted ? "Pesos:" : "O Plano de Ensino tem pesos por parte (ex.: RA1 40%, RA2 60%)?"));
+      if (weighted) for (const k of ["A", "B", "C"]) {
+        const w = el("input"), tp = el("input"); w.type = tp.type = "number"; w.min = "0"; w.max = "100"; w.step = "5"; tp.min = "0"; tp.max = "1000"; tp.step = "0.5";
+        w.value = parts[k] ? String(parts[k].w) : ""; tp.value = parts[k] && parts[k].top ? String(parts[k].top) : ""; tp.placeholder = "auto";
+        w.setAttribute("aria-label", "Peso da parte " + k + " em %"); tp.setAttribute("aria-label", "Pontos da parte " + k + " (vazio: os pontos das atividades dela)");
+        const set = () => { const ps = Object.assign({}, cur().parts), v = Number(String(w.value).replace(",", ".")), t = Number(String(tp.value).replace(",", "."));
+          if (v > 0) ps[k] = Object.assign({ w: v }, t > 0 ? { top: t } : {}); else delete ps[k]; save(Object.keys(ps).length ? { parts: ps } : { parts: {}, part: {} }); };
+        w.addEventListener("change", set); tp.addEventListener("change", set);
+        pw.append(el("span", "pk", "Parte " + k), w, el("span", null, "% de"), tp, el("span", null, "pts"));
+      } else {
+        const on = el("button", "mini", "Usar pesos por parte"); on.type = "button";
+        on.addEventListener("click", () => save({ parts: { A: { w: 50 }, B: { w: 50 } }, part: {} }));
+        pw.appendChild(on);
+      }
+      ed.appendChild(pw);
+      if (myRules[courseId]) { const rs = el("button", "mini", "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); redraw(); }); ed.appendChild(rs); }
+      box.appendChild(ed);
+    }
     courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
     teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;
       const go = el("a", "mini ask-b", "Perguntar"); go.href = location.origin + "/conversations?user_id=" + encodeURIComponent(t.id) + "&user_name=" + encodeURIComponent(t.name) + "&context_id=course_" + encodeURIComponent(t.course);
@@ -955,23 +1498,9 @@
       });
       simActs.append(sb, note, save);
     }
-    // Anotações: a note per course, only on this computer (chrome.storage.local "notes", per Canvas user), saved as you type.
-    const pad = el("div", "card notes"), ta = el("textarea"), saved = el("div", "muted", "");
-    ta.setAttribute("aria-label", "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
-    pad.append(ta, saved);
-    let tm = 0;
-    const store = async () => {
-      const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
-      const v = String(ta.value || "").slice(0, 5000); if (v) mine[courseId] = v; else delete mine[courseId];
-      await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
-    };
-    let typed = 0;
-    ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
-    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || Date.now() - typed < 30000;
-    chrome.storage.local.get("notes").then(({ notes }) => {
-      const v = notes && notes[cache.user] && notes[cache.user][courseId];
-      if (typeof v === "string" && v) { ta.value = v; if (btns.anot) btns.anot.textContent = "Anotações ✓"; }
-    });
+    const resend = async () => sendReminders(agenda(a, cache, await myMarks(cache.user)), prefs, cache);   // a tick or a dated item here changes the reminders
+    const nb = notesBlock(cache, courseId, () => { if (btns.anot) btns.anot.textContent = "Anotações ✓"; }, resend);
+    const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || nb.busy() || (!!host.cpRoot && !!host.cpRoot.activeElement && /^(INPUT)$/.test(host.cpRoot.activeElement.tagName || ""));   // typing the rule's top: not redrawn under the cursor
     acts.appendChild(status);
     // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
     const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
@@ -984,20 +1513,22 @@
     const show = async (k, byClick) => {
       for (const [key] of tabs) { panes[key].hidden = key !== k; btns[key].setAttribute("aria-selected", String(key === k)); btns[key].tabIndex = key === k ? 0 : -1; }
       if (k === "materiais" && !panes.materiais.cpLoaded) { panes.materiais.cpLoaded = 1; materials(courseId, panes.materiais); }
-      if (k === "anot" && byClick && ta.focus) ta.focus();   // only when the student opens it (never on page load)
-      await chrome.storage.local.set({ ctab: k });
+      if (k === "anot" && byClick && nb.ta.focus) nb.ta.focus();   // only when the student opens it (never on page load)
+      if (byClick) await chrome.storage.local.set({ ctab: k });   // the student's choice, not every page load
     };
     for (const [k, label] of tabs) {
       const b = el("button", null, label); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab"); b.addEventListener("click", () => show(k, true)); bar.appendChild(b); btns[k] = b;
       panes[k] = el("div", "cpane"); panes[k].setAttribute("role", "tabpanel"); panes[k].hidden = k !== "geral";   // no flash of every tab before the kept one is read
     }
-    panes.geral.append(...overview(courseId, c, a, cache));
+    panes.geral.append(...overview(courseId, c, a, cache, prefs));
     if (c) panes.notas.append(...parts.notas, simActs);
     panes.materiais.appendChild(acts);
     panes.avisos.appendChild(courseNews(cache, courseId));
-    if (EXT) panes.anot.appendChild(pad);
+    if (EXT) panes.anot.append(...nb.nodes);
     box.append(bar, ...tabs.map(([k]) => panes[k]));
-    chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
+    if (EXT && host) host.cpOpenNotes = () => { show("anot", true); if (nb.ta.scrollIntoView) nb.ta.scrollIntoView({ block: "center" }); };
+    if (EXT && location.hash === "#anot") show("anot"); else chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
+
   }
 
   // The course's color in Canvas (the user's custom colors, GET /users/self/colors), read once a day per user.
@@ -1010,14 +1541,61 @@
     return typeof col === "string" && /^#[0-9a-f]{3,8}$/i.test(col) ? col : null;
   }
   // Visão geral: what comes next in this course, its latest announcement and the shortcuts to Canvas's own pages.
-  function overview(courseId, c, a, cache) {
-    const out = [], t = today(), next = agenda(a, cache, {}).filter(x => (String(x.cid) === courseId || (c && x.ours === c)) && !fin(x) && (x.date >= t || x.late)).slice(0, 5);
-    const sec = el("section", "card news"), h = el("h3", null, "A seguir nesta matéria"); sec.appendChild(h);
-    if (next.length) { const ul = el("ul"); for (const x of next) { const li = el("li", "row");
-      li.append(el("span", "d" + (x.late && x.date < t ? " lt" : ""), x.late && x.date < t ? dmy(x.date) : cap(dayLabel(x.date)) + (x.due ? " " + hhmm(x.due) : "")), mid((x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title, x.url, x.exam ? (x.exam.req ? need(x.exam) : "prova") : x.task ? "entrega" : "evento"),
-        el("span", "pill " + (x.late && x.date < t ? "bad" : x.exam ? "warn" : "nt"), x.late && x.date < t ? "atrasada" : x.exam ? "prova" : "a entregar")); ul.appendChild(li); } sec.appendChild(ul); }
-    else sec.appendChild(el("div", "muted", "Nada pendente nesta matéria nos próximos dias."));
-    out.push(sec);
+  // Visão geral: a mini calendar of the month (a dot on each day with something: coral for exams, amber for work, green when
+  // done; today ringed); clicking a day lists it on the right, which otherwise shows what comes next. Canvas deadlines of
+  // this course plus every assessment of the Plano de Ensino.
+  function miniCal(courseId, c, a, cache, prefs) {
+    const t = today();
+    let marks = {}, items = [];
+    const build = () => {
+      const seen = new Set(); items = [];
+      const rule = c ? c.items.filter(it => it.date).map(it => { const key = "qf:" + C.key(c, it); return { key, mine: !!marks[key], title: it.name, date: it.date, exam: it.exam, task: !it.exam, url: null, rule: true }; }) : [];
+      for (const x of agenda(a, cache, marks).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(rule)) {
+        const k = x.date + "|" + fold(x.title).slice(0, 24); if (seen.has(k)) continue; seen.add(k); items.push(x);
+      }
+    };
+    build();
+    const sec = el("section", "card mcal"), left = el("div", "mc-l"), right = el("div", "mc-r"), head = el("div", "mc-h"), prev = el("button", null, "‹"), next = el("button", null, "›"), title = el("b");
+    prev.type = next.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
+    head.append(prev, title, next); const grid = el("div", "mc-g"); left.append(head, grid); sec.append(left, right);
+    let cur = t.slice(0, 7), pick = null;
+    const tone = x => fin(x) ? "ok" : x.exam ? "ex" : "wa";
+    const listOf = (list, label) => {
+      const k = el("div", "mc-k"); k.append(el("span", null, label), el("span", null, "Feito")); right.replaceChildren(k);
+      if (!list.length) { right.appendChild(el("div", "muted", pick ? "Nada neste dia." : "Nada pela frente nesta matéria.")); return; }
+      for (const x of list.slice(0, 5)) { const r = el("div", "mc-i " + tone(x)), when = el("span", "mc-d" + (x.late && !fin(x) && x.date < t ? " lt" : ""), x.date === t ? "hoje" : dmy(x.date) + (x.due ? " " + hhmm(x.due) : ""));
+        const name = (x.exam && !/prova/i.test(x.title) ? "Prova: " : "") + x.title;
+        let ck = el("span");   // exams and work Canvas already counts as handed in get no tick
+        if (!x.exam && !x.done && cache.user) {
+          ck = el("button", "ck", "✓"); ck.type = "button"; ck.setAttribute("aria-pressed", String(!!x.mine));
+          ck.setAttribute("aria-label", (x.mine ? "Desmarcar: " : "Marcar como feito: ") + name); ck.title = x.mine ? "Desmarcar" : "Marcar como feito (só aqui, o Canvas não muda)";
+          ck.addEventListener("click", async () => { marks = await tick(cache.user, x, !x.mine); build(); draw(); if (prefs) sendReminders(agenda(a, cache, marks), prefs, cache); });
+        }
+        r.append(el("i"), when, link(name, x.url), ck); right.appendChild(r); }
+    };
+    const draw = () => {
+      const [y, m] = cur.split("-").map(Number), pad = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate();
+      title.textContent = MONTHS[m - 1] + " " + y; grid.replaceChildren();
+      for (const w of ["D", "S", "T", "Q", "Q", "S", "S"]) grid.appendChild(el("span", "mc-w", w));
+      for (let i = 0; i < pad; i++) grid.appendChild(el("span"));
+      for (let d = 1; d <= days; d++) {
+        const iso = cur + "-" + String(d).padStart(2, "0"), its = items.filter(x => x.date === iso), b = el("button", "mc-day" + (iso === t ? " today" : "") + (iso === pick ? " on" : "") + (its.length ? " has" : ""));
+        b.type = "button"; b.appendChild(el("span", null, String(d)));
+        if (its.length) { const dots = el("span", "mc-dots"); for (const x of its.slice(0, 3)) dots.appendChild(el("i", tone(x))); b.appendChild(dots); b.title = its.map(x => x.title).join("\n"); }
+        b.addEventListener("click", () => { pick = pick === iso ? null : iso; draw(); });
+        grid.appendChild(b);
+      }
+      if (pick) listOf(items.filter(x => x.date === pick), cap(dayLabel(pick)));
+      else listOf(items.filter(x => !x.done && (x.date >= t || (x.late && !fin(x) && x.date >= addDays(-7)))).sort((p, q) => p.date.localeCompare(q.date)), "A seguir");   // ticked here stays (greyed) so it can be unticked
+    };
+    const shift = n => { const [y, m] = cur.split("-").map(Number), d = new Date(y, m - 1 + n, 1); cur = C.localISO(d).slice(0, 7); pick = null; draw(); };
+    prev.addEventListener("click", () => shift(-1)); next.addEventListener("click", () => shift(1));
+    draw(); if (cache.user) myMarks(cache.user).then(m => { marks = m; build(); draw(); });
+    watchStore(ch => { if (gone(sec)) return false; if (ch.checks) loadChecks(cache.user).then(() => { build(); draw(); }); });   // a dated item added in Anotações shows here at once
+    return sec;
+  }
+  function overview(courseId, c, a, cache, prefs) {
+    const out = [miniCal(courseId, c, a, cache, prefs)];
     const last = (cache.data.announcements || []).filter(x => String(x.courseId) === courseId).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
     if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
       li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
@@ -1072,22 +1650,27 @@
   async function listFiles(id, canvasName, acts, btn, status) {
     btn.disabled = true; status.textContent = "Listando arquivos…";
     try {
+      const root = cpFolder(cpPrefs((await chrome.storage.local.get("prefs")).prefs).dlFolder);   // the student's folder inside Downloads
       const all = (await courseFiles(id)).filter(f => f && f.url && !f.locked_for_user)
-        .map(f => ({ id: f.id, url: new URL(f.url, location.href).href, filename: F.target(canvasName, f, C.COURSES, C.CANVAS, id) })).filter(f => f.filename);
+        .map(f => ({ id: f.id, url: new URL(f.url, location.href).href, filename: F.target(canvasName, f, C.COURSES, C.CANVAS, id, root) })).filter(f => f.filename);
       const { dl } = await chrome.storage.local.get("dl"), have = new Set(Array.isArray(dl) ? dl : []);
       const fresh = all.filter(f => !have.has(f.id));
       btn.remove();
-      status.textContent = all.length + (all.length === 1 ? " arquivo" : " arquivos") + ", " + fresh.length + (fresh.length === 1 ? " novo" : " novos") + " · vão para Downloads/PUCPR";
+      status.textContent = all.length + (all.length === 1 ? " arquivo" : " arquivos") + ", " + fresh.length + (fresh.length === 1 ? " novo" : " novos") + " · vão para Downloads/" + root;
       const btns = [];
       const save = async items => {
+        const now = cpFolder(cpPrefs((await chrome.storage.local.get("prefs")).prefs).dlFolder);   // the folder may have changed since the list was made
+        if (now !== root) items = items.map(f => Object.assign({}, f, { filename: now + f.filename.slice(root.length) }));
         btns.forEach(b => { b.disabled = true; }); status.textContent = "Baixando " + items.length + "…";
         let started = 0;
-        for (let i = 0; i < items.length; i += 300) {   // the service worker takes up to 300 per message
-          const res = await chrome.runtime.sendMessage({ type: "download", items: items.slice(i, i + 300) });
-          started += res && Array.isArray(res.done) ? res.done.length : 0;
-        }
-        status.textContent = started + " de " + items.length + " enviados para Downloads/PUCPR";
-        btns.forEach(b => { b.disabled = false; });
+        try {
+          for (let i = 0; i < items.length; i += 300) {   // the service worker takes up to 300 per message
+            const res = await chrome.runtime.sendMessage({ type: "download", items: items.slice(i, i + 300) });
+            started += res && Array.isArray(res.done) ? res.done.length : 0;
+          }
+          status.textContent = started + " de " + items.length + " enviados para Downloads/" + now;
+        } catch (e) { status.textContent = "Não deu para baixar agora (" + started + " de " + items.length + " enviados). Recarregue a página e tente de novo."; }   // the extension was updated under this tab, or the worker failed
+        finally { btns.forEach(b => { b.disabled = false; }); }
       };
       if (fresh.length) { const b = el("button", "primary", "Baixar " + fresh.length + (fresh.length === 1 ? " novo" : " novos")); b.addEventListener("click", () => save(fresh)); acts.prepend(b); btns.push(b); }
       if (all.length) { const b = el("button", null, "Baixar todos"); b.addEventListener("click", () => save(all)); acts.insertBefore(b, status); btns.push(b); }
@@ -1114,14 +1697,16 @@
   async function moduleIndex(cache) {
     const { search } = await chrome.storage.local.get("search");
     if (search && search.user === cache.user && Date.now() - search.at < SEARCH_TTL && Array.isArray(search.items)) return search.items;
-    const items = []; let read = 0;
-    for (const c of cache.data.courses) {
+    let read = 0;   // three courses at a time, kept in the course order
+    const per = await pool(cache.data.courses, 3, async c => {
       try {
+        const out = [];
         for (const m of await getAll("/api/v1/courses/" + c.id + "/modules?include[]=items&per_page=100"))
-          for (const it of m.items || []) if (it && it.title && it.html_url && it.type !== "SubHeader") items.push({ t: String(it.title), c: shortName(c.name) + " · " + String(m.name || ""), u: it.html_url, k: KIND[it.type] || "item" });
-        read++;
-      } catch (e) { /* modules hidden in this course */ }
-    }
+          for (const it of m.items || []) if (it && it.title && it.html_url && it.type !== "SubHeader") out.push({ t: String(it.title), c: shortName(c.name) + " · " + String(m.name || ""), u: it.html_url, k: KIND[it.type] || "item" });
+        read++; return out;
+      } catch (e) { return []; }   // modules hidden in this course
+    });
+    const items = [].concat(...per);
     if (read) await chrome.storage.local.set({ search: { user: cache.user, at: Date.now(), items } });
     return items;
   }
@@ -1140,8 +1725,8 @@
     if (cur) { cur.remove(); return; }   // the shortcut again closes it
     const host = el("div", "cp-host"); host.id = "cp-search";
     host.style.cssText = "position:fixed;inset:0;z-index:10000;margin:0";
-    const root = host.attachShadow({ mode: "open" }), style = el("style"), back = el("div", "pal-back"), dlg = el("div", "pal");
-    style.textContent = CSS;
+    const root = shadow(host), back = el("div", "pal-back"), dlg = el("div", "pal");
+    styleRoot(root);
     dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true"); dlg.setAttribute("aria-label", "Buscar no Canvas");
     const q = el("input", "pal-q"); q.type = "text"; q.autocomplete = "off"; q.placeholder = "Buscar tarefas, módulos e matérias…"; q.setAttribute("aria-label", "Buscar");
     const ul = el("ul", "pal-r"), note = el("div", "pal-s", "Lendo os módulos das matérias…");
@@ -1162,7 +1747,9 @@
         li.append(el("span", "pal-k", x.k), mid(x.t, null, x.c)); li.addEventListener("click", () => go(x)); ul.appendChild(li);
       });
       if (!hits.length) ul.appendChild(el("li", "pal-e", q.value ? "Nada encontrado." : "Digite para buscar, ou + para criar uma tarefa (ex.: + revisar slides sex)."));
+      const on = ul.querySelector ? ul.querySelector(".on") : null; if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest" });   // the arrows keep the choice in view
     };
+    dlg.addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); close(); } });   // Esc closes from anywhere in the dialog, not only from the field
     q.addEventListener("input", () => { sel = 0; draw(); });
     q.addEventListener("keydown", e => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, Math.min(hits.length - 1, sel + (e.key === "ArrowDown" ? 1 : -1))); draw(); }
@@ -1170,7 +1757,7 @@
       else if (e.key === "Escape") { e.preventDefault(); close(); }
     });
     back.addEventListener("click", close);
-    dlg.append(q, ul, note); root.append(style, back, dlg); document.body.appendChild(host);
+    dlg.append(q, ul, note); root.append(back, dlg); document.body.appendChild(host);
     if (q.focus) q.focus();
     draw();
     moduleIndex(cache).then(mods => { items = items.concat(inCanvasOnly(mods)); note.textContent = KEYS + " abre e fecha · ↑↓ escolhe · Enter abre"; draw(); },
@@ -1193,11 +1780,16 @@
       const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.setAttribute("data-cp-tray", "1"); item.appendChild(p);
     }
   }
+  let trayA = null, trayHidden = null;   // the latest reading and hidden list: the watcher is set once, its data is not
   function watchTray(a, hidden) {
-    if (trayWatch || typeof MutationObserver === "undefined" || !document.body) return;
+    trayA = a; trayHidden = hidden;
+    if (trayWatch || typeof MutationObserver === "undefined" || !document.body) { if (trayWatch) enhanceTray(trayA, trayHidden); return; }
     let t = 0;
-    trayWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => enhanceTray(a, hidden), 150); });
-    trayWatch.observe(document.body, { childList: true, subtree: true });
+    // only the tray portal (Cursos, Grupos...), not every change on the page; the whole page only until the portal exists
+    let onPortal = false;
+    const aim = () => { const p = document.getElementById("nav-tray-portal"); onPortal = !!p; trayWatch.disconnect(); trayWatch.observe(p || document.body, { childList: true, subtree: true }); };
+    trayWatch = new MutationObserver(() => { if (!onPortal && document.getElementById("nav-tray-portal")) aim(); clearTimeout(t); t = setTimeout(() => enhanceTray(trayA, trayHidden), 150); });
+    aim();
     enhanceTray(a, hidden);
   }
   // /courses (Todos os cursos): our pill per subject and, on every course, "Tirar do painel" / "Mostrar no painel".
@@ -1226,14 +1818,13 @@
   async function teachersOf(cache) {
     const { teachers } = await chrome.storage.local.get("teachers");
     if (teachers && teachers.user === cache.user && Date.now() - teachers.at < 864e5 && Array.isArray(teachers.list)) return teachers.list;
-    const list = [];
-    for (const c of cache.data.courses) {
-      try {
-        for (const u of await getAll("/api/v1/courses/" + c.id + "/users?enrollment_type[]=teacher&include[]=avatar_url&per_page=20", 1))
-          if (u && u.id && u.name && !list.some(t => t.id === u.id && t.course === c.id)) list.push({ id: u.id, name: String(u.name).slice(0, 80), avatar: typeof u.avatar_url === "string" ? u.avatar_url : null, course: c.id, courseName: shortName(c.name) });
-      } catch (e) { /* the course hides its people */ }
-    }
-    await chrome.storage.local.set({ teachers: { user: cache.user, at: Date.now(), list } });
+    let failed = false;
+    const list = [], got = await pool(cache.data.courses, 3, c => getAll("/api/v1/courses/" + c.id + "/users?enrollment_type[]=teacher&include[]=avatar_url&per_page=20", 1).catch(() => { failed = true; return []; }));   // three at a time; a course that hides its people gives none
+    cache.data.courses.forEach((c, i) => {
+      for (const u of Array.isArray(got[i]) ? got[i] : [])
+        if (u && u.id && u.name && !list.some(t => t.id === u.id && t.course === c.id)) list.push({ id: u.id, name: String(u.name).slice(0, 80), avatar: typeof u.avatar_url === "string" ? u.avatar_url : null, course: c.id, courseName: shortName(c.name) });
+    });
+    await chrome.storage.local.set({ teachers: { user: cache.user, at: failed ? Date.now() - 864e5 + 3600e3 : Date.now(), list } });   // a failed course is tried again in an hour, not tomorrow
     return list;
   }
   // "Pergunte ao professor": each teacher with photo; the button opens Canvas's own compose, addressed (the inbox reads
@@ -1252,6 +1843,95 @@
     foldable(sec, h, "ask"); return sec;
   }
 
+  // The course menu (#section-tabs, server-rendered): items the professor enabled can be hidden one by one, per course
+  // (chrome.storage.local "navHide": { <course id>: [<tab class>] }). "Editar menu" shows every item with an eye to toggle.
+  // the eye button (show / hide) used by the course menu and the modules editors
+  const EYE = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z'/><circle cx='8' cy='8' r='2'/></svg>")`, EYE_OFF = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z'/><path d='M2.5 13.5l11-11'/></svg>")`;
+  const eyeCss = pfx => `${pfx} .cp-eye { margin-left:auto; flex:none; width:22px; height:22px; padding:0; border:0; border-radius:6px; cursor:pointer; background:currentColor; opacity:.65; -webkit-mask:${EYE} no-repeat center / 16px; mask:${EYE} no-repeat center / 16px; }
+${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opacity:.6; } ${pfx} .cp-eye:hover { opacity:1; }`;
+  const FOLD_CSS = `#cp-navfold { display:flex; align-items:center; gap:6px; margin:0 0 10px 6px; padding:5px 10px 5px 6px; border:1px solid currentColor; border-radius:999px; background:none; color:inherit; opacity:.55; cursor:pointer; font:600 11.5px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; letter-spacing:.02em; transition:opacity .15s; }
+#cp-navfold:hover, #cp-navfold:focus-visible { opacity:1; }
+#cp-navfold i, #cp-navopen i { display:block; width:14px; height:14px; background:currentColor; -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M10 3.5 5.5 8l4.5 4.5'/></svg>") no-repeat center / contain; mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M10 3.5 5.5 8l4.5 4.5'/></svg>") no-repeat center / contain; }
+#cp-navopen { position:fixed; top:96px; left:var(--cp-navleft, 84px); z-index:999; display:grid; place-items:center; width:20px; height:52px; padding:0; border:0; border-radius:0 12px 12px 0; background:var(--ic-brand-primary, #E2482B); color:var(--cp-on-accent, #fff); cursor:pointer; box-shadow:3px 2px 12px -6px rgba(0,0,0,.5); transition:width .15s; }
+#cp-navopen:hover, #cp-navopen:focus-visible { width:26px; }
+#cp-navopen i { -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M6 3.5 10.5 8 6 12.5'/></svg>"); mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M6 3.5 10.5 8 6 12.5'/></svg>"); }`;
+  const tabKey = a => [...(a.classList || [])].find(c => c !== "active") || (a.className || "").split(" ").find(c => c && c !== "active") || "";
+  async function courseNav(courseId) {
+    const nav = document.getElementById("section-tabs");
+    if (!nav || document.getElementById("cp-navedit")) return;
+    const { navHide } = await chrome.storage.local.get("navHide"), all = navHide && typeof navHide === "object" ? navHide : {};
+    let hidden = Array.isArray(all[courseId]) ? all[courseId].filter(k => /^[a-z0-9_-]{1,60}$/.test(k)) : [], editing = false;
+    let st = document.getElementById("cp-navhide"); if (!st) { st = el("style"); st.id = "cp-navhide"; (document.head || document.body).appendChild(st); }
+    const links = [...nav.querySelectorAll("li > a")];
+    const paint = () => {
+      st.textContent = (editing ? hidden.map(k => '#section-tabs li > a.' + k + ' { opacity:.4; text-decoration:line-through; }') : hidden.map(k => '#section-tabs li:has(> a.' + k + ') { display:none !important; }')).join("\n")
+        + '\n' + eyeCss("#section-tabs") + '\n' + FOLD_CSS;
+      for (const a of links) { let b = a.parentNode.querySelector(".cp-eye"); const k = tabKey(a);
+        if (!editing || !k || k === "home") { if (b) b.remove(); continue; }
+        if (!b) { b = el("button", "cp-eye"); b.type = "button"; b.addEventListener("click", async e => { e.preventDefault(); e.stopPropagation();
+          hidden = hidden.includes(k) ? hidden.filter(x => x !== k) : hidden.concat([k]);
+          const { navHide: cur } = await chrome.storage.local.get("navHide"); await chrome.storage.local.set({ navHide: Object.assign({}, cur, { [courseId]: hidden }) }); paint(); });
+          a.style.display = "flex"; a.appendChild(b); }
+        const off = hidden.includes(k); b.className = "cp-eye" + (off ? " off" : ""); b.title = off ? "Mostrar no menu" : "Esconder do menu"; b.setAttribute("aria-label", (off ? "Mostrar " : "Esconder ") + a.textContent.trim());
+      }
+      edit.textContent = editing ? "Pronto" : "Editar menu" + (hidden.length ? " (" + hidden.length + " escondido" + (hidden.length > 1 ? "s" : "") + ")" : "");
+    };
+    // the arrow: fold the course menu away (Canvas's own course-menu-expanded body class, so its layout follows) and back
+    const { navFold } = await chrome.storage.local.get("navFold");
+    const tab = el("button"), fold = el("button"); tab.type = fold.type = "button"; tab.id = "cp-navopen";
+    fold.id = "cp-navfold"; fold.title = "Recolher o menu da matéria"; fold.setAttribute("aria-label", fold.title); fold.appendChild(el("i")); fold.appendChild(el("span", null, "Recolher"));
+    tab.title = "Mostrar o menu da matéria"; tab.setAttribute("aria-label", tab.title); tab.appendChild(el("i"));
+    const header = document.querySelector ? document.querySelector(".ic-app-header") : null;
+    if (header && header.getBoundingClientRect && document.documentElement.style) document.documentElement.style.setProperty("--cp-navleft", Math.round(header.getBoundingClientRect().right) + "px");
+    const setFold = async (on, save = true) => { if (document.body.classList) document.body.classList.toggle("course-menu-expanded", !on); tab.style.display = on ? "" : "none"; if (save) await chrome.storage.local.set({ navFold: on }); };
+    fold.addEventListener("click", () => setFold(true)); tab.addEventListener("click", () => setFold(false));
+    if (nav.parentNode) nav.parentNode.insertBefore(fold, nav); document.body.appendChild(tab);
+    tab.style.display = "none";
+    const { prefs: pp } = await chrome.storage.local.get("prefs");
+    if (navFold === true) setFold(true, false); else if (navFold !== false && cpPrefs(pp).mode === "foco") setFold(true, false);   // Foco folds it without saving   // Foco folds the course menu unless the student opened it
+    const li = el("li", "section"), edit = el("button"); li.id = "cp-navedit"; edit.type = "button";
+    edit.style.cssText = "margin:10px 0 0 6px;padding:5px 10px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.7;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
+    edit.addEventListener("click", () => { editing = !editing; paint(); });
+    li.appendChild(edit); nav.appendChild(li); paint();
+  }
+
+  // Modules (#context_modules, canvas-lms context_modules/_context_module_next and _module_item_next: div#context_module_<id>,
+  // li#context_module_item_<id>): whole modules or single items hidden one by one, per course ("modHide"), edited with eyes.
+  async function courseModules(courseId) {
+    const root = document.getElementById("context_modules");
+    if (!root || document.getElementById("cp-modedit")) return;
+    const { modHide } = await chrome.storage.local.get("modHide"), all = modHide && typeof modHide === "object" ? modHide : {};
+    let hidden = Array.isArray(all[courseId]) ? all[courseId].filter(k => /^context_module(_item)?_\d{1,20}$/.test(k)) : [], editing = false;
+    let st = document.getElementById("cp-modhide"); if (!st) { st = el("style"); st.id = "cp-modhide"; (document.head || document.body).appendChild(st); }
+    const bar = el("div"), edit = el("button"), hint = el("span"); bar.id = "cp-modedit"; edit.type = "button";
+    bar.style.cssText = "display:flex;align-items:center;gap:10px;margin:0 0 12px";
+    edit.style.cssText = "padding:6px 12px;border-radius:9px;border:1px dashed currentColor;background:none;color:inherit;opacity:.75;font:500 12.5px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
+    hint.style.cssText = "font:12px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;opacity:.65";
+    const save = async () => { const { modHide: cur } = await chrome.storage.local.get("modHide"); await chrome.storage.local.set({ modHide: Object.assign({}, cur, { [courseId]: hidden }) }); };
+    const paint = () => {
+      st.textContent = hidden.map(k => "#" + k + (editing ? " { opacity:.45; }" : " { display:none !important; }")).join("\n") + "\n" + eyeCss("#context_modules")
+        + "\n#context_modules .ig-header .cp-eye, #context_modules .ig-row .cp-eye { margin-left:8px; align-self:center; }";
+      const targets = [...root.querySelectorAll(".context_module")].map(m => [m, m.querySelector(".ig-header")]).concat([...root.querySelectorAll("li.context_module_item")].map(i => [i, i.querySelector(".ig-row")]));
+      for (const [node, host] of targets) {
+        const k = node.id; if (!host || !/^context_module(_item)?_\d+$/.test(k || "")) continue;
+        let b = host.querySelector(":scope > .cp-eye");
+        if (!editing) { if (b) b.remove(); continue; }
+        if (!b) { b = el("button", "cp-eye"); b.type = "button"; b.addEventListener("click", async e => { e.preventDefault(); e.stopPropagation();
+          hidden = hidden.includes(k) ? hidden.filter(x => x !== k) : hidden.concat([k]); await save(); paint(); }); host.appendChild(b); }
+        const off = hidden.includes(k), what = node.classList && node.classList.contains("context_module") ? "o módulo" : "o item";
+        b.className = "cp-eye" + (off ? " off" : ""); b.title = (off ? "Mostrar " : "Esconder ") + what; b.setAttribute("aria-label", b.title);
+      }
+      edit.textContent = editing ? "Pronto" : "Editar módulos" + (hidden.length ? " (" + hidden.length + " escondido" + (hidden.length > 1 ? "s" : "") + ")" : "");
+      hint.textContent = editing ? "Clique no olho para esconder um módulo inteiro ou um item." : "";
+    };
+    edit.addEventListener("click", () => { editing = !editing; paint(); });
+    // on the line of Canvas's "Recolher tudo / Exportar" bar (.header-bar, a flex row) when there is one, else above the modules
+    const hb = root.parentNode.querySelector ? root.parentNode.querySelector(".header-bar") : null;
+    bar.append(edit, hint);
+    if (hb) { bar.style.margin = "0 auto 0 0"; hb.prepend(bar); } else root.parentNode.insertBefore(bar, root);
+    paint();
+  }
+
   // /calendar: the Caderno+ semester calendar in place of Canvas's (a month at a time, every month of the term): Canvas
   // deadlines (the planner, read a month at a time when outside the last reading), our exams and the student's own tasks.
   // "Calendário do Canvas" brings the original back (prefs.nativeCal).
@@ -1263,6 +1943,7 @@
     const months = [], first = C.TERM_END.slice(0, 4) === today().slice(0, 4) ? today().slice(0, 4) : String(Number(C.TERM_END.slice(0, 4)) - 1);
     for (let d = new Date(Number(first), 7, 1); C.localISO(d) <= C.TERM_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(C.localISO(d).slice(0, 7));
     let cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : months[0];
+    { const home = cur, hostEl = document.getElementById("cp-cal"); if (hostEl) hostEl.cpBusy = () => cur !== home; }   // a new reading redraws the calendar, but not under a student looking at another month
     const extra = {}, base = agenda(a, cache, marks);
     const ruleItems = (a.rules ? a.mine : []).flatMap(c => c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, course: C.SHORT[c.id] || c.name, date: it.date, exam: it.exam, task: !it.exam, url: courseOf[c.id] ? location.origin + "/courses/" + courseOf[c.id] : null, rule: true })));
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
@@ -1331,11 +2012,11 @@
     if (document.getElementById("cp-scroll") || !de || typeof window.innerHeight !== "number" || !window.scrollTo) return;
     const host = el("div", "cp-host"); host.id = "cp-scroll";
     host.style.cssText = "position:fixed;right:18px;bottom:76px;z-index:9998;margin:0;display:none";
-    const root = host.attachShadow({ mode: "open" }), style = el("style");
+    const root = shadow(host), style = el("style");
     style.textContent = `button { display:block; width:34px; height:34px; margin-top:6px; border-radius:50%; border:1px solid #ECE4D3; background:#FBF7EF; color:#1D2433; font:600 15px/1 -apple-system,BlinkMacSystemFont,sans-serif;
       cursor:pointer; box-shadow:0 6px 16px -8px rgba(29,36,51,.5); opacity:.85; } button:hover { opacity:1; } button:focus-visible { outline:2px solid #E2482B; outline-offset:2px; }`;
     const go = (txt, label, top) => { const b = el("button", null, txt); b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
-      b.addEventListener("click", () => window.scrollTo({ top: top(), behavior: "smooth" })); return b; };
+      b.addEventListener("click", () => window.scrollTo({ top: top(), behavior: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })); return b; };
     root.append(style, go("↑", "Voltar ao topo", () => 0), go("↓", "Ir para o fim", () => de.scrollHeight));
     let busy = false;
     const check = () => { busy = false; host.style.display = de.scrollHeight > window.innerHeight * 2.5 ? "block" : "none"; };
@@ -1343,33 +2024,57 @@
     document.body.appendChild(host); check();
   }
 
+  // Errors are never silent: the last one is kept (what failed and the message, no data) for the popup and for a bug report,
+  // and a dashboard with nothing to show says why and that it tries again.
+  function oops(where, e) {
+    const msg = e && e.name === "SyntaxError" ? "resposta inválida do Canvas" : String(e && e.message || e).replace(/[^\p{L}\p{N} .,:()/-]/gu, "").slice(0, 120);   // never a piece of an answer
+    try { console.warn("Caderno+: erro ao " + where + ":", e); } catch (x) { /* no console */ }
+    try { chrome.storage.local.set({ lastError: { at: Date.now(), where, msg, v: VERSION, page: location.pathname.replace(/\d+/g, ":id").slice(0, 60) } }).catch(() => {}); } catch (x) { /* the extension was updated under this tab */ }
+  }
+  function troubleBanner(e) {
+    if (!/^\/(dashboard)?\/?$/.test(location.pathname)) return;
+    const box = panelHost("cp-dash"); if (!box) return;
+    const card = el("section", "card trouble"), msg = String(e && e.message || "erro desconhecido");
+    card.append(el("h3", null, "Caderno+ não conseguiu ler o Canvas agora"), el("p", "c", msg + ". Tenta de novo sozinho quando você recarregar a página; o botão Atualizar da extensão força uma leitura nova."));
+    box.appendChild(card);
+  }
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
-    const prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs);
+    const first = await chrome.storage.local.get(["prefs", "cache", "refreshing"]); let prefs = cpPrefs(first.prefs);
     if (prefs.scroll) scrollButtons();
     let cache;
     let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
-    const paintAll = (c, again) => (queue = queue.then(() => draw(c, prefs, again)).catch(() => {}));
-    try { cache = await load(fresh => { if (fresh.at !== cache.at) paintAll(fresh, true); }); } catch (e) { return; }   // logged out or Canvas down: stay quiet
+    livePrefs = prefs;   // the panel changes the mode and the meta: a later redraw (a new reading, the Centro de Notas) uses those, not the ones of the page load
+    const paintAll = (c, again) => (queue = queue.then(() => draw(c, livePrefs, again)).catch(e => oops("desenhar o painel", e)));
+    try { cache = await load(fresh => { if (fresh.at !== cache.at) { cache = fresh; paintAll(fresh, true); } }, first); }
+    catch (e) { oops("ler o Canvas", e); if (!/ 401$/.test(String(e && e.message))) troubleBanner(e); return; }   // logged out: quiet (Canvas asks to log in)
+    if (ownerSwapped) { prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs); livePrefs = prefs; }   // another student: their turma, not the previous one's
+    window.cpRepaint = () => paintAll(cache, true);   // the latest reading drawn again (the Centro de Notas landed)
     await paintAll(cache, false);
   }
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
-  let cardWatch = null;
+  let cardWatch = null, livePrefs = null;
   async function draw(cache, prefs, again) {
-    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7));
-    let a = analyse(cache, await myHand(cache.user)); const marks = await myMarks(cache.user);
-    await loadTasks(cache.user); await loadChanges(cache.user);
+    T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null; KPI_COURSE = typeof prefs.kpiCourse === "string" ? prefs.kpiCourse : "";
+    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user), loadRules(cache.user)]);   // side by side, not one after another
+    let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
-    if (again) for (const id of ["cp-dash", "qf-panel"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
+    if (again) for (const id of ["cp-dash", "qf-panel", "cp-cal"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
     sendNext(a);
     sendReminders(agenda(a, cache, marks), prefs, cache);
-    if (prefs.search) {   // the bookmarklet can run again on the same page: one listener, opening the latest reading
-      const first = !window.cpSearch;
-      window.cpSearch = () => openSearch(a, cache);
-      if (first) addEventListener("keydown", e => {
-        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); }
-      }, true);
-    }
+    if (prefs.search) window.cpSearch = () => openSearch(a, cache);   // opens the latest reading
+    // one listener per page (the bookmarklet can run again): Ctrl+K the search; Alt+N the course's Anotações tab, or the
+    // dashboard's column
+    if (!window.cpKeys) { window.cpKeys = 1; addEventListener("keydown", e => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) { if (window.cpSearch) { e.preventDefault(); e.stopPropagation(); window.cpSearch(); } return; }
+      if (!EXT || !e.altKey || e.ctrlKey || e.metaKey || e.code !== "KeyN") return;
+      let tg = e.composedPath ? e.composedPath()[0] : e.target;
+      if (tg && tg.cpRoot && tg.cpRoot.activeElement) tg = tg.cpRoot.activeElement;   // a field inside one of our closed panels
+      if (tg && (/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName || "") || tg.isContentEditable)) return;   // typing (Option+N is the tilde on a Mac): never ours
+      const cp = document.getElementById("qf-panel");
+      if (cp && cp.cpOpenNotes) { e.preventDefault(); cp.cpOpenNotes(); }
+      else if (notesCache && /^\/(dashboard)?\/?$/.test(location.pathname)) { e.preventDefault(); toggleNotes(); }
+    }, true); }
     if (/^\/calendar\/?$/.test(location.pathname) && prefs.calendar) calendarPage(a, cache, prefs, marks);
     { // trays (every page) and the course list use the courses taken off the dashboard
       const { hidden } = await chrome.storage.local.get("hidden");
@@ -1378,6 +2083,8 @@
       watchTray(a, getOff);
       if (/^\/courses\/?$/.test(location.pathname)) coursesPage(a, getOff, setOff);
     }
+    const anyCourse = /^\/courses\/(\d+)(\/|$)/.exec(location.pathname);
+    if (anyCourse) { courseNav(anyCourse[1]); courseModules(anyCourse[1]); }
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
@@ -1387,10 +2094,10 @@
         if (meta != null) T = meta;
         const { prefs: saved } = await chrome.storage.local.get("prefs"), was = cpPrefs(saved);
         if (was.mode !== k || (meta != null && Number(was.meta) !== meta) || (native != null && was.native !== native)) {
-          const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next);
+          const next = Object.assign({}, saved, { mode: k }, meta != null ? { meta: String(meta) } : {}, native != null ? { native } : {}); await chrome.storage.local.set({ prefs: next }); prefs = cpPrefs(next); livePrefs = prefs;
         }
         if (meta != null) { a = analyse(cache, await myHand(cache.user)); if (window.cpCards) window.cpCards(a); gradeA = a; for (const b of (document.querySelectorAll ? document.querySelectorAll("[data-cp-grade]") : [])) b.remove(); enhanceGradeCards(); }
-        const m2 = await myMarks(cache.user); await loadTasks(cache.user); await loadChanges(cache.user);
+        const [m2] = await Promise.all([myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user)]);
         const old = document.getElementById("cp-dash"); if (old) old.remove();
         dashPanel(a, cache, prefs, m2, recent && typeof recent === "object" ? recent[cache.user] : null, onMode); placeDash();
         sendReminders(agenda(a, cache, m2), prefs, cache);
@@ -1399,9 +2106,12 @@
       // the popup changes the mode, the meta or the native dashboard: the panel follows at once (one listener per page)
       window.cpPrefsChanged = async next => {
         const p2 = cpPrefs(next);
-        if (p2.mode === prefs.mode && p2.meta === prefs.meta && p2.native === prefs.native) return;
+        if (!!p2.cardsFirst !== cardsFirst) { cardsFirst = !!p2.cardsFirst; placeDash(); }
+        // the switches in the popup that shape the panel: redrawn at once, not only on the next page
+        const PANEL = ["mode", "meta", "native", "grades", "week", "news", "tasks", "changes", "inbox", "newgrades", "dash", "cardPct", "remind"];   // cardImg is theme CSS only
+        if (PANEL.every(k => p2[k] === prefs[k])) return;
         const metaN = Math.min(10, Math.max(5, Number(String(p2.meta).replace(",", ".")) || 7));
-        prefs = p2; T = metaN; a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
+        prefs = p2; livePrefs = p2; T = metaN; try { ctx.prefs = p2; } catch (e) { /* before the cards were first drawn */ } a = analyse(cache, await myHand(cache.user)); gradeA = a; if (window.cpCards) window.cpCards(a);
         onMode(p2.mode);
       };
       window.cpHiddenChanged = list => { ctx.hidden = (Array.isArray(list) ? list : []).map(String); decorateCards(a, true, ctx); hideGradeCards(ctx.hidden); };   // unticked in the popup: off at once
@@ -1412,16 +2122,20 @@
       }); }
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
       const { hidden } = await chrome.storage.local.get("hidden");
-      const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] };
+      const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] }; hiddenNow = ctx.hidden;
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
-      gradeA = a; watchDash(); enhanceGradeCards();
+      cardsFirst = !!prefs.cardsFirst; gradeA = a; watchDash(); placeDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
+      // again when Canvas's header renders late (the page watcher calls it): a few tries, and nothing once the greeting is there
+      let greetTries = 0;
+      window.cpGreet = () => { if (++greetTries > 12 || (document.querySelector && document.querySelector(".cp-greet"))) { window.cpGreet = null; return; } greet(agenda(a, cache, marks)); };
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
+      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpRepaint ? window.cpRepaint() : window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;
       const watch = cardWatch = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { decorateCards(a, false, ctx); greet(agenda(a, cache, marks)); }, 250); });
-      watch.observe(document.body, { childList: true, subtree: true });
+      watch.observe(document.getElementById("DashboardCard_Container") || document.getElementById("content") || document.body, { childList: true, subtree: true });   // the cards, not the whole page
       setTimeout(() => watch.disconnect(), 20000);
     }
   }

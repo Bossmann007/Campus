@@ -1,28 +1,73 @@
 // Extension: manifest and permissions, collectCanvasGrades against a mocked Canvas, the generated calculator page, the site's download links.
 const assert = require("assert"), fs = require("fs"), path = require("path");
-const dir = path.join(__dirname, "..", "extension");
+const dir = process.env.EXT_DIR || path.join(__dirname, "..", "extension");   // EXT_DIR: the packaged (compacted) copy
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert(manifest.description.length <= 132 && manifest.name.length <= 75, "Chrome Web Store limits: description <= 132 (" + manifest.description.length + "), name <= 75");
 assert.strictEqual(manifest.manifest_version, 3);
 assert.deepStrictEqual(manifest.permissions, ["storage", "downloads", "alarms", "notifications"], "no broad permissions");
 assert.deepStrictEqual(manifest.host_permissions, ["https://pucpr.instructure.com/*"], "host access only to the PUCPR Canvas");
+assert.deepStrictEqual(manifest.optional_host_permissions, ["https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"], "the Centro de Notas host only on request (an update never disables the extension)");
 assert.deepStrictEqual(manifest.content_scripts.map(c => c.matches), [["https://pucpr.instructure.com/*"], ["https://pucpr.instructure.com/*"]], "page scripts only on the PUCPR Canvas");
-assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_idle"], "theme before the page paints, the rest after it loads");
+assert.deepStrictEqual(manifest.content_scripts.map(c => c.run_at), ["document_start", "document_end"], "theme before the page paints, the rest after it loads");
 assert.strictEqual([].concat(...manifest.content_scripts.map(c => c.js)).filter(f => f === "prefs.js").length, 1, "prefs.js once: the scripts share one scope, a second copy would redeclare its consts");
 const pack = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
-for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.background.service_worker, "popup.js", "popup.html", "popup.css"]) {
+for (const f of [...manifest.content_scripts.flatMap(c => c.js), manifest.background.service_worker, "popup.js", "popup.html", "popup.css", "onboarding.html", "onboarding.css", "onboarding.js", "ai.html", "ai.css", "ai.js"]) {
   assert(fs.existsSync(path.join(dir, f)), "file " + f); assert(new RegExp("\\b" + f.replace(".", "\\.") + "\\b").test(pack), "packaged: " + f); }
 for (const f of Object.values(manifest.icons)) assert(fs.existsSync(path.join(dir, f)), "icon " + f);
 const priv = fs.readFileSync(path.join(__dirname, "..", "privacidade.html"), "utf8");
-assert(["storage", "downloads", "alarms", "notifications", "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
+assert([...manifest.permissions, ...(manifest.optional_permissions || []), "pucpr.instructure.com"].every(w => priv.includes(w)) && /localStorage/.test(priv) && !/<script/.test(priv), "privacy page lists every permission and storage, no scripts");
 const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
+const ob = fs.readFileSync(path.join(dir, "onboarding.html"), "utf8");
+{ const ai = fs.readFileSync(path.join(dir, "ai.html"), "utf8"), pk = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
+  assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ai) && !/\son\w+=/.test(ai) && /Novo token de acesso/.test(ai) && !/caderno-agente|agentFile/.test(ai) && /ai\.html ai\.css ai\.js/.test(pk), "Sua IA page: no inline script (MV3 CSP), the token steps, no file, shipped in the zip"); }
+assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ob) && !/\son\w+=/.test(ob), "onboarding: no inline script or handler (MV3 CSP)");
+assert(/details\.reason === "install"\) \{ chrome\.storage\.local\.set\(\{ notesSeen: chrome\.runtime\.getManifest\(\)\.version \}\); chrome\.tabs\.create\(\{ url: chrome\.runtime\.getURL\("onboarding\.html"\) \}\)/.test(fs.readFileSync(path.join(dir, "background.js"), "utf8")), "the onboarding opens on first install");
+for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+=/.test(html), "no inline script or handler (MV3 CSP)");
+assert(!/agentErr|agentFile|caderno-agente/.test(html), "popup: no AI file switch (6.0: the MCP uses a token)");
+{ // "Conectar sua IA": the popup only links to the site page; the page and the privacy text carry the warnings
+  const root = path.join(__dirname, ".."), ia = fs.readFileSync(path.join(root, "ia.html"), "utf8"), pv = fs.readFileSync(path.join(root, "privacidade.html"), "utf8");
+  { // the AI pages follow the MCP: the bundle linked is the current version, every question asked is one a tool answers, the grid is full
+    const v = require("../mcp/package.json").version, ai = fs.readFileSync(path.join(dir, "ai.html"), "utf8");
+    assert(ia.includes("releases/download/mcp-v" + v + "/caderno-mcp-" + v + ".mcpb") && !/mcp-v(?!\d+\.\d+\.\d+\/caderno-mcp-)/.test(ia), "/ia links the .mcpb of mcp " + v);
+    assert(/OAuth/.test(ia) && /3\(i\)/.test(ia), "/ia states both Canvas rules (API policy 3(i), OAuth for apps used by many)");
+    const asks = (ai.match(/<button type="button" data-q=/g) || []).length;
+    assert(asks % 4 === 0 && /Pendências/.test(ai) && /Quizzes/.test(ai) && !/Simular/.test(ai), "ai.html: " + asks + " questions (a full grid of 4), pendências and quizzes, no simulation the MCP cannot do");
+  }
+  assert(/<a id="ia" href="https:\/\/caderno-plus\.vercel\.app\/ia" target="_blank" rel="noopener noreferrer">/.test(html), "popup: one link to the site's /ia page");
+  assert(!/mcp|caderno-mcp/i.test(fs.readdirSync(dir).join(" ")), "no MCP code inside the extension");
+  assert(/^!ia\.html$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")) && !/<script/i.test(ia), "the /ia page is published, with no scripts");
+  { const idx = fs.readFileSync(path.join(root, "index.html"), "utf8"), vi = fs.readFileSync(path.join(root, ".vercelignore"), "utf8");
+    assert(/src="\/media\/ia\.mp4"/.test(ia) && /src="\/media\/ia\.mp4"/.test(idx) && /^!media\/ia\.mp4$/m.test(vi) && /^!media\/ia-poster\.png$/m.test(vi) && fs.existsSync(path.join(root, "media", "ia.mp4")) && fs.existsSync(path.join(root, "video", "ia.html")), "the AI video is on both pages, published, and its scene is in the repo"); }
+  // the CLI deploy only descends into a folder allowed without the trailing slash (2026-11-09: media/ and fonts/ were 404 on the site)
+  assert(/^!media$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")) && /^!fonts$/m.test(fs.readFileSync(path.join(root, ".vercelignore"), "utf8")), "the site folders are allowed in the form the Vercel CLI honors");
+  { const csp = (/http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(ia) || [])[1] || "";
+    assert(/media-src 'self'/.test(csp) && /img-src 'self' data:/.test(csp) && !/script-src/.test(csp), "the /ia page's own policy lets its video and poster load, and still no scripts"); }
+  // installed from our npm package (published by bossmann, 2026-11-09) or the .mcpb of our GitHub release; the page says which
+  assert(/npm install -g caderno-mcp\n/.test(ia) && /npmjs\.com\/package\/caderno-mcp/.test(ia) && /publicado por <code>bossmann<\/code>/.test(ia) && /github\.com\/Bossmann007\/Campus\/releases\/download\/mcp-v[\d.]+\/caderno-mcp-[\d.]+\.mcpb/.test(ia) && /Não instale cópias com nome parecido/.test(ia), "the install is our npm package or our GitHub .mcpb, and the page says who publishes it");
+  assert(/<h2>2\. Ligue a ponte<\/h2>/.test(ia) && /caderno-mcp ponte &lt;id da extensão&gt;/.test(ia) && /sem token/.test(ia) && /<details class="box"><summary><b>Uso pessoal com token/.test(ia) && /nunca cole em chat/.test(ia) && /só para você/.test(ia), "the /ia page: the ponte in steps; the token only as a personal option, never pasted in a chat");
+  assert(!/caderno-agente|Arquivo para a sua IA/.test(ia + pv), "the removed AI file is gone from the site");
+  for (const w of [/nuvem da empresa da IA/, /acesso total/, /3\(i\)/, /só o seu usuário/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
+  assert(/Caderno\+ MCP: conectar sua IA/.test(pv) && /aqui os dados saem do computador/.test(pv) && /única exceção é opcional/.test(pv), "privacy page: the MCP section and the exception in the summary"); }
+assert(/const KEEP = \[[^\]]*"checks"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /checks: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "the backup carries the checklists, validated on import");
+{ // the backup carries only the student who is using Canvas now (other students of this Chrome stay out of the file)
+  const pj = fs.readFileSync(path.join(dir, "popup.js"), "utf8"), m = /const backupOf = ([\s\S]*?);\n/.exec(pj);
+  assert(m, "popup.js has backupOf(got, user)");
+  const backupOf = new Function("return " + m[1])();
+  const out = backupOf({ hand: { 5: { a: "1" }, 8: { b: "2" } }, marks: { 5: { k: "2026-11-01" }, 8: {} }, tasks: { 8: [{ id: "t" }] }, notes: { 5: { x: "meu" }, 8: { x: "do outro" } }, checks: { 5: {} }, hidden: ["1"], prefs: { mode: "foco" }, fold: { a: true } }, 5);
+  assert.deepStrictEqual(Object.keys(out.hand), ["5"]); assert.deepStrictEqual(Object.keys(out.notes), ["5"]); assert.deepStrictEqual(out.tasks, {}, "only this student's slices");
+  assert(out.hidden[0] === "1" && out.prefs.mode === "foco" && out.fold.a === true && !JSON.stringify(out).includes("do outro"), "the browser's own choices stay; nothing of the other student");
+  assert.deepStrictEqual(backupOf({ hand: { 5: {} } }, null).hand, {}, "no reading yet (unknown student): no per-student data in the file"); }
+{ const nj = fs.readFileSync(path.join(dir, "notes.js"), "utf8"), ver = (nj.match(/version: "([\d.]+)"/) || [])[1];
+  assert.strictEqual(ver, manifest.version, "Novidades are for this version");
+  assert(manifest.content_scripts.some(c => c.js.indexOf("notes.js") >= 0 && c.js.indexOf("notes.js") < c.js.indexOf("content.js")) && /src="notes\.js"/.test(html), "notes.js loads before the panel and in the popup");
+  assert(/notes\.js/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "notes.js goes into the store zip"); }
 global.location = { href: "https://pucpr.instructure.com/courses", origin: "https://pucpr.instructure.com" };
 const page = (body, next) => ({ ok: true, text: async () => "while(1);" + JSON.stringify(body), headers: { get: h => h === "Link" && next ? "<" + next + '>; rel="next"' : null } });
 global.fetch = async url => {
   if (url.startsWith("/api/v1/courses?")) return page([{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }]);
   if (url.startsWith("/api/v1/courses/7/assignments")) return page([{ name: "Avaliação somativa -  Prova", points_possible: 10, html_url: "https://pucpr.instructure.com/courses/7/assignments/70", score_statistics: { mean: 6.5, min: 2, max: 10 }, submission: { score: 7, workflow_state: "graded" } }], "https://pucpr.instructure.com/n2");
-  if (url === "https://pucpr.instructure.com/n2") return page([{ name: "TDE - TAREFA SOMATIVA - VÍDEO", points_possible: 10, due_at: "2026-11-11T02:59:59Z", submission_types: ["on_paper"], submission: { score: null, missing: true } }]);
+  if (url === "https://pucpr.instructure.com/n2") return page([{ name: "TDE - TAREFA SOMATIVA - VÍDEO", points_possible: 10, due_at: "2026-11-11T02:59:59Z", submission_types: ["on_paper"], submission: { score: null, missing: true, excused: true } }]);   // dispensed: kept, marked
   if (/^\/api\/v1\/announcements\?context_codes\[\]=course_7&start_date=\d{4}-\d\d-\d\d&end_date=\d{4}-\d\d-\d\d&/.test(url)) return page([{ context_code: "course_7", title: "Prova adiada", posted_at: "2026-11-03T15:00:00Z", read_state: "unread", html_url: "https://pucpr.instructure.com/courses/7/discussion_topics/1", author: { display_name: "Prof. Ana", avatar_image_url: "https://pucpr.instructure.com/images/thumbnails/1/ana.png" } }]);
   throw new Error("unexpected " + url);
 };
@@ -32,8 +77,33 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   const seen = {}, out = await collect(seen);
   assert.deepStrictEqual(seen.courses, [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }], "the course list is handed back, so the caller does not fetch it again");
   assert.deepStrictEqual(out, { v: 1, courses: [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
-    { name: "Avaliação somativa -  Prova", points: 10, url: "https://pucpr.instructure.com/courses/7/assignments/70", score: 7, due: null, missing: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, url: null, score: null, due: "2026-11-11T02:59:59Z", missing: true, submitted: false, online: false, stats: null }] }],
+    { name: "Avaliação somativa -  Prova", points: 10, url: "https://pucpr.instructure.com/courses/7/assignments/70", score: 7, due: null, missing: false, excused: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, url: null, score: null, due: "2026-11-11T02:59:59Z", missing: true, excused: true, submitted: false, online: false, stats: null }] }],
     announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", courseId: 7, title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1", author: "Prof. Ana", avatar: "https://pucpr.instructure.com/images/thumbnails/1/ana.png" }] });
+  { // known courses (the last reading's): their assignments are asked together with the course list, not after it; same result
+    const base = global.fetch, order = []; let release;
+    const gate = new Promise(r => { release = r; });
+    global.fetch = async url => { order.push(url.split("?")[0].replace("https://pucpr.instructure.com", "")); if (url.startsWith("/api/v1/courses?")) await gate; if (url.startsWith("/api/v1/courses/9/")) return page([]); return base(url); };
+    const p = collect({}, [7, 9, "x", 7]);   // 9 left the term (dropped), "x" is ignored, 7 only once
+    await new Promise(r => setTimeout(r, 20));
+    assert(order.includes("/api/v1/courses/7/assignments") && order.includes("/api/v1/courses/9/assignments") && !order.includes("/api/v1/announcements"), "assignments of the known courses start while the course list is still loading: " + order.join(" "));
+    release(); const out2 = await p;
+    assert.deepStrictEqual(out2, out, "the same reading as without the head start");
+    assert.strictEqual(order.filter(u => u === "/api/v1/courses/7/assignments").length, 1, "a known course is not asked twice");
+    let asked7 = 0;
+    global.fetch = async url => { if (url.startsWith("/api/v1/courses/7/assignments") && ++asked7 === 1) return { ok: false, status: 503, text: async () => "", headers: { get: () => null } }; return base(url); };
+    assert.deepStrictEqual(await collect({}, [7]), out, "a head start that failed is asked again the normal way");
+    assert.strictEqual(asked7, 2, "the head start tries once (no retries while Canvas is busy); the normal request follows");
+    global.fetch = base;
+  }
+  { // one course that does not answer does not take the reading down: it comes back empty and marked
+    const base = global.fetch;
+    global.fetch = async url => { if (url.startsWith("/api/v1/courses?")) return page([{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 11, name: "Cálculo - 2026 / 2º Sem" }]);
+      if (url.startsWith("/api/v1/courses/11/assignments")) return { ok: false, status: 403, text: async () => "", headers: { get: () => null } };
+      if (url.startsWith("/api/v1/announcements")) return page([]); return base(url); };
+    const part = await collect();
+    assert(!part.error && part.courses.length === 2 && part.courses[0].assignments.length === 2 && part.courses[1].failed === true && part.courses[1].assignments.length === 0, "the course that failed is marked, the other keeps its assignments");
+    global.fetch = base;
+  }
   global.fetch = async () => page([{ id: 1, name: "X - 2026 / 2º Sem" }], "https://evil.example/x");
   assert.match((await collect()).error, /fora do Canvas/);
   global.fetch = async () => ({ ok: false, status: 401, text: async () => "", headers: { get: () => null } });
@@ -43,7 +113,7 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert(/cp "\$out" dist\/quanto-falta-extension\.zip/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "package script writes the stable name");
   // popup: "Atualizar agora" marks the last reading as old, so the next Canvas page reads everything again
   const els = {}, store = { cache: { at: Date.now(), user: 5, data: { courses: [] } }, refreshing: Date.now() };
-  const pel = id => els[id] || (els[id] = { id, value: "", textContent: "", listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
+  const pel = id => els[id] || (els[id] = { id, value: "", textContent: "", classList: { toggle() {} }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
   const palarms = {}, pchrome = { runtime: { getManifest: () => manifest, getURL: f => f }, tabs: { create() {} },
     alarms: { create: async (n, o) => { palarms[n] = o; }, clear: async n => { delete palarms[n]; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => { Object.assign(store, o); }, remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
@@ -61,9 +131,10 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert.strictEqual(store.prefs.mode, "foco", "a popup change writes only its own key: the panel's mode survives");
   global.location.hash = "#tab";   // the import runs in a tab (a file dialog closes the popup)
   store.tasks = { 9: [{ id: "a", title: "do outro", date: null }] };
-  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09" }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
+  pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09", subs: [{ t: "passo", d: true, x: 1 }, { t: 7 }, null] }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
   assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
+  assert.deepStrictEqual(store.tasks[5][0].subs, [{ t: "passo", d: true }], "import: a task keeps its well-formed steps");
   assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
   store.cache = Object.assign({}, store.cache, { user: 5 });
   pel("importFile").files = [{ text: async () => JSON.stringify({ app: "quanto-falta", grades: { "imp:pbl09": "8", "abd:s3": "0,9", "x y": "1" } }) }];
@@ -80,5 +151,11 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   await pel("fstop").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert(!palarms["focus|pausa"] && !store.focus && pel("fstop").hidden, "Parar clears it");
   assert(!/rascunho|nova-turma|issues\/new/.test(html + fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "no turma draft or issue in the popup (planned inside the extension, not shipped)");
+  { // status colours never come from the theme accent (a green look made "sem nota" and the need look like "ok")
+    const ct = fs.readFileSync(path.join(dir, "content.js"), "utf8"), th = fs.readFileSync(path.join(dir, "theme.js"), "utf8");
+    assert(/\.trk i\.late \{ background:var\(--warn\); \}/.test(ct) && /\.kpi \.v\.need \{ color:var\(--warn\); \}/.test(ct) && !/t-bad \{ color:var\(--coral\)/.test(ct), "late, need and bad in status colours");
+    assert(/\.module-sequence-footer \.module-sequence-footer-content \{ background:var\(--cp-paper\)/.test(th) && /#assignments-student-footer \{ background-color:var\(--cp-paper\)/.test(th) && /#discussion-drawer-layout #module_sequence_footer_container > div \{ background-color:transparent/.test(th), "the Anterior / Próximo bars (files, tasks) and the announcement toolbar follow the look");
+    assert(/\[data-testid="translate-button"\] \{ display:none !important; \}/.test(th), "the translate button is hidden");
+  }
   console.log("extension ok: MV3, permissions limited to the PUCPR Canvas, collect + pagination, off-origin and 401 returned as errors");
 })().catch(e => { console.error(e); process.exit(1); });

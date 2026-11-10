@@ -10,8 +10,8 @@ Upload: `./scripts/package-extension` gera `dist/quanto-falta-extension-<versão
 - **Idioma:** Português (Brasil)
 - **Ícone:** `extension/icons/icon128.png`
 - **Capturas (1280x800):** `store/screenshot-1280x800.png`, `store/screenshot-2-1280x800.png`
-- **Site:** https://falta-quanto.vercel.app/
-- **Política de privacidade:** https://falta-quanto.vercel.app/privacidade.html
+- **Site:** https://caderno-plus.vercel.app/
+- **Política de privacidade:** https://caderno-plus.vercel.app/privacidade.html
 - **Suporte:** https://github.com/Bossmann007/Campus/issues
 
 ## Descrição
@@ -36,15 +36,15 @@ Dentro do Canvas, sem configurar nada:
 - **Avisos:** os avisos de todas as matérias num lugar só, com os não lidos contados;
 - **Lembretes:** notificação 1 dia e 1 hora antes de cada entrega que falta, e na véspera e no dia de cada prova;
 - **Tema escuro** (ou igual ao sistema);
-- **Quanto falta:** em cada card e em cada matéria, quanto você precisa tirar nas próximas avaliações;
-- **Arquivos:** baixa os arquivos da matéria organizados em Downloads/PUCPR/<matéria>/<tipo>;
+- **Quanto falta:** em cada card e em cada matéria, quanto você precisa tirar nas próximas avaliações (pelos pesos do Plano de Ensino, pela fórmula do professor no Centro de Notas ou por uma regra sua com os pontos do Canvas);
+- **Arquivos:** baixa os arquivos da matéria organizados numa pasta sua dentro de Downloads (PUCPR por padrão), por matéria e tipo;
 - o número de dias até a próxima prova no ícone.
 
 Cada parte pode ser desligada no botão da extensão.
 
 Na página de cada matéria, a calculadora mostra:
 
-- quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino;
+- quanto você precisa tirar em cada avaliação que falta, respeitando os pesos dos Planos de Ensino, a fórmula do professor no Centro de Notas ou a sua própria regra (os pontos do Canvas que contam, com partes com peso se quiser);
 - o mínimo em cada prova se você tirar nota cheia no resto;
 - quais matérias já estão garantidas e quais ainda dependem de nota;
 - o que falta entregar nos próximos 14 dias e o que passou do prazo sem envio;
@@ -61,11 +61,13 @@ Projeto independente e não oficial, sem vínculo com a PUCPR nem com a Instruct
 ## Práticas de privacidade (aba Privacy)
 
 - **Finalidade única:** melhorar o Canvas da PUCPR para o próprio aluno: organizar prazos, avisos, notas e arquivos das matérias dele.
-- **Host pucpr.instructure.com (só esse site):** mostrar dentro do Canvas da PUCPR a semana, os avisos, quanto falta em cada matéria, a calculadora dentro das páginas do Canvas, a aparência (temas, fonte e cores, com as fontes da própria extensão expostas só ao Canvas da PUCPR), o tema escuro e o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
-- **storage:** guardar no dispositivo as escolhas do usuário, a última leitura do Canvas, os lembretes, a data da próxima prova (número no ícone), quais arquivos já foram baixados, as tarefas marcadas como feitas, as notas novas encontradas, as anotações por matéria, quais cards foram recolhidos, a lista da semana para o resumo de segunda e o fim do timer de foco. Separado por usuário do Canvas; a leitura do Canvas é apagada ao sair dele.
-- **alarms:** atualizar de hora em hora o número de dias até a próxima prova no ícone, disparar os lembretes na hora marcada, o resumo da semana na segunda às 8h e o fim do timer de foco (não lê nada).
+- **Host opcional, o Centro de Notas da PUCPR** (ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io, pedido ao clicar em Atualizar): ler as fórmulas e as notas do aluno na ferramenta de notas da própria PUCPR, aberta com o login do Canvas, para o quanto falta de cada matéria.
+- **Host pucpr.instructure.com:** mostrar dentro do Canvas da PUCPR a semana, os avisos, quanto falta em cada matéria, a calculadora dentro das páginas do Canvas, a aparência (temas, fonte e cores, com as fontes da própria extensão expostas só ao Canvas da PUCPR), o tema escuro e o download dos arquivos da matéria; lê pela API do Canvas com a sessão do próprio usuário, no máximo a cada 10 minutos.
+- **storage:** guardar no dispositivo as escolhas do usuário, a última leitura do Canvas, os lembretes, a data da próxima prova (número no ícone), quais arquivos já foram baixados, as tarefas marcadas como feitas, as suas tarefas (com passos), as notas novas encontradas, as anotações e checklists por matéria e do painel, os itens de menu e módulos escondidos, a turma confirmada, a pasta de downloads, as novidades já vistas, o Centro de Notas de cada matéria (colunas, fórmulas e as notas do aluno, para o quanto falta), a regra própria de cada matéria (o que conta, até quanto vai e as partes com peso), os títulos dos módulos para a busca, os professores e as cores das matérias, o passo em que parou nas boas-vindas, quais cards foram recolhidos, a lista da semana para o resumo de segunda e o fim do timer de foco. Separado por usuário do Canvas; a leitura do Canvas é apagada ao sair dele.
+- **alarms:** atualizar uma vez por dia, à meia-noite, o número de dias até a próxima prova no ícone, disparar os lembretes na hora marcada, o resumo da semana na segunda às 8h e o fim do timer de foco (não lê nada).
 - **notifications:** mostrar os lembretes de entregas e provas, o aviso de nota nova, o resumo da semana e o fim do timer de foco, cada um com sua chave no botão da extensão; o texto é gerado no dispositivo.
-- **downloads:** salvar, a pedido do usuário, os arquivos das matérias em Downloads/PUCPR/<matéria>/<tipo>; só endereços do Canvas da PUCPR.
+- **nativeMessaging (opcional, a ponte da Sua IA):** pedida só quando o usuário liga a ponte na página Sua IA, e tirada com Desligar: a extensão responde aos pedidos de leitura do Caderno+ MCP instalado no próprio computador (uma lista fixa de endereços do Canvas da PUCPR e o Centro de Notas), com o login do usuário; nada vai para servidor do desenvolvedor.
+- **downloads:** salvar, a pedido do usuário, os arquivos das matérias na pasta escolhida dentro de Downloads (PUCPR por padrão), por matéria e tipo; só endereços do Canvas da PUCPR.
 - **Código remoto:** não. Todo o código está no pacote.
 - **Dados tratados:** as notas, prazos, situação de entrega, marcações de entrega atrasada, estatísticas da turma, títulos de avisos, a agenda do Canvas e os títulos dos módulos são conteúdo lido do site do Canvas; nome e foto de quem escreveu os avisos e dos professores das matérias (o botão Perguntar só abre a caixa de entrada do Canvas); das mensagens do Canvas, só as não lidas: assunto, nomes de quem participa e data, nunca o texto (marque também "Comunicações pessoais"); o número do usuário do Canvas separa os dados de cada aluno (marque "Informações de identificação pessoal"); marque a categoria de conteúdo de site que o formulário oferecer (confira o nome exato na hora) e declare que ficam só no dispositivo do usuário e não são transmitidas ao desenvolvedor.
 - **Declarações:** não vende dados; não usa para fins alheios à finalidade única; não usa para crédito ou empréstimo.

@@ -44,7 +44,7 @@ if (require.main === module) {
   const packs = termPacks(path.join(ROOT, "rules")), term = packs[0].data.term.replace(/ /g, "");
   replaceOnce(path.join(ROOT, "app.html"), /\/\*RULES\*\/[\s\S]*?\/\*RULES\*\//g, () => "/*RULES*/" + rulesBlock(packs) + "/*RULES*/");
   replaceOnce(path.join(ROOT, "README.md"), /<!--TURMAS-->[\s\S]*?<!--TURMAS-->/g, () => "<!--TURMAS-->" +
-    packs.map(p => p.data.turma + ", " + term + " ([`" + p.file + "`](" + p.file + "))").join("; ") + "<!--TURMAS-->");
-  replaceOnce(path.join(ROOT, "index.html"), /<!--TURMAS-->[\s\S]*?<!--TURMAS-->/g, () => "<!--TURMAS-->" + packs.map(p => "<b>" + esc(p.data.turma) + "</b>").join(", ") + " (" + term + ")<!--TURMAS-->");
+    packs.map(p => "[`" + p.file + "`](" + p.file + ")").join(", ") + " (" + term + ")<!--TURMAS-->");   // no course names on public pages
+  replaceOnce(path.join(ROOT, "index.html"), /<!--TURMAS-->[\s\S]*?<!--TURMAS-->/g, () => "<!--TURMAS-->" + "<b>" + packs.length + (packs.length === 1 ? " turma" : " turmas") + "</b> (" + term + ")<!--TURMAS-->");
   console.log("rules: " + packs.length + (packs.length === 1 ? " turma embutida" : " turmas embutidas") + " no core (" + term + ")");
 }
