@@ -36,7 +36,8 @@ contributors. When a rule here can be checked by a script, it is: `./scripts/ver
 - Never edit version strings by hand: `scripts/bump <ext x.y.z> [mcp x.y.z]`. `scripts/check-versions` (in verify)
   fails on drift.
 - Every round bumps: feature = minor, fix = patch. The MCP bumps only when `mcp/` or the core it uses changes.
-- Write the Novidades in `extension/notes.js` (Portuguese, what the student sees, newest first). The PR title starts with
+- Write the Novidades in `extension/notes.js` (Portuguese, what the student sees, at most 6 items: only what changed since
+  the last store version; `check-versions` counts them). The PR title starts with
   the version.
 
 ## 4. Release and deploy (only when the owner asks)

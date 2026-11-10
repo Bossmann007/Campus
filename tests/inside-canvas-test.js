@@ -209,6 +209,8 @@ async function runContent(pathname, files, preStore, opts = {}) {
     sw.ponteDown(); delete chromeSW.permissions; delete chromeSW.runtime.connectNative;
     ok(); }
   const all = await sw.centroAll(5, ["7"], fake()); assert(local.centro && local.centro.user === 5 && local.centro.courses["7"] && all["7"], "stored per Canvas user");
+  { const at0 = local.centro.at; await sw.centroAll(5, ["8"], fake(), { all: false });
+    assert(local.centro.courses["7"] && "8" in local.centro.courses && local.centro.at === at0 && local.centro.tried["8"], "a partial read (a course never read) keeps the others and the term's reading time"); }
   { // only the validated form's inputs go to the tool (never Canvas's own token elsewhere on the page); a failure keeps the last read
     let posted = null; const page = '<input name="authenticity_token" value="CANVAS-CSRF"><form action="' + T + '/lti" method="post"><input data-value="x" name="a" value="1"></form>';
     const f2 = async (u, o) => /launch=1/.test(u) ? res(page) : u === T + "/lti" ? (posted = String(o.body), res('<div data-page="{}"></div>')) : fake()(u, o);
@@ -426,10 +428,14 @@ async function runContent(pathname, files, preStore, opts = {}) {
   if (cvAsg) assert(nextCard && /Próxima entrega/.test(text(nextCard)) && text(nextCard).includes(cvAsg.name), "next card: the Canvas assignment due next, by its official date");
   else assert(!nextCard, "nothing due in Canvas: no next card");
   void nx;
-  const rows = all(gb).filter(e => e.className === "row" && e.parent && e.parent.parent && /centro/.test(e.parent.parent.className));
+  const rows = all(gb).filter(e => e.className === "ovr");
+  assert(all(gb).some(e => e.className === "ovbar" && e.dataset.tip) && all(gb).some(e => e.className === "ovr ovscale"), "the default view is a bar chart with a 0-10 scale and a tooltip per bar");
   assert.deepStrictEqual(rows.map(r => all(r).find(e => e.tag === "a").href), mine.map(c => "/courses/" + cvOf(c.id)), "a Quanto falta row per enrolled subject, each opening its Canvas course");
   assert(rows.every((r, i) => text(r).includes(C.SHORT[mine[i].id])), "rows named like the calculator");
-  assert(/pesos do Plano de Ensino \(transcritos pelo Caderno\+\)/.test(text(gb)) && !/Ciência da Computação/.test(text(gb)), "dashboard grades: each row says its source, no course name");
+  assert(/Plano de Ensino/.test(text(gb)) && !/Ciência da Computação/.test(text(gb)), "dashboard grades: each row says its source, no course name");
+  { const modes = all(gb).filter(e => e.role === "radio" && e.dataset && e.dataset.m); assert.deepStrictEqual(modes.map(b => b.textContent), ["Barras", "Falta", "Anéis", "Entregas", "Lista"], "five views of the quanto falta");
+    for (const b of modes) { await b.listeners.click(); await new Promise(r => setTimeout(r, 5)); const body = all(gb).find(e => e.className === "ov-body"); assert(body.dataset.mode === b.dataset.m && body.kids.length > 0 && gd.store.prefs.ovMode === b.dataset.m, "view " + b.dataset.m + " draws and is saved"); }
+    const ring = all(gb).find(e => e.className === "rg"); assert(!ring, "lista is the last view drawn: no rings left"); }
   const noGrades = await runContent("/", null, { prefs: { grades: false } }), ng = noGrades.anchor.kids.find(k => k.id === "cp-dash");
   assert(ng && !all(ng).some(e => /kpi|tile|upnext/.test(e.className)) && /Próximos 7 dias/.test(text(ng)), "grades off: only the week and the announcements");
   const onlyGrades = await runContent("/", null, { prefs: { week: false, news: false } }), og = onlyGrades.anchor.kids.find(k => k.id === "cp-dash");
@@ -445,7 +451,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   { const nxt = await runContent("/", null, {}, { courseId: 42, extraAsg: [{ name: "Prova final", points_possible: 4, due_at: new Date(Date.now() + 3 * 864e5).toISOString(), html_url: "/courses/42/assignments/99", submission: { score: null } }] }), nt = text(nxt.anchor.kids.find(k => k.id === "cp-dash"));
     assert(/Próxima entrega/.test(nt) && /Prova final/.test(nt) && /em 3 dias/.test(nt), "other turma: the next delivery from Canvas, by its official date");
     const nm = nxt.sent.filter(m => m.type === "next").pop(); assert(nm && nm.label === "Prova final" && nm.date, "the icon counts days to the next Canvas exam: " + JSON.stringify(nm)); }
-  assert(/Quanto falta/.test(text(ob)) && /soma dos pontos: confira na matéria/.test(text(ob)) && !all(ob).some(e => e.className === "muted why"), "other turma: quanto falta by the sum of Canvas points, said so, to check on the course page");
+  assert(/Quanto falta/.test(text(ob)) && /soma dos pontos/.test(text(ob)) && !all(ob).some(e => e.className === "muted why"), "other turma: quanto falta by the sum of Canvas points, said so, to check on the course page");
   { // the course page of that course: the student's rule (untick what is not graded, how far the grade goes), saved per user
     const cp = await runContent("/courses/42", null, {}, { courseId: 42 }), pb = () => cp.anchor.kids.find(k => k.id === "qf-panel") || all(cp.body).find(k => k.id === "qf-panel") || all(cp.anchor).find(k => k.id === "qf-panel");
     { const dash = await runContent("/", null, {}, { courseId: 42 }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
@@ -789,9 +795,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const g = await runContent("/", null, {}, { courseId: 42, groups: [{ id: 1, name: "RA1", group_weight: 70 }, { id: 2, name: "RA2", group_weight: 30 }],
       extraAsg: [{ name: "Prova RA1", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/71", submission: { score: 8 } }, { name: "Prova RA2", points_possible: 10, assignment_group_id: 2, html_url: "/courses/42/assignments/72", submission: { score: null } }] });
     const gt = text(g.anchor.kids.find(k => k.id === "cp-dash"));
-    assert(/pesos que o professor pôs no Canvas/.test(gt), "the dashboard uses Canvas's group weights: " + gt.slice(0, 200));
+    assert(/pesos do Canvas/.test(gt), "the dashboard uses Canvas's group weights: " + gt.slice(0, 200));
     const gp = await runContent("/", null, {}, { groups: [{ id: 1, name: "RA1", group_weight: 70 }, { id: 2, name: "RA2", group_weight: 30 }] }), gpt = text(gp.anchor.kids.find(k => k.id === "cp-dash"));
-    assert(/pesos que o professor pôs no Canvas/.test(gpt) && !/transcritos pelo Caderno/.test(gpt), "a subject with a ready-made Plano rule: the professor's Canvas weights win: " + gpt.slice(0, 300));
+    assert(/pesos do Canvas/.test(gpt) && !/Plano de Ensino/.test(gpt), "a subject with a ready-made Plano rule: the professor's Canvas weights win: " + gpt.slice(0, 300));
     ok(); }
   { // the official date: a Plano item that is a Canvas activity shows Canvas's due date; a Plano date the Plano itself does not confirm says so
     const dp = await runContent("/courses/71306", [], {}, { extraAsg: [{ name: "Entrega Pjbl Parte 3 - 18/11", points_possible: 1, due_at: "2027-01-05T15:00:00Z", html_url: "/courses/71306/assignments/13", submission: { score: null } }] });
@@ -984,7 +990,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const ask1 = await runContent("/", null, {}, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
   assert(/Estas são as suas matérias\? Imperativa, /.test(text(ask1.anchor)) && !/Ciência da Computação/.test(text(ask1.anchor)) && !/\/10 · /.test(text(ask1.header)), "one matching course: ask, no grades yet");
   const askOther = await runContent("/", null, { prefs: { turma: "outro" } }, { askTurma: true }); await new Promise(r => setTimeout(r, 20));
-  assert(!/Estas são as suas matérias/.test(text(askOther.anchor)) && !/\/10 · /.test(text(askOther.header)) && /soma dos pontos: confira na matéria/.test(text(askOther.anchor)), "another program: no question, no Plano de Ensino grades, quanto falta by the sum of points, the week and announcements stay");
+  assert(!/Estas são as suas matérias/.test(text(askOther.anchor)) && !all(askOther.header).some(e => /Plano de Ensino/.test(e.title || "")) && /soma dos pontos/.test(text(askOther.anchor)), "another program: no question, no Plano de Ensino grades, quanto falta by the sum of points, the week and announcements stay");
   const MORE6 = [{ id: 72009, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem" }, { id: 72011, name: "Conectividade (Turma 2º B) - 2026 / 2º Sem" }];
   const ask3 = await runContent("/", null, {}, { askTurma: true, more: MORE6 }); await new Promise(r => setTimeout(r, 20));
   assert(!/Estas são as suas matérias/.test(text(ask3.anchor)) && /\/10 · /.test(text(ask3.header)), "three or more matching courses: the turma, no question");

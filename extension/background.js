@@ -146,13 +146,14 @@ async function centroCourse(id, f = fetch) {
 // A course that failed this time (network, the tool asleep) keeps what was read before; one run at a time (one tool session).
 let centroRun = null, centroQueue = Promise.resolve();
 const centroOne = (id, f) => { const p = centroQueue.then(() => centroCourse(id, f)); centroQueue = p.catch(() => {}); return p; };   // the tool keeps one session per browser
-async function centroAll(user, ids, f = fetch) {
+async function centroAll(user, ids, f = fetch, opts = { all: true }) {
   if (centroRun) return centroRun;
   centroRun = (async () => {
-    const { centro } = await chrome.storage.local.get("centro"), old = centro && centro.user === user && centro.courses ? centro.courses : {}, courses = {};
-    for (const id of ids) { try { courses[id] = await centroOne(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
+    const { centro } = await chrome.storage.local.get("centro"), same = centro && centro.user === user, old = same && centro.courses ? centro.courses : {};
+    const courses = opts.all ? {} : Object.assign({}, old), tried = Object.assign({}, same && centro.tried), all = !!opts.all;   // a partial run (only the courses never read) keeps the others
+    for (const id of ids) { tried[id] = Date.now(); try { courses[id] = await centroOne(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
     for (const id of Object.keys(courses)) if (courses[id] === undefined) delete courses[id];
-    await chrome.storage.local.set({ centro: { user, at: Date.now(), courses } });
+    await chrome.storage.local.set({ centro: { user, at: all || !same ? Date.now() : centro.at, courses, tried } });
     return courses;
   })();
   try { return await centroRun; } finally { centroRun = null; }
@@ -241,8 +242,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     (async () => {
       const ids = msg.ids.map(String).filter(x => /^\d{1,15}$/.test(x)).slice(0, 15), { centro } = await chrome.storage.local.get("centro");
       if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) { const { centroOff } = await chrome.storage.local.get("centroOff"); if (!centroOff) await chrome.storage.local.set({ centroOff: true }); return reply({ ok: false, permission: false }); }   // the panels offer centro.html to grant it
-      if (centro && centro.user === msg.user && Date.now() - centro.at < 60 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
-      await centroAll(msg.user, ids); reply({ ok: true });
+      // Each read opens the tool, and Canvas lists every opening in the student's Histórico recente: the whole term again only
+      // every 6 hours (or with Atualizar); a course never read, at most once an hour
+      const fresh = centro && centro.user === msg.user && Date.now() - centro.at < 6 * 3600e3, tried = fresh && centro.tried || {};
+      const need = fresh ? ids.filter(id => !(id in (centro.courses || {})) && Date.now() - (tried[id] || 0) > 3600e3) : ids;
+      if (!need.length) return reply({ ok: true, cached: true });
+      await centroAll(msg.user, need, fetch, { all: !fresh }); reply({ ok: true });
     })().catch(() => reply({ ok: false }));
     return true;
   }

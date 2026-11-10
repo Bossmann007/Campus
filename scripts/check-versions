@@ -12,5 +12,6 @@ want("README.md", (/extension \(([\d.]+)\)/.exec(read("README.md")) || [])[1], e
 want("mcp/manifest.json", JSON.parse(read("mcp/manifest.json")).version, mcp);
 for (const m of read("ia.html").matchAll(/caderno-mcp-([\d.]+)\.mcpb/g)) want("ia.html .mcpb link", m[1], mcp);
 for (const m of read("ia.html").matchAll(/mcp-v([\d.]+)\//g)) want("ia.html release tag", m[1], mcp);
+{ const n = (read("extension/notes.js").match(/^\s+"[^"\n]+",?$/gm) || []).length; if (n > 6) bad.push("extension/notes.js: " + n + " Novidades items (at most 6: only what changed since the last store version)"); }
 if (bad.length) { console.error("version drift (run scripts/bump):\n  " + bad.join("\n  ")); process.exit(1); }
 console.log("versions ok: extension " + ext + ", MCP " + mcp);
