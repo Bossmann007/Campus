@@ -219,6 +219,15 @@
   // The formula the editor starts from: the professor's in the Centro de Notas (its tree written out), else the Plano de
   // Ensino weights Caderno+ has for the course, else the sum of the Canvas points. { text, from }.
   const shortName2 = n => String(n || "").split(/[:(,;+=#]/)[0].replace(/\s+/g, " ").trim().slice(0, 60);   // an activity's name, short enough for a formula
+  // The shortest start of each activity's name (whole " - " pieces) that finds that activity alone, the way the formula reads
+  // a name (the same words, or the whole name): "Aula 4 - TAREFA SOMATIVA ENTREGA - A justiça…" is "Aula 4".
+  const foldRef = x => String(x == null ? "" : x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const shortRefs = (items, taken = []) => { const names = items.map(i => foldRef(i.name)), out = new Map(), used = new Set(taken.map(foldRef));
+    const hits = k => names.filter(n => n === k || (" " + n + " ").includes(" " + k + " ")).length;
+    for (const it of items) { const full = shortName2(it.name), segs = full.split(/\s+[-–—|]\s+/); let pick = full;
+      for (let i = 1; i < segs.length; i++) { const cand = segs.slice(0, i).join(" - "), k = foldRef(cand); if (/[a-z]/.test(k) && k.length > 1 && !used.has(k) && hits(k) === 1) { pick = cand; break; } }
+      used.add(foldRef(pick)); out.set(it.name, pick); }
+    return out; };
   function startFormula(courseId, items, shortRef = shortName2) {
     const nm = x => shortRef(x) || "Parte", pct = x => String(Math.round(x * 100) / 100).replace(".", ",") + "%";
     const cu = myCentro[courseId], cr = cu ? C.centro(cu, T) : null;
@@ -237,10 +246,12 @@
     // the professor's weights set in Canvas (weighted assignment groups): one line per group, its activities added up (as Canvas does)
     const cw = canvasWeightsRule(courseId);
     if (cw) { const acts = items.filter(x => x && x.name), fold = x => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(), used = new Set(acts.map(x => fold(nm(x.name)))), terms = [], extra = [];
+      const gname = L => { const full = nm(cw.names[L] || "Parte " + L), first = full.split(/\s+[-–—|]\s+/)[0]; return /[a-z]/i.test(first) && first.length > 1 ? first : full; };   // "RA1 - ATIVIDADES SOMATIVAS" is "RA1"
+      const groups = Object.keys(cw.parts).filter(L => acts.filter(x => cw.part[x.key] === L).length > 1).map(gname), refs = shortRefs(acts, groups), ref = x => refs.get(x.name) || nm(x.name);
       for (const [L, g] of Object.entries(cw.parts)) { const mine = acts.filter(x => cw.part[x.key] === L); if (!mine.length) continue;
-        if (mine.length === 1) { terms.push(pct(g.w) + " " + nm(mine[0].name)); continue; }   // one activity: the group is that activity
-        let name = nm(cw.names[L] || "Parte " + L); if (used.has(fold(name))) name = "Grupo " + L; used.add(fold(name));   // never the name of an activity (it would point at itself)
-        terms.push(pct(g.w) + " " + name); extra.push(name + " = soma(" + mine.map(x => nm(x.name)).join(", ") + ")"); }
+        if (mine.length === 1) { terms.push(pct(g.w) + " " + ref(mine[0])); continue; }   // one activity: the group is that activity
+        let name = gname(L); if (used.has(fold(name)) || [...refs.values()].some(r => fold(r) === fold(name))) name = "Grupo " + L; used.add(fold(name));   // never the name of an activity (it would point at itself)
+        terms.push(pct(g.w) + " " + name); extra.push(name + " = soma(" + mine.map(ref).join(", ") + ")"); }
       if (terms.length) return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos que o professor pôs no Canvas" };
     }
     const pack = C.COURSES.find(x => C.CANVAS[x.id] && C.CANVAS[x.id].cids.map(String).includes(String(courseId)));
@@ -253,7 +264,8 @@
       return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos do Plano de Ensino que o Caderno+ tem" };
     }
     const total = items.reduce((t, i) => t + Number(i.points || 0), 0);
-    return { text: "Final = soma(" + items.slice(0, 12).map(i => nm(i.name)).join(", ") + ") de " + String(Math.max(10, Math.round(total * 100) / 100)).replace(".", ","), from: "da soma dos pontos do Canvas" };
+    const refs = shortRefs(items.slice(0, 12));
+    return { text: "Final = soma(" + items.slice(0, 12).map(i => refs.get(i.name) || nm(i.name)).join(", ") + ") de " + String(Math.max(10, Math.round(total * 100) / 100)).replace(".", ","), from: "da soma dos pontos do Canvas" };
   }
   const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
   // the offer to read the Centro de Notas, on the dashboard and on a course page, while its permission is missing
@@ -838,6 +850,9 @@
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
     .ask-b { margin-left:0 !important; color:var(--coral-ink) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
     .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
+    .gt .gtn { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .gt .ir .n .dt { flex:none; } .gt .g small { color:var(--muted); font-weight:400; } .gt .simi { max-width:72px; text-align:center; }
+    .gt-f { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-top:1px solid var(--line); } .gt-f .t { font-size:14px; white-space:normal; } .gt-f .t-ok { color:var(--ok); } .gt-f .t-warn { color:var(--warn); } .gt-f .t-bad { color:var(--bad); }
+    .fdet { margin:0 0 12px; } .fdet > summary { cursor:pointer; padding:6px 2px; color:var(--muted); font-size:13px; } .fdet[open] > summary { margin-bottom:8px; }
     .centro-sim { display:grid; gap:8px; } .sim-h { display:flex; justify-content:space-between; align-items:center; } .sim-rows { display:grid; gap:4px; }
     .sim-r { display:grid; grid-template-columns:minmax(0,1fr) auto 70px; gap:10px; align-items:center; padding:4px 0; border-top:1px solid var(--line); } .sim-r .n { font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .sim-r input { width:70px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:600 14px var(--sans); text-align:center; } .sim-r input:focus { outline:2px solid var(--coral); outline-offset:1px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
@@ -1530,6 +1545,35 @@
     if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
     if (prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again (a fresh analyse: its formula may now beat the Plano)
       if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(own ? null : centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, analyse(cache, a.hand), cache, prefs); } }); });
+    // The table of assessments (as the ready-made rules always showed it): each one, its weight in the final grade, its grade;
+    // where there is none, a box to type the grade you expect (0 to what it is worth) and the result right under it. Typed
+    // grades are kept on this computer (centroSim[user][course][id], 0-10). rows: [{ id, name, date, max, got, w, missing }];
+    // proj({ id: 0-10 }) → { status, need, final } (final: the rest at 0).
+    const gradeTable = (rows, proj) => {
+      const tbl = el("div", "card items gt"), th = el("div", "ir ih"), out = el("b", "t muted"), boxes = [], clear = el("button", "mini", "Limpar"), dd = r => r.max >= 5 ? 1 : 2;
+      th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota")); tbl.appendChild(th);
+      const typed = () => { const g = {}; for (const b of boxes) { const t = String(b.inp.value).trim().replace(",", "."), n = Number(t); if (t !== "" && Number.isFinite(n)) g[b.r.id] = Math.min(10, Math.max(0, n * 10 / b.r.max)); } return g; };
+      const show = () => { const g = typed(), n = Object.keys(g).length, p = proj(g);
+        for (const b of boxes) b.inp.placeholder = p.status === "precisa" ? up(p.need * b.r.max / 10, dd(b.r)) : p.status === "nao-da" ? fmt(b.r.max, dd(b.r)) : "e se?";   // what is needed in each, at its scale
+        if (!n) { out.className = "t muted"; out.textContent = "Digite a nota que você espera nas caixas: o resultado aparece aqui."; return; }
+        out.className = "t " + (p.status === "garantido" ? "t-ok" : p.status === "nao-da" ? "t-bad" : "t-warn");
+        out.textContent = n >= boxes.length ? "Com essas notas você fica com " + dn(p.final) + (p.final >= T - 1e-9 ? " ✓ meta " + fmt(T, T % 1 ? 1 : 0) : ": faltam " + up(T - p.final, 1) + " para a meta")
+          : p.status === "garantido" ? "Com essas notas a meta já fica garantida ✓" : p.status === "nao-da" ? "Com essas notas não dá para chegar à meta, nem com 10 no resto" : "Com essas notas, precisa " + up(p.need, 1) + "/10 em média no resto"; };
+      const save = async () => { const { centroSim = {} } = await chrome.storage.local.get("centroSim"), mine = Object.assign({}, centroSim[cache.user]), g = typed();
+        if (Object.keys(g).length) mine[courseId] = g; else delete mine[courseId];
+        await chrome.storage.local.set({ centroSim: Object.assign({}, centroSim, { [cache.user]: mine }) }); };
+      for (const r of rows) { const row = el("div", "ir"), name = el("span", "n"); name.appendChild(el("span", "gtn", r.name)); name.title = r.name; let g;
+        if (r.date) name.appendChild(el("span", "dt", dmy(r.date)));
+        if (r.got != null) { g = el("span", "g", fmt(r.got, dd(r))); g.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); }
+        else if (r.missing) g = el("span", "g e", "ainda não está no Canvas");
+        else { g = el("span", "g e"); const inp = el("input", "simi"); inp.type = "text"; inp.inputMode = "decimal";
+          inp.setAttribute("aria-label", "Nota esperada em " + r.name + " (de " + fmt(r.max, dd(r)) + ")"); inp.addEventListener("input", () => { show(); save(); });
+          g.appendChild(inp); g.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); boxes.push({ r, inp }); }
+        row.append(name, el("span", "w", r.w == null ? "—" : Math.round(r.w * 10) + "%"), g); tbl.appendChild(row); }
+      if (boxes.length) { const ft = el("div", "gt-f"); clear.type = "button"; clear.addEventListener("click", () => { for (const b of boxes) b.inp.value = ""; show(); save(); }); ft.append(out, clear); tbl.appendChild(ft); show();
+        chrome.storage.local.get("centroSim").then(({ centroSim }) => { const g = centroSim && centroSim[cache.user] && centroSim[cache.user][courseId]; if (!g) return;
+          for (const b of boxes) if (g[b.r.id] != null && Number.isFinite(Number(g[b.r.id]))) b.inp.value = fmt(Number(g[b.r.id]) * b.r.max / 10, dd(b.r)); show(); }).catch(() => {}); }
+      return tbl; };
     if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
       const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
       for (const g of Array.isArray(myCentro[courseId].grupos) ? myCentro[courseId].grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
@@ -1539,27 +1583,19 @@
       card.append(m, el("span", "pill " + centroTone(cr), cr.status === "garantido" ? "garantido" : cr.status === "nao-da" ? "recuperação" : "precisa " + up(cr.need, 1)));
       box.appendChild(card);
       if (!a.expired && ruleItems(courseId).length) { const r0 = el("div", "muted src own-row"); r0.append(el("span", null, "Pela fórmula do Centro de Notas."), ownBtn()); box.appendChild(r0); }
-      if (cr.left.length) {   // simulate: type the grade you expect in each item left (saved on this computer); the rest gets what is still needed
-        const cu = myCentro[courseId], pts = new Map(); for (const g of Array.isArray(cu.grupos) ? cu.grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) pts.set(gc.coluna.id_coluna, gc.coluna.atividade && Number(gc.coluna.atividade.pontos_possiveis) || 10);
-        const simC = el("div", "card centro-sim"), out = el("b", "t"), rows = el("div", "sim-rows"), inputs = new Map(), clear = el("button", "mini", "Limpar");
-        const num = v => { const n = Number(String(v).replace(",", ".")); return String(v).trim() !== "" && Number.isFinite(n) ? Math.min(10, Math.max(0, n)) : null; };
-        const typed = () => { const g = {}; for (const [id, inp] of inputs) { const v = num(inp.value); if (v != null) g[id] = v; } return g; };
-        const show = () => { const g = typed(), n = Object.keys(g).length;
-          if (!n) { out.textContent = "Digite a nota que você espera em cada uma (de 0 a 10): o resultado aparece aqui."; out.className = "t muted"; return; }
-          const p = C.centro(cu, T, { grades: g, rest: 0 }), all = n >= inputs.size;
-          out.className = "t " + (p.status === "garantido" ? "t-ok" : p.status === "nao-da" ? "t-bad" : "t-warn");
-          out.textContent = all ? "Com essas notas você fica com " + dn(p.projected) + (p.projected >= T - 1e-9 ? " ✓ meta " + fmt(T, T % 1 ? 1 : 0) : ": faltam " + up(T - p.projected, 1) + " para a meta")
-            : p.status === "garantido" ? "Com essas notas a meta já fica garantida ✓" : p.status === "nao-da" ? "Com essas notas não dá para chegar à meta, nem com 10 no resto" : "Com essas notas, precisa " + up(p.need, 1) + "/10 em média no resto"; };
-        const save = async () => { const { centroSim = {} } = await chrome.storage.local.get("centroSim"), mine = Object.assign({}, centroSim[cache.user]); mine[courseId] = typed(); if (!Object.keys(mine[courseId]).length) delete mine[courseId];
-          await chrome.storage.local.set({ centroSim: Object.assign({}, centroSim, { [cache.user]: mine }) }); };
-        for (const id of cr.left.slice(0, 20)) { const r = el("label", "sim-r"), inp = el("input"); inp.type = "text"; inp.inputMode = "decimal"; inp.placeholder = cr.need != null ? up(cr.need, 1) : "nota";
-          inp.setAttribute("aria-label", "Nota esperada em " + (names.get(id) || "atividade")); inputs.set(id, inp);
-          inp.addEventListener("input", () => { show(); save(); });
-          r.append(el("span", "n", names.get(id) || "Atividade"), el("span", "c", "vale " + fmt(pts.get(id) || 10, 0) + " pts no Centro"), inp); rows.appendChild(r); }
-        clear.type = "button"; clear.addEventListener("click", () => { for (const inp of inputs.values()) inp.value = ""; show(); save(); });
-        const hd = el("div", "sim-h"); hd.append(el("b", null, "Simule suas notas"), clear);
-        simC.append(hd, rows, out); show(); box.appendChild(simC);
-        chrome.storage.local.get("centroSim").then(({ centroSim }) => { const g = centroSim && centroSim[cache.user] && centroSim[cache.user][courseId]; if (!g) return; for (const [id, inp] of inputs) if (g[id] != null) inp.value = fmt(Number(g[id]), 1); show(); }).catch(() => {});
+      {   // the table of assessments, as before: each Centro column, its weight in the final grade, its grade or a box to type it
+        const cu = myCentro[courseId], leaves = [], seen = new Set(), open = new Set(cr.left);
+        for (const g of Array.isArray(cu.grupos) ? cu.grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) { const col = gc && gc.coluna;
+          if (col && col.tipo_coluna === "padrao" && !seen.has(col.id_coluna) && !(col.atividade && col.atividade.omitir_nota_final)) { seen.add(col.id_coluna); leaves.push(col); } }
+        const wOf = id => { const cl = JSON.parse(JSON.stringify(cu)), cols = (cl.colunas || []).concat(...(cl.grupos || []).map(g => (g && g.grupo_colunas || []).map(gc => gc && gc.coluna).filter(Boolean)));
+          for (const x of cols) if (x && (x.id_coluna === id || x.tipo_coluna === "final")) x.notas = [];   // as if still open: what 10 in it adds to the final
+          const hi = C.centro(cl, T, { grades: { [id]: 10 }, rest: 0 }).projected, lo = C.centro(cl, T, { grades: { [id]: 0 }, rest: 0 }).projected; return hi != null && lo != null ? Math.max(0, hi - lo) : null; };
+        const rows = [];
+        for (const col of leaves.slice(0, 40)) { const p = col.atividade && Number(col.atividade.pontos_possiveis) > 0 ? Number(col.atividade.pontos_possiveis) : 10, v = col.notas && col.notas[0] ? parseFloat(String(col.notas[0].nota).replace(",", ".")) : NaN, w = wOf(col.id_coluna);
+          if (!open.has(col.id_coluna) && !(w > 0.004)) continue;   // outside the final grade (or a recovery that does not count now)
+          rows.push({ id: col.id_coluna, name: col.nome_coluna || "Atividade", max: p, got: Number.isFinite(v) ? v : null, w, open: open.has(col.id_coluna) }); }
+        const proj = g => { const p = C.centro(cu, T, { grades: g, rest: 0 }); return { status: p.status, need: p.need, final: p.projected }; };
+        if (rows.length) box.appendChild(gradeTable(rows.filter(r => r.got != null || r.open), proj));
       }
     }
     if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes
@@ -1572,6 +1608,17 @@
           : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
       if (mr.status !== "vazio" && mr.status !== "acima" && mr.status !== "erro" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
       box.appendChild(card);
+      const bad = mr.status === "vazio" || mr.status === "acima" || mr.status === "erro", rl = myRules[courseId] || canvasWeightsRule(courseId);
+      if (!bad) {   // the table: each activity that counts, its weight in the final grade, its grade or a box to type the one you expect
+        const at = (it, sc) => items.map(x => x === it ? Object.assign({}, x, { score: sc }) : x), nowOf = list => { const r = C.custom(list, rl, T); return r.now; };
+        const rows = [];
+        for (const it of items.slice(0, 40)) { const hi = nowOf(at(it, it.points)), lo = nowOf(at(it, 0)), w = hi != null && lo != null ? Math.max(0, hi - lo) : null;
+          if (!(w > 0.004)) continue;   // not in the rule (unticked, or a name no line uses)
+          rows.push({ id: it.key, name: it.name, date: it.due ? C.localISO(new Date(it.due)) : null, max: Number(it.points), got: it.score == null || !Number.isFinite(Number(it.score)) ? null : Number(it.score), w }); }
+        for (const l of mr.leaves || []) if (l.missing) rows.push({ id: "-" + l.name, name: l.name, max: 10, got: null, w: null, missing: true });
+        const proj = g => { const r = C.custom(items.map(x => g[x.key] != null ? Object.assign({}, x, { score: g[x.key] * Number(x.points) / 10 }) : x), rl, T); return { status: r.status, need: r.need, final: r.now }; };
+        if (rows.length) box.appendChild(gradeTable(rows, proj));
+      }
       // the editor: the formula as the Plano de Ensino writes it; it starts from the professor's (Centro de Notas) or the
       // Plano's weights, shows the result while typing, and offers the course's activities as short names to insert
       const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
@@ -1598,15 +1645,17 @@
       acts.append(apply, restart);
       // the course's activities: a click puts the short name where the cursor is
       const chips = el("div", "chips");
-      for (const it of items.slice(0, 40)) { const b = el("button", "chip", shortRef(it.name)); b.type = "button"; b.title = it.name + " · " + fmt(it.points, 2) + " pts";
-        b.addEventListener("click", () => { const v = String(ta.value), at = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length, add = shortRef(it.name);
+      const crefs = shortRefs(items);
+      for (const it of items.slice(0, 40)) { const add = crefs.get(it.name) || shortRef(it.name), b = el("button", "chip", add); b.type = "button"; b.title = it.name + " · " + fmt(it.points, 2) + " pts";
+        b.addEventListener("click", () => { const v = String(ta.value), at = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length;
           ta.value = v.slice(0, at) + add + v.slice(typeof ta.selectionEnd === "number" ? ta.selectionEnd : at); if (ta.focus) ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(at + add.length, at + add.length); preview(); });
         chips.appendChild(b); }
       ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Uma parte por linha, como no Plano de Ensino: pesos em % (Final = 40% RA1 + 60% RA2), média(A, B) ou soma(A, B) de N. Um nome que nenhuma linha define é uma atividade do Canvas."),
         el("p", "c from", "Começou " + start.from + "."), ta, acts, pv, el("div", "c lbl", "Atividades desta matéria (clique para pôr na fórmula):"), chips, found);
       preview();
       if (myRules[courseId]) { const rs = el("button", "mini back", own ? "Voltar à regra pronta" : "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); if (own) location.reload(); else redraw(); }); ed.appendChild(rs); }
-      box.appendChild(ed);
+      const fd = el("details", "fdet"); fd.appendChild(el("summary", null, "Como a nota é calculada · editar a fórmula")); fd.appendChild(ed); if (bad) fd.open = true;
+      box.appendChild(fd);
     }
     courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
     teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;

@@ -812,7 +812,27 @@ async function runContent(pathname, files, preStore, opts = {}) {
       const gc = await runContent("/courses/42", null, {}, { courseId: 42, groups: G, extraAsg: A }), ph = gc.anchor.kids.find(k => k.id === "qf-panel") || all(gc.anchor).find(k => k.id === "qf-panel");
       const ta = all(ph).find(e => e.tag === "textarea"), pt = text(ph);
       assert(ta && /^Final = 70% RA1 \+ 30% Vídeo/.test(ta.value) && /RA1 = soma\(Tarefa A, Tarefa B, Prova\)/.test(ta.value) && /Começou dos pesos que o professor pôs no Canvas/.test(pt), "a course with Canvas weights: the formula starts from them, a one-activity group is the activity: " + (ta && ta.value));
-      assert(!/garantida/.test(pt.split("Com esta fórmula:")[1] || ""), "and its preview is no false garantido (14 of 30 in RA1, the Prova still open: 6,2 now)"); }
+      assert(!/garantida/.test(pt.split("Com esta fórmula:")[1] || ""), "and its preview is no false garantido (14 of 30 in RA1, the Prova still open: 6,2 now)");
+      { // the table of assessments, as before: each activity with its weight in the final grade, a box where there is no grade
+        const rows = all(ph).filter(e => e.className === "ir"), inp = all(ph).find(e => e.tag === "input" && /Prova/.test((e.attrs && e.attrs["aria-label"]) || e["aria-label"] || ""));
+        assert(rows.length === 4 && /23%/.test(text(rows[0])) && /30%/.test(text(rows[3])) && inp, "a row per activity with its weight (70% / 3 ≈ 23%, the Vídeo 30%) and a box for the open Prova: " + rows.map(text).join(" | "));
+        const out = () => all(ph).find(e => /^t( |$)/.test(e.className || "") && /Com essas notas|Digite a nota/.test(e.textContent));
+        inp.value = "7"; inp.listeners.input(); await new Promise(r => setTimeout(r, 10));
+        assert(/Com essas notas você fica com 7,9 ✓/.test(out().textContent), "a typed grade gives the final by the Canvas weights (0,7 × 21/30 × 10 + 3 = 7,9): " + out().textContent);
+        assert(gc.store.centroSim && gc.store.centroSim[5] && gc.store.centroSim[5]["42"], "kept on this computer, per user and course");
+        assert(all(ph).some(e => e.tag === "details" && /editar a fórmula/.test(text(e)) && !e.open), "the formula editor folded under the table"); }
+    }
+    { // long Canvas names (Ética): the formula uses the shortest start that finds each activity, the group by its first piece
+      const G = [{ id: 1, name: "RA1 - ATIVIDADES SOMATIVAS", group_weight: 70 }, { id: 2, name: "TDE - TAREFA SOMATIVA - VÍDEO", group_weight: 30 }];
+      const A = [{ name: "Aula 4 - TAREFA SOMATIVA ENTREGA - A justiça em Aristóteles", points_possible: 9, assignment_group_id: 1, html_url: "/courses/42/assignments/91", submission: { score: 8 } },
+        { name: "Aula 7 - TAREFA SOMATIVA - O utilitarismo", points_possible: 4, assignment_group_id: 1, html_url: "/courses/42/assignments/92", submission: { score: 3 } },
+        { name: "Avaliação somativa - Prova", points_possible: 17, assignment_group_id: 1, html_url: "/courses/42/assignments/93", submission: { score: null } },
+        { name: "TDE - TAREFA SOMATIVA - VÍDEO", points_possible: 1, assignment_group_id: 2, html_url: "/courses/42/assignments/94", submission: { score: 1 } }];
+      const ec = await runContent("/courses/42", null, {}, { courseId: 42, groups: G, extraAsg: A }), eh = ec.anchor.kids.find(k => k.id === "qf-panel") || all(ec.anchor).find(k => k.id === "qf-panel");
+      const ta = all(eh).find(e => e.tag === "textarea");
+      assert(ta && ta.value === "Final = 70% RA1 + 30% TDE\nRA1 = soma(Aula 4, Aula 7, Avaliação somativa - Prova)", "short names a student can read (\"Avaliação somativa\" alone would also find the other course items of that name): " + (ta && ta.value));
+      assert(/Com esta fórmula: 5,5 agora/.test(text(eh)) && !/erro/.test(text(eh).split("Com esta fórmula:")[1].slice(0, 40)), "the short names find the same activities (11/30 × 7 + 3 = 5,5 now): " + text(eh).split("Com esta fórmula:")[1].slice(0, 80));
+    }
     ok(); }
   { // the official date: a Plano item that is a Canvas activity shows Canvas's due date; a Plano date the Plano itself does not confirm says so
     const dp = await runContent("/courses/71306", [], {}, { extraAsg: [{ name: "Entrega Pjbl Parte 3 - 18/11", points_possible: 1, due_at: "2027-01-05T15:00:00Z", html_url: "/courses/71306/assignments/13", submission: { score: null } }] });
