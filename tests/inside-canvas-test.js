@@ -107,7 +107,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   tabContent.insertBefore = function (c, ref) { if (c.parent) c.parent.kids.splice(c.parent.kids.indexOf(c), 1); c.parent = this; const i = this.kids.indexOf(ref); this.kids.splice(i < 0 ? this.kids.length : i, 0, c); if (c.id) byId[c.id] = c; };   // found by id like any element of the page
   Object.defineProperty(cols, "parentNode", { get() { return this.parent; } }); Object.defineProperty(cols, "previousSibling", { get() { return null; } });
   const doc = { createElement: fakeEl, body, scripts: opts.scripts, documentElement: opts.tall ? { scrollHeight: opts.tall } : undefined, getElementById: id => byId[id] && !byId[id].removed ? byId[id] : null,
-    querySelector: sel => sel === ".ic-Dashboard-header__layout" ? (opts.header || null) : (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
+    querySelector: sel => opts.copyBody && /user_content/.test(sel) ? opts.copyBody : sel === ".ic-Dashboard-header__layout" ? (opts.header || null) : (opts.widgetCols && sel === '[data-testid="widget-columns"]') || (opts.classic && sel === "#DashboardCard_Container") ? cols : null,
     querySelectorAll: sel => sel === "#my_courses_table tbody tr" ? (opts.rows || []) : sel === '[data-testid^="course-grade-card-"]' ? (opts.gradeCard ? [gcard] : []) : sel === "[data-cp-grade]" ? all(gcard).filter(e => e["data-cp-grade"]) : sel === ".ic-DashboardCard[data-qf]" ? (card.dataset.qf ? [card] : []) : sel.startsWith(".ic-DashboardCard") && !card.dataset.qf ? [card] : [] };
   const chrome = { runtime: { getManifest: () => ({ version: C.EXT_LATEST }), getURL: f => "chrome-extension://me/" + f, sendMessage: async m => { sent.push(m); return m.type === "download" ? { done: m.items.map(i => i.id) } : { ok: true }; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => Object.assign(store, o), remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
@@ -564,6 +564,21 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const quietG = await runContent("/", null, Object.assign({}, st10, { cache: oldData, prefs: { newgrades: false } }), { scripts: pageEnv });
   await new Promise(r => setTimeout(r, 60));
   assert(!quietG.sent.some(m => m.type === "grades") && quietG.store.recent && !/Notas novas/.test(text(quietG.anchor)), "switched off: no notification, no card (still recorded)");
+  { // a due date the professor moved: in "Desde a sua última visita" and handed to the worker (reminders on)
+    const extra = [{ name: "Lista 9", points_possible: 2, due_at: new Date(Date.now() + 5 * 864e5).toISOString(), html_url: "/courses/71306/assignments/77", submission: { score: null } }];
+    const old = JSON.parse(JSON.stringify(st10.cache)), c0 = old.data.courses.find(c => String(c.id) === "71306") || old.data.courses[0];
+    c0.assignments.push({ name: "Lista 9", points: 2, score: null, due: new Date(Date.now() + 2 * 864e5).toISOString(), url: "https://pucpr.instructure.com/courses/71306/assignments/77" });
+    const mv = await runContent("/", null, Object.assign({}, st10, { cache: old }), { scripts: pageEnv, extraAsg: extra }); await new Promise(r => setTimeout(r, 60));
+    const dm = mv.sent.find(m => m.type === "due");
+    assert(dm && dm.items.length === 1 && dm.items[0].name === "Lista 9" && /→/.test(dm.items[0].from + " → " + dm.items[0].to) && dm.items[0].from !== dm.items[0].to, "the moved due date is found and sent: " + JSON.stringify(dm && dm.items));
+    assert(mv.store.changes && mv.store.changes[5] && mv.store.changes[5].items.some(x => x.kind === "prazo" && /^Lista 9: /.test(x.text)), "and listed in Desde a sua última visita");
+    const same = await runContent("/", null, Object.assign({}, st10, { cache: mv.store.cache }), { scripts: pageEnv, extraAsg: extra }); await new Promise(r => setTimeout(r, 60));
+    assert(!same.sent.some(m => m.type === "due"), "nothing moved: no notice"); }
+  local.prefs = {}; notes.length = 0;
+  await ask({ type: "due", items: [{ k: "d:71306:Lista 9:x", course: "BD", name: "Lista 9", from: "12/11 23:59", to: "15/11 23:59", url: "https://evil.example/" }] }, CANVAS_TAB);
+  assert(notes.length === 1 && notes[0].title === "Prazo mudou: BD" && notes[0].message === "Lista 9: 12/11 23:59 → 15/11 23:59" && local.shown[notes[0].id] === "https://pucpr.instructure.com/calendar", "the worker's notice: the change, its click never outside Canvas");
+  await ask({ type: "due", items: [{ k: "d:71306:Lista 9:x", course: "BD", name: "Lista 9", from: "a", to: "b" }] }, CANVAS_TAB);
+  assert.strictEqual(notes.length, 1, "the same change from two tabs: one notice");
   local.prefs = { newgrades: true }; notes.length = 0;
   await ask({ type: "grades", items: [{ name: "RA2", course: "BD", score: 8.5, points: 10, url: "https://pucpr.instructure.com/courses/71306/assignments/2" }] }, CANVAS_TAB);
   assert.deepStrictEqual([notes[0].title, notes[0].message], ["Nota nova: BD", "RA2: 8,5 de 10"], "notification text");
@@ -1096,6 +1111,12 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!/\/10 · /.test(text(cdh.header)), "a hidden course gets nothing");
   cd.env.window.cpHiddenChanged(["71306"]); assert(!/\/10 · /.test(text(cd.header)), "unticked in the popup: off at once, no reload"); ok();
 
+  { // Copiar: a button right after an assignment's text (copy itself needs a real browser: checked on the real Canvas)
+    const placed = [], copyBody = { after: h => placed.push(h), innerText: "Faça as views", cloneNode() { return this; } };
+    await runContent("/courses/71306/assignments/5", null, {}, { copyBody }); await new Promise(r => setTimeout(r, 20));
+    assert(placed.length === 1 && placed[0].id === "cp-copy" && all(placed[0].shadow).some(e => e.tag === "button" && /Copiar texto e imagens/.test(e.textContent)), "the Copiar button after the assignment's text");
+    const none = []; await runContent("/courses/71306/grades", null, {}, { copyBody: { after: h => none.push(h) } }); await new Promise(r => setTimeout(r, 20));
+    assert(!none.length, "not on other course pages"); ok(); }
   // .ics: the deadlines and exams from today on
   const icsPage = await runContent("/", null);
   const icsBtn = all(icsPage.anchor).find(e => e.textContent === "↓ .ics");

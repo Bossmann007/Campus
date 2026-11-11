@@ -128,6 +128,7 @@
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
       const planner = await plan, { cache: before, lastError } = await chrome.storage.local.get(["cache", "lastError"]);
       await newGrades(user, data, before);
+      await dueMoves(user, data, before);
       const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner.map(slimPlan) : null, inbox: await inbox };
       await chrome.storage.local.set({ cache: fresh, refreshing: 0 });   // one write (every write reaches every tab); 0 = not reading
       if (lastError) await chrome.storage.local.remove("lastError");   // a reading that worked: the old error is over
@@ -168,6 +169,58 @@
     const all = recent && typeof recent === "object" ? recent : {}, mine = (Array.isArray(all[user]) ? all[user] : []).filter(r => r && now - r.at < 30 * 864e5 && !got.some(g => g.k === r.k));
     await chrome.storage.local.set({ recent: Object.assign({}, all, { [user]: got.concat(mine).slice(0, 20) }) });
     if (cpPrefs(prefs).newgrades) chrome.runtime.sendMessage({ type: "grades", items: got.slice(0, 10) }).catch(() => {});
+  }
+  // Prazo mudou: an assignment whose due date changed since the last reading (both dates known, one still ahead). Goes to
+  // "Desde a sua última visita" and, with the reminders on, to a notification. The first reading only sets the baseline.
+  const dueText = iso => { const d = new Date(iso); return C.localISO(d).slice(8, 10) + "/" + C.localISO(d).slice(5, 7) + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  async function dueMoves(user, data, old) {
+    if (!old || old.user !== user || !old.data || !Array.isArray(old.data.courses)) return;
+    const before = {}, now = Date.now(), moved = [];
+    for (const c of old.data.courses) for (const x of c.assignments || []) before[gradeKey(c, x)] = x.due;
+    for (const c of data.courses) for (const x of c.assignments || []) { const was = before[gradeKey(c, x)], t0 = Date.parse(was), t1 = Date.parse(x.due);
+      if (!Number.isFinite(t0) || !Number.isFinite(t1) || Math.abs(t1 - t0) < 60e3 || Math.max(t0, t1) < now) continue;
+      moved.push({ k: "d:" + gradeKey(c, x) + ":" + x.due, course: shortName(c.name), name: String(x.name), from: dueText(was), to: dueText(x.due), url: x.url && inCanvas(x.url) }); }
+    if (!moved.length) return;
+    const cur = await loadChanges(user), items = moved.map(m => ({ k: m.k, kind: "prazo", text: m.name + ": " + m.from + " → " + m.to, course: m.course, url: m.url, at: now }));
+    await saveChanges(user, { seenAt: cur.seenAt, items: items.concat(cur.items.filter(x => now - x.at < 7 * 864e5 && !items.some(n => n.k === x.k))).slice(0, 40) });
+    const { prefs } = await chrome.storage.local.get("prefs");
+    if (cpPrefs(prefs).remind) chrome.runtime.sendMessage({ type: "due", items: moved.slice(0, 10) }).catch(() => {});
+  }
+  // Copiar: a button at the end of an assignment's, a page's or a discussion's text; copies the title, the dates and the text
+  // with its images inside the copy (Canvas images need the student's session, so they go as data), to paste in Docs or Word
+  const COPY_SEL = "#assignment_show .description.user_content, .show-content.user_content, .discussion-section .message.user_content, [data-resource-type='discussion_topic.body'] .user_content, #content .user_content.enhanced, #content .user_content";
+  function copyButton() {
+    const body = document.querySelector(COPY_SEL);
+    if (!body || document.getElementById("cp-copy")) return;
+    const host = el("div"), root = host.attachShadow({ mode: "closed" }), b = el("button", null, "Copiar texto e imagens"), st = el("style");
+    host.id = "cp-copy";
+    st.textContent = ":host { display:block; margin:14px 0 6px; } button { font:600 13px/1 system-ui, sans-serif; padding:9px 14px; border-radius:9px; border:1px solid #c9c2b4; background:#fffdf8; color:#2a2a2a; cursor:pointer; } button:hover { border-color:#e2685a; } button.ok { border-color:#3c8a5a; color:#2d6b45; }";
+    b.type = "button"; b.title = "Copia o título, as datas e o texto, com as imagens, para colar no Docs, no Word ou no Notion";
+    b.addEventListener("click", () => {
+      const wrap = document.createElement("div"), h = document.querySelector("h1.title, .page-title, h1.discussion-title, h1"), meta = document.querySelector("#assignment_show .student-assignment-overview");
+      wrap.appendChild(el("h2", null, String((h && h.textContent) || document.title).trim()));
+      if (meta) wrap.appendChild(meta.cloneNode(true));
+      wrap.appendChild(body.cloneNode(true));
+      for (const x of wrap.querySelectorAll("script, style, iframe, button, input, .screenreader-only, #cp-copy")) x.remove();
+      const text = [wrap.firstChild.textContent, meta ? meta.innerText : "", body.innerText].filter(Boolean).join("\n\n");
+      const html = (async () => {
+        for (const img of [...wrap.querySelectorAll("img")].slice(0, 30)) {
+          let u; try { u = new URL(img.getAttribute("src") || "", location.href); } catch (e) { continue; }
+          img.removeAttribute("srcset");
+          if (u.origin !== location.origin) { img.setAttribute("src", u.href); continue; }   // outside Canvas: the link as it is
+          try { const f = /\/files\/(\d+)/.exec(u.pathname);   // a Canvas file: its preview redirects to a CDN that refuses the page; the API's download link works
+            const src = f ? (await (await fetch("/api/v1/files/" + f[1], { credentials: "include" })).json()).url : u.href;
+            if (typeof src !== "string" || new URL(src, location.href).origin !== location.origin) { img.setAttribute("src", u.href); continue; }
+            const r = await fetch(src, { credentials: "include" }), bl = await r.blob(); if (!r.ok || !/^image\//.test(bl.type) || bl.size > 5e6) { img.setAttribute("src", u.href); continue; }
+            img.setAttribute("src", await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(bl); })); } catch (e) { img.setAttribute("src", u.href); }
+        }
+        for (const a of wrap.querySelectorAll("a[href]")) { try { a.setAttribute("href", new URL(a.getAttribute("href"), location.href).href); } catch (e) { a.removeAttribute("href"); } }
+        return new Blob([new XMLSerializer().serializeToString(wrap)], { type: "text/html" }); })();
+      b.textContent = "Copiando…";
+      navigator.clipboard.write([new ClipboardItem({ "text/html": html, "text/plain": new Blob([text], { type: "text/plain" }) })])
+        .then(() => { b.textContent = "Copiado ✓ (cole no Docs, no Word ou no Notion)"; b.className = "ok"; }, () => { b.textContent = "Não deu para copiar: clique de novo"; b.className = ""; });
+    });
+    root.append(st, b); body.after(host);
   }
   const pts = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
   // Grades typed by the student where Canvas has none (exams on paper, a grade not posted yet): chrome.storage.local "hand",
@@ -2344,6 +2397,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     }
     const anyCourse = /^\/courses\/(\d+)(\/|$)/.exec(location.pathname);
     if (anyCourse) { courseNav(anyCourse[1]); courseModules(anyCourse[1]); }
+    if (anyCourse && /\/(assignments|pages|discussion_topics|announcements)\/[^/]+\/?$/.test(location.pathname)) { copyButton(); setTimeout(copyButton, 1500); setTimeout(copyButton, 4000); }   // the text may render late (React pages)
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {

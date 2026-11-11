@@ -92,6 +92,21 @@ async function notify(alarm) {
 }
 
 // New grades the Canvas page found: one notification each (up to 3), or one summing them up; a click opens the assignment.
+// a due date the professor changed: one notice per change (two tabs reading at once: one notice), the assignment opens on click
+async function dueMoved(items) {
+  if (!cpPrefs((await chrome.storage.local.get("prefs")).prefs).remind) return;
+  const { notified = [] } = await chrome.storage.local.get("notified"), seen = new Set(notified), txt = x => String(x || "").slice(0, 90);
+  const ok = items.filter(m => m && typeof m.k === "string" && typeof m.name === "string" && !seen.has(m.k)).slice(0, 10);
+  if (!ok.length) return;
+  await chrome.storage.local.set({ notified: notified.concat(ok.map(m => m.k)).slice(-100) });
+  const { shown = {} } = await chrome.storage.local.get("shown"), keep = Object.entries(shown).slice(-30), id = "d|" + Date.now();
+  ok.slice(0, 3).forEach((m, i) => { keep.push([id + "|" + i, typeof m.url === "string" && m.url.startsWith(CANVAS + "/") ? m.url : CANVAS + "/calendar"]);
+    chrome.notifications.create(id + "|" + i, { type: "basic", iconUrl: "icons/icon128.png", title: "Prazo mudou: " + txt(m.course).slice(0, 60), message: txt(m.name) + ": " + txt(m.from) + " → " + txt(m.to), priority: 1 }); });
+  if (ok.length > 3) keep.push([id + "|+", CANVAS + "/"]);
+  if (ok.length > 3) chrome.notifications.create(id + "|+", { type: "basic", iconUrl: "icons/icon128.png", title: "Mais " + (ok.length - 3) + " prazos mudaram", message: "Veja em Desde a sua última visita, no painel", priority: 1 });
+  await chrome.storage.local.set({ shown: Object.fromEntries(keep) });
+}
+
 async function grades(items) {
   if (!cpPrefs((await chrome.storage.local.get("prefs")).prefs).newgrades) return;
   const { notified = [] } = await chrome.storage.local.get("notified"), seen = new Set(notified);   // two Canvas tabs finding the same grade: one notice
@@ -229,6 +244,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   if (msg.type === "remind" && Array.isArray(msg.items)) {
     remind(msg.items, msg.alarms !== false).then(() => reply({ ok: true }));
+    return true;
+  }
+  if (msg.type === "due" && Array.isArray(msg.items)) {
+    dueMoved(msg.items).then(() => reply({ ok: true }));
     return true;
   }
   if (msg.type === "grades" && Array.isArray(msg.items)) {
