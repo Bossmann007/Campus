@@ -604,15 +604,14 @@ const NotasCore = (() => {
           {"id":"ex2","name":"Exercícios do RA2 (PBL06–10)","max":1,"inMax":10,"date":"2026-10-28","dateSrc":"Plano: de 23/9 a 28/10","alt":"Canvas: PBL10 até 03/11","unv":true,"wSrc":"Plano l.360: 10%"},
           {"id":"t2","name":"Trabalho do RA2 (equipe)","max":1,"inMax":10,"date":"2026-11-17","dateSrc":"Canvas: 17/11 23:59","alt":"Plano l.349: 18/11","wSrc":"Plano l.361: 10%"},
           {"id":"p2","name":"Prova do RA2","max":4,"inMax":10,"exam":true,"date":"2026-11-11","dateSrc":"Canvas: 11/11 14:10; Plano l.365","wSrc":"Plano l.371: 40%"} ] },
-      { id:"abd", name:"Arquitetura de Banco de Dados", short:"Banco de Dados", canvasIds:[71306], formula:"Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; PjBL II na escala do Canvas (0–2).", src:"Plano de Ensino de Arquitetura de Banco de Dados l.365-446",
+      { id:"abd", name:"Arquitetura de Banco de Dados", short:"Banco de Dados", canvasIds:[71306], formula:"Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; As notas do Canvas já são os pontos da final (professor, 10/11/2026): PjBL II vale 2,0 e inclui a TDE do RA2.", src:"Plano de Ensino de Arquitetura de Banco de Dados l.365-446",
         canvas:{"items":{"pj1":{"one":"PjBL - Parte 1"},"s1":{"one":"Avaliação somativa RA1"},"pj2":{"one":"PjBL - Parte 2"},"s2":{"one":"Avaliação somativa RA2"},"pj3":{"one":"Pjbl Parte 3"},"s3":{"one":"Avaliação somativa RA3"}}},
         items:[
           {"id":"pj1","name":"RA1 · PjBL Parte I","max":1,"inMax":1,"date":"2026-09-03","dateSrc":"Plano","wSrc":"Plano: 40% de RA1 (25%) = 1,0 pt"},
           {"id":"s1","name":"RA1 · Somativa individual I","max":1.25,"inMax":1.25,"exam":true,"date":"2026-09-10","dateSrc":"Plano","wSrc":"Plano: 50% de RA1 = 1,25 pt"},
           {"id":"tde1","name":"RA1 · TDE","max":0.25,"inMax":0.25,"date":"2026-11-12","dateSrc":"Plano l.436: TDE 12/11","unv":true,"wSrc":"Plano: 10% de RA1 = 0,25 pt"},
-          {"id":"pj2","name":"RA2 · PjBL Parte II","max":1.5,"inMax":2,"date":"2026-10-15","dateSrc":"Plano","wSrc":"Tabela do prof.: 30% de RA2 (50%) = 1,5 pt (Canvas lança de 0 a 2)"},
+          {"id":"pj2","name":"RA2 · PjBL Parte II","max":2,"inMax":2,"date":"2026-10-15","dateSrc":"Plano","wSrc":"Professor (aviso aos alunos, 10/11/2026): as notas do Canvas já são os pontos da nota final; PjBL II vale 2,0 (inclui a TDE do RA2)"},
           {"id":"s2","name":"RA2 · Somativa individual II","max":3,"inMax":3,"exam":true,"date":"2026-10-22","dateSrc":"Plano l.396","wSrc":"Tabela do prof.: 60% de RA2 (50%) = 3,0 pt"},
-          {"id":"tde2","name":"RA2 · TDE","max":0.5,"inMax":0.5,"date":"2026-11-12","dateSrc":"Tabela do prof.: TDE 12/11","unv":true,"wSrc":"Tabela do prof.: 10% de RA2 = 0,5 pt"},
           {"id":"pj3","name":"RA3 · PjBL Parte III (entrega final)","max":1,"inMax":1,"date":"2026-11-18","dateSrc":"Canvas: 18/11 10:40","alt":"Plano l.426: 19/11","wSrc":"Plano: 40% de RA3 (25%) = 1,0 pt"},
           {"id":"s3","name":"RA3 · Somativa individual III","max":1.25,"inMax":1.25,"exam":true,"date":"2026-11-19","dateSrc":"Plano l.416","wSrc":"Plano: 50% de RA3 = 1,25 pt"},
           {"id":"tde3","name":"RA3 · TDE","max":0.25,"inMax":0.25,"date":"2026-11-12","dateSrc":"Plano l.436: TDE 12/11","unv":true,"wSrc":"Plano: 10% de RA3 = 0,25 pt"} ] },
@@ -668,14 +667,17 @@ const NotasCore = (() => {
   const key = (c, it) => c.id + ":" + it.id;
 
   // today: "YYYY-MM-DD" in local time. An item dated today is still upcoming.
+  const PENDING = Symbol("pending");
+  // Items handed in whose grade is not out yet (grades[PENDING], set by fromCanvas from Canvas's "submitted"): past their
+  // date they are still to be graded, not lost, so they count with what is left. A symbol key: no JSON, no Object.keys.
   function courseState(c, grades, today, target) {
-    let earned = 0, futureMax = 0, lateMax = 0;
+    let earned = 0, futureMax = 0, lateMax = 0; const pend = grades && grades[PENDING] || {};
     const future = [], late = [], invalid = [];
     for (const it of c.items) {
       const p = itemPoints(it, grades[key(c, it)]);
       if (Number.isNaN(p)) invalid.push(it);
       if (p !== null && !Number.isNaN(p)) { earned += p; continue; }
-      if (it.date < today) { late.push(it); lateMax += it.max; }
+      if (it.date < today && !pend[key(c, it)]) { late.push(it); lateMax += it.max; }
       else { future.push(it); futureMax += it.max; }
     }
     earned = r9(earned); futureMax = r9(futureMax); lateMax = r9(lateMax);
@@ -689,8 +691,9 @@ const NotasCore = (() => {
     else status = "precisa";
     const fraction = need <= EPS ? 0 : futureMax > EPS ? need / futureMax : null;
     const fractionIfLate = need <= EPS ? 0 : futureMax + lateMax > EPS ? need / (futureMax + lateMax) : null;
-    return { earned, futureMax, lateMax, need, ceiling, ceilingIfLate, status, fraction, fractionIfLate,
-             future, late, invalid, provisional: late.length > 0 || invalid.length > 0 };
+    // today (not enumerable: the state's shape stays): future items before it are handed in, waiting for a grade
+    return Object.defineProperty({ earned, futureMax, lateMax, need, ceiling, ceilingIfLate, status, fraction, fractionIfLate,
+             future, late, invalid, provisional: late.length > 0 || invalid.length > 0 }, "today", { value: today });
   }
   // Same fraction of each pending item's maximum (so the weight of each item counts). Returned in the item's own scale.
   function requiredFor(st, item) {
@@ -707,7 +710,7 @@ const NotasCore = (() => {
     const out = [];
     for (const c of courses) {
       const st = courseState(c, grades, today, target);
-      for (const it of st.future) out.push({ course:c, item:it, st, req:requiredFor(st, it), min:minimumFor(st, it, target) });
+      for (const it of st.future) if (it.date >= today) out.push({ course:c, item:it, st, req:requiredFor(st, it), min:minimumFor(st, it, target) });   // handed-in ones wait for a grade, not for the student
     }
     return out.sort((a, b) => a.item.date.localeCompare(b.item.date) || a.course.name.localeCompare(b.course.name));
   }
@@ -751,7 +754,7 @@ const NotasCore = (() => {
     const courses = data.courses.map(c => {
       if (!c || str(c.name) === null || !Array.isArray(c.assignments)) throw new Error("formato inválido: matéria sem nome ou sem avaliações");
       return { id:cidOf(c.id), name:c.name, assignments:c.assignments.filter(a => a && str(a.name) !== null).map(a => ({ name:a.name, points:num(a.points), score:num(a.score),
-        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, flagged:"missing" in a,
+        due:str(a.due) === null ? null : /^\d{4}-\d\d-\d\d$/.test(a.due) ? a.due : Number.isNaN(Date.parse(a.due)) ? null : localISO(new Date(a.due)), missing:a.missing === true, excused:a.excused === true, flagged:"missing" in a,
         submitted:a.submitted === true, hasSub:"submitted" in a, offline:a.online === false,
         stats:a.stats && typeof a.stats === "object" && [a.stats.mean, a.stats.min, a.stats.max].every(x => num(x) !== null) ? { mean:a.stats.mean, min:a.stats.min, max:a.stats.max } : null })) };
     });
@@ -773,7 +776,7 @@ const NotasCore = (() => {
     todo.sort((x, y) => x.due < y.due ? -1 : x.due > y.due ? 1 : 0);
     const knownSub = courses.some(cv => cv.assignments.some(a => a.hasSub)), dates = {}, stats = {};
     const knownStats = Array.isArray(data.courses) && data.courses.some(c => c && Array.isArray(c.assignments) && c.assignments.some(a => a && "stats" in a));
-    const grades = {}, missing = [], notes = [];
+    const grades = {}, missing = [], notes = [];   // grades[PENDING]: handed in, grade not out yet (not lost); only when there is one
     const turmas = new Set(courses.map(cv => subjectOf(cv, byId)).filter(Boolean).map(c => PACK_OF[c.id]));   // the reading's turmas
     for (const c of COURSES) {
       if (turmas.size && !turmas.has(PACK_OF[c.id])) continue;   // another turma's subject: not this student's
@@ -784,9 +787,10 @@ const NotasCore = (() => {
         if (!cv) { missing.push({ key:k, reason:cvs.length > 1 ? "a matéria aparece em mais de uma turma no Canvas: lance à mão" : "matéria não veio do Canvas" }); continue; }
         const parts = (rule.avg || rule.sum || [rule.one]).map(n => cv.assignments.filter(a => a.name.includes(n)));
         if (parts.some(p => p.length !== 1)) { missing.push({ key:k, reason:"avaliação não está no Canvas (ou aparece repetida)" }); continue; }
-        const got = parts.map(p => p[0]);
+        const got = parts.map(p => p[0]).filter(a => !(rule.avg && a.excused));   // a dispensed part leaves an average
+        if (!got.length) { missing.push({ key:k, reason:"todas as partes foram dispensadas no Canvas" }); continue; }
         if (rule.one && got[0].due) dates[k] = got[0].due;   // Canvas due date of a single-assignment item
-        if (got.some(a => a.score === null)) { missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
+        if (got.some(a => a.score === null)) { /* pending only when nothing of it is missing */ if (got.some(a => a.score === null && a.submitted) && !got.some(a => a.score === null && a.missing)) (grades[PENDING] = grades[PENDING] || {})[k] = true; missing.push({ key:k, reason:"sem nota ainda no Canvas" }); continue; }
         const pts = a => rule.pts && !(a.points > 0) ? rule.pts : a.points;
         if (got.some(a => !(pts(a) > 0))) { missing.push({ key:k, reason:"avaliação sem pontuação no Canvas" }); continue; }
         if (rule.one && got[0].stats && pts(got[0]) > 0) {   // class mean/min/max on the item's own scale
@@ -812,7 +816,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.6.0";
+  const EXT_LATEST = "6.16.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -864,7 +868,7 @@ const NotasCore = (() => {
   // Shared by the calculator page and the panels inside Canvas (extension/content.js), so both show the same numbers.
   const fractionTone = f => f > 0.8 ? "bad" : f > 0.6 ? "warn" : "ok";
   const statusTone = st => st.status === "garantido" ? "ok" : st.status === "nao-da" ? "bad" : st.status === "depende-atrasadas" ? "warn" : fractionTone(st.fraction);
-  const nextItem = st => st.future.slice().sort((a, b) => a.date < b.date ? -1 : 1)[0] || null;
+  const nextItem = st => st.future.filter(it => !st.today || it.date >= st.today).sort((a, b) => a.date < b.date ? -1 : 1)[0] || null;   // never one already handed in
   // Ring: share of 10 already earned, and the share still possible (capped so both fit in one turn).
   const ringParts = st => { const e = Math.min(10, st.earned); return { earned: e / 10, future: Math.min(10 - e, st.futureMax) / 10 }; };
   // What a course still needs on 0-10 in each remaining item: of10 null when it cannot reach the goal; approx when
@@ -888,10 +892,11 @@ const NotasCore = (() => {
     const items = [];
     for (const c of courses) for (const it of c.items) {
       const p = itemPoints(it, grades[key(c, it)]), graded = p !== null && !Number.isNaN(p);
-      items.push({ course: c, item: it, s: graded ? "ok" : it.date < today ? "late" : "next" });
+      const sent = !graded && !!(grades && grades[PENDING] && grades[PENDING][key(c, it)]);   // handed in, the grade is not out yet
+      items.push({ course: c, item: it, s: graded ? "ok" : sent ? "sent" : it.date < today ? "late" : "next" });
     }
     items.sort((a, b) => a.item.date.localeCompare(b.item.date));
-    return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok").length, late: items.filter(x => x.s === "late").length };
+    return { states, mean, tight, counts, items, done: items.filter(x => x.s === "ok" || x.s === "sent").length, graded: items.filter(x => x.s === "ok").length, sent: items.filter(x => x.s === "sent").length, late: items.filter(x => x.s === "late").length };
   }
   // Centro de Notas (PUCPR's grade tool, an LTI in every course): its formula tree, evaluated the way the tool does it
   // (weights are percentages, a part without a grade counts 0; checked against the tool's own values, bridge/SPEC-centro-notas.md).
@@ -904,6 +909,7 @@ const NotasCore = (() => {
   // - The tool's own final value wins: now is it, and the projection is shifted by what the visible formula misses.
   // - "total" adds raw points; the means use each leaf on 10 (a leaf not on 10 inside a mean: approx, the scale is a guess).
   // fill (optional, 0-10): also returns projected, the final with that grade on everything left (the course page simulator).
+  const ceil2 = x => Math.ceil(x * 100 - 1e-9) / 100, floor2 = x => Math.floor(x * 100 + 1e-9) / 100;   // a need never shown lower, a grade never higher
   // The student's own rule, for a course without our rules and without a formula in the Centro de Notas: the Canvas
   // items that count (the student unticks what is not graded), their points summed, the grade going up to "total"
   // (10 unless the Plano de Ensino says otherwise). Points not yet in Canvas (total minus what is planned) count as left.
@@ -927,23 +933,100 @@ const NotasCore = (() => {
       const ny = Math.max(0, top - pl); counted += its.length; open += o; notYet += ny;
       now += w * e / top * 10; gain += w * (o + ny) / top * 10; parts.push({ id: k, w: Number(P[k].w), now: Math.round(e / top * 1000) / 100, top, planned: pl });
     }
-    const shown = Math.round(now * 100) / 100;
+    const shown = floor2(now);
     if (now >= meta - 1e-9) return { status: "garantido", now: shown, need: 0, open, notYet, counted, total: 10, parts };
     const need = gain > 0 ? (meta - now) / gain * 10 : Infinity;
-    return { status: need > 10 ? "nao-da" : "precisa", now: shown, need: need > 10 ? null : Math.round(need * 100) / 100, open, notYet, counted, total: 10, parts };
+    return { status: need > 10 ? "nao-da" : "precisa", now: shown, need: need > 10 ? null : ceil2(need), open, notYet, counted, total: 10, parts };
+  }
+  // The student's formula, written the way the Plano de Ensino writes it, one line per part:
+  //   Final = 40% RA1 + 60% RA2          (weights in %, or 0,4 RA1; they are normalised when they do not add to 100)
+  //   RA1 = 75% Prova do RA1 + 25% Exercícios
+  //   Exercícios = média(TDE 1, TDE 2, PBL01)
+  //   RA2 = soma(PjBL Parte 2, Somativa RA2) de 5   (points added up, out of 5)
+  // The first line is the final grade (0-10). A name no line defines is a Canvas activity, found by its name (accents and
+  // case ignored; every activity whose name contains it). Each activity counts as its grade over its points; one without a
+  // grade is "left". A part with no activity yet counts as left too (said in missing).
+  // formulaParse(text) -> { lines: [{ name, op: "w" | "avg" | "sum", terms: [{ w, ref }], top }], errors: [..] }
+  const foldName = x => String(x == null ? "" : x).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  function formulaParse(text) {
+    const lines = [], errors = [];
+    String(text || "").split(/\r?\n|;/).slice(0, 60).forEach((raw, n) => {
+      const s = /^\s*#/.test(raw) ? "" : raw.trim(); if (!s) return;   // a comment is a line that starts with # ("Lista #2" stays a name)
+      const m = /^([^=]{1,80})=(.{1,600})$/.exec(s); if (!m) { errors.push("linha " + (n + 1) + ": falta o \"=\" (ex.: Final = 40% RA1 + 60% RA2)"); return; }
+      const name = m[1].trim(), rhs = m[2].trim();
+      const fn = /^(m[eé]dia|soma)\s*\((.*)\)\s*(?:de\s+([\d.,]+))?$/i.exec(rhs);
+      if (fn) {
+        const refs = fn[2].split(",").map(x => x.trim()).filter(Boolean), top = fn[3] ? Number(fn[3].replace(",", ".")) : null;
+        if (!refs.length) { errors.push("linha " + (n + 1) + ": " + fn[1] + "() sem nada dentro"); return; }
+        lines.push({ name, op: /^s/i.test(fn[1]) ? "sum" : "avg", terms: refs.map(ref => ({ w: 1, ref })), top: top > 0 ? top : null }); return;
+      }
+      const terms = [];
+      for (const part of rhs.split("+")) {
+        const t = part.trim(), w = /^([\d.,]+)\s*%\s*(?:de\s+|x\s+|×\s*|\*\s*)?(.+)$/i.exec(t) || /^(0?[.,]\d+|1(?:[.,]0+)?)\s*(?:x|×|\*)?\s+(.+)$/i.exec(t);
+        if (!w) { errors.push("linha " + (n + 1) + ": \"" + t.slice(0, 40) + "\" sem peso (ex.: 40% RA1)"); return; }
+        let v = Number(w[1].replace(",", ".")); if (!/%/.test(t) && v <= 1) v *= 100;
+        terms.push({ w: v, ref: w[2].trim() });
+      }
+      lines.push({ name, op: "w", terms, top: null });
+    });
+    if (!lines.length && !errors.length) errors.push("escreva a fórmula, uma parte por linha (ex.: Final = 40% RA1 + 60% RA2)");
+    return { lines, errors };
+  }
+  // items: [{ key, name, points, score }]. Returns custom()'s fields plus leaves: [{ name, items: [names], missing }] and errors.
+  function formulaEval(text, items, meta) {
+    const { lines, errors } = formulaParse(text), byName = new Map(lines.map(l => [foldName(l.name), l]));
+    // the final grade: the line called Final (or Nota final, Média final), else the one no other line uses, else the first
+    if (lines.length) { const used = new Set(lines.flatMap(l => l.terms.map(t => foldName(t.ref)))), named = lines.find(l => /^(nota |media )?final$/.test(foldName(l.name)));
+      const top = named || lines.find(l => !used.has(foldName(l.name))) || lines[0]; lines.splice(lines.indexOf(top), 1); lines.unshift(top); }
+    const out = (status, extra) => Object.assign({ status, now: null, need: null, open: 0, notYet: 0, counted: 0, total: 10, leaves: [], errors }, extra);
+    if (errors.length || !lines.length) return out("erro");
+    const acts = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0), leaves = new Map();
+    const leafOf = ref => { const k = foldName(ref); if (!leaves.has(k)) { const exact = acts.filter(a => foldName(a.name) === k), hit = !k ? [] : exact.length ? exact : acts.filter(a => (" " + foldName(a.name) + " ").includes(" " + k + " ")); /* whole words: "TDE 1" is not "TDE 10" */ leaves.set(k, { name: ref, items: hit, missing: !hit.length }); } return leaves.get(k); };
+    // value of a node with "x" (0-1) on everything left: { v: 0-10, pts, top }
+    const val = (ref, x, seen) => {
+      const l = byName.get(foldName(ref));
+      if (!l) { const lf = leafOf(ref);
+        if (lf.missing) return { v: x * 10, pts: null, top: null, left: true };
+        let got = 0, of = 0; for (const a of lf.items) { const p = Number(a.points); of += p; got += a.score == null || !Number.isFinite(Number(a.score)) ? x * p : Math.min(p, Math.max(0, Number(a.score))); }
+        return { v: got / of * 10, pts: got, top: of }; }
+      if (seen.has(l)) throw new Error("a parte \"" + l.name + "\" usa ela mesma");
+      const s2 = new Set(seen).add(l), kids = l.terms.map(t => Object.assign({ w: t.w }, val(t.ref, x, s2)));
+      if (l.op === "sum") {   // points added up; what is not in Canvas yet (a missing name, or the top above the known points) is left
+        const known = kids.reduce((s, k) => s + (k.top || 0), 0), got = kids.reduce((s, k) => s + (k.pts == null ? 0 : k.pts), 0);
+        const line = l.terms.find((t, i) => kids[i].pts === undefined); if (line) throw new Error("\"" + l.name + "\" soma pontos, mas \"" + line.ref + "\" é uma média ou um peso (sem pontos): use pesos (ex.: 50% " + line.ref + " + 50% ...) ou faça \"" + line.ref + "\" com soma(...) de N");   // its points would vanish and its whole weight count as left
+        if (kids.some(k => k.top == null) && !l.top) throw new Error("\"" + l.name + "\" soma algo que ainda não está no Canvas: diga quantos pontos ela vale com \"de N\" (ex.: soma(...) de 5)");
+        const top = l.top || known; return { v: top > 0 ? Math.min(10, (got + x * Math.max(0, top - known)) / top * 10) : 0, pts: got + x * Math.max(0, top - known), top }; }
+      if (l.op === "avg") return { v: kids.reduce((s, k) => s + k.v, 0) / kids.length };
+      const W = kids.reduce((s, k) => s + k.w, 0); return { v: W > 0 ? kids.reduce((s, k) => s + k.w * k.v, 0) / W : 0 };
+    };
+    let now, best;
+    try { now = val(lines[0].name, 0, new Set()).v; best = val(lines[0].name, 1, new Set()).v; } catch (e) { errors.push(String(e.message)); return out("erro"); }
+    const lv = [...leaves.values()], counted = lv.reduce((s, l) => s + l.items.length, 0);
+    { const where = new Map(); for (const l of lines) for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref));   // one activity in two lines counts twice (a short name like "Prova" also finds "Prova RA2")
+      for (const a of lf ? lf.items : []) { const w = where.get(a); if (w && w.line !== l) errors.push("\"" + a.name + "\" conta em " + w.line.name + " (por \"" + w.ref + "\") e em " + l.name + " (por \"" + t.ref + "\"): use um nome mais completo"); else if (!w) where.set(a, { line: l, ref: t.ref }); } } }
+    for (const l of lines) { const seen = new Map(); for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref)); for (const a of lf ? lf.items : []) { if (seen.has(a) && seen.get(a) !== t.ref) errors.push("\"" + a.name + "\" entrou duas vezes em " + l.name + " (por \"" + seen.get(a) + "\" e \"" + t.ref + "\"): um nome com vírgula? use um pedaço sem vírgula"); seen.set(a, t.ref); } } }
+    const open = acts.filter(a => lv.some(l => l.items.includes(a)) && (a.score == null || !Number.isFinite(Number(a.score)))).length;
+    const extra = { leaves: lv.map(l => ({ name: l.name, items: l.items.map(a => a.name), missing: l.missing })), counted, open, notYet: lv.filter(l => l.missing).length, weights: lines.filter(l => l.op === "w" && Math.abs(l.terms.reduce((s, t) => s + t.w, 0) - 100) > 0.5).map(l => l.name) };
+    const shown = floor2(now);
+    if (now >= meta - 1e-9) return out("garantido", Object.assign(extra, { now: shown, need: 0 }));
+    if (best < meta - 1e-9) return out("nao-da", Object.assign(extra, { now: shown }));
+    let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (val(lines[0].name, mid, new Set()).v >= meta - 1e-9) hi = mid; else lo = mid; }
+    return out("precisa", Object.assign(extra, { now: shown, need: ceil2(hi * 10) }));
   }
   function custom(items, rule, meta) {
+    if (rule && typeof rule.formula === "string" && rule.formula.trim()) return formulaEval(rule.formula, items, meta);   // the student's own formula wins
     const off = new Set(rule && Array.isArray(rule.off) ? rule.off.map(String) : []), total = rule && Number(rule.total) > 0 && Number(rule.total) <= 1000 ? Number(rule.total) : 10;
     if (rule && rule.parts && typeof rule.parts === "object" && Object.keys(rule.parts).some(k => /^[A-E]$/.test(k) && Number(rule.parts[k] && rule.parts[k].w) > 0)) return customParts(Array.isArray(items) ? items : [], rule, meta, off);
     const counted = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)));
+    if (!rule) { const sum = counted.reduce((t, i) => t + Number(i.points), 0); if (sum > 10) return Object.assign(custom(items, { total: Math.min(1000, Math.ceil(sum * 100) / 100) }, meta), { scaled: true }); }   // no rule at all: the Canvas points, brought to 0-10
     if (!counted.length) return { status: "vazio", now: 0, need: null, open: 0, notYet: 0, counted: 0, total };
     let earned = 0, open = 0, planned = 0;
     for (const i of counted) { const p = Number(i.points); planned += p; if (i.score == null || !Number.isFinite(Number(i.score))) open += p; else earned += Math.min(p, Math.max(0, Number(i.score))); }
     if (planned > total * 1.001) return { status: "acima", now: null, need: null, open, notYet: 0, counted: counted.length, total, planned: Math.round(planned * 100) / 100 };
-    const scale = 10 / total, notYet = Math.max(0, total - planned), left = open + notYet, now = Math.round(earned * scale * 100) / 100;
+    const scale = 10 / total, notYet = Math.max(0, total - planned), left = open + notYet, now = floor2(earned * scale);
     if (earned * scale >= meta - 1e-9) return { status: "garantido", now, need: 0, open, notYet, counted: counted.length, total };
     const need = left > 0 ? (meta / scale - earned) / left * 10 : Infinity;
-    return { status: need > 10 ? "nao-da" : "precisa", now, need: need > 10 ? null : Math.round(need * 100) / 100, open, notYet, counted: counted.length, total };
+    return { status: need > 10 ? "nao-da" : "precisa", now, need: need > 10 ? null : ceil2(need), open, notYet, counted: counted.length, total };
   }
   function centro(curso, meta, fill) {
     const none = st => ({ status: st, now: 0, need: null, left: [], approx: false });
@@ -970,14 +1053,17 @@ const NotasCore = (() => {
         hid.set(key, node); return node; };
       const kids = c => (Array.isArray(c.colunas_associadas_pai) ? c.colunas_associadas_pai : []).map(k => ({ c: cols.get(refId(k)) || hidden(k), w: Number(k && k.pivot && k.pivot.peso_coluna_filho) || 0 }));   // a lost part stays, counting 0
       // value of a column; f: the fraction given to every leaf still open (the projection). raw: points, for "total"
+      // fill: a number (0-10 on everything left) or { grades: { columnId: 0-10 }, rest }: grades the student typed count as given
+      let per = new Map();   // empty while the tool's own value is calibrated; the typed grades come in after
+      const perIn = new Map(fill && typeof fill === "object" && fill.grades && typeof fill.grades === "object" ? Object.entries(fill.grades).map(([k, v]) => [Number.isNaN(Number(k)) ? k : Number(k), Math.min(10, Math.max(0, Number(v)))]).filter(([, v]) => Number.isFinite(v)) : []);
       let visits = 0;   // a hostile tree (layers of columns sharing children) must not hang the page or the MCP
       const val = (c, f, seen, raw) => {
         if (!c) return 0;
         if (++visits > 20000) throw new Error("fórmula grande demais");
         if (seen.has(c.id_coluna)) return 0; seen = new Set(seen).add(c.id_coluna);
-        if (isLeaf(c)) { const v = num(c), p = pts(c); return v != null ? (raw ? v : v * 10 / p) : open.has(c.id_coluna) ? (raw ? f * p : f * 10) : 0; }
+        if (isLeaf(c)) { const v = num(c), p = pts(c), g = per.get(c.id_coluna); return v != null ? (raw ? v : v * 10 / p) : open.has(c.id_coluna) ? (g != null ? (raw ? g * p / 10 : g) : (raw ? f * p : f * 10)) : 0; }   // g: a grade the student typed (0-10)
         const ks = kids(c);
-        if (c.tipo_coluna === "oculta" && c.h0 != null) return c.h0 + ks.reduce((s, k) => s + (k.c && open.has(k.c.id_coluna) ? f * 10 : 0), 0) / c.n;   // calibrated: what is graded inside = h0
+        if (c.tipo_coluna === "oculta" && c.h0 != null) return c.h0 + ks.reduce((s, k) => s + (k.c && open.has(k.c.id_coluna) ? (per.has(k.c.id_coluna) ? per.get(k.c.id_coluna) : f * 10) : 0), 0) / c.n;   // calibrated: what is graded inside = h0
         if (!ks.length || !CALC.includes(c.tipo_calculo)) { const v = num(c); return v != null ? v : 0; }
         if (c.tipo_calculo !== "total" && ks.some(k => k.c && isLeaf(k.c) && pts(k.c) !== 10)) approx = true;
         const vs = ks.map(k => val(k.c, f, seen, c.tipo_calculo === "total")), sw = ks.reduce((s, k) => s + k.w, 0);
@@ -1002,16 +1088,17 @@ const NotasCore = (() => {
         hs[0].c.h0 = Math.min(10, Math.max(0, (shown * sw - rest) / hs[0].w));
       }
       if (cols.size > 600) return none("incompleto");
-      const base = val(fin, 0, new Set()), shift = shown != null ? shown - base : 0, at = f => { visits = 0; return val(fin, f, new Set()) + shift; };
-      const now = Math.round(at(0) * 100) / 100, T = Number(meta) || 7, left = [...open];
-      const extra = fill != null && Number.isFinite(Number(fill)) ? { projected: Math.round(Math.min(10, at(Math.min(10, Math.max(0, Number(fill))) / 10)) * 100) / 100 } : {};
+      const base = val(fin, 0, new Set()), shift = shown != null ? shown - base : 0; per = perIn; const at = f => { visits = 0; return val(fin, f, new Set()) + shift; };
+      const now = floor2(at(0)), T = Number(meta) || 7, left = [...open].filter(id => !perIn.has(id));   // typed grades are not left any more
+      const rest = fill && typeof fill === "object" ? Number(fill.rest) : fill;
+      const extra = rest != null && Number.isFinite(Number(rest)) ? { projected: Math.round(Math.min(10, at(Math.min(10, Math.max(0, Number(rest))) / 10)) * 100) / 100 } : {};
       if (at(0) >= T - 1e-9) return Object.assign({ status: "garantido", now, need: 0, left, approx }, extra);
       if (!left.length || at(1) < T - 1e-9) return Object.assign({ status: "nao-da", now, need: null, left, approx }, extra);
       let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (at(mid) >= T - 1e-9) hi = mid; else lo = mid; }
-      return Object.assign({ status: "precisa", now, need: Math.round(hi * 1000) / 100, left, approx }, extra);
+      return Object.assign({ status: "precisa", now, need: Math.ceil(hi * 1000 - 1e-9) / 100, left, approx }, extra);
     } catch (e) { return none("sem-formula"); }
   }
-  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, formulaParse, formulaEval, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();
 </script>
@@ -1495,7 +1582,7 @@ const NotasCore = (() => {
     left.append(el("div", "t", u.item.name), el("div", "s", (SHORT[u.course.id] || u.course.name) + " · " + dmy(u.item.date) + ", " + when));
     const nd = C.courseNeed(u.st), v = nd.impossible ? "não dá" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
     const vv = el("div", "v num", v); vv.style.color = "var(--" + nd.tone + ")";
-    need.append(vv, el("div", "u", nd.impossible ? "nem com nota cheia" : "precisa, em 10" + (nd.approx ? " (faltam notas antigas)" : "")));
+    need.append(vv, el("div", "u", nd.impossible ? "nem com nota cheia" : "média que falta tirar (de 10)" + (nd.approx ? " (faltam notas antigas)" : "")));
     box.append(el("div", "k", "Próxima avaliação que conta"), left, need);
     const rest = list.slice(1, 3);
     if (rest.length) { const t = el("div", "then", "Depois: ");

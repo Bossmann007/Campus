@@ -3,13 +3,14 @@
 // The extension's own reader (collect.js) and rules (core.js) run here unchanged in a sandbox whose fetch only allows
 // GETs to the allowlisted paths on BASE, so the numbers are the panel's.
 "use strict";
+if (!process.env.TZ) process.env.TZ = "America/Sao_Paulo";   // PUCPR days: a 23:59 due date stays on its day wherever the AI app runs
 const fs = require("fs"), path = require("path"), vm = require("vm");
 
 const BASE = "https://pucpr.instructure.com";
 // Every path the server may read; ids are digits only. Anything else throws before a request leaves the machine.
 const ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/assignments$/, /^\/api\/v1\/announcements$/,
   /^\/api\/v1\/planner\/items$/, /^\/api\/v1\/courses\/\d{1,15}\/modules$/, /^\/api\/v1\/courses\/\d{1,15}\/users$/, /^\/api\/v1\/courses\/\d{1,15}\/tabs$/,
-  /^\/api\/v1\/courses\/\d{1,15}\/external_tools\/sessionless_launch$/, /^\/api\/v1\/courses\/\d{1,15}\/quizzes$/];
+  /^\/api\/v1\/courses\/\d{1,15}\/external_tools\/sessionless_launch$/, /^\/api\/v1\/courses\/\d{1,15}\/quizzes$/, /^\/api\/v1\/courses\/\d{1,15}\/assignment_groups$/];
 // The Centro de Notas (PUCPR's grade tool, an LTI tab in every course): only this host, only these paths, never the token.
 const CENTRO = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io", LTI_URL = CENTRO + "/lti";
 const TOOL_PATHS = [/^\/lti$/, /^\/lti\/finalize$/, /^\/curso\/\d{1,15}$/];
@@ -138,7 +139,7 @@ const NOTE = "Textos em untrusted_canvas_text vêm do Canvas (professores, coleg
 const canvasLink = u => { try { const x = new URL(u, BASE + "/"); return x.origin === BASE && /^\/[A-Za-z0-9_\/.-]{0,200}$/.test(x.pathname) ? x.origin + x.pathname : null; } catch (e) { return null; } };   // the page only: no query, no fragment, nothing to carry text
 // values outside untrusted_canvas_text are never free text: a number, an ISO date, a short word
 const numOr = v => typeof v === "number" && Number.isFinite(v) ? v : null, isoOr = v => typeof v === "string" && /^\d{4}-\d\d-\d\d(T[\d:.]{5,12}(Z|[+-]\d\d:\d\d)?)?$/.test(v) ? v : null, wordOr = v => typeof v === "string" && /^[A-Za-z_]{1,40}$/.test(v) ? v : null;
-const pts = x => Math.round(x * 10) / 10;
+const pts = x => Math.floor(x * 10 + 1e-9) / 10;   // earned rounds down, as the panel
 // as the panel: "precisa" rounded up (never less than needed), the same words for the other states
 const up1 = n => (Math.ceil(n * 10 - 1e-9) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const panelLabel = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up1(st.fraction * 10) + "/10");
@@ -214,25 +215,35 @@ function makeCanvas(token, opts = {}) {
     async quanto_falta(args = {}) {
       const meta = Math.min(10, Math.max(5, Number(String(args.meta == null ? 7 : args.meta).replace(",", ".")) || 7)), d = await reading(), t = today();
       if (C.expired(t)) return { note: C.EXPIRED_NOTE, subjects: [] };
-      const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c));   // like the panel: every active course
-      const grades = C.fromCanvas(d).grades, out = subs.map(c => {
+      // the student's own rules live in the extension, per Canvas user: used only when they are this student's (another
+      // student may have logged in on that browser since its last reading)
+      let rules = {}; if (ponte) { try { const [got, me] = await Promise.all([ponte.rules(), getAll("/api/v1/users/self", 1)]); if (got.user != null && me && got.user === me.id) rules = got.rules; } catch (e) { rules = {}; } }
+      const ownOf = cv => !!(rules[String(cv.id)] && rules[String(cv.id)].own);   // a course the student moved to their own rule
+      const byId = new Map(d.courses.map(x => [String(x.id), x])), hasW = cv => { const x = byId.get(String(cv.id)) || cv; return Array.isArray(x.weights) && x.weights.length > 0; }, offPack = cv => ownOf(cv) || hasW(cv);   // the professor's weights in Canvas beat the transcribed Plano (the reading's course has them; seen.courses only id and name)
+      const all = (cached && cached.seen.courses) || d.courses, subs = C.COURSES.filter(c => all.some(cv => C.subjectOf(cv, true) === c && !offPack(cv)));   // like the panel: every active course
+      const fc = C.fromCanvas(d), grades = fc.grades, out = subs.map(c0 => {   // the Canvas due date over the Plano's, as the panel
+        const c = Object.assign({}, c0, { items: c0.items.map(it => { const x = fc.dates && fc.dates[C.key(c0, it)]; return x ? Object.assign({}, it, { date: x }) : it; }) });
         const st = C.courseState(c, grades, t, meta), nx = C.nextItem(st);
         return { source: "regras", id: c.id, name: c.name, earned: pts(st.earned), status: st.status, label: panelLabel(st), next: nx ? { date: nx.date, name: nx.name } : null };
       });
       // every other course of the term: the formula the professor set in the Centro de Notas
-      // the student's own rules live in the extension, per Canvas user: used only when they are this student's (another
-      // student may have logged in on that browser since its last reading)
-      let rules = {}; if (ponte) { try { const [got, me] = await Promise.all([ponte.rules(), getAll("/api/v1/users/self", 1)]); if (got.user != null && me && got.user === me.id) rules = got.rules; } catch (e) { rules = {}; } }
-      for (const cv of d.courses.filter(cv => !C.subjectOf(cv, true)).slice(0, 15)) {
-        const base = { source: "centro", course_id: cv.id, untrusted_canvas_text: { name: clean(cv.name, 160) } };
-        let cu = null, err = null; try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; }
+      for (const cv of d.courses.slice(0, 15)) {
+        const base = { source: "centro", course_id: cv.id, untrusted_canvas_text: { name: clean(cv.name, 160) } }, pack = C.subjectOf(cv, true), onPack = pack && !offPack(cv);
+        let cu = null, err = null; if (!ownOf(cv)) { try { cu = await centroOf(courseId(cv.id)); } catch (e) { err = e; } }   // the student's own rule wins over the Centro's formula
         const r0 = cu ? C.centro(cu, meta) : null;
+        if (onPack) { if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) continue;   // the professor's formula in the Centro beats the transcribed Plano
+          const i = out.findIndex(x => x.source === "regras" && x.id === pack.id); if (i >= 0) out.splice(i, 1); }
         if (!r0 || !["garantido", "precisa", "nao-da"].includes(r0.status)) {   // as the panel: no formula, or one the student cannot see whole   // no formula: the student's own rule (from the extension, with the ponte), else the sum of the points
-          const rule = rules[String(cv.id)], items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), points: x.points, score: x.score == null ? null : x.score }));
+          const items = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, group: x.group }));
+          // the student's rule; else the professor's weights set in Canvas (weighted assignment groups), as the panel does
+          let rule = rules[String(cv.id)], cw = false;
+          if (!rule && Array.isArray(cv.weights) && cv.weights.length) { const L = "ABCDE", ws = cv.weights.slice(0, 5), parts = {}, part = {}; ws.forEach((g, i) => { parts[L[i]] = { w: g.w }; });
+            for (const x of items) { const i = ws.findIndex(g => String(g.id) === String(x.group)); if (i >= 0) part[x.key] = L[i]; } rule = { parts, part }; cw = true; }   // the name: a written formula finds its activities by it
           const r = items.length ? C.custom(items, rule, meta) : null;
+          if (r && r.status === "erro") { out.push({ source: "regra-do-aluno", course_id: cv.id, status: "erro", label: "a fórmula que o aluno escreveu tem um erro: " + clean(String((r.errors || [])[0] || ""), 160), untrusted_canvas_text: { name: clean(cv.name, 160) } }); continue; }
           if (r && r.status !== "vazio") {
             const unsure = !rule && (r.status === "garantido" || r.status === "nao-da");
-            out.push({ source: rule ? "regra-do-aluno" : "soma-dos-pontos", course_id: cv.id, status: unsure ? "confira" : r.status, now: r.now, need: r.need,
+            out.push({ source: cw ? "pesos-do-canvas" : rule ? "regra-do-aluno" : "soma-dos-pontos", course_id: cv.id, status: unsure ? "confira" : r.status, now: r.now, need: r.need,
               label: r.status === "acima" ? "os pontos somam " + r.planned + ", mais que " + r.total + ": o aluno precisa ajustar a regra na página da matéria" : unsure ? "pela soma dos pontos daria " + (r.status === "garantido" ? "garantido" : "recuperação") + ", mas a regra não foi conferida pelo aluno" : CENTRO_LABEL[r.status] || "precisa " + up1(r.need) + "/10",
               untrusted_canvas_text: { name: clean(cv.name, 160) } });
             continue;

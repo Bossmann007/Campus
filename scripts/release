@@ -1,0 +1,21 @@
+#!/bin/sh
+# Publish the GitHub releases for the current versions. Run only when the owner asked for a release.
+#   scripts/release "notas da extensão" ["notas do MCP"]
+# Refuses on a dirty tree or a failing verify. Skips a tag that already exists. Keeps only the newest zip in ~/Downloads.
+set -e
+cd "$(dirname "$0")/.."
+[ -n "$1" ] || { echo "usage: scripts/release \"extension notes\" [\"MCP notes\"]"; exit 2; }
+[ -z "$(git status --porcelain)" ] || { echo "release: commit first (dirty tree):"; git status --short; exit 1; }
+git fetch -q origin && [ "$(git rev-parse HEAD)" = "$(git rev-parse @{u} 2>/dev/null)" ] || { echo "release: push the branch first"; exit 1; }
+./scripts/verify >/dev/null || { echo "release: scripts/verify failed"; exit 1; }
+ext=$(node -p 'require("./extension/manifest.json").version'); mcp=$(node -p 'require("./mcp/package.json").version')
+./scripts/package-extension >/dev/null && ./scripts/package-mcp >/dev/null
+[ -z "$(git status --porcelain)" ] || { echo "release: packaging changed tracked files (run the sync scripts, commit):"; git status --short; exit 1; }
+tmp=$(mktemp -d); cp "dist/quanto-falta-extension-$ext.zip" "$tmp/caderno-plus-$ext.zip"
+rm -f "$HOME"/Downloads/caderno-plus-*.zip; cp "$tmp/caderno-plus-$ext.zip" "$HOME/Downloads/"
+if gh release view "ext-v$ext" >/dev/null 2>&1; then echo "ext-v$ext exists: skipped"; else
+  gh release create "ext-v$ext" --latest --title "Caderno+ $ext" --notes "$1" "$tmp/caderno-plus-$ext.zip" dist/quanto-falta-extension.zip "dist/caderno-plus-firefox-$ext.zip"; fi
+if gh release view "mcp-v$mcp" >/dev/null 2>&1; then echo "mcp-v$mcp exists: skipped"; elif [ -n "$2" ]; then
+  gh release create "mcp-v$mcp" --prerelease --title "Caderno+ MCP $mcp" --notes "$2" "dist/caderno-mcp-$mcp.mcpb"; else echo "mcp-v$mcp: no MCP notes given, not released"; fi
+rm -rf "$tmp"
+echo "store zip: ~/Downloads/caderno-plus-$ext.zip · npm (owner, 2FA): cd mcp && npm publish"

@@ -12,6 +12,7 @@
   let KPI_COURSE = "";   // prefs.kpiCourse: the subject the three dashboard numbers are about ("" = every subject)
   let TURMA_PREF = null;   // prefs.turma: the turma the student confirmed, "outro" for another program, null when not asked yet
   const fmt = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const dn = n => fmt(Math.floor(n * 10 + 1e-9) / 10, 1);   // round down: never shows more than earned (the dashboard, the course page, the popup alike)
   const up = (n, d) => fmt(Math.ceil(n * 10 ** d - 1e-9) / 10 ** d, d);   // round up: never shows less than needed
   const dmy = iso => iso.slice(8, 10) + "/" + iso.slice(5, 7);
   const today = () => C.localISO(new Date());
@@ -82,7 +83,7 @@
   }
   // Forgetting a student also drops what the service worker holds for them: reminders, the week list, the exam on the icon.
   const forget = async () => {
-    await chrome.storage.local.remove(["cache", "search", "teachers", "ccolors"]);
+    await chrome.storage.local.remove(["cache", "search", "teachers", "ccolors", "notified", "shown"]);   // notified/shown hold the last student's grade keys
     try { if (typeof sessionStorage !== "undefined") { sessionStorage.removeItem("cp-sent-remind"); sessionStorage.removeItem("cp-sent-next"); } } catch (e) { /* no storage */ }
     chrome.runtime.sendMessage({ type: "remind", items: [], alarms: false }).catch(() => {});
     chrome.runtime.sendMessage({ type: "next", date: null, label: "" }).catch(() => {});
@@ -125,11 +126,12 @@
         oops("ler uma matéria", new Error(data.courses.filter(c => c.failed).length + " matéria(s) sem resposta do Canvas"));
       }
       const ids = (got.courses || []).map(c => ({ id: c.id, name: c.name }));
-      const planner = await plan;
-      await newGrades(user, data);
+      const planner = await plan, { cache: before, lastError } = await chrome.storage.local.get(["cache", "lastError"]);
+      await newGrades(user, data, before);
+      await dueMoves(user, data, before);
       const fresh = { v: VERSION, user, at: Date.now(), data, ids, planner: Array.isArray(planner) ? planner.map(slimPlan) : null, inbox: await inbox };
-      await chrome.storage.local.set({ cache: fresh });
-      await chrome.storage.local.remove(["refreshing", "lastError"]);   // a reading that worked: the old error is over
+      await chrome.storage.local.set({ cache: fresh, refreshing: 0 });   // one write (every write reaches every tab); 0 = not reading
+      if (lastError) await chrome.storage.local.remove("lastError");   // a reading that worked: the old error is over
       // the Centro de Notas of the term's courses, read by the worker behind (the cards repaint when it lands)
       if (EXT) chrome.runtime.sendMessage({ type: "centro", user, ids: (data.courses || []).map(c => c.id) }).catch(() => {});
       return fresh;
@@ -154,8 +156,8 @@
   // New grades: what got a score (or a different one) since the last reading of this user. The first reading only sets the
   // baseline. Kept in "recent" per user (20 newest, 30 days) for the dashboard; the service worker shows a notification.
   const gradeKey = (c, x) => c.id + ":" + x.name;
-  async function newGrades(user, data) {
-    const { cache: old, recent, prefs } = await chrome.storage.local.get(["cache", "recent", "prefs"]);
+  async function newGrades(user, data, old0) {
+    const { cache: oldRead, recent, prefs } = await chrome.storage.local.get(old0 ? ["recent", "prefs"] : ["cache", "recent", "prefs"]), old = old0 || oldRead;   // the reading before this one, when the caller has it
     if (!old || old.user !== user || !old.data || !Array.isArray(old.data.courses)) return;
     const before = {};
     for (const c of old.data.courses) for (const x of c.assignments || []) before[gradeKey(c, x)] = x.score;
@@ -167,6 +169,58 @@
     const all = recent && typeof recent === "object" ? recent : {}, mine = (Array.isArray(all[user]) ? all[user] : []).filter(r => r && now - r.at < 30 * 864e5 && !got.some(g => g.k === r.k));
     await chrome.storage.local.set({ recent: Object.assign({}, all, { [user]: got.concat(mine).slice(0, 20) }) });
     if (cpPrefs(prefs).newgrades) chrome.runtime.sendMessage({ type: "grades", items: got.slice(0, 10) }).catch(() => {});
+  }
+  // Prazo mudou: an assignment whose due date changed since the last reading (both dates known, one still ahead). Goes to
+  // "Desde a sua última visita" and, with the reminders on, to a notification. The first reading only sets the baseline.
+  const dueText = iso => { const d = new Date(iso); return C.localISO(d).slice(8, 10) + "/" + C.localISO(d).slice(5, 7) + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  async function dueMoves(user, data, old) {
+    if (!old || old.user !== user || !old.data || !Array.isArray(old.data.courses)) return;
+    const before = {}, now = Date.now(), moved = [];
+    for (const c of old.data.courses) for (const x of c.assignments || []) before[gradeKey(c, x)] = x.due;
+    for (const c of data.courses) for (const x of c.assignments || []) { const was = before[gradeKey(c, x)], t0 = Date.parse(was), t1 = Date.parse(x.due);
+      if (!Number.isFinite(t0) || !Number.isFinite(t1) || Math.abs(t1 - t0) < 60e3 || Math.max(t0, t1) < now) continue;
+      moved.push({ k: "d:" + gradeKey(c, x) + ":" + x.due, course: shortName(c.name), name: String(x.name), from: dueText(was), to: dueText(x.due), url: x.url && inCanvas(x.url) }); }
+    if (!moved.length) return;
+    const cur = await loadChanges(user), items = moved.map(m => ({ k: m.k, kind: "prazo", text: m.name + ": " + m.from + " → " + m.to, course: m.course, url: m.url, at: now }));
+    await saveChanges(user, { seenAt: cur.seenAt, items: items.concat(cur.items.filter(x => now - x.at < 7 * 864e5 && !items.some(n => n.k === x.k))).slice(0, 40) });
+    const { prefs } = await chrome.storage.local.get("prefs");
+    if (cpPrefs(prefs).remind) chrome.runtime.sendMessage({ type: "due", items: moved.slice(0, 10) }).catch(() => {});
+  }
+  // Copiar: a button at the end of an assignment's, a page's or a discussion's text; copies the title, the dates and the text
+  // with its images inside the copy (Canvas images need the student's session, so they go as data), to paste in Docs or Word
+  const COPY_SEL = "#assignment_show .description.user_content, .show-content.user_content, .discussion-section .message.user_content, [data-resource-type='discussion_topic.body'] .user_content, #content .user_content.enhanced, #content .user_content";
+  function copyButton() {
+    const body = document.querySelector(COPY_SEL);
+    if (!body || document.getElementById("cp-copy")) return;
+    const host = el("div"), root = host.attachShadow({ mode: "closed" }), b = el("button", null, "Copiar texto e imagens"), st = el("style");
+    host.id = "cp-copy";
+    st.textContent = ":host { display:block; margin:14px 0 6px; } button { font:600 13px/1 system-ui, sans-serif; padding:9px 14px; border-radius:9px; border:1px solid #c9c2b4; background:#fffdf8; color:#2a2a2a; cursor:pointer; } button:hover { border-color:#e2685a; } button.ok { border-color:#3c8a5a; color:#2d6b45; }";
+    b.type = "button"; b.title = "Copia o título, as datas e o texto, com as imagens, para colar no Docs, no Word ou no Notion";
+    b.addEventListener("click", () => {
+      const wrap = document.createElement("div"), h = document.querySelector("h1.title, .page-title, h1.discussion-title, h1"), meta = document.querySelector("#assignment_show .student-assignment-overview");
+      wrap.appendChild(el("h2", null, String((h && h.textContent) || document.title).trim()));
+      if (meta) wrap.appendChild(meta.cloneNode(true));
+      wrap.appendChild(body.cloneNode(true));
+      for (const x of wrap.querySelectorAll("script, style, iframe, button, input, .screenreader-only, #cp-copy")) x.remove();
+      const text = [wrap.firstChild.textContent, meta ? meta.innerText : "", body.innerText].filter(Boolean).join("\n\n");
+      const html = (async () => {
+        for (const img of [...wrap.querySelectorAll("img")].slice(0, 30)) {
+          let u; try { u = new URL(img.getAttribute("src") || "", location.href); } catch (e) { continue; }
+          img.removeAttribute("srcset");
+          if (u.origin !== location.origin) { img.setAttribute("src", u.href); continue; }   // outside Canvas: the link as it is
+          try { const f = /\/files\/(\d+)/.exec(u.pathname);   // a Canvas file: its preview redirects to a CDN that refuses the page; the API's download link works
+            const src = f ? (await (await fetch("/api/v1/files/" + f[1], { credentials: "include" })).json()).url : u.href;
+            if (typeof src !== "string" || new URL(src, location.href).origin !== location.origin) { img.setAttribute("src", u.href); continue; }
+            const r = await fetch(src, { credentials: "include" }), bl = await r.blob(); if (!r.ok || !/^image\//.test(bl.type) || bl.size > 5e6) { img.setAttribute("src", u.href); continue; }
+            img.setAttribute("src", await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(bl); })); } catch (e) { img.setAttribute("src", u.href); }
+        }
+        for (const a of wrap.querySelectorAll("a[href]")) { try { a.setAttribute("href", new URL(a.getAttribute("href"), location.href).href); } catch (e) { a.removeAttribute("href"); } }
+        return new Blob([new XMLSerializer().serializeToString(wrap)], { type: "text/html" }); })();
+      b.textContent = "Copiando…";
+      navigator.clipboard.write([new ClipboardItem({ "text/html": html, "text/plain": new Blob([text], { type: "text/plain" }) })])
+        .then(() => { b.textContent = "Copiado ✓ (cole no Docs, no Word ou no Notion)"; b.className = "ok"; }, () => { b.textContent = "Não deu para copiar: clique de novo"; b.className = ""; });
+    });
+    root.append(st, b); body.after(host);
   }
   const pts = n => typeof n === "number" ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "?";
   // Grades typed by the student where Canvas has none (exams on paper, a grade not posted yet): chrome.storage.local "hand",
@@ -181,7 +235,8 @@
   let myTasks = [];
   // The Centro de Notas read by the worker, per Canvas user ("centro": { user, at, courses: { <course id>: curso | null } }).
   let myCentro = {};
-  async function loadCentro(user) { const { centro } = await chrome.storage.local.get("centro"); myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
+  let centroOff = false;   // the worker could not read the Centro de Notas: its permission was never granted (centro.html grants it)
+  async function loadCentro(user) { const { centro, centroOff: off } = await chrome.storage.local.get(["centro", "centroOff"]); centroOff = !!off; myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
   // quanto falta from the professor's formula in the Centro de Notas, for a course without our rules; null without a formula
   const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && ["garantido", "precisa", "nao-da"].includes(r.status) ? r : null; };   // sem-formula and incompleto: no number
   // The student's own rule (C.custom) for a course with neither our rules nor a formula in the Centro de Notas: per Canvas
@@ -191,22 +246,85 @@
   async function loadRules(user) { const { myRules: all } = await chrome.storage.local.get("myRules"); rulesUser = user; myRules = all && typeof all === "object" && all[user] && typeof all[user] === "object" ? all[user] : {}; return myRules; }
   async function saveRule(user, courseId, rule) {
     const { myRules: all } = await chrome.storage.local.get("myRules"), base = all && typeof all === "object" ? all : {};
+    if (rule && rule.merge) { const stored = base[user] && base[user][courseId]; rule = Object.assign({}, stored, rule); delete rule.merge; }   // a change onto the rule as stored now
     const parts = {}, part = {};
     for (const k of ["A", "B", "C"]) { const x = rule.parts && rule.parts[k]; if (x && Number(x.w) > 0) parts[k] = Object.assign({ w: Math.min(100, Number(x.w)) }, Number(x.top) > 0 ? { top: Math.min(1000, Number(x.top)) } : {}); }
     for (const [key, k] of Object.entries(rule.part || {}).slice(0, 300)) if (/^[ABC]$/.test(k)) part[String(key).slice(0, 300)] = k;
-    const mine = Object.assign({}, base[user], { [courseId]: Object.assign({ off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 }, Object.keys(parts).length ? { parts, part } : {}) });
+    const mine = Object.assign({}, base[user], { [courseId]: Object.assign({ off: [...new Set((rule.off || []).map(String))].slice(0, 300), total: Number(rule.total) > 0 ? Math.min(1000, Number(rule.total)) : 10 }, Object.keys(parts).length ? { parts, part } : {}, rule.own ? { own: true } : {}, typeof rule.formula === "string" && rule.formula.trim() ? { formula: rule.formula.slice(0, 4000) } : {}) });
     myRules = mine; await chrome.storage.local.set({ myRules: Object.assign({}, base, { [user]: mine }) });
   }
   let ruleCache = null;   // the reading the items come from (set where the panels are drawn)
   const ruleItems = courseId => { const cv = ruleCache && ruleCache.data && ruleCache.data.courses.find(x => String(x.id) === String(courseId));
-    return cv ? cv.assignments.filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, due: x.due })) : []; };
+    return cv ? cv.assignments.filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, due: x.due, group: x.group })) : []; };
+  // The professor's weights set in Canvas itself (weighted assignment groups): a rule made of them, official, used when the
+  // student has not written one. Up to five groups (A-E); each group is its activities' points.
+  const canvasWeightsRule = courseId => { const cv = ruleCache && ruleCache.data && ruleCache.data.courses.find(x => String(x.id) === String(courseId));
+    const ws = cv && Array.isArray(cv.weights) ? cv.weights.slice(0, 5) : []; if (!ws.length) return null;
+    const parts = {}, part = {}, L = "ABCDE"; ws.forEach((g, i) => { parts[L[i]] = { w: g.w }; });
+    for (const x of ruleItems(courseId)) { const i = ws.findIndex(g => String(g.id) === String(x.group)); if (i >= 0) part[x.key] = L[i]; }
+    return { parts, part, official: true, names: Object.fromEntries(ws.map((g, i) => [L[i], g.name])) }; };
   // Until the student confirms the rule (any change saves it), no "garantido" or "recuperação": the sum may miss items
   // that are not in Canvas yet, or count extras
-  const customOf = courseId => { const items = ruleItems(courseId); if (!items.length) return null; const r = C.custom(items, myRules[courseId], T); if (r.status === "vazio" && !r.parts) return null;
-    const mine = !!myRules[courseId]; return Object.assign(r, { mine, unsure: !mine && (r.status === "garantido" || r.status === "nao-da") }); };
+  const customOf = courseId => { const items = ruleItems(courseId); if (!items.length) return null; const cw = myRules[courseId] ? null : canvasWeightsRule(courseId);
+    const r = C.custom(items, myRules[courseId] || cw, T); if (r.status === "vazio" && !r.parts) return null;
+    const mine = !!myRules[courseId]; return Object.assign(r, { mine, canvasWeights: !!cw, unsure: !mine && !cw && (r.status === "garantido" || r.status === "nao-da") }); };   // Canvas's own weights are not a guess
   const customPill = r => r.status === "acima" || r.unsure ? "confira" : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.";
+  // The formula the editor starts from: the professor's in the Centro de Notas (its tree written out), else the Plano de
+  // Ensino weights Caderno+ has for the course, else the sum of the Canvas points. { text, from }.
+  const shortName2 = n => String(n || "").split(/[:(,;+=#]/)[0].replace(/\s+/g, " ").trim().slice(0, 60);   // an activity's name, short enough for a formula
+  // The shortest start of each activity's name (whole " - " pieces) that finds that activity alone, the way the formula reads
+  // a name (the same words, or the whole name): "Aula 4 - TAREFA SOMATIVA ENTREGA - A justiça…" is "Aula 4".
+  const foldRef = x => String(x == null ? "" : x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const shortRefs = (items, taken = []) => { const names = items.map(i => foldRef(i.name)), out = new Map(), used = new Set(taken.map(foldRef));
+    const hits = k => names.filter(n => n === k || (" " + n + " ").includes(" " + k + " ")).length;
+    for (const it of items) { const full = shortName2(it.name), segs = full.split(/\s+[-–—|]\s+/); let pick = full;
+      for (let i = 1; i < segs.length; i++) { const cand = segs.slice(0, i).join(" - "), k = foldRef(cand); if (/[a-z]/.test(k) && k.length > 1 && !used.has(k) && hits(k) === 1) { pick = cand; break; } }
+      used.add(foldRef(pick)); out.set(it.name, pick); }
+    return out; };
+  function startFormula(courseId, items, shortRef = shortName2) {
+    const nm = x => shortRef(x) || "Parte", pct = x => String(Math.round(x * 100) / 100).replace(".", ",") + "%";
+    const cu = myCentro[courseId], cr = cu ? C.centro(cu, T) : null;
+    if (cu && cr && cr.status !== "sem-formula") {
+      const cols = new Map(); for (const g of cu.grupos || []) for (const gc of (g && g.grupo_colunas) || []) if (gc && gc.coluna) cols.set(gc.coluna.id_coluna, gc.coluna);
+      for (const c of cu.colunas || []) cols.set(c.id_coluna, c);
+      const final = (cu.colunas || []).find(c => c && c.tipo_coluna === "final"), lines = [], seen = new Set();
+      const write = (col, name) => { if (!col || seen.has(col.id_coluna) || lines.length > 30) return; seen.add(col.id_coluna);
+        const kids = (col.colunas_associadas_pai || []).map(k => ({ col: cols.get(k.id_coluna) || { id_coluna: k.id_coluna, nome_coluna: "Parte " + k.id_coluna }, w: k.pivot && Number(k.pivot.peso_coluna_filho) })).filter(k => k.col);
+        if (!kids.length) return; const names = kids.map(k => nm(k.col.nome_coluna)), calc = col.tipo_calculo;
+        lines.push(name + " = " + (calc === "media_ponderada" ? kids.map((k, i) => pct(k.w || 0) + " " + names[i]).join(" + ") : (calc === "total" ? "soma(" : "média(") + names.join(", ") + ")")
+          + (calc === "maximo" || calc === "minimo" ? "   # no Centro é o " + (calc === "maximo" ? "maior" : "menor") + " deles (recuperação)" : ""));
+        kids.forEach((k, i) => { if ((k.col.colunas_associadas_pai || []).length) write(k.col, names[i]); }); };
+      if (final) { write(final, "Final"); if (lines.length) return { text: lines.join("\n"), from: "da fórmula do professor no Centro de Notas" }; }
+    }
+    // the professor's weights set in Canvas (weighted assignment groups): one line per group, its activities added up (as Canvas does)
+    const cw = canvasWeightsRule(courseId);
+    if (cw) { const acts = items.filter(x => x && x.name), fold = x => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(), used = new Set(acts.map(x => fold(nm(x.name)))), terms = [], extra = [];
+      const gname = L => { const full = nm(cw.names[L] || "Parte " + L), first = full.split(/\s+[-–—|]\s+/)[0]; return /[a-z]/i.test(first) && first.length > 1 ? first : full; };   // "RA1 - ATIVIDADES SOMATIVAS" is "RA1"
+      const groups = Object.keys(cw.parts).filter(L => acts.filter(x => cw.part[x.key] === L).length > 1).map(gname), refs = shortRefs(acts, groups), ref = x => refs.get(x.name) || nm(x.name);
+      for (const [L, g] of Object.entries(cw.parts)) { const mine = acts.filter(x => cw.part[x.key] === L); if (!mine.length) continue;
+        if (mine.length === 1) { terms.push(pct(g.w) + " " + ref(mine[0])); continue; }   // one activity: the group is that activity
+        let name = gname(L); if (used.has(fold(name)) || [...refs.values()].some(r => fold(r) === fold(name))) name = "Grupo " + L; used.add(fold(name));   // never the name of an activity (it would point at itself)
+        terms.push(pct(g.w) + " " + name); extra.push(name + " = soma(" + mine.map(ref).join(", ") + ")"); }
+      if (terms.length) return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos que o professor pôs no Canvas" };
+    }
+    const pack = C.COURSES.find(x => C.CANVAS[x.id] && C.CANVAS[x.id].cids.map(String).includes(String(courseId)));
+    if (pack) {
+      const map = C.CANVAS[pack.id].items || {}, extra = [];
+      const terms = pack.items.map(it => { const m = map[it.id] || {}; let ref = nm(it.name.replace(/\s*·\s*/g, " "));   // an item with no Canvas activity keeps its full name (it shows as not in Canvas yet)
+        if (m.one) ref = nm(m.one);
+        else if (m.avg || m.sum) { ref = nm(it.name.replace(/^RA\d+\s*·\s*/, "")); extra.push(ref + " = " + (m.sum ? "soma(" : "média(") + (m.avg || m.sum).map(nm).join(", ") + ")" + (m.sum && !(m.factor && m.factor !== 1) ? " de " + String(it.inMax).replace(".", ",") : "")); }
+        return pct(it.max * 10) + " " + ref; });
+      return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos do Plano de Ensino que o Caderno+ tem" };
+    }
+    const total = items.reduce((t, i) => t + Number(i.points || 0), 0);
+    const refs = shortRefs(items.slice(0, 12));
+    return { text: "Final = soma(" + items.slice(0, 12).map(i => refs.get(i.name) || nm(i.name)).join(", ") + ") de " + String(Math.max(10, Math.round(total * 100) / 100)).replace(".", ","), from: "da soma dos pontos do Canvas" };
+  }
   const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
-  const centroText = r => fmt(r.now, 1) + "/10 · " + (r.status === "garantido" ? "garantido" : r.status === "nao-da" ? "recuperação" : "precisa " + up(r.need, 1) + "/10" + (r.approx ? " (aprox.)" : ""));
+  // the offer to read the Centro de Notas, on the dashboard and on a course page, while its permission is missing
+  const centroOffer = () => { const b = el("div", "card centro-ask"), go = el("button", "primary", "Permitir a leitura");
+    b.append(el("div", "mid", "As notas do Centro de Notas (a fórmula que o professor montou) ainda não foram lidas: falta a sua permissão."), go);
+    go.type = "button"; go.addEventListener("click", () => chrome.runtime.sendMessage({ type: "centroAsk" }).catch(() => {})); return b; };
   const centroTone = r => r.status === "garantido" ? "ok" : r.status === "nao-da" ? "bad" : r.need > 8 ? "bad" : "warn";
   // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
   // the dated ones join the week like Minhas tarefas. chrome.storage.local "checks"; 50 items of 200 chars per list.
@@ -236,11 +354,11 @@
     ta.setAttribute("aria-label", key === "painel" ? "Minhas anotações" : "Anotações desta matéria"); ta.placeholder = "Lembretes, links, o que cai na prova… (fica só neste computador)"; ta.maxLength = 5000;
     pad.append(ta, saved);
     let tm = 0, typed = 0;
-    const store = async () => {
+    const store = async () => { try {
       const { notes } = await chrome.storage.local.get("notes"), all = notes && typeof notes === "object" ? notes : {}, mine = Object.assign({}, all[cache.user]);
       const v = String(ta.value || "").slice(0, 5000); if (v) mine[key] = v; else delete mine[key];
       await chrome.storage.local.set({ notes: Object.assign({}, all, { [cache.user]: mine }) }); saved.textContent = "Salvo neste computador";
-    };
+    } catch (e) { saved.textContent = "Não salvou (a extensão foi atualizada?): copie o texto e recarregue a página."; } };   // never a silent loss
     ta.addEventListener("input", () => { typed = Date.now(); saved.textContent = ""; clearTimeout(tm); tm = setTimeout(store, 400); });
     chrome.storage.local.get("notes").then(({ notes }) => {
       const v = notes && notes[cache.user] && notes[cache.user][key];
@@ -372,15 +490,23 @@
   // and the term has not ended; only then the grade parts, our exams, the reminders for them and the icon number appear.
   // grades: Canvas first; where Canvas has none, the grade the student typed (hand, kept per Canvas user)
   function analyse(cache, hand) {
-    const canvas = C.fromCanvas(cache.data).grades, grades = Object.assign({}, hand || {}, canvas), t = today(), byCanvasId = {};
-    for (const x of cache.ids) { const c = C.subjectOf(x, true); if (c) { byCanvasId[x.id] = c; courseOf[c.id] = String(x.id); } }
+    const fc = C.fromCanvas(cache.data), canvas = fc.grades, grades = Object.assign({}, hand || {}, canvas), t = today(), byCanvasId = {};
+    // the official date: an item that is a Canvas activity takes Canvas's due date over the Plano's (planDate keeps it)
+    const dated = new Map(), withDates = c => { if (dated.has(c)) return dated.get(c); let ch = false;
+      const items = c.items.map(it => { const d = fc.dates && fc.dates[C.key(c, it)]; if (d && d !== it.date) { ch = true; return Object.assign({}, it, { date: d, planDate: it.date, fromCanvas: true }); } return d ? Object.assign({}, it, { fromCanvas: true }) : it; });
+      const out = Object.assign({}, c, { items }); dated.set(c, out); return out; };
+    for (const x of cache.ids) { const c0 = C.subjectOf(x, true); if (c0) { const c = withDates(c0); byCanvasId[x.id] = c; courseOf[c.id] = String(x.id); } }
     // Our rules are for one turma. Canvas courses shared with other programs (Ética, for example) carry the same course id, so
     // a match alone is not proof: the student confirms the turma (onboarding or the question on the dashboard). Without an
     // answer, three or more matching courses count as the turma; fewer ask first.
-    const matched = C.COURSES.filter(c => courseOf[c.id]), turma = matched.length ? C.turmaOf(matched[0]) : null;
+    const matched = C.COURSES.filter(c => courseOf[c.id]).map(withDates), turma = matched.length ? C.turmaOf(matched[0]) : null;
     const confirmed = !!TURMA_PREF && matched.some(c => C.turmaOf(c) === TURMA_PREF), other = TURMA_PREF === "outro" || (!!TURMA_PREF && !confirmed);
     const askTurma = matched.length > 0 && !confirmed && !other && matched.length < 3;
-    const mine = confirmed ? matched.filter(c => C.turmaOf(c) === TURMA_PREF) : !other && !askTurma ? matched : [], expired = C.expired(t), rules = mine.length > 0 && !expired;
+    const ownRule = c => { const r = myRules[courseOf[c.id]]; return !!(r && r.own); };   // the student chose to build this course's rule
+    ruleCache = cache;
+    const officialId = cid => !!(centroOf(cid) || canvasWeightsRule(cid)), official = c => !!courseOf[c.id] && officialId(courseOf[c.id]);   // the professor's formula (Centro) or weights (Canvas) beat the transcribed Plano
+    const mine = (confirmed ? matched.filter(c => C.turmaOf(c) === TURMA_PREF) : !other && !askTurma ? matched : []).filter(c => !ownRule(c) && !official(c)), expired = C.expired(t), rules = mine.length > 0 && !expired;
+    for (const id of Object.keys(byCanvasId)) if (ownRule(byCanvasId[id]) || officialId(id)) delete byCanvasId[id];
     const state = c => C.courseState(c, grades, t, T);
     const label = st => ({ garantido: "garantido", "nao-da": "recuperação", "depende-atrasadas": "faltam notas" }[st.status] || "precisa " + up(st.fraction * 10, 1) + "/10");
     const upcoming = rules ? C.upcoming(mine, grades, t, T) : [];
@@ -402,14 +528,52 @@
     } catch (e) { /* no storage: send */ }
     return true;
   };
-  function sendNext(a) {
-    const u = a.upcoming.find(x => x.item.exam && x.st.status !== "garantido"), msg = { type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" };
+  function sendNext(a, cache) {
+    let u = a.upcoming.find(x => x.item.exam && x.st.status !== "garantido"), msg = { type: "next", date: u ? u.item.date : null, label: u ? u.item.name : "" };
+    if (!u && cache && cache.data) {   // no ready-made weights: the next Canvas activity whose name says it is an exam, by its official date
+      const now = Date.now(), ex = cache.data.courses.flatMap(c => (c.assignments || []).filter(x => x && x.due && Date.parse(x.due) >= now && !x.submitted && x.score == null && /prova|avalia[cç][aã]o (somativa|final)|exame|somativa/i.test(String(x.name || ""))).map(x => x)).sort((p, q) => Date.parse(p.due) - Date.parse(q.due))[0];
+      if (ex) msg = { type: "next", date: C.localISO(new Date(ex.due)), label: String(ex.name).slice(0, 80) };
+    }
     if (fresh("next", msg)) chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   // Deadlines from the Canvas planner (every course) plus our exams that are not in Canvas, from today on. marks: what the
   // student ticked as done here (never written to Canvas); done is what Canvas says (handed in, graded).
   const shortName = name => String(name || "").split(" (")[0].split(" - ")[0];
+  // The course programs (Canvas's "Resumo do curso" on each Programa page): every assignment of the term with a due date,
+  // from the reading itself (no request), plus the courses' calendar events (read once per page, 10 courses a request).
+  // Same keys as the planner ("assignment:<id>", "calendar_event:<id>"), so nothing shows twice.
+  let progEvents = null;
+  function programa(a, cache, marks, courseId) {
+    const out = [], idOf = u => { const m = /\/assignments\/(\d+)/.exec(String(u || "")); return m ? m[1] : null; };
+    for (const cv of (cache.data && cache.data.courses) || []) {
+      if (courseId && String(cv.id) !== String(courseId)) continue;
+      for (const x of cv.assignments || []) { if (!x || !x.due || Number.isNaN(Date.parse(x.due))) continue;
+        const id = idOf(x.url), key = id ? "assignment:" + id : "prog:" + cv.id + ":" + x.name;
+        out.push({ key, cid: cv.id, mine: !!(marks && marks[key]), title: String(x.name || ""), course: (a.byCanvasId[cv.id] && a.byCanvasId[cv.id].name) || shortName(cv.name), ours: a.byCanvasId[cv.id] || null,
+          task: true, date: C.localISO(new Date(x.due)), due: x.due, url: typeof x.url === "string" && x.url.startsWith(location.origin + "/") ? x.url : null, done: !!(x.submitted || x.score != null || x.excused), late: !!x.missing, prog: true }); }
+    }
+    for (const e of progEvents || []) if (!courseId || String(e.cid) === String(courseId)) out.push(Object.assign({ mine: !!(marks && marks[e.key]) }, e));
+    return out;
+  }
+  // one course (its page) or all (the calendar); kept for the tab session while the reading is the same
+  async function loadProgEvents(cache, only) {
+    if (progEvents) return progEvents;
+    const memo = "cp-prog|" + cache.user + "|" + cache.at + "|" + (only || "all");
+    try { const s = typeof sessionStorage !== "undefined" && sessionStorage.getItem(memo); if (s) { progEvents = JSON.parse(s); return progEvents; } } catch (e) { /* no session storage */ }
+    const ids = ((cache.data && cache.data.courses) || []).map(c => String(c.id)).filter(x => /^\d{1,15}$/.test(x) && (!only || x === String(only))), got = [];
+    for (let i = 0; i < ids.length; i += 10) {
+      const q = ids.slice(i, i + 10).map(id => "context_codes[]=course_" + id).join("&");
+      try { const evs = await getAll("/api/v1/calendar_events?type=event&all_events=true&per_page=100&" + q, 3);
+        for (const e of Array.isArray(evs) ? evs : []) { const cid = /^course_(\d+)$/.exec(String(e.context_code || "")); if (!cid || !e.start_at || !e.id) continue;
+          const cv = cache.data.courses.find(c => String(c.id) === cid[1]);
+          got.push({ key: "calendar_event:" + e.id, cid: cid[1], title: String(e.title || "").slice(0, 200), course: cv ? shortName(cv.name) : "", ours: null, task: false, date: C.localISO(new Date(e.start_at)), due: e.all_day ? null : e.start_at,
+            url: typeof e.html_url === "string" && e.html_url.startsWith(location.origin + "/") ? e.html_url : null, done: false, late: false, prog: true, exam: /prova|avalia[cç][aã]o|exame/i.test(String(e.title || "")) }); } }
+      catch (e) { /* the events are extra: the assignments are already there */ }
+    }
+    progEvents = got; try { if (typeof sessionStorage !== "undefined") sessionStorage.setItem(memo, JSON.stringify(got).slice(0, 400000)); } catch (e) { /* full: next page reads again */ }
+    return got;
+  }
   function agenda(a, cache, marks) {
     const short = (name, id) => { const c = a.byCanvasId[id]; return c ? c.name : shortName(name); };
     const out = [];
@@ -499,25 +663,31 @@
   const colsFor = n => n <= 3 ? Math.max(1, n) : n === 4 ? 2 : n <= 6 ? 3 : 4;   // 2 side by side, 4 as 2+2, 5-6 as 3+3
   // the card columns from the cards shown (cpShown) and the box width (cpBoxW, kept by a ResizeObserver: reading clientWidth
   // right after drawing forced a layout of the whole page)
+  // The subject picked in the dashboard chips (KPI_COURSE): only its Canvas card shows; Todas shows them all again.
+  const pickCards = () => { if (typeof document === "undefined" || !document.querySelectorAll) return; const cards = [...document.querySelectorAll(".ic-DashboardCard")];
+    const idOf = card => { const l = card.querySelector('a[href*="/courses/"]'), m = l && /\/courses\/(\d+)/.exec(l.getAttribute("href")); return m ? m[1] : null; };
+    const pick = KPI_COURSE && cards.some(c => idOf(c) === KPI_COURSE) ? KPI_COURSE : "";
+    for (const card of cards) { const id = idOf(card); card.style.display = id && (hiddenNow.includes(id) || (pick && id !== pick)) ? "none" : ""; }
+    window.cpShown = cards.filter(c => c.style.display !== "none").length; setCols(); };
   const setCols = () => {
     const shown = window.cpShown || 0, root = document.documentElement, fit = window.cpBoxW ? Math.max(1, Math.floor((window.cpBoxW + 24) / 298)) : 4;
     const rows = shown ? Math.ceil(shown / Math.min(colsFor(shown), fit)) : 1, cols = shown ? Math.ceil(shown / rows) : 1;   // never one card alone on the last row
-    if (root && root.style && root.style.setProperty && shown) root.style.setProperty("--cp-cols", String(cols));
+    if (root && root.style && root.style.setProperty && shown && (!root.style.getPropertyValue || root.style.getPropertyValue("--cp-cols") !== String(cols))) root.style.setProperty("--cp-cols", String(cols));
   };
   function decorateCards(a, again, ctx) {
-    const prefs = ctx.prefs;
+    const prefs = ctx.prefs; let nums = null;
     if (again) for (const card of document.querySelectorAll(".ic-DashboardCard[data-qf]")) { for (const x of card.cpAdded || []) x.remove(); delete card.dataset.qf; }
     for (const card of document.querySelectorAll(".ic-DashboardCard:not([data-qf])")) {
       const link = card.querySelector('a[href*="/courses/"]'), m = link && /\/courses\/(\d+)/.exec(link.getAttribute("href"));
       card.dataset.qf = "1"; card.cpAdded = [];
       if (!m) continue;
       const id = m[1], c = a.byCanvasId[id];
-      card.style.display = ctx.hidden.includes(id) ? "none" : "";
+      card.style.display = ctx.hidden.includes(id) || (KPI_COURSE && KPI_COURSE !== id && a.term && document.querySelector('.ic-DashboardCard a[href*="/courses/' + KPI_COURSE + '"]')) ? "none" : "";   // the subject picked in the chips
       if (ctx.hidden.includes(id) || !prefs.grades) continue;
-      if (!c || !a.rules) {   // no rules of ours for this course: the professor's formula from the Centro de Notas, when there is one
-        const r = centroOf(id); if (!r) continue;
-        const p = pill(centroText(r), centroTone(r)), head = card.querySelector(".ic-DashboardCard__header_content") || card;
-        p.title = "Caderno+ · fórmula do Centro de Notas, meta " + fmt(T, T % 1 ? 1 : 0) + (r.approx ? " · aproximado: parte da fórmula está escondida para o aluno" : "");
+      if (!c || !a.rules || !a.has) {   // no Plano rule in use: the dashboard's own number (Centro de Notas, Canvas weights, the student's rule, the sum)
+        const u = (nums = nums || new Map(courseNumbers(a, ctx.cache).U.map(x => [x.cid, x]))).get(id); if (!u || (u.now == null && u.need == null && u.status !== "nao-da")) continue;
+        const p = pill((u.now == null ? "" : dn(u.now) + "/10 · ") + u.label, u.tone === "nt" ? "warn" : u.tone), head = card.querySelector(".ic-DashboardCard__header_content") || card;
+        p.title = "Caderno+ · " + ({ aluno: "sua regra", centro: "fórmula do Centro de Notas", canvas: "pesos que o professor pôs no Canvas", soma: "soma dos pontos do Canvas (confira na matéria)", plano: "pesos do Plano de Ensino" }[u.src]) + ", meta " + fmt(T, T % 1 ? 1 : 0) + (u.r && u.r.approx ? " · aproximado: parte da fórmula está escondida para o aluno" : "");
         card.cpAdded.push(p); head.appendChild(p); continue;
       }
       const st = a.state(c);   // with the ring, the pill says only what is still needed
@@ -552,8 +722,9 @@
     .box { position:relative; container:cp / inline-size; overflow-x:clip; overflow-clip-margin:6px; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
     .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
-    .box > .card, .box > .kpis, .box > .tiles { margin-bottom:10px; }
+    .box > .card, .box > .kpis, .box > .tiles, .box > .nslot > .card { margin-bottom:10px; }   /* .nslot is display:contents */
     .k { font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+    .nslot { display:contents; }
     .upnext { display:flex; align-items:center; gap:16px; padding:12px 14px; } .upnext .k { text-transform:none; letter-spacing:0; font-size:12px; font-weight:500; }
     .upnext .t, .cring .t { font:600 17px/1.25 var(--serif); letter-spacing:-.01em; margin:2px 0; overflow:hidden; text-overflow:ellipsis; } .upnext .mid, .cring .mid { flex:1; }
     .big { flex:none; text-align:right; } .big .v { display:block; font:500 30px/1 var(--serif); letter-spacing:-.02em; } .big span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
@@ -562,7 +733,7 @@
     .kpi { padding:10px 12px 12px; min-width:0; } .kpi .v { font:500 24px/1.15 var(--serif); letter-spacing:-.02em; margin:2px 0 4px; } .kpi .v.need { color:var(--warn); } .kpi .v.need.t-ok { color:var(--ok); }
     .meter { position:relative; height:6px; margin-top:6px; border-radius:99px; background:var(--track); }
     .meter i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--fg); } .meter b { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); }
-    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--warn); }
+    .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--warn); } .trk i.sent { background:color-mix(in srgb, var(--ok) 45%, var(--track)); }
     .trk i:hover { outline:1.5px solid var(--fg); outline-offset:1px; }
     [data-tip]::after { content:attr(data-tip); position:absolute; z-index:6; left:50%; bottom:calc(100% + 8px); width:max-content; max-width:240px; padding:6px 9px; border-radius:7px; background:var(--fg); color:var(--bg);
       font:500 12px/1.35 var(--sans); box-shadow:0 10px 24px -10px rgba(29,36,51,.5); opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,3px); transition:opacity .12s, transform .12s, visibility 0s .12s; }
@@ -580,6 +751,34 @@
     .cring { display:flex; align-items:center; gap:14px; padding:12px 14px; }
     .items { overflow:hidden; } .ir { display:grid; grid-template-columns:minmax(0,1fr) 56px 140px; gap:10px; align-items:center; padding:8px 12px; border-top:1px solid var(--line); }
     .rule .ir.off .n { color:var(--muted); text-decoration:line-through; } .rule label.n { display:flex; gap:8px; align-items:center; cursor:pointer; } .rule label.n input { accent-color:var(--coral); flex:none; }
+    .own-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; } .own-row .own-b { flex:none; }
+    .c.scale { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; }
+    .card.ov { padding:12px 14px; }
+    .ovh { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; } .ovh h3 { margin:0; } .seg.ov-mode { display:flex; flex-wrap:wrap; max-width:100%; }
+    .ov-body { display:grid; gap:6px; } .ovr { display:grid; grid-template-columns:minmax(90px,170px) minmax(0,1fr) auto; gap:10px; align-items:center; min-height:30px; }
+    .ovn { display:grid; min-width:0; color:inherit; text-decoration:none; } .ovn:hover .n { text-decoration:underline; } .ovn .n { font-size:13px; font-weight:600; } .ovn .c { font-size:11px; }
+    .ovbar { position:relative; height:14px; border-radius:4px; background:var(--track); } .ovbar > i { position:absolute; left:0; top:0; bottom:0; border-radius:4px; min-width:2px; background:var(--fg); }
+    .ovbar > i.ok { background:var(--ok); } .ovbar > i.warn { background:var(--warn); } .ovbar > i.bad { background:var(--bad); } .ovbar > i.nt { background:var(--muted); }
+    .ovbar > i.hatch { background:repeating-linear-gradient(45deg, var(--bad) 0 5px, color-mix(in srgb, var(--bad) 35%, transparent) 5px 9px); }
+    .ovbar > b { position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); box-shadow:0 0 0 2px var(--bg); }
+    .ovin { position:absolute; left:6px; top:50%; transform:translateY(-50%); font-size:10.5px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35); pointer-events:none; }
+    .ovv { min-width:38px; text-align:center; } .ovscale { min-height:0; margin-top:-2px; } .ovbar.ovax { display:flex; justify-content:space-between; height:12px; background:none; } .ovax span { font-size:10.5px; color:var(--muted); }
+    .ovtrk { margin-top:0; } .ovtrk i { height:12px; } .trk i.late { display:block; margin:0; }   /* not the overdue row's .late */
+    .ovrings { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:10px; } .ovring { display:grid; justify-items:center; gap:2px; padding:8px 4px; border-radius:10px; color:inherit; text-decoration:none; text-align:center; }
+    .ovring:hover { background:var(--soft); } .ovring .n { font-size:12.5px; font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ovring .c { font-size:11px; }
+    .rg { --c:var(--muted); width:64px; height:64px; border-radius:50%; display:grid; place-items:center; background:conic-gradient(var(--c) var(--p), var(--track) 0); position:relative; }
+    .rg[data-t=ok] { --c:var(--ok); } .rg[data-t=warn] { --c:var(--warn); } .rg[data-t=bad] { --c:var(--bad); } .rg::after { content:""; position:absolute; inset:-3px; border-radius:50%; background:conic-gradient(transparent calc(var(--m) - .8%), var(--coral) 0 calc(var(--m) + .8%), transparent 0); -webkit-mask:radial-gradient(circle, transparent 22px, #000 23px); mask:radial-gradient(circle, transparent 22px, #000 23px); }   /* the meta: a tick across the ring */
+    .rg > b { display:grid; place-items:center; width:48px; height:48px; border-radius:50%; background:var(--bg); font:700 14px/1 var(--sans); }
+    .ovdet { display:grid; gap:10px; margin-top:6px; padding-top:10px; border-top:1px solid var(--line); } .ovstats { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; }
+    .ovst { display:grid; gap:2px; padding:8px 10px; border-radius:10px; background:var(--soft); } .ovst b { font:600 18px/1.1 var(--serif); } .ovdet > .k { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .ovacts { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:6px 18px; } .ovact { display:grid; grid-template-columns:minmax(0,1fr) 90px 64px; gap:8px; align-items:center; font-size:12.5px; }
+    .ovact .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:inherit; } .ovact a.n:hover { text-decoration:underline; } .ovact .c { text-align:right; font-size:11.5px; } .ovbar.sm { height:8px; } .ovact.more { grid-template-columns:1fr; }
+    .ovcap { margin-top:8px; } @media (max-width:560px) { .ovr { grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto; } } .ov h3 { margin:0 0 6px; } .ov .row .mid .c { white-space:normal; overflow:visible; line-height:1.35; }
+    .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:13.5px; }
+    .formula { padding:12px 14px; } .formula .acts { justify-content:flex-start; } .formula .from { opacity:.8; } .formula .res { font-weight:600; color:var(--fg); margin-top:8px; }
+    .formula .lbl { margin-top:10px; } .formula .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .formula .chip { padding:3px 9px; border:1px solid var(--line); border-radius:999px; background:var(--bg); color:var(--fg); font:12px/1.3 var(--sans); cursor:pointer; } .formula .chip:hover { border-color:var(--coral); }
+    .formula .back { margin-top:12px; } .formula .found-d { margin-top:10px; font-size:13px; } .formula .found-d summary { cursor:pointer; color:var(--muted); } .formula p.c, .formula .found li { white-space:normal; overflow:visible; text-overflow:clip; } .formula textarea { box-sizing:border-box; width:100%; margin:8px 0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; resize:vertical; }
+    .formula .acts { display:flex; gap:8px; align-items:center; } .formula .err { color:var(--bad); } .formula .found { margin:10px 0 0; padding-left:18px; font-size:13px; } .formula .found .miss { color:var(--warn); } .formula > .mini { margin-top:10px; }
     .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:12.5px; } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
     .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
     .ih { border-top:0; background:var(--track); font-size:11px; font-weight:600; color:var(--muted); padding:7px 12px; }
@@ -704,14 +903,19 @@
     .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
     .ask-b { margin-left:0 !important; color:var(--coral-ink) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
     .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
-    .centro-sim { display:grid; gap:6px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
+    .gt .gtn { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .gt .ir .n .dt { flex:none; } .gt .g small { color:var(--muted); font-weight:400; } .gt .simi { max-width:72px; text-align:center; }
+    .gt-f { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-top:1px solid var(--line); } .gt-f .t { font-size:14px; white-space:normal; } .gt-f .t-ok { color:var(--ok); } .gt-f .t-warn { color:var(--warn); } .gt-f .t-bad { color:var(--bad); }
+    .fdet { margin:0 0 12px; } .fdet > summary { cursor:pointer; padding:6px 2px; color:var(--muted); font-size:13px; } .fdet[open] > summary { margin-bottom:8px; }
+    .centro-sim { display:grid; gap:8px; } .sim-h { display:flex; justify-content:space-between; align-items:center; } .sim-rows { display:grid; gap:4px; }
+    .sim-r { display:grid; grid-template-columns:minmax(0,1fr) auto 70px; gap:10px; align-items:center; padding:4px 0; border-top:1px solid var(--line); } .sim-r .n { font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sim-r input { width:70px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:600 14px var(--sans); text-align:center; } .sim-r input:focus { outline:2px solid var(--coral); outline-offset:1px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
     .band-c { position:absolute; left:0; right:0; top:0; height:4px; background:var(--coral); } .htxt { flex:1; min-width:0; }
     .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 21px/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .hs { margin-top:3px; color:var(--muted); font-size:12.5px; } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
     .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:12px; background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
     .ctabs button { border:0; background:none; padding:6px 14px; border-radius:9px; font-size:13px; color:var(--muted); white-space:nowrap; } .ctabs button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .ctabs button[aria-selected="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
-    .cpane[hidden] { display:none; } .cpane > * + * { margin-top:10px; } .qlinks { display:flex; flex-wrap:wrap; align-items:center; gap:6px; } .qlinks .mini { margin:0; padding:5px 12px; font-size:12.5px; color:var(--fg); }
+    .cpane[hidden] { display:none; } .cpane > * + * { margin-top:10px; }
     .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:11.5px; font-weight:650; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
     .mi { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:6px 4px; border-top:1px solid var(--line); }
@@ -856,7 +1060,7 @@
     }
     let st = document.getElementById("cp-grades");
     if (!st) { st = el("style"); st.id = "cp-grades"; (document.head || document.body).appendChild(st); }
-    st.textContent = hide.length ? hide.join(",") + " { display:none !important; }" : "";
+    const css = hide.length ? hide.join(",") + " { display:none !important; }" : ""; if (st.textContent !== css) st.textContent = css;   // a rewrite restyles the whole page
   }
   function watchDash() {
     const root = document.getElementById("content");
@@ -1015,83 +1219,137 @@
   function needBig(st) {
     const nd = C.courseNeed(st), box = el("div", "big");
     const v = st.status === "garantido" ? "✓" : nd.impossible ? "nem com 10" : (nd.approx ? "≈ " : "") + up(nd.of10, 1);
-    const cap = st.status === "garantido" ? "garantido" : st.status === "depende-atrasadas" ? "faltam notas antigas" : nd.impossible ? "nem com nota cheia" : "precisa, em 10";
+    const cap = st.status === "garantido" ? "garantido" : st.status === "depende-atrasadas" ? "faltam notas antigas" : nd.impossible ? "nem com nota cheia" : "média que falta tirar (de 10)";
     box.append(el("b", "v t-" + (st.status === "depende-atrasadas" ? "warn" : nd.tone), v), el("span", null, cap));
     if (st.status === "garantido") box.title = C.GARANTIDO_TIP;
     return box;
   }
-  function gradesView(a) {
-    const t = today(), out = [], list = C.stillCounts(a.mine, a.grades, t, T);
-    if (list.length) {
-      const u = list[0], d = days(u.item.date), card = toCampus("div", "card upnext", u.course.id), left = el("div", "mid");
-      left.append(el("div", "k", "Próxima avaliação que conta"), el("div", "t", u.item.name), el("div", "c", C.SHORT[u.course.id] + " · " + dmy(u.item.date) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias")));
-      card.append(left, needBig(u.st)); out.push(card);
+  // The dashboard's numbers, for any turma, each course from its best source: the student's own rule, the professor's
+  // formula in the Centro de Notas, the professor's weights in Canvas, the Plano de Ensino weights transcribed by
+  // Caderno+ (only where nothing official exists), else the sum of the Canvas points. The next delivery and what was
+  // handed in come from Canvas. The chips pick every course or one (prefs.kpiCourse).
+  const SRC = { aluno: "sua regra", centro: "fórmula do professor no Centro de Notas", canvas: "pesos que o professor pôs no Canvas", plano: "pesos do Plano de Ensino (transcritos pelo Caderno+)", soma: "soma dos pontos: confira na matéria" };
+  // A course name short enough for a chip or a chart row, for any turma: "Resolução de Problemas de Natureza Discreta" → RPND.
+  const nick = name => { const t = shortName(name).trim(); if (t.length <= 22) return t;
+    const w = t.split(/\s+/).filter(x => x.length > 2 && !/^(das?|dos?|em|para|com|and|of)$/i.test(x)); return w.length >= 2 ? w.map(x => x[0].toUpperCase()).join("") : t.slice(0, 20) + "…"; };
+  // Every course of the term with its number from its best source (AGENTS.md §5); the dashboard, its chips and the Canvas cards use this.
+  function courseNumbers(a, cache) {
+    const t = today(), nowMs = Date.now(); ruleCache = cache;
+    const courses = cache.data.courses.filter(c => !hiddenNow.includes(String(c.id))), sem = a.rules ? C.semester(a.mine, a.grades, t, T) : null, U = [];
+    for (const cv of courses) {
+      const cid = String(cv.id), pack = a.byCanvasId[cid], acts = (cv.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused);
+      if (pack && sem && a.has && sem.states[pack.id]) { const st = sem.states[pack.id];   // as the course page: the Plano only once a grade was read
+        U.push({ cid, name: C.SHORT[pack.id] || nick(cv.name), full: shortName(cv.name), src: "plano", now: Math.min(10, st.earned), need: st.status === "precisa" ? st.fraction * 10 : null, status: st.status === "depende-atrasadas" ? "faltam" : st.status,
+          items: sem.items.filter(x => x.course === pack).map(x => ({ s: x.s, date: x.item.date, tip: (C.SHORT[pack.id] || "") + " · " + x.item.name + " · " + dmy(x.item.date) })) }); continue; }
+      const ownR = !!(myRules[cid] && myRules[cid].own), cr = ownR ? null : centroOf(cid);
+      if (!cr && (a.expired || !acts.length)) continue;   // a Centro formula counts even with no Canvas activity
+      const r = cr || customOf(cid), src = cr ? "centro" : r && r.mine ? "aluno" : r && r.canvasWeights ? "canvas" : "soma";   // the student's own rule first
+      const sure = r && !["erro", "acima", "vazio"].includes(r.status) && !r.unsure && r.now != null;
+      U.push({ cid, name: nick(cv.name), full: shortName(cv.name), src, now: sure ? r.now : null, need: sure && r.status === "precisa" ? r.need : null, scaled: r && r.scaled ? r.total : 0, status: !r ? "sem" : r.status === "erro" ? "erro" : r.status === "acima" ? "acima" : r.unsure ? "confira" : r.status, r,
+        items: acts.map(x => { const d = x.due ? C.localISO(new Date(x.due)) : "9999-12-31"; return { s: x.score != null ? "ok" : x.submitted ? "sent" : x.missing || (x.due && Date.parse(x.due) < nowMs) ? "late" : "next", date: d, tip: shortName(cv.name) + " · " + x.name + (x.due ? " · " + dmy(d) : "") }; }) });
     }
-    // The three numbers, for every subject ("Todas") or for the one the student picks in the chips above them (saved in
-    // prefs.kpiCourse); each number says which subject it is about.
-    const sem = C.semester(a.mine, a.grades, t, T), kpis = el("div", "kpis");
-    const kpi = (k, v, cls, sub) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (sub) d.appendChild(sub); kpis.appendChild(d); return d; };
-    const meterOf = x => { const meter = el("div", "meter"), fill = el("i"), goal = el("b"); meter.setAttribute("aria-hidden", "true");
-      fill.style.width = Math.min(100, x * 10) + "%"; goal.style.left = Math.min(99.5, T * 10) + "%"; meter.append(fill, goal); return meter; };
-    const trackOf = items => { const done = items.filter(x => x.s === "ok").length, late = items.filter(x => x.s === "late").length, trk = el("div", "trk");
-      trk.setAttribute("aria-label", done + " lançadas, " + late + " sem nota, " + (items.length - done - late) + " pela frente");
-      for (const x of items) { const b = el("i", x.s); b.dataset.tip = C.SHORT[x.course.id] + " · " + x.item.name + " · " + dmy(x.item.date) + " · " + (x.s === "ok" ? "lançada" : x.s === "late" ? "sem nota" : "pela frente"); trk.appendChild(b); }
-      return { trk, done }; };
-    const cnt = s => sem.counts[s] || 0;
-    const fillKpis = id => {
-      kpis.replaceChildren();
-      const c = a.mine.find(x => x.id === id);
-      if (c) {   // one subject
-        const st = sem.states[c.id], items = sem.items.filter(x => x.course.id === c.id), tr = trackOf(items), name = C.SHORT[c.id];
-        const g = el("div"); g.append(meterOf(st.earned), el("div", "c", name));
-        kpi("Garantido até agora", fmt(Math.floor(Math.min(10, st.earned) * 10) / 10, 1), null, g).title = "pontos garantidos de 10 em " + name + " · meta " + fmt(T, 1);
-        if (st.status === "garantido") kpi("Quanto falta", "0", "need t-ok", el("div", "c", name + ", garantido"));
-        else if (st.status === "nao-da") kpi("Quanto falta", "—", "need", el("div", "c", name + ", recuperação"));
-        else if (st.status === "depende-atrasadas") kpi("Quanto falta", "?", "need", el("div", "c", name + ", faltam notas antigas"));
-        else kpi("Quanto falta", up(st.fraction * 10, 1), "need", el("div", "c", name + ", em 10 no que falta"));
-        const e = el("div"); e.append(tr.trk, el("div", "c", name));
-        kpi("Entregues", tr.done + " de " + items.length, null, e);
-        return;
-      }
-      const g = el("div"); g.append(meterOf(sem.mean), el("div", "c", "média das " + a.mine.length + " matérias"));
-      kpi("Garantido até agora", fmt(Math.floor(sem.mean * 10) / 10, 1), null, g).title = "pontos garantidos de 10, média das " + a.mine.length + " matérias · meta " + fmt(T, 1);
-      // the tightest subject, but not the one the "Próxima avaliação" card already shows (no 9,0 twice)
-      const heroId = list.length ? list[0].course.id : null, open2 = a.mine.filter(c => c.id !== heroId && sem.states[c.id].status === "precisa").sort((x, y) => sem.states[y.id].fraction - sem.states[x.id].fraction)[0];
-      const tight = sem.tight && sem.tight.id !== heroId ? sem.tight : open2 || sem.tight;
-      if (tight) kpi(tight === sem.tight ? "Quanto falta" : "Depois dessa", up(sem.states[tight.id].fraction * 10, 1), "need", el("div", "c", C.SHORT[tight.id] + (tight === sem.tight ? ", a mais apertada" : ", a próxima mais apertada")));
-      else if (cnt("depende-atrasadas")) kpi("Quanto falta", "?", "need", el("div", "c", "faltam notas antigas"));
-      else if (cnt("nao-da")) kpi("Quanto falta", "—", "need", el("div", "c", cnt("nao-da") + (cnt("nao-da") === 1 ? " matéria na recuperação" : " matérias na recuperação")));
-      else kpi("Quanto falta", "0", "need t-ok", el("div", "c", "tudo garantido"));
-      const tr = trackOf(sem.items), e = el("div"); e.append(tr.trk, el("div", "c per", a.mine.map(c => { const it = sem.items.filter(x => x.course.id === c.id); return C.SHORT[c.id] + " " + it.filter(x => x.s === "ok").length + "/" + it.length; }).join(" · ")));
-      kpi("Entregues", tr.done + " de " + sem.items.length, null, e);
+    for (const u of U) { u.tone = u.need != null ? (u.need > 8 ? "bad" : "warn") : u.status === "garantido" ? "ok" : u.status === "nao-da" ? "bad" : "nt";
+      u.label = u.status === "garantido" ? "garantido" : u.status === "nao-da" ? "recuperação" : u.need != null ? "precisa " + up(u.need, 1) + "/10" : u.status === "faltam" ? "faltam notas" : u.status === "erro" ? "fórmula com erro" : "confira"; }
+    return { U, courses };
+  }
+  function gradesOverview(a, cache, clean, prefs = {}) {
+    const out = [], nowMs = Date.now(); ruleCache = cache; let redrawOv = () => {};
+    const { U, courses } = courseNumbers(a, cache);
+    const shownU = () => { const one = U.filter(u => u.cid === KPI_COURSE); return one.length ? one : U; };   // a subject picked in the chips: only it
+    if (!U.length) return out;
+    const byCid = new Map(U.map(u => [u.cid, u]));
+    // the next delivery: Canvas's own, by its official date
+    const nextSlot = el("div", "nslot"), nextCard = () => { nextSlot.replaceChildren(); const only = shownU().length === 1 && U.length > 1 ? shownU()[0].cid : "";   // the picked subject's own next delivery
+    const nx = courses.filter(c => !only || String(c.id) === only).flatMap(c => (c.assignments || []).filter(x => x && Number(x.points) > 0 && !x.excused && x.due && Date.parse(x.due) >= nowMs && !x.submitted && x.score == null).map(x => ({ c, x }))).sort((p, q) => Date.parse(p.x.due) - Date.parse(q.x.due))[0];
+    if (nx) { const card = el("a", "card upnext"), left = el("div", "mid"), dd = C.localISO(new Date(nx.x.due)), d = days(dd), u = byCid.get(String(nx.c.id)), big = el("div", "big");
+      if (typeof nx.x.url === "string" && nx.x.url.startsWith(location.origin + "/")) card.href = nx.x.url;
+      left.append(el("div", "k", "Próxima entrega"), el("div", "t", nx.x.name), el("div", "c", (u ? u.name : shortName(nx.c.name)) + " · " + dmy(dd) + " " + hhmm(nx.x.due) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias") + " · " + fmt(nx.x.points, 2) + " pts"));
+      if (u && u.need != null) big.append(el("b", "v t-" + (u.need > 8 ? "bad" : "warn"), up(u.need, 1)), el("span", null, "média que falta tirar (de 10)")); else if (u && u.status === "garantido") big.append(el("b", "v t-ok", "✓"), el("span", null, "meta garantida"));
+      card.append(left, big); nextSlot.appendChild(card); } };
+    nextCard(); out.push(nextSlot);
+    const kpis = el("div", "kpis"), kpi = (k, v, cls, subEl) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (subEl) d.appendChild(subEl); kpis.appendChild(d); };
+    const meterOf = x => { const m = el("div", "meter"), f = el("i"), g = el("b"); m.setAttribute("aria-hidden", "true"); f.style.width = Math.min(100, x * 10) + "%"; g.style.left = Math.min(99.5, T * 10) + "%"; m.append(f, g); return m; };
+    const trackOf = items => { const trk = el("div", "trk"), its = items.slice().sort((p, q) => p.date.localeCompare(q.date)), n = k => its.filter(x => x.s === k).length;
+      trk.setAttribute("aria-label", n("ok") + " com nota, " + n("sent") + " entregues esperando nota, " + n("late") + " sem nota e com prazo vencido, " + n("next") + " pela frente");
+      for (const x of its) { const b = el("i", x.s); b.dataset.tip = x.tip + " · " + (x.s === "ok" ? "com nota" : x.s === "sent" ? "entregue, esperando a nota" : x.s === "late" ? "prazo vencido, sem nota" : "pela frente"); trk.appendChild(b); }
+      return { trk, done: n("ok") + n("sent"), total: its.length }; };
+    const fill = cid => {
+      kpis.replaceChildren(); const one = cid && byCid.get(cid), list = one ? [one] : U, num = list.filter(u => u.now != null);
+      if (num.length) { const mean = num.reduce((s, u) => s + u.now, 0) / num.length, w = el("div"); w.append(meterOf(mean), el("div", "c", one ? one.name + " · " + SRC[one.src] : num.length === 1 ? "1 matéria com nota calculada" : "média das " + num.length + " matérias"));
+        kpi("Garantido até agora", dn(mean), null, w); }
+      else kpi("Garantido até agora", "—", null, el("div", "c", one ? (one.status === "erro" ? "a fórmula tem um erro: abra a matéria" : "sem número: confira a regra na matéria") : "nenhuma matéria com nota calculada"));
+      const tight = list.filter(u => u.need != null).sort((p, q) => q.need - p.need)[0], rec = list.some(u => u.status === "nao-da"), anyFaltam = list.some(u => u.status === "faltam" || u.status === "confira" || u.status === "acima");
+      if (tight) kpi("Quanto falta", up(tight.need, 1), "need", el("div", "c", one ? one.name + ", em 10 no que falta" : tight.name + ", a mais apertada"));
+      else if (rec) kpi("Quanto falta", "—", "need", el("div", "c", one ? one.name + ", recuperação" : "recuperação em alguma matéria"));
+      else if (num.length && !anyFaltam) kpi("Quanto falta", "0", "need t-ok", el("div", "c", one ? one.name + ", garantido" : "tudo garantido"));
+      else kpi("Quanto falta", "?", "need", el("div", "c", one ? one.name + ", " + (one.status === "faltam" ? "faltam notas antigas" : "confira a regra na matéria") : "faltam notas ou regras: veja abaixo"));
+      const tr = trackOf(list.flatMap(u => u.items)), w2 = el("div"); w2.append(tr.trk, el("div", "c per", one ? one.name : U.map(u => { const k = trackOf(u.items); return u.name + " " + k.done + "/" + k.total; }).join(" · ")));
+      kpi("Entregues", tr.done + " de " + tr.total, null, w2);
     };
-    const pickId = a.mine.some(c => c.id === KPI_COURSE) ? KPI_COURSE : "", pick = el("div", "seg kpis-pick"), chips = [];
+    const pickId = U.some(u => u.cid === KPI_COURSE) ? KPI_COURSE : "", pick = el("div", "seg kpis-pick"), chips = [];
     pick.setAttribute("role", "radiogroup"); pick.setAttribute("aria-label", "Matéria dos números");
-    for (const [id, name] of [["", "Todas"]].concat(a.mine.map(c => [c.id, C.SHORT[c.id]]))) {
+    for (const [id, name] of [["", "Todas"]].concat(U.map(u => [u.cid, u.name]))) {
       const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(id === pickId)); b.dataset.id = id;
-      b.addEventListener("click", async () => {
-        KPI_COURSE = id; fillKpis(id);
-        for (const x of chips) x.setAttribute("aria-checked", String(x === b));
-        const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { kpiCourse: id }) });
-      });
+      if (id) { b.title = "Clique duas vezes para abrir a matéria"; b.addEventListener("dblclick", () => location.assign("/courses/" + id)); }
+      b.addEventListener("click", async () => { KPI_COURSE = id; fill(id); redrawOv(); nextCard(); pickCards(); for (const x of chips) x.setAttribute("aria-checked", String(x === b));
+        const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { kpiCourse: id }) }); });
       chips.push(b); pick.appendChild(b);
     }
-    radioKeys(chips);
-    fillKpis(pickId);
-    if (a.mine.length > 1) out.push(pick);
-    out.push(kpis);
-    const tiles = el("div", "tiles");
-    for (const c of a.mine) {
-      const st = sem.states[c.id], nx = C.nextItem(st), tile = toCampus("div", "card tile", c.id), txt = el("span", "mid");
-      txt.append(el("span", "nm", C.SHORT[c.id]), el("span", "c", nx ? "próxima " + dmy(nx.date) : "nada pela frente"), el("span", "pill " + C.statusTone(st), a.label(st)));
-      tile.setAttribute("aria-label", c.name + ": " + fmt(st.earned, 2) + " garantidos de 10; " + a.label(st));
-      if (st.status === "garantido") tile.title = C.GARANTIDO_TIP;
-      tile.append(ring(st), txt); tiles.appendChild(tile);
-    }
-    out.push(tiles, el("div", "muted src", source(a.mine)));
+    radioKeys(chips); fill(pickId);
+    if (!clean) { if (U.length > 1) out.push(pick); out.push(kpis); }   // limpo: no KPI row, the list stays
+    // each course with its number and where it comes from, as a chart (five views, the choice saved) or the plain list
+    const SRCS = { aluno: "sua regra", centro: "Centro de Notas", canvas: "pesos do Canvas", plano: "Plano de Ensino", soma: "soma dos pontos" };
+    const sec = el("section", "card centro ov"), head = el("div", "ovh"), seg = el("div", "seg ov-mode"), body = el("div", "ov-body"), modeBtns = [];
+    const tipOf = u => u.full + " · " + (u.now == null ? "sem nota calculada" : dn(u.now) + " de 10 agora") + " · " + u.label + " · " + SRCS[u.src] + (u.scaled ? " (" + fmt(u.scaled, 0) + " pontos levados a 10)" : "");
+    const nameCell = u => { const n = el("a", "ovn"); n.href = "/courses/" + u.cid; n.append(el("span", "n", u.name), el("span", "c", SRCS[u.src])); n.title = u.full; return n; };
+    const gap = u => u.now == null ? null : Math.max(0, T - u.now);   // points still missing to the student's meta (BD: 7 − 6,5 = 0,5)
+    const valCell = u => { const g = gap(u), v = el("span", "ovv pill " + u.tone, u.status === "garantido" || g === 0 ? "✓" : u.status === "erro" ? "erro" : g == null ? "?" : "+" + up(g, 1));
+      v.title = u.status === "garantido" || g === 0 ? "meta garantida" : g == null ? "sem nota calculada" : "faltam " + up(g, 1) + " pontos para a meta " + fmt(T, T % 1 ? 1 : 0) + (u.need != null ? " (média de " + up(u.need, 1) + " no que falta)" : u.status === "nao-da" ? " · nem com 10 no que falta" : ""); return v; };
+    const scale = () => { const r = el("div", "ovr ovscale"), ax = el("div", "ovbar ovax"); for (const v of ["0", "5", "10"]) ax.appendChild(el("span", null, v)); r.setAttribute("aria-hidden", "true"); r.append(el("span"), ax, el("span", "ovv")); return r; };
+    const VIEWS = {
+      barras: ["Barras", "nota garantida em cada matéria, de 0 a 10; o risco é a meta", () => { const rows = shownU().map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone), m = el("b");
+          f.style.width = (u.now == null ? 0 : Math.min(100, u.now * 10)) + "%"; m.style.left = Math.min(99.5, T * 10) + "%"; bar.append(f, m); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
+          if (u.now != null && u.now >= 1.2) bar.appendChild(el("span", "ovin", dn(u.now)));   // inside the bar only when it fits
+          r.append(nameCell(u), bar, valCell(u)); return r; }); return rows.concat(scale()); }],
+      falta: ["Falta", "pontos que faltam até a meta em cada matéria, de quem falta mais para quem falta menos", () => shownU().slice().sort((p, q) => (gap(q) == null ? -1 : gap(q)) - (gap(p) == null ? -1 : gap(p))).map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone);
+          f.style.width = (gap(u) == null ? 0 : Math.min(100, gap(u) * 10)) + "%"; if (u.status === "nao-da") f.className = "bad hatch"; bar.append(f); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
+          r.append(nameCell(u), bar, valCell(u)); return r; }).concat(scale())],
+      aneis: ["Anéis", "quanto de 10 já está garantido; no meio, os pontos que faltam até a meta", () => { const g = el("div", "ovrings"); for (const u of shownU()) { const c = el("a", "ovring"), ring = el("div", "rg"), mid = el("b", null, u.status === "garantido" || gap(u) === 0 ? "✓" : gap(u) == null ? "?" : "+" + up(gap(u), 1));
+          const pct = u.now == null ? 0 : Math.min(100, u.now * 10); ring.dataset.t = u.tone; ring.style.cssText = "--p:" + pct + "%;--m:" + Math.min(100, T * 10) + "%"; ring.appendChild(mid);
+          c.href = "/courses/" + u.cid; c.dataset.tip = tipOf(u); c.setAttribute("aria-label", tipOf(u)); c.append(ring, el("span", "n", u.name), el("span", "c", (u.now == null ? "—" : dn(u.now)) + " garantido"));
+          g.appendChild(c); } return [g]; }],
+      entregas: ["Entregas", "cada quadradinho é uma atividade: verde com nota, verde claro entregue, laranja vencida, cinza pela frente", () => shownU().map(u => { const r = el("div", "ovr"), tr = trackOf(u.items); tr.trk.classList ? tr.trk.classList.add("ovtrk") : (tr.trk.className += " ovtrk");
+          r.append(nameCell(u), tr.trk, el("span", "ovv pill nt", tr.done + "/" + tr.total)); return r; })],
+      lista: ["Lista", "o mesmo em texto", () => { const ul = el("ul"); for (const u of shownU()) { const li = el("li", "row"), txt = u.status === "erro" ? "a fórmula tem um erro: abra a matéria" : u.status === "acima" ? "os pontos passam do total: ajuste na matéria" : u.status === "confira" ? "confira a regra na matéria antes de contar com isso"
+          : u.status === "faltam" ? "faltam notas antigas" : u.status === "garantido" ? "meta garantida" : u.status === "nao-da" ? "nem com 10 no que falta" : u.need != null ? "precisa " + up(u.need, 1) + "/10 em média no que falta" : "sem número ainda";
+          li.append(el("span", "d", u.now == null ? "—" : dn(u.now)), mid(u.full, "/courses/" + u.cid, txt + " · " + SRC[u.src] + (u.scaled ? " (" + fmt(u.scaled, u.scaled % 1 ? 1 : 0) + " pontos levados a 10)" : "")), valCell(u)); ul.appendChild(li); } return [ul]; }],
+    };
+    let curMode = "barras"; redrawOv = () => show(curMode);
+    // one subject picked: under the chart, its numbers and each Canvas activity with its grade (what fills the box)
+    const detail = u => { const cv = courses.find(c => String(c.id) === u.cid), w = el("div", "ovdet"), stats = el("div", "ovstats"), ul = el("ul", "ovacts"), g = gap(u);
+      const stat = (k, v, cls) => { const d = el("div", "ovst"); d.append(el("span", "c", k), el("b", cls || null, v)); stats.appendChild(d); };
+      stat("Garantido", u.now == null ? "—" : dn(u.now)); stat("Até a meta " + fmt(T, T % 1 ? 1 : 0), u.status === "garantido" || g === 0 ? "✓" : g == null ? "?" : "+" + up(g, 1), "t-" + (u.tone === "nt" ? "warn" : u.tone));
+      stat("Média no que falta", u.need != null ? up(u.need, 1) : u.status === "garantido" ? "—" : u.status === "nao-da" ? "rec." : "?"); const tr = trackOf(u.items); stat("Entregues", tr.done + " de " + tr.total); stat("Fonte", SRCS[u.src]);
+      const acts = ((cv && cv.assignments) || []).filter(x => x && Number(x.points) > 0 && !x.excused).sort((p, q) => (p.due ? Date.parse(p.due) : 9e15) - (q.due ? Date.parse(q.due) : 9e15));
+      for (const x of acts.slice(0, 14)) { const li = el("li", "ovact"), nmEl = el(typeof x.url === "string" && x.url.startsWith(location.origin + "/") ? "a" : "span", "n", x.name), bar = el("div", "ovbar sm"), f = el("i");
+        if (nmEl.tag === "a" || nmEl.tagName === "A") nmEl.href = x.url; nmEl.title = x.name;
+        const late = !x.submitted && x.score == null && x.due && Date.parse(x.due) < nowMs, st = x.score != null ? fmt(Number(x.score), 1) + "/" + fmt(Number(x.points), Number(x.points) % 1 ? 1 : 0) : x.submitted ? "entregue" : late ? "vencida" : x.due ? "até " + dmy(C.localISO(new Date(x.due))) : "sem data";
+        f.className = x.score != null ? (Number(x.score) / Number(x.points) >= T / 10 ? "ok" : "warn") : x.submitted ? "nt" : late ? "bad hatch" : "nt"; f.style.width = (x.score != null ? Math.min(100, Number(x.score) / Number(x.points) * 100) : x.submitted || late ? 100 : 0) + "%";
+        if (x.submitted && x.score == null) f.style.opacity = ".45"; bar.appendChild(f); bar.dataset.tip = x.name + " · " + st;
+        li.append(nmEl, bar, el("span", "c", st)); ul.appendChild(li); }
+      if (acts.length > 14) { const li = el("li", "ovact more"), l = el("a", "n", "ver as " + acts.length + " atividades na matéria →"); l.href = "/courses/" + u.cid; li.appendChild(l); ul.appendChild(li); }
+      w.append(stats); if (acts.length) w.append(el("div", "k", "Atividades no Canvas"), ul); return w; };
+    const cap = el("p", "c scale ovcap"), show = m => { curMode = m; const one = shownU().length === 1 && U.length > 1 ? shownU()[0] : null; body.replaceChildren(...VIEWS[m][2](), ...(one ? [detail(one)] : [])); body.dataset.mode = m; cap.textContent = VIEWS[m][1] + ". Meta " + fmt(T, T % 1 ? 1 : 0) + ". Passe o mouse para ver de onde vem cada número; na página da matéria você monta ou muda a sua regra.";
+      for (const b of modeBtns) b.setAttribute("aria-checked", String(b.dataset.m === m)); };
+    seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-label", "Como mostrar o quanto falta");
+    const mode0 = VIEWS[prefs.ovMode] ? prefs.ovMode : "barras";
+    for (const [m, v] of Object.entries(VIEWS)) { const b = el("button", null, v[0]); b.type = "button"; b.setAttribute("role", "radio"); b.dataset.m = m; modeBtns.push(b); seg.appendChild(b);
+      b.addEventListener("click", async () => { show(m); const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { ovMode: m }) }); }); }
+    radioKeys(modeBtns);
+    head.append(el("h3", null, "Quanto falta"), seg); sec.append(head, body, cap); show(mode0);
+    out.push(sec);
     return out;
   }
-
   // The turma(s) whose rule pack gave these numbers (rules/<term>/<turma>.json).
   const source = cs => "Pesos do Plano de Ensino " + TERM + " · não oficial, confira no Canvas";
   // Instead of the grade parts: why they are not there (term over, or another turma); null when there is nothing to say.
@@ -1252,23 +1510,10 @@
       yes.type = no.type = "button"; yes.addEventListener("click", () => answer(a.turma)); no.addEventListener("click", () => answer("outro"));
     }
     if (!prefs.dash) return;   // panel switched off: only the turma question
+    if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
-    if (grades) { const inside = prefs.native, g = gradesView(a); box.append(...g.filter(x => !(clean && /kpis|src/.test(x.className)) && !(inside && /tiles/.test(x.className)))); }
-    else if (why) {   // no rules of ours: the Centro de Notas formulas, course by course, when the professors set them
-      const off = hiddenNow;   // the courses taken off the dashboard in the popup
-      ruleCache = cache;
-      const rows = cache.data.courses.filter(c => !off.includes(String(c.id))).map(c => { const r = centroOf(String(c.id)); return r ? { c, r, src: "centro" } : { c, r: a.expired ? null : customOf(String(c.id)), src: "regra" }; }).filter(x => x.r && x.r.status !== "vazio");   // an old term: its points are not this semester's
-      if (rows.length) {
-        const sec = el("section", "card centro"), h = el("h3", null, "Quanto falta"), ul = el("ul");
-        sec.appendChild(h);
-        for (const { c, r, src } of rows) { const li = el("li", "row"), m = mid(shortName(c.name), "/courses/" + c.id, (r.status === "acima" ? "os pontos somam " + fmt(r.planned, 1) + ", mais que " + fmt(r.total, 0) + ": ajuste na matéria" : r.unsure ? "confira a regra na matéria antes de contar com isso" : r.status === "precisa" ? "precisa " + up(r.need, 1) + "/10 em média no que falta" + (r.approx ? " (aprox.)" : "") : r.status === "garantido" ? "meta garantida" : "recuperação")
-            + (src === "regra" ? " · " + (r.mine ? "sua regra" : "soma dos pontos: confira na matéria") : " · Centro de Notas"));
-          li.append(el("span", "d", r.now == null ? "—" : fmt(r.now, 1)), m, el("span", "pill " + (r.status === "acima" || r.unsure ? "nt" : centroTone(r)), src === "regra" ? customPill(r) : r.status === "precisa" ? up(r.need, 1) : r.status === "garantido" ? "ok" : "rec.")); ul.appendChild(li); }
-        sec.append(ul, el("p", "c", "Meta " + fmt(T, T % 1 ? 1 : 0) + ". Pela fórmula do professor no Centro de Notas; sem fórmula, pela soma dos pontos do Canvas, que você ajusta na página da matéria (o que não vale nota sai da conta)."));
-        box.appendChild(sec);
-      } else box.append(el("div", "muted why", why));
-    }
+    if (prefs.grades) { const ov = gradesOverview(a, cache, clean, prefs); if (ov.length) box.append(...ov); else if (why) box.append(el("div", "muted why", why)); }
     box.appendChild(grid);
     { // when Canvas was read, at the foot of the panel (the course page says it in its header)
       const d = C.localISO(new Date(cache.at)), when = (d === today() ? "hoje" : ago(d)) + " às " + hhmm(new Date(cache.at).toISOString());
@@ -1333,9 +1578,13 @@
   // and grade or what it needs, and the actions (files download, open Caderno+ on this subject).
   function coursePanel(courseId, a, cache, prefs) {
     const c = prefs.grades && a.has ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
-    const cr = !c && prefs.grades ? centroOf(courseId) : null;   // no rules of ours: the professor's formula from the Centro de Notas
+    const own = !!(myRules[courseId] && myRules[courseId].own);   // the student builds this course's rule (over the ready-made one or the Centro's)
+    const cr = !c && !own && prefs.grades ? centroOf(courseId) : null;   // no rules of ours: the professor's formula from the Centro de Notas
     ruleCache = cache;
-    const mr = !c && !cr && prefs.grades && !a.expired && ruleItems(courseId).length ? customOf(courseId) || { status: "vazio" } : null;   // neither: the student's own rule
+    const mr = !c && !cr && prefs.grades && !a.expired && ruleItems(courseId).length ? customOf(courseId) || { status: "vazio" } : null;   // neither (or chosen): the student's own rule
+    const ownBtn = () => { const b = el("button", "mini own-b", "Montar minha própria regra"); b.type = "button"; b.title = "Usar os pontos do Canvas desta matéria, com o que você tira da conta e os pesos que você puser, no lugar desta regra";
+      b.addEventListener("click", async () => { const had = myRules[courseId] && myRules[courseId].formula;   // starts with the professor's or the Plano's formula, saved, so the card and the editor agree
+        await saveRule(cache.user, courseId, Object.assign({ merge: true, own: true }, had ? {} : { formula: startFormula(courseId, ruleItems(courseId)).text })); location.reload(); }); return b; };
     if (!c && !cr && !mr && !prefs.files) return;
     const box = panelHost("qf-panel");
     if (!box) return;
@@ -1344,80 +1593,122 @@
     title.append(mark(), el("b", null, shortName(cv ? cv.name : document.title)));
     heroSub.textContent = (c ? "meta " + fmt(T, T % 1 ? 1 : 0) + " · " : "") + "lido do Canvas " + ago(C.localISO(new Date(cache.at)));
     const official = c && prefs.grades ? centroOf(courseId) : null;   // with our rules too: the Centro de Notas number beside them, to compare
-    if (official) heroSub.textContent += " · Centro de Notas: " + fmt(official.now, 1) + " agora" + (official.status === "precisa" ? ", precisa " + up(official.need, 1) + (official.approx ? " (aprox.)" : "") : official.status === "garantido" ? ", garantido" : official.status === "nao-da" ? ", recuperação" : "");
+    if (official) heroSub.textContent += " · Centro de Notas: " + dn(official.now) + " agora" + (official.status === "precisa" ? ", precisa " + up(official.need, 1) + (official.approx ? " (aprox.)" : "") : official.status === "garantido" ? ", garantido" : official.status === "nao-da" ? ", recuperação" : "");
     const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
-    if (!c && prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again
-      if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); } }); });
+    if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
+    if (prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again (a fresh analyse: its formula may now beat the Plano)
+      if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(own ? null : centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, analyse(cache, a.hand), cache, prefs); } }); });
+    // The table of assessments (as the ready-made rules always showed it): each one, its weight in the final grade, its grade;
+    // where there is none, a box to type the grade you expect (0 to what it is worth) and the result right under it. Typed
+    // grades are kept on this computer (centroSim[user][course][id], 0-10). rows: [{ id, name, date, max, got, w, missing }];
+    // proj({ id: 0-10 }) → { status, need, final } (final: the rest at 0).
+    const gradeTable = (rows, proj) => {
+      const tbl = el("div", "card items gt"), th = el("div", "ir ih"), out = el("b", "t muted"), boxes = [], clear = el("button", "mini", "Limpar"), dd = r => r.max >= 5 ? 1 : 2;
+      th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota")); tbl.appendChild(th);
+      const typed = () => { const g = {}; for (const b of boxes) { const t = String(b.inp.value).trim().replace(",", "."), n = Number(t); if (t !== "" && Number.isFinite(n)) g[b.r.id] = Math.min(10, Math.max(0, n * 10 / b.r.max)); } return g; };
+      const show = () => { const g = typed(), n = Object.keys(g).length, p = proj(g);
+        for (const b of boxes) b.inp.placeholder = p.status === "precisa" ? up(p.need * b.r.max / 10, dd(b.r)) : p.status === "nao-da" ? fmt(b.r.max, dd(b.r)) : "e se?";   // what is needed in each, at its scale
+        if (!n) { out.className = "t muted"; out.textContent = "Digite a nota que você espera nas caixas: o resultado aparece aqui."; return; }
+        out.className = "t " + (p.status === "garantido" ? "t-ok" : p.status === "nao-da" ? "t-bad" : "t-warn");
+        out.textContent = n >= boxes.length ? "Com essas notas você fica com " + dn(p.final) + (p.final >= T - 1e-9 ? " ✓ meta " + fmt(T, T % 1 ? 1 : 0) : ": faltam " + up(T - p.final, 1) + " para a meta")
+          : p.status === "garantido" ? "Com essas notas a meta já fica garantida ✓" : p.status === "nao-da" ? "Com essas notas não dá para chegar à meta, nem com 10 no resto" : "Com essas notas, precisa " + up(p.need, 1) + "/10 em média no resto"; };
+      const save = async () => { const { centroSim = {} } = await chrome.storage.local.get("centroSim"), mine = Object.assign({}, centroSim[cache.user]), g = typed();
+        if (Object.keys(g).length) mine[courseId] = g; else delete mine[courseId];
+        await chrome.storage.local.set({ centroSim: Object.assign({}, centroSim, { [cache.user]: mine }) }); };
+      for (const r of rows) { const row = el("div", "ir"), name = el("span", "n"); name.appendChild(el("span", "gtn", r.name)); name.title = r.name; let g;
+        if (r.date) name.appendChild(el("span", "dt", dmy(r.date)));
+        if (r.got != null) { g = el("span", "g", fmt(r.got, dd(r))); g.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); }
+        else if (r.missing) g = el("span", "g e", "ainda não está no Canvas");
+        else { g = el("span", "g e"); const inp = el("input", "simi"); inp.type = "text"; inp.inputMode = "decimal";
+          inp.setAttribute("aria-label", "Nota esperada em " + r.name + " (de " + fmt(r.max, dd(r)) + ")"); inp.addEventListener("input", () => { show(); save(); });
+          g.appendChild(inp); g.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); boxes.push({ r, inp }); }
+        row.append(name, el("span", "w", r.w == null ? "—" : Math.round(r.w * 10) + "%"), g); tbl.appendChild(row); }
+      if (boxes.length) { const ft = el("div", "gt-f"); clear.type = "button"; clear.addEventListener("click", () => { for (const b of boxes) b.inp.value = ""; show(); save(); }); ft.append(out, clear); tbl.appendChild(ft); show();
+        chrome.storage.local.get("centroSim").then(({ centroSim }) => { const g = centroSim && centroSim[cache.user] && centroSim[cache.user][courseId]; if (!g) return;
+          for (const b of boxes) if (g[b.r.id] != null && Number.isFinite(Number(g[b.r.id]))) b.inp.value = fmt(Number(g[b.r.id]) * b.r.max / 10, dd(b.r)); show(); }).catch(() => {}); }
+      return tbl; };
     if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
       const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
       for (const g of Array.isArray(myCentro[courseId].grupos) ? myCentro[courseId].grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
-      m.append(el("div", "t", fmt(cr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+      m.append(el("div", "t", dn(cr.now) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
         el("div", "c", cr.status === "garantido" ? "meta garantida pela fórmula do professor" : cr.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "precisa " + up(cr.need, 1) + "/10 em média no que falta" + (cr.approx ? " (aproximado: parte da fórmula está escondida para o aluno e pode contar outras atividades)" : "")),
         el("div", "c", "Falta: " + (cr.left.map(id => names.get(id)).filter(Boolean).slice(0, 8).join(", ") || "nada lançado em aberto") + " · fórmula do Centro de Notas"));
       card.append(m, el("span", "pill " + centroTone(cr), cr.status === "garantido" ? "garantido" : cr.status === "nao-da" ? "recuperação" : "precisa " + up(cr.need, 1)));
       box.appendChild(card);
-      if (cr.left.length) {   // simulate: the same grade on everything left, and the final it gives (nothing is saved)
-        const simC = el("div", "card centro-sim"), lab = el("label", "c"), range = el("input"), out = el("b", "t");
-        range.type = "range"; range.min = "0"; range.max = "10"; range.step = "0.5"; range.value = String(Math.min(10, Math.max(0, Math.ceil((cr.need != null ? cr.need : 7) * 2) / 2)));
-        range.setAttribute("aria-label", "Nota no que falta");
-        const show = () => { const p = C.centro(myCentro[courseId], T, Number(range.value)); out.textContent = "tirando " + fmt(Number(range.value), 1) + " no que falta, você fica com " + fmt(p.projected, 1) + (p.projected >= T ? " ✓" : ""); };
-        range.addEventListener("input", show); lab.append(el("span", null, "Simular"), range); simC.append(lab, out); show();
-        box.appendChild(simC);
+      if (!a.expired && ruleItems(courseId).length) { const r0 = el("div", "muted src own-row"); r0.append(el("span", null, "Pela fórmula do Centro de Notas."), ownBtn()); box.appendChild(r0); }
+      {   // the table of assessments, as before: each Centro column, its weight in the final grade, its grade or a box to type it
+        const cu = myCentro[courseId], leaves = [], seen = new Set(), open = new Set(cr.left);
+        for (const g of Array.isArray(cu.grupos) ? cu.grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) { const col = gc && gc.coluna;
+          if (col && col.tipo_coluna === "padrao" && !seen.has(col.id_coluna) && !(col.atividade && col.atividade.omitir_nota_final)) { seen.add(col.id_coluna); leaves.push(col); } }
+        const wOf = id => { const cl = JSON.parse(JSON.stringify(cu)), cols = (cl.colunas || []).concat(...(cl.grupos || []).map(g => (g && g.grupo_colunas || []).map(gc => gc && gc.coluna).filter(Boolean)));
+          for (const x of cols) if (x && (x.id_coluna === id || x.tipo_coluna === "final")) x.notas = [];   // as if still open: what 10 in it adds to the final
+          const hi = C.centro(cl, T, { grades: { [id]: 10 }, rest: 0 }).projected, lo = C.centro(cl, T, { grades: { [id]: 0 }, rest: 0 }).projected; return hi != null && lo != null ? Math.max(0, hi - lo) : null; };
+        const rows = [];
+        for (const col of leaves.slice(0, 40)) { const p = col.atividade && Number(col.atividade.pontos_possiveis) > 0 ? Number(col.atividade.pontos_possiveis) : 10, v = col.notas && col.notas[0] ? parseFloat(String(col.notas[0].nota).replace(",", ".")) : NaN, w = wOf(col.id_coluna);
+          if (!open.has(col.id_coluna) && !(w > 0.004)) continue;   // outside the final grade (or a recovery that does not count now)
+          rows.push({ id: col.id_coluna, name: col.nome_coluna || "Atividade", max: p, got: Number.isFinite(v) ? v : null, w, open: open.has(col.id_coluna) }); }
+        const proj = g => { const p = C.centro(cu, T, { grades: g, rest: 0 }); return { status: p.status, need: p.need, final: p.projected }; };
+        if (rows.length) box.appendChild(gradeTable(rows.filter(r => r.got != null || r.open), proj));
       }
     }
     if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes
       const items = ruleItems(courseId), rule = myRules[courseId] || { off: [], total: 10 }, off = new Set(rule.off || []);
       const card = el("div", "card cring"), m = el("div", "mid");
-      m.append(el("div", "t", mr.status === "vazio" ? (mr.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " passou dos pontos dela" : "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0)) : fmt(mr.now, 1) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
+      m.append(el("div", "t", mr.status === "erro" ? "A fórmula tem um erro: veja abaixo" : mr.status === "vazio" ? (mr.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " passou dos pontos dela" : "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0)) : dn(mr.now) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
         el("div", "c", mr.status === "vazio" ? (mr.parts ? (mr.emptyPart ? "A parte " + mr.emptyPart + " ainda não tem atividade: escolha a parte de cada atividade na lista (ou diga quantos pontos ela vale)." : "Escolha a parte de cada atividade na lista abaixo.") : "Marque o que vale nota na lista abaixo.")
           : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " soma " + fmt(mr.planned, 1) + " pontos, mais que os " + fmt(mr.total, 1) + " dela: tire o que não vale nota ou aumente os pontos da parte " + mr.part + "." : "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz).") : mr.unsure ? "Pela soma dos pontos daria " + (mr.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : customText(mr) + (mr.notYet > 0.001 ? " · " + fmt(mr.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
-        el("div", "c", mr.parts && mr.parts.length ? "Sua regra: " + mr.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + fmt(p.now, 1) + "/10").join(" · ") + (mr.emptyPart ? " · a parte " + mr.emptyPart + " não tem atividade" : "")
+        el("div", "c", mr.canvasWeights ? "Pelos pesos que o professor pôs no Canvas: " + (mr.parts || []).map(pp => { const cw = canvasWeightsRule(courseId); return (cw && cw.names[pp.id] || "parte " + pp.id) + " " + fmt(pp.w, 0) + "% (" + dn(pp.now) + "/10)"; }).join(" · ") : rule.formula ? "Pela sua fórmula" + (mr.notYet ? " · " + mr.notYet + (mr.notYet === 1 ? " parte ainda não está" : " partes ainda não estão") + " no Canvas (contam como o que falta)" : "") : mr.parts && mr.parts.length ? "Sua regra: " + mr.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + dn(p.now) + "/10").join(" · ") + (mr.emptyPart ? " · a parte " + mr.emptyPart + " não tem atividade" : "")
           : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
-      if (mr.status !== "vazio" && mr.status !== "acima" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
+      if (mr.status !== "vazio" && mr.status !== "acima" && mr.status !== "erro" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
       box.appendChild(card);
-      const ed = el("div", "card items rule"), th = el("div", "ir ih"); th.append(el("span", null, "Conta na nota?"), el("span", null, "Pontos"), el("span", null, "Nota"));
-      ed.appendChild(th);
+      const bad = mr.status === "vazio" || mr.status === "acima" || mr.status === "erro", rl = myRules[courseId] || canvasWeightsRule(courseId);
+      if (!bad) {   // the table: each activity that counts, its weight in the final grade, its grade or a box to type the one you expect
+        const at = (it, sc) => items.map(x => x === it ? Object.assign({}, x, { score: sc }) : x), nowOf = list => { const r = C.custom(list, rl, T); return r.now; };
+        const rows = [];
+        for (const it of items.slice(0, 40)) { const hi = nowOf(at(it, it.points)), lo = nowOf(at(it, 0)), w = hi != null && lo != null ? Math.max(0, hi - lo) : null;
+          if (!(w > 0.004)) continue;   // not in the rule (unticked, or a name no line uses)
+          rows.push({ id: it.key, name: it.name, date: it.due ? C.localISO(new Date(it.due)) : null, max: Number(it.points), got: it.score == null || !Number.isFinite(Number(it.score)) ? null : Number(it.score), w }); }
+        for (const l of mr.leaves || []) if (l.missing) rows.push({ id: "-" + l.name, name: l.name, max: 10, got: null, w: null, missing: true });
+        const proj = g => { const r = C.custom(items.map(x => g[x.key] != null ? Object.assign({}, x, { score: g[x.key] * Number(x.points) / 10 }) : x), rl, T); return { status: r.status, need: r.need, final: r.now }; };
+        if (rows.length) box.appendChild(gradeTable(rows, proj));
+      }
+      // the editor: the formula as the Plano de Ensino writes it; it starts from the professor's (Centro de Notas) or the
+      // Plano's weights, shows the result while typing, and offers the course's activities as short names to insert
       const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
-      const cur = () => myRules[courseId] || rule;   // the rule as stored now (a second quick change keeps the first)
-      const save = async change => { await saveRule(cache.user, courseId, Object.assign({}, cur(), change)); redraw(); };
-      const weighted = !!(rule.parts && Object.keys(rule.parts).length);
-      for (const it of items) {
-        const row = el("div", "ir" + (off.has(it.key) ? " off" : "")), lab = el("label", "n"), ck = el("input");
-        ck.type = "checkbox"; ck.checked = !off.has(it.key); ck.setAttribute("aria-label", "Conta na nota: " + it.name);
-        ck.addEventListener("change", () => { const o = new Set(cur().off || []); if (ck.checked) o.delete(it.key); else o.add(it.key); save({ off: [...o] }); });
-        lab.append(ck, el("span", null, it.name));
-        if (weighted) {   // which part of the Plano de Ensino this item belongs to
-          const ps = el("select", "part"); ps.setAttribute("aria-label", "Parte de " + it.name);
-          for (const k of ["", "A", "B", "C"]) { const o = el("option", null, k ? "Parte " + k : "fora"); o.value = k; if (((rule.part || {})[it.key] || "") === k) o.selected = true; ps.appendChild(o); }
-          ps.addEventListener("change", () => { const pt = Object.assign({}, cur().part); if (ps.value) pt[it.key] = ps.value; else delete pt[it.key]; save({ part: pt }); });
-          lab.appendChild(ps);
-        }
-        row.append(lab, el("span", "w", fmt(it.points, 2)), el("span", "g", it.score == null ? "—" : fmt(it.score, 2)));
-        ed.appendChild(row);
-      }
-      const tl = el("label", "c tot"), ti = el("input"); ti.type = "number"; ti.min = "1"; ti.max = "1000"; ti.step = "0.5"; ti.value = String(rule.total || 10); ti.setAttribute("aria-label", "A nota vai até");
-      ti.addEventListener("change", () => { const v = Number(String(ti.value).replace(",", ".")); if (v > 0 && v <= 1000) save({ off: (myRules[courseId] || rule).off || [], total: v }); });
-      tl.append(el("span", null, "A nota vai até "), ti, el("span", null, " pontos (veja no Plano de Ensino)"));
-      if (!weighted) ed.appendChild(tl);
-      // weights by part: "RA1 40%, RA2 60%"; each part's top defaults to the points of its items
-      const pw = el("div", "c tot parts"), parts = rule.parts || {};
-      pw.appendChild(el("span", null, weighted ? "Pesos:" : "O Plano de Ensino tem pesos por parte (ex.: RA1 40%, RA2 60%)?"));
-      if (weighted) for (const k of ["A", "B", "C"]) {
-        const w = el("input"), tp = el("input"); w.type = tp.type = "number"; w.min = "0"; w.max = "100"; w.step = "5"; tp.min = "0"; tp.max = "1000"; tp.step = "0.5";
-        w.value = parts[k] ? String(parts[k].w) : ""; tp.value = parts[k] && parts[k].top ? String(parts[k].top) : ""; tp.placeholder = "auto";
-        w.setAttribute("aria-label", "Peso da parte " + k + " em %"); tp.setAttribute("aria-label", "Pontos da parte " + k + " (vazio: os pontos das atividades dela)");
-        const set = () => { const ps = Object.assign({}, cur().parts), v = Number(String(w.value).replace(",", ".")), t = Number(String(tp.value).replace(",", "."));
-          if (v > 0) ps[k] = Object.assign({ w: v }, t > 0 ? { top: t } : {}); else delete ps[k]; save(Object.keys(ps).length ? { parts: ps } : { parts: {}, part: {} }); };
-        w.addEventListener("change", set); tp.addEventListener("change", set);
-        pw.append(el("span", "pk", "Parte " + k), w, el("span", null, "% de"), tp, el("span", null, "pts"));
-      } else {
-        const on = el("button", "mini", "Usar pesos por parte"); on.type = "button";
-        on.addEventListener("click", () => save({ parts: { A: { w: 50 }, B: { w: 50 } }, part: {} }));
-        pw.appendChild(on);
-      }
-      ed.appendChild(pw);
-      if (myRules[courseId]) { const rs = el("button", "mini", "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); redraw(); }); ed.appendChild(rs); }
-      box.appendChild(ed);
+      const ed = el("div", "card rule formula"), ta = el("textarea"), acts = el("div", "acts"), apply = el("button", "primary", "Aplicar"), restart = el("button", "mini", "Recomeçar");
+      const shortRef = shortName2;
+      const start = startFormula(courseId, items, shortRef);
+      ta.value = rule.formula || start.text; ta.rows = Math.min(16, Math.max(4, ta.value.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 64)), 0) + 1));   // long lines wrap: count them ta.spellcheck = false; ta.setAttribute("aria-label", "Fórmula da nota desta matéria");
+      apply.type = restart.type = "button"; restart.title = "Voltar à fórmula inicial (" + start.from + ")";
+      const pv = el("div", "pv"), found = el("div");
+      const preview = () => {   // the result of what is typed now (nothing saved until Aplicar)
+        const r = C.custom(items, { formula: ta.value }, T); pv.replaceChildren(); found.replaceChildren();
+        if (r.status === "erro") { for (const e of r.errors || []) pv.appendChild(el("p", "c err", e)); return; }
+        pv.appendChild(el("p", "c res", "Com esta fórmula: " + (r.now == null ? "—" : dn(r.now)) + " agora · " + (r.status === "garantido" ? "meta " + fmt(T, T % 1 ? 1 : 0) + " garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + " em média no que falta")
+          + (r.weights && r.weights.length ? " · os pesos de " + r.weights.join(", ") + " não somam 100% (ajustados)" : "")));
+        if (r.leaves && r.leaves.length) {   // what each name found: open by itself only when a name found nothing
+          const miss = r.leaves.filter(l => l.missing).length, det = el("details", "found-d"), ul = el("ul", "found");
+          det.appendChild(el("summary", null, "O que cada nome achou no Canvas (" + r.leaves.length + ")" + (miss ? " · " + miss + " sem atividade" : ""))); if (miss) det.open = true;
+          for (const l of r.leaves) { const li = el("li", l.missing ? "miss" : null); li.append(el("b", null, l.name), el("span", null, l.missing ? " → não achei no Canvas (conta como o que falta)" : " → " + l.items.join("; "))); ul.appendChild(li); }
+          det.appendChild(ul); found.appendChild(det); }
+      };
+      let pt = 0; ta.addEventListener("input", () => { clearTimeout(pt); pt = setTimeout(preview, 250); });
+      apply.addEventListener("click", async () => { await saveRule(cache.user, courseId, { merge: true, formula: String(ta.value).slice(0, 4000), own: own || undefined }); redraw(); });
+      restart.addEventListener("click", () => { ta.value = start.text; preview(); });
+      acts.append(apply, restart);
+      // the course's activities: a click puts the short name where the cursor is
+      const chips = el("div", "chips");
+      const crefs = shortRefs(items);
+      for (const it of items.slice(0, 40)) { const add = crefs.get(it.name) || shortRef(it.name), b = el("button", "chip", add); b.type = "button"; b.title = it.name + " · " + fmt(it.points, 2) + " pts";
+        b.addEventListener("click", () => { const v = String(ta.value), at = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length;
+          ta.value = v.slice(0, at) + add + v.slice(typeof ta.selectionEnd === "number" ? ta.selectionEnd : at); if (ta.focus) ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(at + add.length, at + add.length); preview(); });
+        chips.appendChild(b); }
+      ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Uma parte por linha, como no Plano de Ensino: pesos em % (Final = 40% RA1 + 60% RA2), média(A, B) ou soma(A, B) de N. Um nome que nenhuma linha define é uma atividade do Canvas."),
+        el("p", "c from", "Começou " + start.from + "."), ta, acts, pv, el("div", "c lbl", "Atividades desta matéria (clique para pôr na fórmula):"), chips, found);
+      preview();
+      if (myRules[courseId]) { const rs = el("button", "mini back", own ? "Voltar à regra pronta" : "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); if (own) location.reload(); else redraw(); }); ed.appendChild(rs); }
+      const fd = el("details", "fdet"); fd.appendChild(el("summary", null, "Como a nota é calculada · editar a fórmula")); fd.appendChild(ed); if (bad) fd.open = true;
+      box.appendChild(fd);
     }
     courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
     teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;
@@ -1432,6 +1723,12 @@
         const head = el("div", "card cring" + (simOn ? " simulating" : "")), mid = el("div", "mid");
         mid.append(el("div", "t", earnedText(st) + " garantidos de 10" + (simOn ? " (simulação)" : "")),
           el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida" + (simOn ? " com essas notas" : " pelas notas lançadas") : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
+        // the Canvas sum and ours differ when an item is graded on another scale than what it is worth (PjBL II of BD:
+        // Canvas 0-2, worth 1,5 of the final): said, item by item, so the two numbers are not a mystery
+        { let raw = 0; const scaled = [];   // the grades in Canvas only (a simulation does not change this line)
+          for (const it of c.items) { const g = C.parseNum(a.canvas[C.key(c, it)]); if (g == null || Number.isNaN(g)) continue; raw += g; if (Math.abs(it.inMax - it.max) > 1e-9) scaled.push(it.name.replace(/^RA\d · /, "") + ": o Canvas lança de 0 a " + fmt(it.inMax, 2) + ", vale " + fmt(it.max, 2)); }
+          const e0 = C.courseState(c, a.canvas, today(), T).earned;
+          if (Math.abs(raw - e0) >= 0.05) mid.appendChild(el("div", "c scale", "No Canvas as notas somam " + fmt(raw, 2) + "; pelos pesos do Plano de Ensino valem " + fmt(e0, 2) + (scaled.length ? " (" + scaled.slice(0, 3).join("; ") + ")" : ""))); }
         head.append(ring(st, true), mid, needBig(st)); return head;
       };
       box.appendChild(headBox);
@@ -1441,6 +1738,8 @@
       for (const it of c.items) {
         const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.canvas[k]), name = el("span", "n", it.name);
         if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st0.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
+        if (!it.fromCanvas && it.unv) name.appendChild(el("span", "dt unv", "data a confirmar"));   // a Plano date the Plano itself does not confirm, and no Canvas activity yet
+        else if (!it.fromCanvas && it.date) name.title = "Data do Plano de Ensino (ainda não está no Canvas)";
         let g;
         if (Number.isNaN(p)) g = el("span", "g e", "nota inválida");
         else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.canvas[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
@@ -1470,7 +1769,9 @@
         }
       };
       paint();
-      parts.notas.push(tbl, el("div", "muted src", source([c])));
+      const srcRow = el("div", "muted src own-row"); srcRow.append(el("span", null, source([c])));
+      if (!a.expired && ruleItems(courseId).length) srcRow.appendChild(ownBtn());   // the ready-made weights do not match? build your own
+      parts.notas.push(tbl, srcRow);
     }
     const acts = el("div", "acts"), status = el("span", "muted");
     if (prefs.files) {
@@ -1550,11 +1851,12 @@
     const build = () => {
       const seen = new Set(); items = [];
       const rule = c ? c.items.filter(it => it.date).map(it => { const key = "qf:" + C.key(c, it); return { key, mine: !!marks[key], title: it.name, date: it.date, exam: it.exam, task: !it.exam, url: null, rule: true }; }) : [];
-      for (const x of agenda(a, cache, marks).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(rule)) {
+      for (const x of agenda(a, cache, marks).filter(x => String(x.cid) === courseId || (c && x.ours === c)).concat(programa(a, cache, marks, courseId), rule)) {
         const k = x.date + "|" + fold(x.title).slice(0, 24); if (seen.has(k)) continue; seen.add(k); items.push(x);
       }
     };
     build();
+    if (!progEvents) loadProgEvents(cache, courseId).then(() => { build(); if (typeof draw === "function") draw(); }, () => {});   // this course's calendar events only
     const sec = el("section", "card mcal"), left = el("div", "mc-l"), right = el("div", "mc-r"), head = el("div", "mc-h"), prev = el("button", null, "‹"), next = el("button", null, "›"), title = el("b");
     prev.type = next.type = "button"; prev.setAttribute("aria-label", "Mês anterior"); next.setAttribute("aria-label", "Próximo mês");
     head.append(prev, title, next); const grid = el("div", "mc-g"); left.append(head, grid); sec.append(left, right);
@@ -1600,9 +1902,6 @@
     if (last) { const s2 = el("section", "card news"), li = el("div", "row"), who = el("span", "who"); who.appendChild(avatar(last.avatar, last.author || "", 32)); if (last.unread) who.appendChild(el("span", "dot", "não lido"));
       li.append(who, mid(last.title, last.url && inCanvas(last.url), (last.author ? last.author + " · " : "") + (last.at ? ago(C.localISO(new Date(last.at))) : "")), el("span"));
       s2.append(el("h3", null, "Último aviso"), li); out.push(s2); }
-    const links = el("div", "qlinks"); links.appendChild(el("span", "muted", "Abrir no Canvas:"));
-    for (const [label, path] of [["Módulos", "/modules"], ["Tarefas", "/assignments"], ["Arquivos", "/files"], ["Notas", "/grades"]]) { const l = el("a", "mini", label); l.href = "/courses/" + courseId + path; links.appendChild(l); }
-    out.push(links);
     return out;
   }
   // Materiais: every module and its items (one GET when the tab opens), with a filter box; the files download stays above.
@@ -1611,7 +1910,7 @@
     box.append(el("h3", null, "Módulos"), q, list); pane.appendChild(box); list.appendChild(el("div", "muted", "Lendo os módulos…"));
     let mods = [];
     try { mods = await getAll("/api/v1/courses/" + courseId + "/modules?include[]=items&per_page=100"); } catch (e) { list.replaceChildren(el("div", "muted", "Esta matéria não mostra os módulos.")); return; }
-    for (const m of mods) if (!m.items && m.items_count) { try { m.items = await getAll("/api/v1/courses/" + courseId + "/modules/" + m.id + "/items?per_page=100"); } catch (e) { m.items = []; } }   // big modules come without their items
+    await pool(mods.filter(m => !m.items && m.items_count), 3, async m => { try { m.items = await getAll("/api/v1/courses/" + courseId + "/modules/" + m.id + "/items?per_page=100"); } catch (e) { m.items = []; } });   // big modules come without their items: three at a time
     const draw = () => {
       const w = fold(q.value || "").trim(); let shown = 0; list.replaceChildren();
       for (const m of mods) {
@@ -1638,13 +1937,12 @@
   async function courseFiles(id) {
     try { return await getAll("/api/v1/courses/" + id + "/files?sort=created_at&order=desc&per_page=100"); }
     catch (e) {   // Files tab hidden by the professor: the files linked in modules
-      const out = [], seen = new Set();
+      const ids = [], seen = new Set();
       for (const m of await getAll("/api/v1/courses/" + id + "/modules?include[]=items&per_page=100"))
-        for (const it of m.items || []) if (it.type === "File" && it.content_id && !seen.has(it.content_id)) {
-          seen.add(it.content_id);
-          try { out.push(await getAll("/api/v1/courses/" + id + "/files/" + it.content_id)); } catch (err) { /* locked file */ }
-        }
-      return out;
+        for (const it of m.items || []) if (it.type === "File" && it.content_id && !seen.has(it.content_id)) { seen.add(it.content_id); ids.push(it.content_id); }
+      const out = new Array(ids.length);   // three at a time, in module order
+      await pool(ids.map((cid, i) => [cid, i]), 3, async ([cid, i]) => { try { out[i] = await getAll("/api/v1/courses/" + id + "/files/" + cid); } catch (err) { /* locked file */ } });
+      return out.filter(Boolean);
     }
   }
   async function listFiles(id, canvasName, acts, btn, status) {
@@ -1691,7 +1989,7 @@
       out.push({ t: nm, c: "Matéria", u: "/courses/" + c.id, k: "matéria" });
       for (const x of c.assignments) if (x.url) out.push({ t: x.name, c: nm, u: x.url, k: "tarefa" });
     }
-    for (const c of a.mine) out.push({ t: C.SHORT[c.id] + ": quanto falta", c: "Caderno+", u: "/courses/" + courseOf[c.id], k: "campus" });
+    for (const c of cache.data.courses) { const p = a.byCanvasId[String(c.id)]; out.push({ t: (p ? C.SHORT[p.id] : nick(c.name)) + ": quanto falta", c: "Caderno+", u: "/courses/" + c.id, k: "campus" }); }   // every course, any turma
     return out;
   }
   async function moduleIndex(cache) {
@@ -1768,16 +2066,23 @@
   // The left-menu trays (Cursos, Grupos, Histórico, Ajuda: canvas-lms navigation_header/react/trays, all in #nav-tray-portal):
   // the look is page CSS; here the Cursos tray gets our pill on our subjects and leaves out the courses taken off the dashboard.
   let trayWatch = null;
+  let trayCache = null;   // the reading the tray numbers come from (set with watchTray)
   function enhanceTray(a, hidden) {
-    const portal = document.getElementById("nav-tray-portal");
+    const portal = document.getElementById("nav-tray-portal"); let nums = null;
     if (!portal || !portal.querySelectorAll) return;
     for (const link of portal.querySelectorAll('a[href^="/courses/"]')) {
       const m = /^\/courses\/(\d+)$/.exec(link.getAttribute("href") || ""); if (!m) continue;
       const item = link.closest ? link.closest("li") : null;
       if (item) item.style.display = hidden().includes(m[1]) ? "none" : "";
-      const c = a.byCanvasId[m[1]];
-      if (!c || !a.has || !item || item.querySelector("[data-cp-tray]")) continue;
-      const st = a.state(c), p = pill(earnedText(st) + "/10 · " + a.label(st), a.tone(st)); p.setAttribute("data-cp-tray", "1"); item.appendChild(p);
+      if (!item) continue;
+      const c = a.byCanvasId[m[1]]; let txt = null, tone = "warn";
+      if (c && a.has && a.rules) { const st = a.state(c); txt = earnedText(st) + "/10 · " + a.label(st); tone = a.tone(st); }
+      else if (trayCache) { const u = (nums = nums || new Map(courseNumbers(a, trayCache).U.map(x => [x.cid, x]))).get(m[1]);   // any course, any turma: the dashboard's number
+        if (u && (u.now != null || u.status === "nao-da")) { txt = (u.now == null ? "" : dn(u.now) + "/10 · ") + u.label; tone = u.tone === "nt" ? "warn" : u.tone; } }
+      const old = item.querySelector("[data-cp-tray]");
+      if (old && old.textContent === txt) continue;   // unchanged: no write (the watcher would see it)
+      if (old) old.remove();
+      if (txt) { const p = pill(txt, tone); p.setAttribute("data-cp-tray", "1"); item.appendChild(p); }
     }
   }
   let trayA = null, trayHidden = null;   // the latest reading and hidden list: the watcher is set once, its data is not
@@ -1944,7 +2249,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     for (let d = new Date(Number(first), 7, 1); C.localISO(d) <= C.TERM_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(C.localISO(d).slice(0, 7));
     let cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : months[0];
     { const home = cur, hostEl = document.getElementById("cp-cal"); if (hostEl) hostEl.cpBusy = () => cur !== home; }   // a new reading redraws the calendar, but not under a student looking at another month
-    const extra = {}, base = agenda(a, cache, marks);
+    const extra = {}; let base = agenda(a, cache, marks).concat(programa(a, cache, marks));   // the planner and every course program
     const ruleItems = (a.rules ? a.mine : []).flatMap(c => c.items.filter(it => it.date).map(it => ({ key: "qf:" + C.key(c, it), title: it.name, course: C.SHORT[c.id] || c.name, date: it.date, exam: it.exam, task: !it.exam, url: courseOf[c.id] ? location.origin + "/courses/" + courseOf[c.id] : null, rule: true })));
     const hd = el("div", "hd"); hd.append(mark(), wordmark());
     const nav = el("span", "calnav"), prev = el("button", null, "‹"), next = el("button", null, "›"), now = el("button", null, "Hoje"), title = el("b", "calt");
@@ -1953,7 +2258,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     const natB = el("button", "find natv", prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"); natB.type = "button";
     natB.addEventListener("click", async () => { const { prefs: sp } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, sp, { nativeCal: !prefs.nativeCal }) }); prefs = cpPrefs(Object.assign({}, prefs, { nativeCal: !prefs.nativeCal })); natB.textContent = prefs.nativeCal ? "Só o do Caderno+" : "Calendário do Canvas"; setTimeout(() => window.dispatchEvent && window.dispatchEvent(new Event("resize")), 60); });   // Canvas's calendar measures itself when shown
     hd.appendChild(natB);
-    const grid = el("div", "card cal"), legend = el("div", "muted src", "Prazos do Canvas, provas do Plano de Ensino e as suas tarefas · clique para abrir");
+    const grid = el("div", "card cal"), legend = el("div", "muted src", "O programa de cada matéria (as atividades e os eventos do Canvas), as provas do Plano de Ensino e as suas tarefas · clique para abrir");
     box.append(hd, grid, legend);
     const itemsOf = ym => {
       const seen = new Set(), out = [];
@@ -1961,6 +2266,9 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
         if (!x.date || x.date.slice(0, 7) !== ym) continue;
         const k = (x.rule ? x.course + x.date : x.key);
         if (x.rule && base.some(y => y.exam && y.date === x.date && y.ours && (C.SHORT[y.ours.id] || "") === x.course)) continue;
+        // a Plano item that the program already has on that day ("RA2 · AS 07 (grupo)" and Canvas's "AS 07"): once
+        if (x.rule) { const n = fold(String(x.title).replace(/^RA\d+\s*·\s*/, "").replace(/\(.*?\)/g, "")).trim();
+          if (n && base.some(y => !y.rule && y.date === x.date && ((y.ours && (C.SHORT[y.ours.id] || "") === x.course) || y.course === x.course) && (fold(y.title).includes(n) || n.includes(fold(y.title).trim())))) continue; }
         if (seen.has(k)) continue; seen.add(k); out.push(x);
       }
       return out.sort((p, q) => (p.due || p.date).localeCompare(q.due || q.date));
@@ -1999,6 +2307,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     next.addEventListener("click", () => { const i = months.indexOf(cur); if (i < months.length - 1) { cur = months[i + 1]; draw(); load(cur); } });
     now.addEventListener("click", () => { cur = months.includes(today().slice(0, 7)) ? today().slice(0, 7) : cur; draw(); });
     draw(); load(cur);
+    loadProgEvents(cache).then(() => { base = agenda(a, cache, marks).concat(programa(a, cache, marks)); draw(); }, () => {});   // the courses' calendar events, when they arrive
   }
 
   // Canvas login and logout pages (the content script runs on every pucpr.instructure.com page): the next student may be
@@ -2046,7 +2355,10 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
     livePrefs = prefs;   // the panel changes the mode and the meta: a later redraw (a new reading, the Centro de Notas) uses those, not the ones of the page load
     const paintAll = (c, again) => (queue = queue.then(() => draw(c, livePrefs, again)).catch(e => oops("desenhar o painel", e)));
-    try { cache = await load(fresh => { if (fresh.at !== cache.at) { cache = fresh; paintAll(fresh, true); } }, first); }
+    try { cache = await load(fresh => { if (fresh.at === cache.at) return;
+      const same = JSON.stringify([fresh.data, fresh.planner, fresh.inbox]) === JSON.stringify([cache.data, cache.planner, cache.inbox]);   // ~1 ms for a term
+      cache = fresh; if (same) { for (const id of ["cp-dash"]) { const h = document.getElementById(id), r = h && h.cpRoot, rd = r && r.querySelector && r.querySelector(".read"); if (rd) rd.textContent = "Lido do Canvas hoje às " + hhmm(new Date(fresh.at).toISOString()) + " · o botão Atualizar da extensão lê de novo"; } return; }
+      paintAll(fresh, true); }, first); }
     catch (e) { oops("ler o Canvas", e); if (!/ 401$/.test(String(e && e.message))) troubleBanner(e); return; }   // logged out: quiet (Canvas asks to log in)
     if (ownerSwapped) { prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs); livePrefs = prefs; }   // another student: their turma, not the previous one's
     window.cpRepaint = () => paintAll(cache, true);   // the latest reading drawn again (the Centro de Notas landed)
@@ -2060,7 +2372,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel", "cp-cal"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
-    sendNext(a);
+    sendNext(a, cache);
     sendReminders(agenda(a, cache, marks), prefs, cache);
     if (prefs.search) window.cpSearch = () => openSearch(a, cache);   // opens the latest reading
     // one listener per page (the bookmarklet can run again): Ctrl+K the search; Alt+N the course's Anotações tab, or the
@@ -2080,11 +2392,12 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       const { hidden } = await chrome.storage.local.get("hidden");
       let off = Array.isArray(hidden) ? hidden.map(String) : [];
       const getOff = () => off, setOff = async list => { off = list.map(String); await chrome.storage.local.set({ hidden: off }); };
-      watchTray(a, getOff);
+      trayCache = cache; watchTray(a, getOff);
       if (/^\/courses\/?$/.test(location.pathname)) coursesPage(a, getOff, setOff);
     }
     const anyCourse = /^\/courses\/(\d+)(\/|$)/.exec(location.pathname);
     if (anyCourse) { courseNav(anyCourse[1]); courseModules(anyCourse[1]); }
+    if (anyCourse && /\/(assignments|pages|discussion_topics|announcements)\/[^/]+\/?$/.test(location.pathname)) { copyButton(); setTimeout(copyButton, 1500); setTimeout(copyButton, 4000); }   // the text may render late (React pages)
     const m = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
     if (m && !keepCourse) coursePanel(m[1], a, cache, prefs);
     if (location.pathname === "/" || location.pathname === "/dashboard") {
@@ -2122,7 +2435,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       }); }
       if (prefs.changes) whatChanged(cache).then(got => { const h = document.getElementById("cp-dash"); if (got && !(h && document.activeElement === h)) onMode(prefs.mode); }, () => {});   // in the background, never while the student types in the panel
       const { hidden } = await chrome.storage.local.get("hidden");
-      const ctx = { prefs, hidden: Array.isArray(hidden) ? hidden.map(String) : [] }; hiddenNow = ctx.hidden;
+      const ctx = { prefs, cache, hidden: Array.isArray(hidden) ? hidden.map(String) : [] }; hiddenNow = ctx.hidden;
       dashPanel(a, cache, prefs, marks, recent && typeof recent === "object" ? recent[cache.user] : null, onMode);
       cardsFirst = !!prefs.cardsFirst; gradeA = a; watchDash(); placeDash(); enhanceGradeCards();
       decorateCards(a, again, ctx); hideGradeCards(ctx.hidden); greet(agenda(a, cache, marks));
@@ -2130,7 +2443,8 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       let greetTries = 0;
       window.cpGreet = () => { if (++greetTries > 12 || (document.querySelector && document.querySelector(".cp-greet"))) { window.cpGreet = null; return; } greet(agenda(a, cache, marks)); };
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
-      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centro) loadCentro(cache.user).then(() => window.cpRepaint ? window.cpRepaint() : window.cpCards && window.cpCards(gradeA)); }); }   // the Centro de Notas landed: the panel and the cards again
+      if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centroOff && !ch.centroOff.newValue) { centroOff = false; for (const h of ["cp-dash", "qf-panel"]) { const x = document.getElementById(h), r = x && x.cpRoot; for (const o of r && r.querySelectorAll ? r.querySelectorAll(".centro-ask") : []) o.remove(); } }   // allowed: the offer goes at once
+        if (ch.centro) loadCentro(cache.user).then(() => { if (window.cpRepaint) window.cpRepaint(); const a2 = analyse(cache, gradeA && gradeA.hand); if (window.cpCards) window.cpCards(a2); if (trayA) { trayA = a2; enhanceTray(trayA, trayHidden); } }); }); }   // both: the cards were drawn before the Centro landed   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();
       let t = 0;

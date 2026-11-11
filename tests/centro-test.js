@@ -121,6 +121,14 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert(big.status === "acima" && big.now === null && big.planned === 20, "points adding up past the top: no number, never a false garantido: " + JSON.stringify(big));
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], { total: 20 }, 7).now, 8.5, "told the top: 17 of 20 = 8,5");
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 10, score: 2 }], {}, 7).status, "nao-da", "nothing left, below the meta");
+  { const r3 = NotasCore.formulaEval("Final = soma(A, P) de 10\nA = média(TDE)", [{ key: "t", name: "TDE", points: 5, score: 0 }, { key: "p", name: "P", points: 5, score: null }], 7);
+    assert(r3.status === "erro" && /média ou um peso/.test(r3.errors.join(" ")), "soma() over a média line: an error, not its points silently counted as left: " + JSON.stringify(r3.errors));
+    const r4 = NotasCore.formulaEval("Final = 50% RA1 + 50% RA2\nRA1 = 100% Prova\nRA2 = 100% Prova RA2", [{ key: "1", name: "Prova RA1", points: 10, score: 10 }, { key: "2", name: "Prova RA2", points: 10, score: null }], 7);
+    assert(r4.errors.some(e => /Prova RA2" conta em RA1/.test(e)), "a short name that also finds an activity of another line is warned: " + JSON.stringify(r4.errors));
+    const r5 = NotasCore.formulaEval("Final = 50% A + 50% B\nA = média(T1)\nB = média(T2)", [{ key: "1", name: "T1", points: 10, score: 8 }, { key: "2", name: "T2", points: 10, score: null }], 7);
+    assert(!r5.errors.length, "distinct names: no warning"); }
+  { const sc = NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], null, 7);
+    assert(sc.scaled && sc.total === 20 && sc.now === 8.5 && sc.status === "garantido", "no rule at all: the Canvas points brought to 0-10 (17 of 20 = 8,5): " + JSON.stringify(sc)); }
   assert.strictEqual(NotasCore.custom(it, { off: ["a", "b", "c", "x"] }, 7).status, "vazio", "nothing counts");
   assert.strictEqual(NotasCore.custom([{ key: "a", points: 2, score: 5 }], {}, 7).now, 2, "a score above the points is capped");
   assert.strictEqual(NotasCore.custom(null, null, 7).status, "vazio", "no items: no number");
@@ -134,6 +142,52 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.strictEqual(NotasCore.custom(its, { parts: { A: { w: 40 }, B: { w: 60 } }, part: { p1: "A" } }, 7).status, "vazio", "a weighted part with no item and no top: no number");
   assert.strictEqual(NotasCore.custom(its, { parts: { A: { w: 100, top: 5 } }, part: { p1: "A" } }, 7).status, "acima", "a part past its top: no number");
   assert.strictEqual(NotasCore.custom(its, { parts: { A: { w: 40 }, B: { w: 60 } }, part: { p1: "A", p2: "B" }, off: ["p2"] }, 7).status, "vazio", "an unticked item leaves its part too");
+  ok();
+}
+{ // the student's formula, written as the Plano de Ensino writes it (Imperativa-like: the Centro de Notas gives 3,4 and 6,0)
+  const it = [{ key: "1", name: "Prova do RA1", points: 10, score: 8 }, { key: "2", name: "TDE 1: Motivação", points: 10, score: 10 }, { key: "3", name: "TDE 10", points: 10, score: 0 },
+    { key: "4", name: "PBL01", points: 10, score: 10 }, { key: "5", name: "Prova do RA2", points: 10, score: null }, { key: "6", name: "Trabalho do RA2", points: 10, score: null }];
+  const f = "Final = 40% RA1 + 60% RA2\nRA1 = 75% Prova do RA1 + 25% Exercícios\nExercícios = média(TDE 1, PBL01)\nRA2 = 70% Prova do RA2 + 30% Trabalho do RA2";
+  const r = NotasCore.custom(it, { formula: f }, 7);
+  assert(r.status === "precisa" && r.now === 3.4 && Math.abs(r.need - 6) < 0.01, "the Centro's numbers from the written formula: " + JSON.stringify(r).slice(0, 200));
+  assert.deepStrictEqual(r.leaves.find(l => l.name === "TDE 1").items, ["TDE 1: Motivação"], "\"TDE 1\" is a whole word: not TDE 10");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = 0,4 RA1 + 0,6 RA2\nRA1 = 75% Prova do RA1 + 25% Exercícios\nExercícios = média(TDE 1, PBL01)\nRA2 = 70% Prova do RA2 + 30% Trabalho do RA2" }, 7).now, 3.4, "weights as decimals too");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = soma(Prova do RA1, PBL01) de 20" }, 7).now, 9, "soma(...) de N: 18 of 20 = 9");
+  const miss = NotasCore.custom(it, { formula: "Final = 50% Prova do RA1 + 50% Prova do RA3" }, 7);
+  assert(miss.notYet === 1 && miss.leaves[1].missing && miss.now === 4 && Math.abs(miss.need - 6) < 0.01, "a name not in Canvas yet counts as left: " + JSON.stringify(miss).slice(0, 160));
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = 40 RA1" }, 7).status, "erro", "a term without a weight is an error");
+  assert(NotasCore.custom(it, { formula: "Final = 40% A\nA = 100% Final" }, 7).errors.some(e => /ela mesma/.test(e)), "a loop is an error, not a hang");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = 30% Prova do RA1 + 30% PBL01" }, 7).weights[0], "Final", "weights that do not add to 100 are said (and normalised)");
+  assert.strictEqual(NotasCore.custom(it, { formula: "Final = média(Prova do RA1, PBL01)" }, 9).status, "garantido", "média of 8 and 10 = 9");
+  ok();
+}
+{ // handed in, grade not out yet: past its date it is still to be graded, not a zero (Imperativa's PBL06-10: 7,2 became 6,0)
+  const imp = NotasCore.COURSES.find(c => c.id === "imp"), cid = NotasCore.CANVAS.imp.cid, m = NotasCore.CANVAS.imp.items;
+  const names = Object.values(m).flatMap(r => r.one ? [r.one] : r.avg || r.sum || []);
+  const mk = submittedEx2 => ({ v: 1, courses: [{ id: cid, name: "Programação Imperativa (Turma 2º B) - 2026 / 2º Sem", assignments: names.map((n, i) => {
+    const ex2 = (m.ex2.avg || []).includes(n), graded = /TDE 1|TDE 2|PBL0[1-5]|Prova do RA1/.test(n);
+    return { name: n, points: 10, score: graded ? 8 : null, due: ex2 ? "2026-10-28" : "2026-12-01", submitted: ex2 && submittedEx2, missing: false, online: true }; }) }] });
+  const st = sub => NotasCore.courseState(imp, NotasCore.fromCanvas(mk(sub)).grades, "2026-11-10", 7);
+  assert(st(true).lateMax === 0 && st(true).futureMax > st(false).futureMax, "handed in and not graded: counted with what is left, not lost");
+  assert(st(false).lateMax > 0, "not handed in, past its date: still late (a real zero risk)");
+  const nx = NotasCore.nextItem(st(true)); assert(!nx || nx.date >= "2026-11-10", "a handed-in item is never the next assessment: " + (nx && nx.date));
+  const sem = NotasCore.semester([imp], NotasCore.fromCanvas(mk(true)).grades, "2026-11-10", 7);
+  assert(sem.sent > 0 && sem.done === sem.graded + sem.sent && sem.items.some(x => x.s === "sent"), "Entregues counts what was handed in and waits for a grade");
+  assert(NotasCore.upcoming([imp], NotasCore.fromCanvas(mk(true)).grades, "2026-11-10", 7).every(u => u.item.date >= "2026-11-10"), "nor in the coming list");
+  assert.deepStrictEqual(Object.keys(NotasCore.fromCanvas(mk(true)).grades).filter(k => /pending/i.test(k)), [], "the pending mark is not a grade key (no backup, no count)");
+  ok();
+}
+{ // the general blindspot pass: rounding never shows a need lower or a grade higher; soma, Final, "#", commas
+  const A = (name, points, score) => ({ key: name, name, points, score });
+  const r1 = NotasCore.custom([A("A", 10, 7.3996), A("B", 10, null)], { formula: "Final = 50% A + 50% B" }, 7);
+  assert(r1.need >= 6.6004 && r1.need <= 6.61, "need rounded up (6,6004 → 6,61, never 6,60): " + r1.need);
+  assert.strictEqual(NotasCore.custom([A("A", 10, 6.96)], {}, 7).now, 6.96, "6,96 is kept, not 7,0");
+  assert.strictEqual(NotasCore.custom([A("PjBL 2", 3, 3)], { formula: "Final = soma(PjBL 2, Somativa RA2)" }, 7).status, "erro", "soma of something not in Canvas without \"de N\": an error, never a false garantido");
+  const sm = NotasCore.custom([A("PjBL 2", 3, 3)], { formula: "Final = soma(PjBL 2, Somativa RA2) de 10" }, 7);
+  assert(sm.status === "precisa" && sm.now === 3 && Math.abs(sm.need - 5.72) < 0.02, "with de 10 the points not in Canvas yet are left: " + JSON.stringify(sm).slice(0, 120));
+  assert.strictEqual(NotasCore.custom([A("P1", 10, 10), A("P2", 10, 0)], { formula: "RA1 = 100% P1\nFinal = 50% RA1 + 50% P2" }, 7).now, 5, "the Final line is the final grade wherever it is");
+  assert.strictEqual(NotasCore.custom([A("Lista #2", 10, 10), A("Prova", 10, 0)], { formula: "Final = 50% Lista #2 + 50% Prova" }, 7).now, 5, "a # inside a name is part of the name");
+  assert(NotasCore.custom([A("Prova 1, parte A", 10, 10), A("Prova 2", 10, 4)], { formula: "Final = média(Prova 1, parte A, Prova 2)" }, 7).errors.some(e => /duas vezes/.test(e)), "a comma in a title that splits one activity in two: said");
   ok();
 }
 console.log("centro ok: " + n + " groups (tool value, quanto falta, extremes, recovery, no formula, odd input)");

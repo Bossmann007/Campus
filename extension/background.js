@@ -9,6 +9,7 @@ const daysTo = iso => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(lo
 function okDownload(it, root = "PUCPR") {
   if (!it || typeof it.url !== "string" || typeof it.filename !== "string") return false;
   let u; try { u = new URL(it.url); } catch (e) { return false; }
+  if (/\.(app|command|sh|bash|zsh|csh|exe|msi|dmg|pkg|bat|cmd|com|scr|ps1|vbs|vbe|jar|apk|lnk|reg|hta|wsf|wsh|cpl|msc|pif|iso|img|vhd|docm|xlsm|pptm|jse|url|desktop|terminal|scpt|xll|workflow|action|inf|gadget)$/i.test(it.filename)) return false;   // executables never, even if a page script asks (files.js keeps the same list)
   return u.origin === CANVAS && it.filename.startsWith(root + "/") && it.filename.length > root.length + 1 && !it.filename.split("/").some(p => p === "" || p === "." || p === "..");
 }
 
@@ -27,7 +28,11 @@ const at = (iso, days, h) => { const [y, m, d] = iso.split("-").map(Number); ret
 let queue = Promise.resolve();   // two Canvas tabs at once: one rebuild after the other
 const remind = (items, alarms = true) => (queue = queue.then(() => rebuild(items, alarms), () => rebuild(items, alarms)));
 async function rebuild(items, alarms) {
-  for (const a of await chrome.alarms.getAll()) if (a.name.startsWith("r|")) await chrome.alarms.clear(a.name);
+  // the same list again (every new Canvas tab sends it): nothing to redo when its alarms are all still there
+  const sig = JSON.stringify([alarms, (items || []).slice(0, 60).map(it => it && [it.key, it.title, it.date, it.due, it.url, it.course])]);
+  const have = (await chrome.alarms.getAll()).filter(a => a.name.startsWith("r|")), { remindSig, remindN } = chrome.storage.session ? await chrome.storage.session.get(["remindSig", "remindN"]) : {};
+  if (remindSig === sig && have.length === remindN) return;
+  for (const a of have) await chrome.alarms.clear(a.name);
   const reminders = {}, now = Date.now(), upcoming = [];
   for (const it of items.slice(0, 60)) {
     if (it && typeof it.title === "string" && typeof it.date === "string" && /^\d{4}-\d\d-\d\d$/.test(it.date)) upcoming.push({ title: it.title.slice(0, 120), date: it.date });
@@ -44,6 +49,7 @@ async function rebuild(items, alarms) {
     }
   }
   await chrome.storage.local.set({ reminders, upcoming });
+  if (chrome.storage.session) await chrome.storage.session.set({ remindSig: sig, remindN: Object.keys(reminders).length });
 }
 // Monday 08:00: what the week holds, from the last list a Canvas page sent ("3 entregas e 1 prova · Prova: RA2 (qui)").
 function nextMonday8(now = new Date()) {
@@ -86,6 +92,21 @@ async function notify(alarm) {
 }
 
 // New grades the Canvas page found: one notification each (up to 3), or one summing them up; a click opens the assignment.
+// a due date the professor changed: one notice per change (two tabs reading at once: one notice), the assignment opens on click
+async function dueMoved(items) {
+  if (!cpPrefs((await chrome.storage.local.get("prefs")).prefs).remind) return;
+  const { notified = [] } = await chrome.storage.local.get("notified"), seen = new Set(notified), txt = x => String(x || "").slice(0, 90);
+  const ok = items.filter(m => m && typeof m.k === "string" && typeof m.name === "string" && !seen.has(m.k)).slice(0, 10);
+  if (!ok.length) return;
+  await chrome.storage.local.set({ notified: notified.concat(ok.map(m => m.k)).slice(-100) });
+  const { shown = {} } = await chrome.storage.local.get("shown"), keep = Object.entries(shown).slice(-30), id = "d|" + Date.now();
+  ok.slice(0, 3).forEach((m, i) => { keep.push([id + "|" + i, typeof m.url === "string" && m.url.startsWith(CANVAS + "/") ? m.url : CANVAS + "/calendar"]);
+    chrome.notifications.create(id + "|" + i, { type: "basic", iconUrl: "icons/icon128.png", title: "Prazo mudou: " + txt(m.course).slice(0, 60), message: txt(m.name) + ": " + txt(m.from) + " → " + txt(m.to), priority: 1 }); });
+  if (ok.length > 3) keep.push([id + "|+", CANVAS + "/"]);
+  if (ok.length > 3) chrome.notifications.create(id + "|+", { type: "basic", iconUrl: "icons/icon128.png", title: "Mais " + (ok.length - 3) + " prazos mudaram", message: "Veja em Desde a sua última visita, no painel", priority: 1 });
+  await chrome.storage.local.set({ shown: Object.fromEntries(keep) });
+}
+
 async function grades(items) {
   if (!cpPrefs((await chrome.storage.local.get("prefs")).prefs).newgrades) return;
   const { notified = [] } = await chrome.storage.local.get("notified"), seen = new Set(notified);   // two Canvas tabs finding the same grade: one notice
@@ -123,29 +144,31 @@ async function centroCourse(id, f = fetch) {
   const tab = Array.isArray(tabs) && tabs.find(t => t && t.label === "Centro de Notas" && t.type === "external"), tid = tab && /\/external_tools\/(\d+)/.exec(String(tab.html_url || ""));
   if (!tid) return null;
   const sl = await json(CANVAS + "/api/v1/courses/" + id + "/external_tools/sessionless_launch?id=" + tid[1]);
-  if (!sl || typeof sl.url !== "string" || !sl.url.startsWith(CANVAS + "/")) return null;
+  if (!sl || typeof sl.url !== "string" || !sl.url.startsWith(CANVAS + "/")) throw new Error("lançamento do Centro de Notas inválido");   // a failure keeps the last reading
   const page = await (await f(sl.url)).text(), form = /<form\b[^>]*\saction="([^"]+)"[^>]*>([\s\S]*?)<\/form>/.exec(page);
-  if (!form || unesc(form[1]) !== CENTRO + "/lti") return null;   // only PUCPR's tool, never another address the page names
+  if (!form || unesc(form[1]) !== CENTRO + "/lti") throw new Error("formulário do Centro de Notas mudou");   // only PUCPR's tool, never another address the page names
   const body = new URLSearchParams();   // only the inputs of that form (never Canvas's own tokens elsewhere on the page)
   for (const m of form[2].matchAll(/<input\b[^>]*>/g)) { const n = /\sname="([^"]*)"/.exec(m[0]), v = /\svalue="([^"]*)"/.exec(m[0]); if (n) body.append(unesc(n[1]), v ? unesc(v[1]) : ""); }
   const lti = await f(CENTRO + "/lti", { method: "POST", body, credentials: "include" });
-  if (!lti.ok) return null;
+  if (!lti.ok) throw new Error("Centro de Notas respondeu " + lti.status);
   const dp = /data-page="([^"]+)"/.exec(await lti.text()); let ver = ""; try { ver = dp ? String(JSON.parse(unesc(dp[1])).version || "") : ""; } catch (e) { /* no version */ }
   const fin = await json(CENTRO + "/lti/finalize", { headers: { "X-Requested-With": "XMLHttpRequest", Accept: "application/json" }, credentials: "include" });
-  if (!fin || fin.status !== "success" || !/^\/curso\/\d{1,15}$/.test(String(fin.redirect_url))) return null;
+  if (!fin || fin.status !== "success" || !/^\/curso\/\d{1,15}$/.test(String(fin.redirect_url))) throw new Error("Centro de Notas não abriu a matéria");
   const d = await json(CENTRO + fin.redirect_url, { headers: { "X-Inertia": "true", "X-Inertia-Version": ver, "X-Requested-With": "XMLHttpRequest" }, credentials: "include" });
   return slimCentro(d && d.props && d.props.curso);
 }
 // every course of the reading, one after another; stored per Canvas user in "centro" (the panels repaint when it lands).
 // A course that failed this time (network, the tool asleep) keeps what was read before; one run at a time (one tool session).
-let centroRun = null;
-async function centroAll(user, ids, f = fetch) {
+let centroRun = null, centroQueue = Promise.resolve();
+const centroOne = (id, f) => { const p = centroQueue.then(() => centroCourse(id, f)); centroQueue = p.catch(() => {}); return p; };   // the tool keeps one session per browser
+async function centroAll(user, ids, f = fetch, opts = { all: true }) {
   if (centroRun) return centroRun;
   centroRun = (async () => {
-    const { centro } = await chrome.storage.local.get("centro"), old = centro && centro.user === user && centro.courses ? centro.courses : {}, courses = {};
-    for (const id of ids) { try { courses[id] = await centroCourse(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
+    const { centro } = await chrome.storage.local.get("centro"), same = centro && centro.user === user, old = same && centro.courses ? centro.courses : {};
+    const courses = opts.all ? {} : Object.assign({}, old), tried = Object.assign({}, same && centro.tried), all = !!opts.all;   // a partial run (only the courses never read) keeps the others
+    for (const id of ids) { tried[id] = Date.now(); try { courses[id] = await centroOne(id, f); } catch (e) { courses[id] = id in old ? old[id] : undefined; } }
     for (const id of Object.keys(courses)) if (courses[id] === undefined) delete courses[id];
-    await chrome.storage.local.set({ centro: { user, at: Date.now(), courses } });
+    await chrome.storage.local.set({ centro: { user, at: all || !same ? Date.now() : centro.at, courses, tried } });
     return courses;
   })();
   try { return await centroRun; } finally { centroRun = null; }
@@ -155,7 +178,7 @@ async function centroAll(user, ids, f = fetch) {
 // browser's login, so the student's AI needs no token. On only after the student grants "nativeMessaging" (Sua IA page);
 // while connected the worker stays alive (Chrome 105+). Only GETs to the MCP's own allowlist, and the Centro de Notas reader.
 const PONTE_HOST = "br.caderno_plus.mcp";
-const PONTE_ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/(assignments|modules|users|tabs|quizzes)$/, /^\/api\/v1\/announcements$/, /^\/api\/v1\/planner\/items$/];
+const PONTE_ALLOW = [/^\/api\/v1\/users\/self$/, /^\/api\/v1\/courses$/, /^\/api\/v1\/courses\/\d{1,15}\/(assignments|modules|users|tabs|quizzes|assignment_groups)$/, /^\/api\/v1\/announcements$/, /^\/api\/v1\/planner\/items$/];
 let ponte = null, ponteErr = "";
 async function ponteAnswer(m, f = fetch) {
   const id = m && m.id;
@@ -169,6 +192,9 @@ async function ponteAnswer(m, f = fetch) {
     if (m.op === "get") {
       const u = new URL(String(m.url || ""));
       if (u.origin !== CANVAS || !PONTE_ALLOW.some(re => re.test(u.pathname)) || u.username || u.password) return { id, error: "bloqueado: fora da lista de leitura" };
+      // the query too: the teachers only on /users (never classmates or e-mails), and only the keys the MCP sends
+      const keys = [...u.searchParams.keys()], OKQ = /^(per_page|page|include\[\]|enrollment_state|enrollment_type\[\]|start_date|end_date|context_codes\[\]|active_only|latest_only|order|state\[\]|bookmark)$/;
+      if (keys.some(k => !OKQ.test(k)) || (/\/users$/.test(u.pathname) && (u.searchParams.getAll("enrollment_type[]").join() !== "teacher" || u.searchParams.has("include[]")))) return { id, error: "bloqueado: pedido fora do que o Caderno+ MCP faz" };
       const r = await f(u.href, { method: "GET", credentials: "include", redirect: "error", headers: { Accept: "application/json" } }), body = await r.text();
       if (body.length > 5e6) return { id, error: "resposta grande demais do Canvas" };
       return { id, ok: r.ok, status: r.status, link: r.headers.get("Link"), body };
@@ -176,7 +202,7 @@ async function ponteAnswer(m, f = fetch) {
     if (m.op === "centro") {
       const c = String(m.course || ""); if (!/^\d{1,15}$/.test(c)) return { id, error: "matéria inválida" };
       if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return { id, ok: true, curso: null, aviso: "Centro de Notas não liberado: clique em Atualizar no botão do Caderno+" };
-      return { id, ok: true, curso: await centroCourse(c, f) };
+      return { id, ok: true, curso: await centroOne(c, f) };
     }
     return { id, error: "pedido desconhecido" };
   } catch (e) { return { id, error: String(e && e.message || e).slice(0, 160) }; }
@@ -195,6 +221,12 @@ async function ponteOpen() {
   port.onDisconnect.addListener(() => { ponteErr = (chrome.runtime.lastError && chrome.runtime.lastError.message) || "desligada"; if (ponte === port) ponte = null; });
   return true;
 }
+if (chrome.permissions && chrome.permissions.onAdded) chrome.permissions.onAdded.addListener(async p => {   // the Centro de Notas just allowed: read the courses of the last reading now
+  if (!p || !Array.isArray(p.origins) || !p.origins.some(o => o.startsWith(CENTRO))) return;
+  await chrome.storage.local.remove("centroOff");
+  const { cache } = await chrome.storage.local.get("cache"), ids = cache && cache.data && Array.isArray(cache.data.courses) ? cache.data.courses.map(c => String(c.id)) : [];
+  if (cache && typeof cache.user === "number" && ids.length) centroAll(cache.user, ids.slice(0, 15)).catch(() => {});
+});
 if (chrome.permissions && chrome.permissions.onAdded) chrome.permissions.onAdded.addListener(p => { if (p && Array.isArray(p.permissions) && p.permissions.includes("nativeMessaging")) ponteUp(); });
 ponteUp();   // every time the worker starts (browser start, an update): reconnects when the student turned the ponte on
 
@@ -214,18 +246,27 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     remind(msg.items, msg.alarms !== false).then(() => reply({ ok: true }));
     return true;
   }
+  if (msg.type === "due" && Array.isArray(msg.items)) {
+    dueMoved(msg.items).then(() => reply({ ok: true }));
+    return true;
+  }
   if (msg.type === "grades" && Array.isArray(msg.items)) {
     grades(msg.items).then(() => reply({ ok: true }));
     return true;
   }
   // read the Centro de Notas of these courses (from the panel's reading); at most once an hour per user (formulas change
   // rarely and each read is six requests per course); Atualizar in the popup forces it
+  if (msg.type === "centroAsk") { chrome.tabs.create({ url: chrome.runtime.getURL("centro.html") }); reply({ ok: true }); return; }   // a Canvas page cannot ask for a permission: this page can
   if (msg.type === "centro" && Array.isArray(msg.ids) && typeof msg.user === "number") {
     (async () => {
       const ids = msg.ids.map(String).filter(x => /^\d{1,15}$/.test(x)).slice(0, 15), { centro } = await chrome.storage.local.get("centro");
-      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) return reply({ ok: false, permission: false });   // asked once, from Atualizar in the popup
-      if (centro && centro.user === msg.user && Date.now() - centro.at < 60 * 60e3 && ids.every(id => id in (centro.courses || {}))) return reply({ ok: true, cached: true });
-      await centroAll(msg.user, ids); reply({ ok: true });
+      if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO + "/*"] }))) { const { centroOff } = await chrome.storage.local.get("centroOff"); if (!centroOff) await chrome.storage.local.set({ centroOff: true }); return reply({ ok: false, permission: false }); }   // the panels offer centro.html to grant it
+      // Each read opens the tool, and Canvas lists every opening in the student's Histórico recente: the whole term again only
+      // every 6 hours (or with Atualizar); a course never read, at most once an hour
+      const fresh = centro && centro.user === msg.user && Date.now() - centro.at < 6 * 3600e3, tried = fresh && centro.tried || {};
+      const need = fresh ? ids.filter(id => !(id in (centro.courses || {})) && Date.now() - (tried[id] || 0) > 3600e3) : ids;
+      if (!need.length) return reply({ ok: true, cached: true });
+      await centroAll(msg.user, need, fetch, { all: !fresh }); reply({ ok: true });
     })().catch(() => reply({ ok: false }));
     return true;
   }
@@ -284,6 +325,6 @@ chrome.notifications.onClicked.addListener(async id => {
   if (typeof shown[id] === "string" && shown[id].startsWith(CANVAS + "/")) chrome.tabs.create({ url: shown[id] });
   chrome.notifications.clear(id);
 });
-chrome.storage.onChanged.addListener(async (ch, area) => {   // turned off: drop pending reminders (the week list stays for the summary)
-  if (area === "local" && ch.prefs && !cpPrefs(ch.prefs.newValue).remind) remind((await chrome.storage.local.get("upcoming")).upcoming || [], false);
-});
+// No storage.onChanged listener here: it woke this worker on every write of every tab (the reading, notes as they are
+// typed, ticks). Reminders switched off are honoured when an alarm fires (notify reads prefs.remind) and the next Canvas
+// page sends alarms: false.

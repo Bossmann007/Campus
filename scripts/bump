@@ -1,0 +1,31 @@
+#!/bin/sh
+# Bump every version spot in one go, then regenerate and verify.
+#   scripts/bump 6.13.0          extension only
+#   scripts/bump 6.13.0 1.8.0    extension and MCP
+# Novidades (extension/notes.js items) are written by hand: this only moves its version.
+set -e
+cd "$(dirname "$0")/.."
+ext="$1"; mcp="$2"
+echo "$ext" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "usage: scripts/bump <ext x.y.z> [mcp x.y.z]"; exit 2; }
+[ -z "$mcp" ] || echo "$mcp" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "bad MCP version: $mcp"; exit 2; }
+EXT="$ext" MCP="$mcp" python3 - <<'PY'
+import os, re, json
+ext, mcp = os.environ["EXT"], os.environ["MCP"]
+def sub(path, pat, rep, n=1):
+    s = open(path).read(); t, k = re.subn(pat, rep, s, count=n)
+    if k == 0: raise SystemExit(f"bump: pattern not found in {path}: {pat}")
+    open(path, "w").write(t)
+sub("extension/manifest.json", r'"version": "[\d.]+"', f'"version": "{ext}"')
+sub("app.html", r'const EXT_LATEST = "[\d.]+"', f'const EXT_LATEST = "{ext}"')
+sub("extension/notes.js", r'version: "[\d.]+"', f'version: "{ext}"')
+sub("index.html", r'<span class="tag">[\d.]+</span>', '<span class="tag">' + ".".join(ext.split(".")[:2]) + "</span>")
+sub("README.md", r'extension \([\d.]+\)', f"extension ({ext})")
+if mcp:
+    sub("mcp/package.json", r'"version": "[\d.]+"', f'"version": "{mcp}"')
+    sub("mcp/manifest.json", r'"version": "[\d.]+"', f'"version": "{mcp}"')
+    sub("ia.html", r'mcp-v[\d.]+/caderno-mcp-[\d.]+\.mcpb', f"mcp-v{mcp}/caderno-mcp-{mcp}.mcpb")
+    sub("ia.html", r'caderno-mcp-[\d.]+\.mcpb', f"caderno-mcp-{mcp}.mcpb", 0)
+PY
+./scripts/sync-ext-core >/dev/null && ./scripts/sync-mcp-lib >/dev/null && ./scripts/sync-bookmarklet >/dev/null
+./scripts/check-versions
+echo "bumped to $ext${mcp:+ / MCP $mcp}: write the Novidades items in extension/notes.js, then ./scripts/verify"
