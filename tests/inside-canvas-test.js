@@ -654,7 +654,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
   assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
   assert.strictEqual(np.store.ctab, undefined, "opening the page writes nothing: the tab is saved only when the student picks one");
-  assert(/A seguir/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).filter(e => /^mc-day/.test(e.className)).length >= 28 && all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next and the shortcuts");
+  assert(/A seguir/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).filter(e => /^mc-day/.test(e.className)).length >= 28 && !all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next, and no Abrir no Canvas row (Canvas has its own menu)");
   assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
   await tabB("Anotações").listeners.click(); await new Promise(r => setTimeout(r, 5));
   const ta = all(paneOf("Anotações")).find(e => e.tag === "textarea");

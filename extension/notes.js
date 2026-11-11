@@ -1,7 +1,7 @@
 // Novidades: shown once after an update, on the Canvas dashboard and in the popup, until the student closes it
 // (chrome.storage.local "notesSeen" = the version read). A fresh install skips it (the onboarding comes instead).
 const CP_NOTES = {
-  version: "6.15.1",
+  version: "6.15.2",
   items: [
     "Na página da matéria, a tabela das provas voltou: peso e nota de cada uma (ex.: 9,0 de 10) e, onde ainda não tem nota, uma caixa para digitar a que você espera e ver na hora com quanto você fica (fica salvo no seu computador)",
     "Escolha uma matéria no painel: a próxima entrega, os números, o gráfico, o resumo de cada atividade e o cartão do Canvas mostram só ela; dois cliques no nome abrem a matéria",
