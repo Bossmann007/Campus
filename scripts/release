@@ -14,8 +14,8 @@ ext=$(node -p 'require("./extension/manifest.json").version'); mcp=$(node -p 're
 tmp=$(mktemp -d); cp "dist/quanto-falta-extension-$ext.zip" "$tmp/caderno-plus-$ext.zip"
 rm -f "$HOME"/Downloads/caderno-plus-*.zip; cp "$tmp/caderno-plus-$ext.zip" "$HOME/Downloads/"
 if gh release view "ext-v$ext" >/dev/null 2>&1; then echo "ext-v$ext exists: skipped"; else
-  gh release create "ext-v$ext" --latest --title "Caderno+ $ext" --notes "$1" "$tmp/caderno-plus-$ext.zip" dist/quanto-falta-extension.zip "dist/caderno-plus-firefox-$ext.zip"; fi
+  gh release create "ext-v$ext" --target "$(git rev-parse HEAD)" --latest --title "Caderno+ $ext" --notes "$1" "$tmp/caderno-plus-$ext.zip" dist/quanto-falta-extension.zip "dist/caderno-plus-firefox-$ext.zip"; fi
 if gh release view "mcp-v$mcp" >/dev/null 2>&1; then echo "mcp-v$mcp exists: skipped"; elif [ -n "$2" ]; then
-  gh release create "mcp-v$mcp" --prerelease --title "Caderno+ MCP $mcp" --notes "$2" "dist/caderno-mcp-$mcp.mcpb"; else echo "mcp-v$mcp: no MCP notes given, not released"; fi
+  gh release create "mcp-v$mcp" --target "$(git rev-parse HEAD)" --prerelease --title "Caderno+ MCP $mcp" --notes "$2" "dist/caderno-mcp-$mcp.mcpb"; else echo "mcp-v$mcp: no MCP notes given, not released"; fi
 rm -rf "$tmp"
 echo "store zip: ~/Downloads/caderno-plus-$ext.zip · npm (owner, 2FA): cd mcp && npm publish"

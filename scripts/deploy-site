@@ -4,8 +4,10 @@
 set -e
 cd "$(dirname "$0")/.."
 [ -z "$(git status --porcelain)" ] || { echo "deploy-site: commit first (dirty tree):"; git status --short; exit 1; }
+[ "$(git branch --show-current)" = main ] || { echo "deploy-site: run from the main branch (now on '$(git branch --show-current)'): production serves main"; exit 1; }
 ext=$(node -p 'require("./extension/manifest.json").version')
-npx -y vercel@latest deploy --prod --yes 2>&1 | grep -E "Aliased|Error" || true
+# Vercel CLI pinned (npm view vercel version, 2026-11-16); bump it on purpose, never @latest.
+npx -y vercel@65.16.0 deploy --prod --yes 2>&1 | grep -E "Aliased|Error" || true
 rm -f .env.local; git checkout -- .gitignore 2>/dev/null || true
 for i in 1 2 3 4 5 6; do   # the CDN edges take a few seconds to agree
   live=$(curl -sL -H "Cache-Control: no-cache" "https://caderno-plus.vercel.app/app?nc=$$$i" | sed -n 's/.*const EXT_LATEST = "\([0-9.]*\)".*/\1/p' | head -1)
