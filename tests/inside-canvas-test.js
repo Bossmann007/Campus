@@ -1,6 +1,10 @@
 // Extension inside Canvas: core.js is app.html's core, file routing, the service worker's download guard, and content.js
 // run against a mocked Canvas (dashboard pill, course panel, files download through the service worker).
 const assert = require("assert"), fs = require("fs"), path = require("path");
+// A fixed clock: the fixtures are relative to "today", but rules/ has real term dates, so a real clock made the test
+// change with the calendar (from 2026-11-13 a rule date turned late). Time still moves from REF, so timers and ages work.
+const REF = Date.parse("2026-11-11T12:00:00-03:00"), RealDate = Date, START = RealDate.now();
+global.Date = class extends RealDate { constructor(...a) { if (a.length) super(...a); else super(REF + RealDate.now() - START); } static now() { return REF + RealDate.now() - START; } };
 const root = path.join(__dirname, ".."), dir = process.env.EXT_DIR || path.join(root, "extension");   // EXT_DIR: the packaged (compacted) copy
 const read = f => fs.readFileSync(path.join(dir, f), "utf8");
 let n = 0; const ok = s => { n++; };
@@ -361,7 +365,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   await listaChip().parent.kids.find(e => e.className === "ck").listeners.click({ preventDefault() {} }); await new Promise(r => setTimeout(r, 10));
   assert.deepStrictEqual(tick.store.marks[5], {}, "untick"); assert(/^ev wa/.test(listaChip().className));
   assert(tick.sent.filter(m => m.type === "remind").pop().items.some(i => i.key === "assignment:1"), "the reminder is back");
-  const lateRow = () => all(tickBox()).find(e => e.className === "late"), rel = () => all(lateRow()).find(e => /^ev /.test(e.className));
+  const lateRow = () => all(tickBox()).find(e => e.className === "late" && e.tag === "div"), rel = () => all(lateRow()).find(e => /^ev /.test(e.className));
   await rel().parent.kids.find(e => e.className === "ck").listeners.click({ preventDefault() {} }); await new Promise(r => setTimeout(r, 10));
   assert(tick.store.marks[5]["assignment:2"] && !/atrasada/.test(text(all(tickBox()).find(e => e.tag === "h3"))), "overdue work can be ticked: no longer counted late");
   assert(/^ev ok dn/.test(rel().className) && /^Desmarcar/.test(rel().parent.kids[1]["aria-label"]), "it stays in the overdue row, greyed, so it can be unticked");
