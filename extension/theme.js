@@ -234,11 +234,13 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-hea
     cl.toggle("cp-look", !!LOOKS[p.look]); cl.toggle("cp-look-nav", p.nav !== "original" && (!!NAV[p.nav] || !!LOOKS[p.look]));
   };
   const take = prefs => {
-    p = cpPrefs(prefs); apply();
+    p = cpPrefs(prefs); apply(); nightClock();
     try { localStorage.setItem("cp-look", JSON.stringify({ theme: p.theme, look: p.look, bg: p.bg, bgColor: p.bgColor, nav: p.nav, mode: p.mode, native: p.native, cardImg: p.cardImg, nativeCal: p.nativeCal, navHide: p.navHide })); } catch (e) { /* no storage */ }
   };
   apply();
-  setInterval(() => { if (p.theme === "night") apply(); }, 5 * 60 * 1000);
+  let nightTimer = null;   // only the "night" theme needs the clock: no timer in every tab otherwise
+  const nightClock = () => { if (p.theme === "night" && !nightTimer) nightTimer = setInterval(() => { if (p.theme === "night") apply(); else { clearInterval(nightTimer); nightTimer = null; } }, 5 * 60 * 1000); };
+  nightClock();
   chrome.storage.local.get("prefs").then(({ prefs }) => take(prefs));
   chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs) take(ch.prefs.newValue); });
   dark.addEventListener("change", apply);

@@ -58,8 +58,14 @@ $("refresh").addEventListener("click", async () => {
   const { cache } = await chrome.storage.local.get("cache");
   if (cache) await chrome.storage.local.set({ cache: Object.assign({}, cache, { at: 0 }) });
   const { centro } = await chrome.storage.local.get("centro"); if (centro) await chrome.storage.local.set({ centro: Object.assign({}, centro, { at: 0 }) });   // the Centro de Notas too
-  await chrome.storage.local.remove("refreshing");
-  $("status").textContent = "Atualiza na próxima página do Canvas.";
+  // everything read from Canvas with a longer life comes again too: teachers, course colours, the search list, the
+  // "Desde a sua última visita" files and modules
+  await chrome.storage.local.remove(["refreshing", "teachers", "ccolors", "search"]);
+  const { snap } = await chrome.storage.local.get("snap"); if (snap && typeof snap === "object") await chrome.storage.local.set({ snap: Object.fromEntries(Object.entries(snap).map(([u, v]) => [u, Object.assign({}, v, { netAt: 0 })])) });
+  // and the Canvas page open now reads it at once (no waiting for the next page)
+  let tab = null; try { [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); } catch (e) { tab = null; }
+  if (tab && typeof tab.url === "string" && tab.url.startsWith("https://pucpr.instructure.com/")) { chrome.tabs.reload(tab.id); $("status").textContent = "Lendo o Canvas de novo…"; }
+  else $("status").textContent = "Atualiza na próxima página do Canvas.";
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
 const KEEP = ["hand", "marks", "tasks", "notes", "checks", "myRules", "hidden", "prefs", "fold"];
@@ -67,7 +73,9 @@ const KEEP = ["hand", "marks", "tasks", "notes", "checks", "myRules", "hidden", 
 // carries that one slice (other students of this Chrome stay out of it). The look, the mode and the folds are the browser's.
 const backupOf = (got, user) => Object.assign({}, got, Object.fromEntries(["hand", "marks", "tasks", "notes", "checks", "myRules"].map(k => [k, user != null && got[k] && typeof got[k] === "object" && got[k][user] !== undefined ? { [user]: got[k][user] } : {}])));
 $("export").addEventListener("click", async () => {
-  const all = await chrome.storage.local.get(KEEP.concat("cache")), got = backupOf(Object.fromEntries(KEEP.map(k => [k, all[k]])), all.cache && all.cache.user != null ? all.cache.user : null);
+  const all = await chrome.storage.local.get(KEEP.concat("cache")), user = all.cache && all.cache.user != null ? all.cache.user : null;
+  if (user == null) { $("status").textContent = "Abra o Canvas logado antes: o backup leva os dados de quem está usando, e não sei quem é."; return; }   // logged out: an empty file is not a backup
+  const got = backupOf(Object.fromEntries(KEEP.map(k => [k, all[k]])), user);
   const body = JSON.stringify(Object.assign({ app: "caderno-plus", v: 1, exported: new Date().toISOString().slice(0, 10) }, got), null, 1);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = "caderno-plus-backup.json"; a.click();
   $("status").textContent = "Backup salvo nos Downloads.";
@@ -90,17 +98,21 @@ $("importFile").addEventListener("change", async () => {
   const keepIf = (m, ok) => obj(m) ? Object.fromEntries(Object.entries(m).filter(([k, v]) => str(k, 60) && ok(v))) : {};
   const per = { myRules: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, r]) => /^\d{1,15}$/.test(k) && obj(r)).slice(0, 40).map(([k, r]) => [k, Object.assign({ off: (Array.isArray(r.off) ? r.off : []).filter(x => str(x, 300)).slice(0, 300), total: Number(r.total) > 0 && Number(r.total) <= 1000 ? Number(r.total) : 10 },
       obj(r.parts) ? { parts: Object.fromEntries(Object.entries(r.parts).filter(([p, x]) => /^[ABC]$/.test(p) && obj(x) && Number(x.w) > 0 && Number(x.w) <= 100).map(([p, x]) => [p, Object.assign({ w: Number(x.w) }, Number(x.top) > 0 && Number(x.top) <= 1000 ? { top: Number(x.top) } : {})])),
-        part: obj(r.part) ? Object.fromEntries(Object.entries(r.part).filter(([key, p]) => str(key, 300) && /^[ABC]$/.test(p)).slice(0, 300)) : {} } : {})])) : {},
+        part: obj(r.part) ? Object.fromEntries(Object.entries(r.part).filter(([key, p]) => str(key, 300) && /^[ABC]$/.test(p)).slice(0, 300)) : {} } : {}, r.own === true ? { own: true } : {}, str(r.formula, 4000) ? { formula: r.formula } : {})])) : {},
     hand: u => keepIf(u, v => str(v, 12)), marks: u => keepIf(u, iso), notes: u => keepIf(u, v => str(v, 5000)),
     checks: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, l]) => /^(\d{1,15}|painel)$/.test(k) && Array.isArray(l)).map(([k, l]) => [k, l.filter(x => x && str(x.id, 40) && str(x.t, 200) && (x.date === undefined || iso(x.date))).slice(0, 50).map(x => Object.assign({ id: x.id, t: x.t, done: x.done === true }, x.date ? { date: x.date } : {}))])) : {},
     tasks: u => Array.isArray(u) ? u.filter(t => t && str(t.id, 40) && str(t.title, 140) && (t.date === null || iso(t.date))).slice(0, 100).map(t => Object.assign({ id: t.id, title: t.title, date: t.date },
       Array.isArray(t.subs) ? { subs: t.subs.filter(s => s && str(s.t, 100)).slice(0, 10).map(s => ({ t: s.t, d: s.d === true })) } : {})) : [] };
   const cur = await chrome.storage.local.get(KEEP), out = {};
-  for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, per[k](v)])));
+  // merged key by key into what this student has now (grades typed after the backup stay); lists (tasks) are replaced
+  const merge = (now, add) => Array.isArray(add) ? add : obj(add) ? Object.assign({}, obj(now) ? now : {}, add) : add;
+  for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, merge((cur[k] || {})[u], per[k](v))])));
+  const { cache } = await chrome.storage.local.get("cache"), fileUsers = [...new Set(Object.keys(per).flatMap(k => obj(d[k]) ? Object.keys(d[k]).filter(u => /^\d{1,20}$/.test(u)) : []))];
+  const other = cache && cache.user != null && fileUsers.length && !fileUsers.includes(String(cache.user));
   if (Array.isArray(d.hidden)) out.hidden = d.hidden.map(String).filter(x => /^\d{1,20}$/.test(x)).slice(0, 200);
   if (obj(d.prefs)) out.prefs = cpPrefs(Object.assign({}, cur.prefs, d.prefs));
   if (obj(d.fold)) out.fold = keepIf(d.fold, v => typeof v === "boolean");
-  await chrome.storage.local.set(out); $("status").textContent = "Backup aplicado (" + Object.keys(out).length + " partes). Recarregue o Canvas.";
+  await chrome.storage.local.set(out); $("status").textContent = (other ? "Atenção: este backup é de outro aluno do Canvas; os dados dele foram guardados para ele, não para você. " : "") + "Backup aplicado (" + Object.keys(out).length + " partes). Recarregue o Canvas.";
 });
 // Once: the grades and the meta typed in the old Caderno+ page (this extension's localStorage, per Canvas user) become
 // "hand" grades, which the Canvas panels now use. Grades already typed in Canvas win.

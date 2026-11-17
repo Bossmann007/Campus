@@ -77,7 +77,7 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   const seen = {}, out = await collect(seen);
   assert.deepStrictEqual(seen.courses, [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem" }, { id: 8, name: "Penso, Logo Programo - 2023/1" }], "the course list is handed back, so the caller does not fetch it again");
   assert.deepStrictEqual(out, { v: 1, courses: [{ id: 7, name: "Ética (Turma 2º B) - 2026 / 2º Sem", assignments: [
-    { name: "Avaliação somativa -  Prova", points: 10, url: "https://pucpr.instructure.com/courses/7/assignments/70", score: 7, due: null, missing: false, excused: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, url: null, score: null, due: "2026-11-11T02:59:59Z", missing: true, excused: true, submitted: false, online: false, stats: null }] }],
+    { name: "Avaliação somativa -  Prova", points: 10, url: "https://pucpr.instructure.com/courses/7/assignments/70", group: null, score: 7, due: null, missing: false, excused: false, submitted: true, online: true, stats: { mean: 6.5, min: 2, max: 10 } }, { name: "TDE - TAREFA SOMATIVA - VÍDEO", points: 10, url: null, group: null, score: null, due: "2026-11-11T02:59:59Z", missing: true, excused: true, submitted: false, online: false, stats: null }] }],
     announcements: [{ course: "Ética (Turma 2º B) - 2026 / 2º Sem", courseId: 7, title: "Prova adiada", at: "2026-11-03T15:00:00Z", unread: true, url: "https://pucpr.instructure.com/courses/7/discussion_topics/1", author: "Prof. Ana", avatar: "https://pucpr.instructure.com/images/thumbnails/1/ana.png" }] });
   { // known courses (the last reading's): their assignments are asked together with the course list, not after it; same result
     const base = global.fetch, order = []; let release;
@@ -133,7 +133,8 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   store.tasks = { 9: [{ id: "a", title: "do outro", date: null }] };
   pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09", subs: [{ t: "passo", d: true, x: 1 }, { t: 7 }, null] }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
-  assert.deepStrictEqual(store.hand[5], { "abd:s3": "1" }, "import: well-formed grades only"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
+  assert.strictEqual(store.hand[5]["abd:s3"], "1", "import: the backup's grade"); assert(!("x" in store.hand[5]), "import: well-formed grades only");
+  assert(Object.keys(store.hand[5]).length >= 1, "import: merged into what the student has (grades typed after the backup stay)"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
   assert.deepStrictEqual(store.tasks[5][0].subs, [{ t: "passo", d: true }], "import: a task keeps its well-formed steps");
   assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
   store.cache = Object.assign({}, store.cache, { user: 5 });

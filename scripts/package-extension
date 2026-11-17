@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 ./scripts/verify >/dev/null
 v=$(python3 -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
 b=dist/build && rm -rf "$b" && mkdir -p "$b"
-files="manifest.json popup.html popup.css popup.js onboarding.html onboarding.css onboarding.js ai.html ai.css ai.js prefs.js theme.js collect.js core.js files.js notes.js content.js background.js icons fonts"
+files="manifest.json popup.html popup.css popup.js onboarding.html onboarding.css onboarding.js ai.html ai.css ai.js centro.html centro.js prefs.js theme.js collect.js core.js files.js notes.js content.js background.js icons fonts"
 (cd extension && cp -R $files "../$b/")
 for f in "$b"/*.js; do
   npx -y esbuild@0.25.10 "$f" --minify-whitespace --minify-syntax --charset=ascii --legal-comments=none --target=chrome120 --log-level=warning --outfile="$f.min" && mv "$f.min" "$f"

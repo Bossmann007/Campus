@@ -3,7 +3,7 @@
 const QFFiles = (() => {
   const BLOCKED = new Set([".app", ".command", ".sh", ".bash", ".zsh", ".csh", ".exe", ".msi", ".dmg", ".pkg", ".bat", ".cmd", ".com",
     ".scr", ".ps1", ".vbs", ".vbe", ".jar", ".apk", ".lnk", ".reg", ".hta", ".wsf", ".wsh", ".cpl", ".msc", ".pif", ".iso", ".img", ".vhd",
-    ".docm", ".xlsm", ".pptm"]);
+    ".docm", ".xlsm", ".pptm", ".jse", ".url", ".desktop", ".terminal", ".scpt", ".xll", ".workflow", ".action", ".inf", ".gadget"]);
   const IMAGES = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".svg"]);
   const MEDIA = new Set([".mp4", ".mov", ".mkv", ".avi", ".webm", ".mp3", ".m4a", ".wav", ".aac", ".ogg"]);
   const CODE = new Set([".c", ".h", ".cpp", ".java", ".py", ".js", ".ts", ".php", ".sql", ".css", ".json", ".ipynb", ".html", ".xml", ".csv"]);

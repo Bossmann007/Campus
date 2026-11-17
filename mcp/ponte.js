@@ -7,13 +7,13 @@ const fs = require("fs"), path = require("path"), os = require("os"), net = requ
 
 const HOST_NAME = "br.caderno_plus.mcp";
 const DIR = (home = os.homedir()) => path.join(home, ".caderno-mcp");
-// Windows: a named pipe whose name carries a random secret kept in the user's own folder (another account on the same
-// machine cannot guess it and sit on it first); macOS, Linux: a socket in a 0700 folder.
+// Windows: a named pipe whose name carries a random secret kept in the user's own folder, new at every host start (another
+// account on the same machine cannot guess it, nor reuse a name it saw listed, and sit on it first); macOS, Linux: a socket in a 0700 folder.
 function socketPath(platform = process.platform, home = os.homedir(), user = safeUser(), create = false) {
   if (platform !== "win32") return path.join(DIR(home), "ponte.sock");
   const f = path.join(DIR(home), "pipe"); let secret = "";
   try { secret = fs.readFileSync(f, "utf8").trim(); } catch (e) { /* none yet */ }
-  if (!/^[a-f0-9]{32}$/.test(secret) && create) { secret = require("crypto").randomBytes(16).toString("hex"); fs.mkdirSync(DIR(home), { recursive: true, mode: 0o700 }); fs.writeFileSync(f, secret, { mode: 0o600 }); }
+  if (create && (create === "fresh" || !/^[a-f0-9]{32}$/.test(secret))) { secret = require("crypto").randomBytes(16).toString("hex"); fs.mkdirSync(DIR(home), { recursive: true, mode: 0o700 }); fs.writeFileSync(f, secret, { mode: 0o600 }); }
   return "\\\\.\\pipe\\caderno-mcp-" + user + "-" + (secret || "none");
 }
 function safeUser() { try { return String(os.userInfo().username).replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 60) || "user"; } catch (e) { return "user"; } }
@@ -40,7 +40,7 @@ const lines = (onLine, max = 1 << 20) => { let s = ""; return chunk => { s += ch
 // The host: started by the browser when the extension connects; lives as long as that port. The last host started owns the
 // socket (another browser or profile connecting later takes it over).
 function host({ input = process.stdin, output = process.stdout, sock, platform = process.platform, exit = code => process.exit(code) } = {}) {
-  sock = sock || socketPath(platform, os.homedir(), safeUser(), true);
+  sock = sock || socketPath(platform, os.homedir(), safeUser(), "fresh");   // Windows: a new pipe secret every start, so a name seen before is useless to another account
   const waiting = new Map(); let seq = 0, mine = null;   // mine: the socket file this host made (another host may replace it)
   if (platform !== "win32") { fs.mkdirSync(path.dirname(sock), { recursive: true, mode: 0o700 }); try { fs.chmodSync(path.dirname(sock), 0o700); } catch (e) { /* not ours */ } try { fs.unlinkSync(sock); } catch (e) { /* none */ } }
   const server = net.createServer(c => {

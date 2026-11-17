@@ -38,6 +38,8 @@ Os ids das turmas que já existem não mudam: as notas salvas e os backups usam 
 
 ## Regras
 
+As regras completas de desenvolvimento (mapa do repositório, versões, de onde vem cada número, release) estão em [`AGENTS.md`](AGENTS.md). Para versões, use `./scripts/bump`; nunca edite os números à mão.
+
 - Nunca coloque notas reais, nomes de colegas, tokens ou cookies em issues, commits ou testes. Use notas inventadas.
 - Mudança de conta precisa de teste em `tests/notas-test.js`. Os números da turma de `cc-manha` são conferidos por `tests/rules-golden.js`: se você mudou de propósito as regras dessa turma ou as contas, regenere com `node tests/rules-golden.js app.html --write` e explique no PR.
 - Nada pode chamar um servidor nosso ou de terceiros: a página tem CSP que bloqueia rede, e a extensão só fala com o próprio Canvas da PUCPR.
