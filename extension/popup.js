@@ -53,8 +53,15 @@ chrome.storage.local.get("cache").then(({ cache }) => {
 });
 // Atualizar agora: the last reading counts as old (and no tab holds the read lock), so the next Canvas page reads everything.
 $("refresh").addEventListener("click", async () => {
-  // reloading the grades also reads the Centro de Notas: its host is asked once, here (a click is needed to ask)
-  if (chrome.permissions) chrome.permissions.request({ origins: ["https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*"] }).catch(() => {});
+  // reloading the grades also reads the Centro de Notas: without its permission, the page that explains it opens at the end
+  // (a new tab closes this popup, so every write comes first); at most once a day from here, apart from the Canvas
+  // offer's own "Agora não" (centroSnooze), so both routes the deny text names keep working
+  const CENTRO_HOST = "https://ca-centro-notas-es-prd.lemonfield-d7b6934d.brazilsouth.azurecontainerapps.io/*";
+  let askCentro = false;
+  if (chrome.permissions && !(await chrome.permissions.contains({ origins: [CENTRO_HOST] }).catch(() => true))) {
+    const { centroAskedAt } = await chrome.storage.local.get("centroAskedAt");
+    if (!(Date.now() - (Number(centroAskedAt) || 0) < 864e5)) { askCentro = true; await chrome.storage.local.set({ centroAskedAt: Date.now() }); }
+  }
   const { cache } = await chrome.storage.local.get("cache");
   if (cache) await chrome.storage.local.set({ cache: Object.assign({}, cache, { at: 0 }) });
   const { centro } = await chrome.storage.local.get("centro"); if (centro) await chrome.storage.local.set({ centro: Object.assign({}, centro, { at: 0 }) });   // the Centro de Notas too
@@ -66,12 +73,13 @@ $("refresh").addEventListener("click", async () => {
   let tab = null; try { [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); } catch (e) { tab = null; }
   if (tab && typeof tab.url === "string" && tab.url.startsWith("https://pucpr.instructure.com/")) { chrome.tabs.reload(tab.id); $("status").textContent = "Lendo o Canvas de novo…"; }
   else $("status").textContent = "Atualiza na próxima página do Canvas.";
+  if (askCentro) chrome.runtime.sendMessage({ type: "centroAsk" }).catch(() => {});   // last: the worker opens centro.html (this popup may close)
 });
 // Backup: everything Caderno+ keeps for the student, in one file (nothing leaves the computer unless the student moves it).
-const KEEP = ["hand", "marks", "tasks", "notes", "checks", "myRules", "hidden", "prefs", "fold"];
+const KEEP = ["hand", "marks", "tasks", "notes", "checks", "myRules", "myGrades", "hidden", "prefs", "fold"];
 // Only the student using Canvas now: grades, ticks, tasks, notes and checklists are kept per Canvas user, and the file
 // carries that one slice (other students of this Chrome stay out of it). The look, the mode and the folds are the browser's.
-const backupOf = (got, user) => Object.assign({}, got, Object.fromEntries(["hand", "marks", "tasks", "notes", "checks", "myRules"].map(k => [k, user != null && got[k] && typeof got[k] === "object" && got[k][user] !== undefined ? { [user]: got[k][user] } : {}])));
+const backupOf = (got, user) => Object.assign({}, got, Object.fromEntries(["hand", "marks", "tasks", "notes", "checks", "myRules", "myGrades"].map(k => [k, user != null && got[k] && typeof got[k] === "object" && got[k][user] !== undefined ? { [user]: got[k][user] } : {}])));
 $("export").addEventListener("click", async () => {
   const all = await chrome.storage.local.get(KEEP.concat("cache")), user = all.cache && all.cache.user != null ? all.cache.user : null;
   if (user == null) { $("status").textContent = "Abra o Canvas logado antes: o backup leva os dados de quem está usando, e não sei quem é."; return; }   // logged out: an empty file is not a backup
@@ -99,6 +107,7 @@ $("importFile").addEventListener("change", async () => {
   const per = { myRules: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, r]) => /^\d{1,15}$/.test(k) && obj(r)).slice(0, 40).map(([k, r]) => [k, Object.assign({ off: (Array.isArray(r.off) ? r.off : []).filter(x => str(x, 300)).slice(0, 300), total: Number(r.total) > 0 && Number(r.total) <= 1000 ? Number(r.total) : 10 },
       obj(r.parts) ? { parts: Object.fromEntries(Object.entries(r.parts).filter(([p, x]) => /^[ABC]$/.test(p) && obj(x) && Number(x.w) > 0 && Number(x.w) <= 100).map(([p, x]) => [p, Object.assign({ w: Number(x.w) }, Number(x.top) > 0 && Number(x.top) <= 1000 ? { top: Number(x.top) } : {})])),
         part: obj(r.part) ? Object.fromEntries(Object.entries(r.part).filter(([key, p]) => str(key, 300) && /^[ABC]$/.test(p)).slice(0, 300)) : {} } : {}, r.own === true ? { own: true } : {}, str(r.formula, 4000) ? { formula: r.formula } : {})])) : {},
+    myGrades: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, g]) => /^\d{1,15}$/.test(k) && obj(g)).slice(0, 60).map(([k, g]) => [k, Object.fromEntries(Object.entries(g).filter(([id, v]) => str(id, 300) && typeof v === "number" && v >= 0 && v <= 10).slice(0, 300))])) : {},   // Minhas notas: [course][id] on 0-10
     hand: u => keepIf(u, v => str(v, 12)), marks: u => keepIf(u, iso), notes: u => keepIf(u, v => str(v, 5000)),
     checks: u => obj(u) ? Object.fromEntries(Object.entries(u).filter(([k, l]) => /^(\d{1,15}|painel)$/.test(k) && Array.isArray(l)).map(([k, l]) => [k, l.filter(x => x && str(x.id, 40) && str(x.t, 200) && (x.date === undefined || iso(x.date))).slice(0, 50).map(x => Object.assign({ id: x.id, t: x.t, done: x.done === true }, x.date ? { date: x.date } : {}))])) : {},
     tasks: u => Array.isArray(u) ? u.filter(t => t && str(t.id, 40) && str(t.title, 140) && (t.date === null || iso(t.date))).slice(0, 100).map(t => Object.assign({ id: t.id, title: t.title, date: t.date },
@@ -106,7 +115,8 @@ $("importFile").addEventListener("change", async () => {
   const cur = await chrome.storage.local.get(KEEP), out = {};
   // merged key by key into what this student has now (grades typed after the backup stay); lists (tasks) are replaced
   const merge = (now, add) => Array.isArray(add) ? add : obj(add) ? Object.assign({}, obj(now) ? now : {}, add) : add;
-  for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, merge((cur[k] || {})[u], per[k](v))])));
+  const deep = (now, add) => Object.assign({}, obj(now) ? now : {}, Object.fromEntries(Object.entries(add).map(([c, g]) => [c, Object.assign({}, obj(now) && obj(now[c]) ? now[c] : {}, g)])));   // Minhas notas: course by course, grade by grade
+  for (const k of Object.keys(per)) if (obj(d[k])) out[k] = Object.assign({}, cur[k], Object.fromEntries(Object.entries(d[k]).filter(([u]) => /^\d{1,20}$/.test(u)).map(([u, v]) => [u, (k === "myGrades" ? deep : merge)((cur[k] || {})[u], per[k](v))])));
   const { cache } = await chrome.storage.local.get("cache"), fileUsers = [...new Set(Object.keys(per).flatMap(k => obj(d[k]) ? Object.keys(d[k]).filter(u => /^\d{1,20}$/.test(u)) : []))];
   const other = cache && cache.user != null && fileUsers.length && !fileUsers.includes(String(cache.user));
   if (Array.isArray(d.hidden)) out.hidden = d.hidden.map(String).filter(x => /^\d{1,20}$/.test(x)).slice(0, 200);
@@ -191,9 +201,11 @@ if (tabs.length) { let k = null; try { k = localStorage.getItem("cpTab"); } catc
   const { cache, hidden } = await chrome.storage.local.get(["cache", "hidden"]), box = $("courses"), off = new Set(Array.isArray(hidden) ? hidden.map(String) : []);
   const ids = cache && Array.isArray(cache.ids) ? cache.ids : [];
   if (!ids.length) { $("coursesHint").textContent = "Abra o Canvas uma vez para escolher as matérias do painel."; return; }
+  const short = x => String(x.name).split(" (")[0].split(" - ")[0], seen = ids.map(short);
   for (const x of ids) {
     const row = document.createElement("label"), name = document.createElement("span"), box2 = document.createElement("input");
-    row.className = "row"; name.textContent = String(x.name).split(" (")[0].split(" - ")[0]; name.title = x.name;
+    row.className = "row"; name.textContent = short(x); name.title = x.name;
+    if (seen.filter(n => n === short(x)).length > 1) { const sm = document.createElement("small"); sm.textContent = String(x.name).slice(short(x).length).replace(/[()]/g, "").replace(/^[\s–-]+/, ""); name.appendChild(sm); }   // three "Sala do Curso": the rest of the name tells them apart
     box2.type = "checkbox"; box2.setAttribute("role", "switch"); box2.checked = !off.has(String(x.id));
     box2.addEventListener("change", async () => {
       const { hidden: h } = await chrome.storage.local.get("hidden"), set = new Set(Array.isArray(h) ? h.map(String) : []);
@@ -204,3 +216,49 @@ if (tabs.length) { let k = null; try { k = localStorage.getItem("cpTab"); } catc
   }
 })();
 $("setup").addEventListener("click", e => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }); });
+
+// "Avalie o Caderno+": the stars only open a page (nothing is sent). 4-5: the Chrome Web Store reviews; 1-3: an issue on
+// GitHub with the version and no personal data. The choice is kept ("rated") so the card thanks instead of asking again.
+(() => {
+  const STORE = "https://chromewebstore.google.com/detail/pmpjlaiflcnngpbkphcobndjgnihfkmp/reviews", REPO = "https://github.com/Bossmann007/Campus";
+  const stars = [...document.querySelectorAll("#rate .star")]; if (stars.length !== 5) return;
+  const go = $("rateGo"), msg = $("rateMsg"), q = $("rateQ"), ver = chrome.runtime.getManifest().version;
+  const fill = n => stars.forEach((s, i) => s.classList.toggle("on", i < n));
+  const show = n => { stars.forEach((s, i) => s.setAttribute("aria-pressed", String(i + 1 === n))); fill(n); if (!n) { go.hidden = msg.hidden = true; return; }
+    const good = n >= 4; q.textContent = good ? "Valeu pela nota!" : "Obrigado por contar";
+    msg.hidden = false; msg.textContent = good ? "Uma avaliação na Chrome Web Store ajuda outros alunos a acharem o Caderno+." : "O que faltou? Conte no GitHub (página pública: não ponha notas nem dados pessoais).";
+    go.hidden = false; $("rateGoT").textContent = good ? "Avaliar na Chrome Web Store ↗" : "Dizer o que melhorar ↗"; $("rateGoI").hidden = !good;   // the Chrome logo on the store button
+    go.href = good ? STORE : REPO + "/issues/new?title=" + encodeURIComponent("Sugestão (" + n + " estrela" + (n > 1 ? "s" : "") + ")") + "&body=" + encodeURIComponent("Versão " + ver + "\n\nO que melhorar:\n"); };
+  let chosen = 0;
+  stars.forEach((s, i) => { s.addEventListener("mouseenter", () => fill(i + 1)); s.addEventListener("focus", () => fill(i + 1));
+    s.addEventListener("click", () => { chosen = i + 1; show(chosen); chrome.storage.local.set({ rated: { n: chosen, v: ver } }).catch(() => {}); }); });
+  stars[0].parentNode.addEventListener("mouseleave", () => fill(chosen));
+  chrome.storage.local.get("rated").then(({ rated }) => { if (rated && rated.n >= 1 && rated.n <= 5) { chosen = rated.n; show(chosen); } }).catch(() => {});
+})();
+
+// Labs: the opinion goes to a GitHub issue with the version only (a public page: no grades, no personal data)
+(() => { const a = $("labsSay"); if (!a || !a.setAttribute) return;
+  a.href = "https://github.com/Bossmann007/Campus/issues/new?title=" + encodeURIComponent("Labs: o que achei do visual novo") + "&body=" + encodeURIComponent("Versão " + chrome.runtime.getManifest().version + "\n\nO que ficou melhor:\n\nO que piorou ou ficou estranho:\n\n(página pública: não ponha notas nem dados pessoais)"); })();
+
+// "Sua imagem" (Desenho do fundo): a picture of the student's, made smaller here (at most 1920 px, JPEG) and kept in
+// chrome.storage.local "bgImage"; theme.js lays it behind the page with a veil. Picked in a tab (a file dialog closes the popup).
+(() => {
+  const pick = $("bgPick"), drop = $("bgDrop"), file = $("bgFile"), st = $("bgImgSt"); if (!pick || !file || !pick.addEventListener) return;
+  const show = has => { drop.hidden = !has; pick.textContent = has ? "Trocar imagem" : "Escolher imagem"; };
+  chrome.storage.local.get("bgImage").then(({ bgImage }) => show(!!bgImage)).catch(() => {});
+  pick.addEventListener("click", () => { if (location.hash === "#tab") file.click(); else chrome.tabs.create({ url: chrome.runtime.getURL("popup.html#tab") }); });
+  drop.addEventListener("click", async () => { await chrome.storage.local.remove("bgImage"); const { prefs } = await chrome.storage.local.get("prefs"); if (prefs && prefs.bg === "imagem") await chrome.storage.local.set({ prefs: Object.assign({}, prefs, { bg: "liso" }) }); show(false); st.textContent = "Imagem tirada."; });
+  file.addEventListener("change", async () => {
+    const f = file.files && file.files[0]; if (!f) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { st.textContent = "Use uma imagem PNG, JPEG ou WebP."; return; }
+    try {
+      const bmp = await createImageBitmap(f), k = Math.min(1, 1920 / Math.max(bmp.width, bmp.height)), c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k); c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      let q = .82, url = c.toDataURL("image/jpeg", q); while (url.length > 1.5e6 && q > .4) { q -= .12; url = c.toDataURL("image/jpeg", q); }   // a few hundred KB: storage holds it, every Canvas tab reads it
+      const { prefs } = await chrome.storage.local.get("prefs");
+      await chrome.storage.local.set({ bgImage: url, prefs: Object.assign({}, prefs, { bg: "imagem" }) });
+      show(true); st.textContent = "Pronto: a imagem já está atrás do Canvas.";
+    } catch (e) { st.textContent = "Não deu para abrir essa imagem."; }
+  });
+  if (location.hash === "#tab" && /bg/.test(location.search)) file.click();
+})();

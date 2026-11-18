@@ -185,9 +185,9 @@ async function ponteAnswer(m, f = fetch) {
   try {
     if (!m || typeof m !== "object") return { id, error: "pedido inválido" };
     if (m.op === "ping") return { id, ok: true, v: chrome.runtime.getManifest().version };
-    if (m.op === "rules") {   // the student's own rules (courses without a formula), for the Canvas user of the last reading only
-      const { cache, myRules } = await chrome.storage.local.get(["cache", "myRules"]), user = cache && cache.user;
-      return { id, ok: true, user: user == null ? null : user, rules: user != null && myRules && typeof myRules === "object" && myRules[user] && typeof myRules[user] === "object" ? myRules[user] : {} };
+    if (m.op === "rules") {   // the student's own rules (courses without a formula) and grades ("Minhas notas"), for the Canvas user of the last reading only
+      const { cache, myRules, myGrades } = await chrome.storage.local.get(["cache", "myRules", "myGrades"]), user = cache && cache.user, mine = x => user != null && x && typeof x === "object" && x[user] && typeof x[user] === "object" ? x[user] : {};
+      return { id, ok: true, user: user == null ? null : user, rules: mine(myRules), grades: mine(myGrades) };
     }
     if (m.op === "get") {
       const u = new URL(String(m.url || ""));

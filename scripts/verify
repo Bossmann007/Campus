@@ -7,7 +7,7 @@ node tests/extension-test.js
 ./scripts/check-rules                                   # rule packs: schema, weights sum to 10, dates in the term, unique ids
 node tests/rules-test.js                                # validator on bad packs, two turmas in one core, draft without grades
 TZ=America/Sao_Paulo node tests/rules-golden.js app.html   # cc-manha numbers identical to before the rule packs
-TZ=America/Sao_Paulo node tests/inside-canvas-test.js
+TZ=America/Sao_Paulo node -r ./tests/fixed-clock.cjs tests/inside-canvas-test.js   # clock pinned mid-term: the Plano dates are absolute
 node tests/centro-test.js                               # the Centro de Notas engine: the tool's formulas, hidden columns, calibration
 ./scripts/check-code                                    # AGENTS.md §6: no duplicate top-level names, no HTML sinks
 ./scripts/check-versions                                # every version spot agrees (scripts/bump)

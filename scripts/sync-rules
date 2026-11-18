@@ -28,7 +28,7 @@ function termPacks(dir, today, env) {
 function rulesBlock(packs) {
   const j = x => JSON.stringify(x).replace(/</g, "\\u003c");
   return "[\n" + packs.map(({ data: d }) => "    { term:" + j(d.term) + ", termEnd:" + j(d.termEnd) + ", turma:" + j(d.turma) + ", subjects:[\n" +
-    d.subjects.map(s => "      { id:" + j(s.id) + ", name:" + j(s.name) + ", short:" + j(s.short) + ", canvasIds:" + j(s.canvasIds) + ", formula:" + j(s.formula) + ", src:" + j(s.src) +
+    d.subjects.map(s => "      { id:" + j(s.id) + ", name:" + j(s.name) + ", short:" + j(s.short) + ", canvasIds:" + j(s.canvasIds) + ", formula:" + j(s.formula) + ", src:" + j(s.src) + (s.plan ? ", plan:" + j(s.plan) : "") +
       ",\n        canvas:" + j(s.canvas || { items: {} }) + ",\n        items:[\n" + s.items.map(it => "          " + j(it)).join(",\n") + " ] }").join(",\n") + " ] }").join(",\n") + " ]";
 }
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

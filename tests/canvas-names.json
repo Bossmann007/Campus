@@ -71,6 +71,10 @@
     {
      "name": "Entrega atividade - Avaliação formativa 03/09 - GABARITO",
      "points": 0.0
+    },
+    {
+     "name": "Entrega TDE",
+     "points": 1.0
     }
    ]
   },
@@ -195,6 +199,10 @@
     },
     {
      "name": "AS01 - NOTAS",
+     "points": 0.0
+    },
+    {
+     "name": "AS02 - NOTAS",
      "points": 0.0
     },
     {
@@ -395,6 +403,10 @@
     {
      "name": "Entrega atividade 21/08",
      "points": 0.0
+    },
+    {
+     "name": "Avaliação Somativa RA2 e RA3",
+     "points": 6.37
     }
    ]
   },

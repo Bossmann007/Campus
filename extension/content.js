@@ -137,6 +137,25 @@
       return fresh;
     } catch (e) { await chrome.storage.local.set({ refreshing: Date.now() }); throw e; }   // failed (throttled, Canvas down): the lock stays a minute, so each page does not read everything again
   }
+  // A course page reads that course's activities again (one request, at most once a minute per course): an activity or a
+  // grade that just came out shows now, not at the next full reading. The reading is updated in place, the new grades and
+  // moved due dates noticed as a full reading would. Returns the new reading, or null when nothing changed.
+  async function freshCourse(courseId) {   // at most once a minute per course across page loads (kept in storage), never during a full reading
+    const busy = r => r && Date.now() - r < LOCK, { freshAt, refreshing } = await chrome.storage.local.get(["freshAt", "refreshing"]), fa = freshAt && typeof freshAt === "object" ? freshAt : {};
+    if (busy(refreshing) || Date.now() - (Number(fa[courseId]) || 0) < 60000) return null;
+    await chrome.storage.local.set({ freshAt: Object.assign(Object.fromEntries(Object.entries(fa).filter(([, t]) => Date.now() - t < 60000)), { [courseId]: Date.now() }) });
+    let as; try { as = await getAll(canvasAsgUrl(encodeURIComponent(courseId))); } catch (e) { return null; }
+    const { cache: old } = await chrome.storage.local.get("cache"), cv = old && old.data && Array.isArray(old.data.courses) ? old.data.courses.find(x => String(x.id) === String(courseId)) : null;
+    if (!cv || !Array.isArray(as)) return null;
+    const next = as.filter(x => x && typeof x.name === "string").map(canvasAsg);
+    if (JSON.stringify(next) === JSON.stringify(cv.assignments)) return null;
+    const data = Object.assign({}, old.data, { courses: old.data.courses.map(x => x === cv ? Object.assign({}, cv, { assignments: next }) : x) }), fresh = Object.assign({}, old, { data, rev: (Number(old.rev) || 0) + 1 });
+    const now = await chrome.storage.local.get(["cache", "refreshing"]);   // a full reading started or landed meanwhile: it wins (never write an older reading over it)
+    if (busy(now.refreshing) || !now.cache || now.cache.at !== old.at || now.cache.rev !== old.rev || now.cache.user !== old.user) return null;
+    await newGrades(old.user, data, old); await dueMoves(old.user, data, old);
+    const last = await chrome.storage.local.get("cache"); if (!last.cache || last.cache.at !== old.at || last.cache.rev !== old.rev) return null;
+    await chrome.storage.local.set({ cache: fresh }); return fresh;
+  }
   // Ticked as done, per Canvas user: { <user>: { <planner key>: <due day> } } in chrome.storage.local "marks"; kept 30 days.
   async function myMarks(user) {
     const { marks } = await chrome.storage.local.get("marks");
@@ -234,11 +253,22 @@
   // Own tasks (not from Canvas), per Canvas user in chrome.storage.local "tasks": [{ id, title, date|null }]; done = a tick.
   let myTasks = [];
   // The Centro de Notas read by the worker, per Canvas user ("centro": { user, at, courses: { <course id>: curso | null } }).
-  let myCentro = {};
+  let myCentro = {}, centroSnoozed = false;   // "Agora não" on the Centro offer: hidden for a week (centroSnooze)
   let centroOff = false;   // the worker could not read the Centro de Notas: its permission was never granted (centro.html grants it)
-  async function loadCentro(user) { const { centro, centroOff: off } = await chrome.storage.local.get(["centro", "centroOff"]); centroOff = !!off; myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
+  async function loadCentro(user) { const { centro, centroOff: off, centroSnooze } = await chrome.storage.local.get(["centro", "centroOff", "centroSnooze"]); centroOff = !!off; centroSnoozed = Number(centroSnooze) > Date.now(); myCentro = centro && centro.user === user && centro.courses && typeof centro.courses === "object" ? centro.courses : {}; return myCentro; }
+  // Grades the student entered ("Minhas notas") where Canvas has none, in a course without our rules: chrome.storage.local
+  // "myGrades"[user][course][id] on 0-10, id = the Centro column or the Canvas activity key. They count like a grade read
+  // from Canvas everywhere (course page, dashboard); "Simular" never writes here (centroSim).
+  let myGrades = {};
+  async function loadGrades(user) { const { myGrades: all } = await chrome.storage.local.get("myGrades"), m = all && typeof all === "object" ? all[user] : null; myGrades = m && typeof m === "object" ? m : {}; return myGrades; }
+  async function setGrades(user, course, g) { const { myGrades: all } = await chrome.storage.local.get("myGrades"), base = all && typeof all === "object" ? all : {}, mine = Object.assign({}, base[user]);
+    if (g && Object.keys(g).length) mine[course] = Object.assign({}, g); else delete mine[course];
+    myGrades = mine; await chrome.storage.local.set({ myGrades: Object.assign({}, base, { [user]: mine }) }); }
+  let gtMode = "sim";   // the grade card's mode last chosen (chrome.storage.local "gtMode"), Simular or Minhas notas
+  chrome.storage.local.get("gtMode").then(({ gtMode: m }) => { if (m === "mine" || m === "sim") gtMode = m; }).catch(() => {});
+  const gradesOf = id => { const g = myGrades[id]; return g && typeof g === "object" ? Object.fromEntries(Object.entries(g).filter(([, v]) => Number.isFinite(Number(v))).map(([k, v]) => [k, Math.min(10, Math.max(0, Number(v)))])) : {}; };
   // quanto falta from the professor's formula in the Centro de Notas, for a course without our rules; null without a formula
-  const centroOf = id => { const r = myCentro[id] ? C.centro(myCentro[id], T) : null; return r && ["garantido", "precisa", "nao-da"].includes(r.status) ? r : null; };   // sem-formula and incompleto: no number
+  const centroOf = id => { const mg = gradesOf(id), r = myCentro[id] ? C.centro(myCentro[id], T, Object.keys(mg).length ? { grades: mg, rest: 0 } : undefined) : null; return r && ["garantido", "precisa", "nao-da"].includes(r.status) ? r : null; };   // sem-formula and incompleto: no number
   // The student's own rule (C.custom) for a course with neither our rules nor a formula in the Centro de Notas: per Canvas
   // user, per course, in chrome.storage.local "myRules": { <user>: { <course id>: { off: [item keys], total } } }.
   // Without a saved rule every graded item counts, up to 10: the student unticks what is not graded.
@@ -255,7 +285,16 @@
   }
   let ruleCache = null;   // the reading the items come from (set where the panels are drawn)
   const ruleItems = courseId => { const cv = ruleCache && ruleCache.data && ruleCache.data.courses.find(x => String(x.id) === String(courseId));
-    return cv ? cv.assignments.filter(x => x && Number(x.points) > 0 && !x.excused).map(x => ({ key: String(x.url || x.name).slice(0, 300), name: x.name, points: x.points, score: x.score == null ? null : x.score, due: x.due, group: x.group })) : []; };
+    const mg = gradesOf(courseId);
+    // a grade Canvas posts as worth 0 points (CSCF's "AS01 - NOTAS"): the scale the rules pack gives it ("pts")
+    const pk = C.COURSES.find(c => C.CANVAS[c.id] && C.CANVAS[c.id].cids.map(String).includes(String(courseId))), scales = pk ? Object.values(C.CANVAS[pk.id].items || {}).filter(r => r.one && r.pts > 0) : [];
+    const ptsOf = x => Number(x.points) > 0 ? Number(x.points) : (scales.find(r => String(x.name).includes(r.one)) || {}).pts || 0;
+    // a grade of the formula not in Canvas yet that the student typed ("Minhas notas", key "-<name>", on 0-10): an activity
+    // of 10 points, until Canvas has one with that name (then Canvas's own counts)
+    const typed = (list) => list.concat(Object.entries(mg).filter(([k]) => k[0] === "-" && k.length > 1 && !list.some(x => { const a = foldRef(x.name), n = foldRef(k.slice(1)); return a === n || (" " + a + " ").includes(" " + n + " "); }))
+      .map(([k, v]) => ({ key: k, name: k.slice(1), points: 10, score: v, canvasScore: null, mine: true, typed: true })));
+    return !cv ? [] : typed(cv.assignments.filter(x => x && ptsOf(x) > 0).map(x => { const key = String(x.url || x.name).slice(0, 300), mine = x.score == null && mg[key] != null ? mg[key] * ptsOf(x) / 10 : null;
+      return Object.assign({ key, name: x.name, points: ptsOf(x), score: x.score == null ? mine : x.score, canvasScore: x.score == null ? null : x.score, mine: mine != null, due: x.due, group: x.group }, x.excused ? { excused: true } : {}); })); };   // excused: kept, flagged (the formula leaves it out, as Canvas does)
   // The professor's weights set in Canvas itself (weighted assignment groups): a rule made of them, official, used when the
   // student has not written one. Up to five groups (A-E); each group is its activities' points.
   const canvasWeightsRule = courseId => { const cv = ruleCache && ruleCache.data && ruleCache.data.courses.find(x => String(x.id) === String(courseId));
@@ -291,8 +330,8 @@
       const write = (col, name) => { if (!col || seen.has(col.id_coluna) || lines.length > 30) return; seen.add(col.id_coluna);
         const kids = (col.colunas_associadas_pai || []).map(k => ({ col: cols.get(k.id_coluna) || { id_coluna: k.id_coluna, nome_coluna: "Parte " + k.id_coluna }, w: k.pivot && Number(k.pivot.peso_coluna_filho) })).filter(k => k.col);
         if (!kids.length) return; const names = kids.map(k => nm(k.col.nome_coluna)), calc = col.tipo_calculo;
-        lines.push(name + " = " + (calc === "media_ponderada" ? kids.map((k, i) => pct(k.w || 0) + " " + names[i]).join(" + ") : (calc === "total" ? "soma(" : "média(") + names.join(", ") + ")")
-          + (calc === "maximo" || calc === "minimo" ? "   # no Centro é o " + (calc === "maximo" ? "maior" : "menor") + " deles (recuperação)" : ""));
+        if (calc === "maximo" || calc === "minimo") lines.push("# " + name + ": no Centro é o " + (calc === "maximo" ? "maior" : "menor") + " deles (recuperação)");   // a comment is a line of its own (inside a line it would be read as a name)
+        lines.push(name + " = " + (calc === "media_ponderada" ? kids.map((k, i) => pct(k.w || 0) + " " + names[i]).join(" + ") : (calc === "total" ? "soma(" : "média(") + names.join(", ") + ")"));
         kids.forEach((k, i) => { if ((k.col.colunas_associadas_pai || []).length) write(k.col, names[i]); }); };
       if (final) { write(final, "Final"); if (lines.length) return { text: lines.join("\n"), from: "da fórmula do professor no Centro de Notas" }; }
     }
@@ -307,14 +346,35 @@
         terms.push(pct(g.w) + " " + name); extra.push(name + " = soma(" + mine.map(ref).join(", ") + ")"); }
       if (terms.length) return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos que o professor pôs no Canvas" };
     }
+    // the Plano de Ensino by RA, written in the rules pack (rules/<term>/*.json "plan"): after the professor's Centro formula
+    // and Canvas weights (AGENTS.md §5), before the RA groups (the Plano says what each grade is worth)
+    const planned = C.COURSES.find(x => x.plan && C.CANVAS[x.id] && C.CANVAS[x.id].cids.map(String).includes(String(courseId)));
+    if (planned) return { text: planned.plan, from: (/soma\(/.test(planned.plan) ? "do Plano de Ensino por RA, com as notas do Canvas já em pontos da final (" : "dos pesos do Plano de Ensino, por RA (") + planned.src + ")" };
+    // the assignment groups the professor named by RA in Canvas: one line per RA with its activities. When their points add up
+    // to 10, the grades are already points of the final (each RA adds them up); else the RAs weigh by their points so far
+    const cvR = ruleCache && ruleCache.data && ruleCache.data.courses.find(x => String(x.id) === String(courseId)), ras = cvR && Array.isArray(cvR.ras) ? cvR.ras : [];
+    if (ras.length > 1) { const seen = new Map();
+      const gs0 = ras.map(g => { const n = ((/^\s*(RA\s*\d+(?:\s*(?:e|,|\/|&)\s*RA\s*\d+)*)/i.exec(g.name) || [])[1] || "").match(/\d+/g).map(d => "RA" + d).join(" e "), acts = items.filter(x => String(x.group) === String(g.id)); return { name: n, acts, pts: acts.reduce((t, x) => t + Number(x.points || 0), 0) }; })
+        .filter(g => g.acts.length);
+      for (const g of gs0) { const o = seen.get(g.name); if (o) { o.acts = o.acts.concat(g.acts); o.pts += g.pts; } else seen.set(g.name, g); }   // "RA1 - Provas" and "RA1 - Trabalhos": one RA1
+      const gs = [...seen.values()], refs = shortRefs(items, gs.map(g => g.name));   // never an activity named like a RA (it would point at itself)
+      const tot = gs.reduce((t, g) => t + g.pts, 0), w2 = x => String(Math.round(x * 100) / 100).replace(".", ",");
+      if (gs.length > 1 && tot > 0) { const ten = Math.abs(tot - 10) < 0.011, list = g => g.acts.map(x => refs.get(x.name) || nm(x.name)).join(", ");
+        return { text: ["Final = " + gs.map(g => pct(ten ? g.pts * 10 : g.pts / tot * 100) + " " + g.name).join(" + ")].concat(gs.map(g => g.name + " = soma(" + list(g) + ")" + (ten ? " de " + w2(g.pts) : ""))).join("\n"),
+          from: ten ? "dos grupos RA do Canvas: as notas já somam os 10 pontos da final" : "dos grupos RA do Canvas (o peso de cada RA saiu dos pontos lançados até agora: confira no Plano de Ensino)" }; }
+    }
     const pack = C.COURSES.find(x => C.CANVAS[x.id] && C.CANVAS[x.id].cids.map(String).includes(String(courseId)));
     if (pack) {
       const map = C.CANVAS[pack.id].items || {}, extra = [];
-      const terms = pack.items.map(it => { const m = map[it.id] || {}; let ref = nm(it.name.replace(/\s*·\s*/g, " "));   // an item with no Canvas activity keeps its full name (it shows as not in Canvas yet)
+      const refs = pack.items.map(it => { const m = map[it.id] || {}; let ref = nm(it.name.replace(/\s*·\s*/g, " "));   // an item with no Canvas activity keeps its full name (it shows as not in Canvas yet)
         if (m.one) ref = nm(m.one);
         else if (m.avg || m.sum) { ref = nm(it.name.replace(/^RA\d+\s*·\s*/, "")); extra.push(ref + " = " + (m.sum ? "soma(" : "média(") + (m.avg || m.sum).map(nm).join(", ") + ")" + (m.sum && !(m.factor && m.factor !== 1) ? " de " + String(it.inMax).replace(".", ",") : "")); }
-        return pct(it.max * 10) + " " + ref; });
-      return { text: ["Final = " + terms.join(" + ")].concat(extra).join("\n"), from: "dos pesos do Plano de Ensino que o Caderno+ tem" };
+        return ref; });
+      const raOf = it => (/^RA(\d)\s*·/.exec(it.name) || [])[1], gs = [...new Set(pack.items.map(raOf))];
+      if (gs.length > 1 && pack.items.every(raOf)) {   // one line per RA, as the Plano writes it: the RA's weight, then each grade's share of it
+        const tot = g => pack.items.filter(i => raOf(i) === g).reduce((t, i) => t + i.max, 0);
+        return { text: ["Final = " + gs.map(g => pct(tot(g) * 10) + " RA" + g).join(" + ")].concat(gs.map(g => "RA" + g + " = " + pack.items.map((it, j) => [it, j]).filter(([it]) => raOf(it) === g).map(([it, j]) => pct(it.max / tot(g) * 100) + " " + refs[j]).join(" + ")), extra).join("\n"), from: "dos pesos do Plano de Ensino que o Caderno+ tem" }; }
+      return { text: ["Final = " + pack.items.map((it, j) => pct(it.max * 10) + " " + refs[j]).join(" + ")].concat(extra).join("\n"), from: "dos pesos do Plano de Ensino que o Caderno+ tem" };
     }
     const total = items.reduce((t, i) => t + Number(i.points || 0), 0);
     const refs = shortRefs(items.slice(0, 12));
@@ -322,9 +382,11 @@
   }
   const customText = r => r.status === "garantido" ? "meta garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + "/10 em média no que falta";
   // the offer to read the Centro de Notas, on the dashboard and on a course page, while its permission is missing
-  const centroOffer = () => { const b = el("div", "card centro-ask"), go = el("button", "primary", "Permitir a leitura");
-    b.append(el("div", "mid", "As notas do Centro de Notas (a fórmula que o professor montou) ainda não foram lidas: falta a sua permissão."), go);
-    go.type = "button"; go.addEventListener("click", () => chrome.runtime.sendMessage({ type: "centroAsk" }).catch(() => {})); return b; };
+  const centroOffer = () => { const b = el("div", "card centro-ask"), go = el("button", "primary", "Usar a fórmula do professor ↗"), no = el("button", "", "Agora não"), acts = el("div", "acts");
+    b.append(el("div", "mid", "Quer o quanto falta com a fórmula exata do seu professor? O Caderno+ só lê o Centro de Notas da PUCPR."), acts); acts.append(no, go);
+    go.type = no.type = "button"; go.addEventListener("click", () => chrome.runtime.sendMessage({ type: "centroAsk" }).catch(() => {}));
+    no.addEventListener("click", () => { chrome.storage.local.set({ centroSnooze: Date.now() + 7 * 864e5 }).catch(() => {}); centroSnoozed = true; b.remove(); });   // asked again in a week, never on every page
+    return b; };
   const centroTone = r => r.status === "garantido" ? "ok" : r.status === "nao-da" ? "bad" : r.need > 8 ? "bad" : "warn";
   // Checklists (Anotações): per Canvas user, per course id or "painel" (the dashboard's own), items { id, t, done, date? };
   // the dated ones join the week like Minhas tarefas. chrome.storage.local "checks"; 50 items of 200 chars per list.
@@ -717,237 +779,306 @@
     :host { all: initial; display:block; margin:0 0 18px; --fg:var(--cp-ink,#1D2433); --muted:var(--cp-muted,#5F6675); --line:var(--cp-line,#ECE4D3); --bg:var(--cp-card,#fff); --soft:var(--cp-paper,#FBF7EF);
       --ring:var(--cp-accent,#E2482B); --coral:var(--cp-accent,#E2482B); --coral-ink:var(--cp-accent-ink,var(--cp-accent,#E2482B)); --on-coral:var(--cp-on-accent,#fff); --tile:var(--cp-ink,#1D2433); --tile-c:var(--cp-paper,#FBF7EF); --band1:color-mix(in srgb, var(--cp-accent,#E2482B) 16%, var(--cp-card,#fff)); --band2:color-mix(in srgb, var(--cp-accent,#E2482B) 6%, var(--cp-card,#fff));
       --paper:var(--cp-paper,#FBF7EF); --track:color-mix(in srgb, var(--cp-line,#ECE4D3) 75%, var(--cp-paper,#FBF7EF)); --ok:#2F7D5B; --warn:#A8650F; --bad:#C2361F; --ok-s:#CFE6D9; --warn-s:#F1DDB8; --bad-s:#F6CFC4; --lift:0 8px 20px -12px rgba(29,36,51,.35);
-      --serif:"Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-      font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; }
-    .box { position:relative; container:cp / inline-size; overflow-x:clip; overflow-clip-margin:6px; border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
-    .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:inherit; }
+      --serif:"Fraunces","Iowan Old Style","New York",Georgia,"Times New Roman",serif; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      /* one type scale and one radius scale for every panel (Refactoring UI: pick the scale first, then only use its steps) */
+      --fs-xs:11px; --fs-sm:12px; --fs-md:13px; --fs-base:14px; --fs-lg:16px; --fs-xl:18px; --fs-2xl:22px; --fs-3xl:30px; --r-xs:4px; --r-sm:8px; --r-md:12px; --r-lg:14px; --r-pill:999px;
+      font:14px/1.45 var(--sans); color:var(--fg); font-variant-numeric:tabular-nums; font-synthesis-weight:none; }
+    /* Labs: the new look in test (prefs.labs). Off: the bar is hidden and nothing else changes.
+       v2, clean (shadcn/ui, Tremor, Linear, Vercel): one sans for text and numbers, hairline borders, no shadows, color only
+       where it says something (ok, warn, bad), more white space; tokens derived from the theme so dark keeps working */
+    .labs-bar { display:none; }
+    :host(.labs) { --serif:var(--sans); --line:color-mix(in srgb, var(--fg) 10%, var(--bg)); --track:color-mix(in srgb, var(--fg) 6%, var(--bg)); --r-md:12px; --r-lg:12px; letter-spacing:-.003em; }
+    :host(.labs) .labs-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:0 0 12px; padding:6px 6px 6px 12px; border:1px solid var(--line); border-radius:var(--r-pill); background:var(--bg); font-size:var(--fs-sm); color:var(--muted); }
+    .labs-tag { display:inline-flex; align-items:center; gap:6px; font-weight:600; color:var(--fg); } .labs-tag::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--coral); }
+    .labs-t { flex:1; min-width:160px; } .labs-say { color:var(--fg); font-weight:500; text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px; } .labs-say:hover { text-decoration-color:var(--fg); }
+    .labs-back { all:unset; cursor:pointer; padding:4px 12px; border-radius:var(--r-pill); background:var(--track); color:var(--fg); font-weight:500; } .labs-back:hover { background:var(--line); } .labs-back:focus-visible, .labs-say:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
+    :host(.labs) .box { background:transparent; border-color:transparent; box-shadow:none; padding:8px 0 16px; }
+    :host(.labs) .card { border:1px solid var(--line); border-radius:12px; box-shadow:none; background:var(--bg); }
+    :host(.labs) a.card:hover { transform:none; box-shadow:none; border-color:color-mix(in srgb, var(--fg) 24%, var(--bg)); }
+    :host(.labs) .box > .card, :host(.labs) .box > .kpis, :host(.labs) .box > .tiles, :host(.labs) .box > .nslot > .card { margin-bottom:12px; } :host(.labs) .kpis { gap:12px; }
+    :host(.labs) .k { text-transform:none; letter-spacing:0; font-size:12.5px; font-weight:500; }
+    :host(.labs) .kpi { padding:16px 18px 18px; } :host(.labs) .kpi .v, :host(.labs) .big .v { font:600 28px/1.1 var(--sans); letter-spacing:-.025em; }
+    :host(.labs) .upnext { padding:16px 18px; } :host(.labs) .upnext .t, :host(.labs) .cring .t { font:600 17px/1.3 var(--sans); letter-spacing:-.012em; }
+    :host(.labs) h3 { font:600 15px/1.3 var(--sans); letter-spacing:-.01em; } :host(.labs) .ht b { font:600 20px/1.25 var(--sans); letter-spacing:-.02em; }
+    :host(.labs) .meter { height:6px; } :host(.labs) .ovbar { height:16px; border-radius:var(--r-pill); } :host(.labs) .ovbar > i { border-radius:var(--r-pill); }
+    :host(.labs) .ih { background:transparent; border-bottom:1px solid var(--line); font-weight:500; padding:10px 18px; } :host(.labs) .ir { padding:12px 18px; }
+    :host(.labs) .seg { background:var(--track); } :host(.labs) .seg button[aria-pressed="true"] { background:var(--bg); color:var(--fg); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08), 0 0 0 1px var(--line); }
+    :host(.labs) .hero { margin:0 0 12px; padding:18px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
+    /* v3, beyond clean: frosted glass over the background scene, a light on the border that follows the mouse (Magic UI /
+       Aceternity), a bento of the numbers, each subject as its own tile, and a short cascade when the panel comes in */
+    :host(.labs) .card, :host(.labs) .hero, :host(.labs) .labs-bar { background:color-mix(in srgb, var(--bg) 74%, transparent); -webkit-backdrop-filter:blur(18px) saturate(1.35); backdrop-filter:blur(18px) saturate(1.35); border-color:color-mix(in srgb, var(--fg) 9%, transparent); }
+    :host(.labs) .card { overflow:visible; } :host(.labs) .card::after { content:""; position:absolute; inset:-1px; border-radius:inherit; padding:1px; pointer-events:none; opacity:0; transition:opacity .25s ease;
+      background:radial-gradient(240px circle at var(--mx, -400px) var(--my, -400px), var(--coral), transparent 65%); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+    :host(.labs) .card:hover::after { opacity:1; }
+    :host(.labs) .kpis { grid-template-columns:1.5fr 1fr 1fr; } :host(.labs) .kpis > .kpi:first-child .v { font-size:52px; letter-spacing:-.04em; background:linear-gradient(120deg, var(--fg) 30%, var(--coral)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    :host(.labs) .ov-body:has(> .ovr:not(.ovscale) > .ovbar) { grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; }
+    :host(.labs) .ov-body > .ovr:not(.ovscale):has(> .ovbar) { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"n p" "b b"; align-items:start; gap:12px; padding:14px; min-height:92px; border:1px solid var(--line); border-radius:14px; background:color-mix(in srgb, var(--coral) 4%, var(--bg)); }
+    :host(.labs) .ov-body > .ovr:not(.ovscale):has(> .ovbar) > :nth-child(1) { grid-area:n; } :host(.labs) .ov-body > .ovr:not(.ovscale):has(> .ovbar) > :nth-child(2) { grid-area:b; align-self:end; } :host(.labs) .ov-body > .ovr:not(.ovscale):has(> .ovbar) > :nth-child(3) { grid-area:p; }
+    :host(.labs) .ov-body > .ovscale { display:none; }
+    :host(.labs) .ov-body > .ovr:not(.ovscale):has(> .ovbar) { min-height:118px; } :host(.labs) .ov-body > .ovr:not(.ovscale) > .ovbar { height:8px; overflow:visible; }
+    :host(.labs) .ov-body > .ovr:not(.ovscale) > .ovbar .ovin, :host(.labs) .ov-body > .ovr:not(.ovscale) > .ovbar .ovin.low { display:block; left:0; top:auto; bottom:calc(100% + 10px); transform:none; font:600 30px/1 var(--sans); letter-spacing:-.03em; color:var(--fg); text-shadow:none; }   /* the subject's grade, big, over its bar */
+    /* the course page in Labs: the hero washed in the course's own color (its band grows into a soft glow), the grade ring big
+       beside a big number, the grade table as a list of rows that light up, the tabs as a glass pill */
+    :host(.labs) .hero { overflow:hidden; } :host(.labs) .band-c { height:auto; bottom:0; opacity:.16; -webkit-mask:radial-gradient(120% 140% at 0% 0%, #000 20%, transparent 70%); mask:radial-gradient(120% 140% at 0% 0%, #000 20%, transparent 70%); }
+    :host(.labs) .ht b { font-size:26px; letter-spacing:-.03em; } :host(.labs) .hero .hs { margin-top:4px; }
+    :host(.labs) .cring { padding:20px 22px; gap:20px; } :host(.labs) .cring .rg { width:96px; height:96px; }
+    :host(.labs) .cring .t { font:600 30px/1.1 var(--sans); letter-spacing:-.03em; }
+    :host(.labs) .gt .ir:not(.ih) { transition:background .15s ease; } :host(.labs) .gt .ir:not(.ih):hover { background:color-mix(in srgb, var(--coral) 6%, transparent); }
+    :host(.labs) .gt .ir .w { justify-self:start; padding:2px 8px; border-radius:var(--r-pill); background:var(--track); font-size:var(--fs-xs); font-weight:600; color:var(--muted); }
+    :host(.labs) .gt .g { font-weight:600; } :host(.labs) .gt .simi { border-radius:10px; }
+    :host(.labs) .ctabs { background:color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border:1px solid color-mix(in srgb, var(--fg) 9%, transparent); border-radius:var(--r-pill); padding:4px; }
+    :host(.labs) .ctabs button { border-radius:var(--r-pill); } :host(.labs) .ctabs button[aria-selected="true"] { box-shadow:0 1px 2px rgba(0,0,0,.08), 0 0 0 1px var(--line); font-weight:600; }
+    @media (prefers-reduced-motion:no-preference) {
+      :host(.labs) .box > * { animation:labs-in .55s cubic-bezier(.22,1,.36,1) both; } :host(.labs) .box > :nth-child(2) { animation-delay:.04s; } :host(.labs) .box > :nth-child(3) { animation-delay:.08s; } :host(.labs) .box > :nth-child(4) { animation-delay:.12s; } :host(.labs) .box > :nth-child(5) { animation-delay:.16s; } :host(.labs) .box > :nth-child(n+6) { animation-delay:.2s; }
+      :host(.labs) .ovbar > i { animation:labs-grow .9s cubic-bezier(.22,1,.36,1) both; transform-origin:left; }
+      @keyframes labs-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } } @keyframes labs-grow { from { transform:scaleX(0); } to { transform:none; } } }
+    .box { position:relative; container:cp / inline-size; overflow-x:clip; overflow-clip-margin:6px; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--paper); padding:0 14px 14px; box-shadow:0 1px 2px rgba(29,36,51,.05); }
+    .card { display:block; position:relative; background:var(--bg); border:1px solid var(--line); border-radius:var(--r-md); color:inherit; }
     a.card { transition:transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s, border-color .15s; } a.card:hover { text-decoration:none; transform:translateY(-1px); border-color:var(--muted); box-shadow:var(--lift); } a.card:active { transform:scale(.99); }
     .box > .card, .box > .kpis, .box > .tiles, .box > .nslot > .card { margin-bottom:10px; }   /* .nslot is display:contents */
-    .k { font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+    .k { font-size:var(--fs-xs); font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
     .nslot { display:contents; }
-    .upnext { display:flex; align-items:center; gap:16px; padding:12px 14px; } .upnext .k { text-transform:none; letter-spacing:0; font-size:12px; font-weight:500; }
-    .upnext .t, .cring .t { font:600 17px/1.25 var(--serif); letter-spacing:-.01em; margin:2px 0; overflow:hidden; text-overflow:ellipsis; } .upnext .mid, .cring .mid { flex:1; }
-    .big { flex:none; text-align:right; } .big .v { display:block; font:500 30px/1 var(--serif); letter-spacing:-.02em; } .big span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
+    .upnext { display:flex; align-items:center; gap:16px; padding:12px 14px; } .upnext .k { text-transform:none; letter-spacing:0; font-size:var(--fs-sm); font-weight:500; }
+    .upnext .t, .cring .t { font:600 var(--fs-xl)/1.25 var(--serif); letter-spacing:-.01em; margin:2px 0; overflow:hidden; text-overflow:ellipsis; } .upnext .mid, .cring .mid { flex:1; }
+    .big { flex:none; text-align:right; } .big .v { display:block; font:500 var(--fs-3xl)/1 var(--serif); letter-spacing:-.02em; } .big span { display:block; margin-top:3px; color:var(--muted); font-size:var(--fs-sm); }
     .v.t-ok { color:var(--ok); } .v.t-warn { color:var(--warn); } .v.t-bad { color:var(--bad); }
     .kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; } .seg.kpis-pick { display:flex; flex-wrap:wrap; width:fit-content; max-width:100%; margin:0 0 8px; } .kpi .c { margin-top:6px; } .kpi .c.per { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.45; }
     .kpi { padding:10px 12px 12px; min-width:0; } .kpi .v { font:500 24px/1.15 var(--serif); letter-spacing:-.02em; margin:2px 0 4px; } .kpi .v.need { color:var(--warn); } .kpi .v.need.t-ok { color:var(--ok); }
-    .meter { position:relative; height:6px; margin-top:6px; border-radius:99px; background:var(--track); }
-    .meter i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--fg); } .meter b { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); }
+    .meter { position:relative; height:6px; margin-top:6px; border-radius:var(--r-pill); background:var(--track); }
+    .meter i { position:absolute; left:0; top:0; bottom:0; border-radius:var(--r-pill); background:var(--fg); } .meter b { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); }
     .trk { display:flex; gap:2px; margin-top:7px; } .trk i { position:relative; flex:1; min-width:2px; height:8px; border-radius:2px; background:var(--track); } .trk i.ok { background:var(--ok); } .trk i.late { background:var(--warn); } .trk i.sent { background:color-mix(in srgb, var(--ok) 45%, var(--track)); }
     .trk i:hover { outline:1.5px solid var(--fg); outline-offset:1px; }
-    [data-tip]::after { content:attr(data-tip); position:absolute; z-index:6; left:50%; bottom:calc(100% + 8px); width:max-content; max-width:240px; padding:6px 9px; border-radius:7px; background:var(--fg); color:var(--bg);
-      font:500 12px/1.35 var(--sans); box-shadow:0 10px 24px -10px rgba(29,36,51,.5); opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,3px); transition:opacity .12s, transform .12s, visibility 0s .12s; }
+    [data-tip]::after { content:attr(data-tip); position:absolute; z-index:6; left:50%; bottom:calc(100% + 8px); width:max-content; max-width:240px; padding:6px 9px; border-radius:var(--r-sm); background:var(--fg); color:var(--bg);
+      font:500 var(--fs-sm)/1.35 var(--sans); box-shadow:0 10px 24px -10px rgba(29,36,51,.5); opacity:0; visibility:hidden; pointer-events:none; transform:translate(-50%,3px); transition:opacity .12s, transform .12s, visibility 0s .12s; }
     [data-tip]:hover::after { opacity:1; visibility:visible; transform:translate(-50%,0); transition-delay:0s; }
     .trk i:nth-child(-n+5)::after { left:0; transform:translateY(3px); } .trk i:nth-last-child(-n+5)::after { left:auto; right:0; transform:translateY(3px); }
     .trk i:nth-child(-n+5):hover::after, .trk i:nth-last-child(-n+5):hover::after { transform:none; }
     .tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
     .tile { display:grid; grid-template-columns:46px minmax(0,1fr); gap:10px; align-items:center; padding:9px 10px; }
-    .tile .nm { display:block; font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .tile .c { display:block; margin:1px 0 4px; } .tile .pill { display:inline-block; }
+    .tile .nm { display:block; font-weight:600; font-size:var(--fs-md); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .tile .c { display:block; margin:1px 0 4px; } .tile .pill { display:inline-block; }
     .ring { position:relative; flex:none; width:46px; height:46px; border-radius:50%; }
     .ring::after { content:""; position:absolute; inset:5px; border-radius:50%; background:var(--bg); }
-    .ring b { position:absolute; inset:0; z-index:1; display:grid; place-items:center; font:600 13px/1 var(--serif); }
+    .ring b { position:absolute; inset:0; z-index:1; display:grid; place-items:center; font:600 var(--fs-md)/1 var(--serif); }
     .ring i { position:absolute; inset:0; z-index:1; } .ring i::before { content:""; position:absolute; left:50%; top:-2px; width:2px; height:9px; margin-left:-1px; border-radius:1px; background:var(--fg); }
-    .ring.big { width:64px; height:64px; } .ring.big::after { inset:6px; } .ring.big b { font-size:17px; } .ring.big i::before { height:11px; }
-    .cring { display:flex; align-items:center; gap:14px; padding:12px 14px; }
+    .ring.big { width:64px; height:64px; } .ring.big::after { inset:6px; } .ring.big b { font-size:var(--fs-xl); } .ring.big i::before { height:11px; }
+    .cring { display:flex; align-items:center; gap:14px; padding:12px 14px; } .cring .mid .c { white-space:normal; overflow:visible; line-height:1.35; }
     .items { overflow:hidden; } .ir { display:grid; grid-template-columns:minmax(0,1fr) 56px 140px; gap:10px; align-items:center; padding:8px 12px; border-top:1px solid var(--line); }
     .rule .ir.off .n { color:var(--muted); text-decoration:line-through; } .rule label.n { display:flex; gap:8px; align-items:center; cursor:pointer; } .rule label.n input { accent-color:var(--coral); flex:none; }
     .own-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; } .own-row .own-b { flex:none; }
-    .c.scale { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; }
+    .c.scale { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.4; } details.scale summary { cursor:pointer; list-style:none; } details.scale summary::-webkit-details-marker { display:none; } details.scale summary::after { content:" ▾"; } details.scale[open] summary::after { content:" ▴"; }
+    .scale-l { margin:4px 0 0; padding-left:16px; } .scale-l li { margin:1px 0; }
     .card.ov { padding:12px 14px; }
     .ovh { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; } .ovh h3 { margin:0; } .seg.ov-mode { display:flex; flex-wrap:wrap; max-width:100%; }
-    .ov-body { display:grid; gap:6px; } .ovr { display:grid; grid-template-columns:minmax(90px,170px) minmax(0,1fr) auto; gap:10px; align-items:center; min-height:30px; }
-    .ovn { display:grid; min-width:0; color:inherit; text-decoration:none; } .ovn:hover .n { text-decoration:underline; } .ovn .n { font-size:13px; font-weight:600; } .ovn .c { font-size:11px; }
-    .ovbar { position:relative; height:14px; border-radius:4px; background:var(--track); } .ovbar > i { position:absolute; left:0; top:0; bottom:0; border-radius:4px; min-width:2px; background:var(--fg); }
+    .ov-body { display:grid; gap:6px; } .ovr { display:grid; grid-template-columns:minmax(90px,170px) minmax(0,1fr) 84px; gap:10px; align-items:center; min-height:30px; } .ovr > :nth-child(3) { justify-self:end; }   /* one width for the last column: every bar the same length, the meta line straight */
+    .ovn { display:grid; min-width:0; color:inherit; text-decoration:none; } .ovn:hover .n { text-decoration:underline; } .ovn .n { font-size:var(--fs-md); font-weight:600; } .ovn .c { font-size:var(--fs-xs); }
+    .ovbar { position:relative; height:14px; border-radius:var(--r-xs); background:var(--track); } .ovbar > i { position:absolute; left:0; top:0; bottom:0; border-radius:var(--r-xs); min-width:2px; background:var(--fg); }
     .ovbar > i.ok { background:var(--ok); } .ovbar > i.warn { background:var(--warn); } .ovbar > i.bad { background:var(--bad); } .ovbar > i.nt { background:var(--muted); }
     .ovbar > i.hatch { background:repeating-linear-gradient(45deg, var(--bad) 0 5px, color-mix(in srgb, var(--bad) 35%, transparent) 5px 9px); }
     .ovbar > b { position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; border-radius:2px; background:var(--coral); box-shadow:0 0 0 2px var(--bg); }
-    .ovin { position:absolute; left:6px; top:50%; transform:translateY(-50%); font-size:10.5px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35); pointer-events:none; }
-    .ovv { min-width:38px; text-align:center; } .ovscale { min-height:0; margin-top:-2px; } .ovbar.ovax { display:flex; justify-content:space-between; height:12px; background:none; } .ovax span { font-size:10.5px; color:var(--muted); }
+    .ovin { position:absolute; left:6px; top:50%; transform:translateY(-50%); font-size:var(--fs-xs); font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35); pointer-events:none; } .ovin.low { display:none; }
+    .ovv { min-width:38px; text-align:center; } .ovscale { min-height:0; margin-top:-2px; } .ovbar.ovax { display:flex; justify-content:space-between; height:12px; background:none; } .ovax span { font-size:var(--fs-xs); color:var(--muted); } .ovax { position:relative; } .ovax .ovmeta { position:absolute; top:0; transform:translateX(-50%); color:var(--coral-ink); font-weight:700; white-space:nowrap; } .ovin.out { color:var(--muted); text-shadow:none; }
     .ovtrk { margin-top:0; } .ovtrk i { height:12px; } .trk i.late { display:block; margin:0; }   /* not the overdue row's .late */
-    .ovrings { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:10px; } .ovring { display:grid; justify-items:center; gap:2px; padding:8px 4px; border-radius:10px; color:inherit; text-decoration:none; text-align:center; }
-    .ovring:hover { background:var(--soft); } .ovring .n { font-size:12.5px; font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ovring .c { font-size:11px; }
+    .ovrings { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:10px; } .ovring { display:grid; justify-items:center; gap:2px; padding:8px 4px; border-radius:var(--r-md); color:inherit; text-decoration:none; text-align:center; }
+    .ovring:hover { background:var(--soft); } .ovring .n { font-size:var(--fs-sm); font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ovring .c { font-size:var(--fs-xs); }
     .rg { --c:var(--muted); width:64px; height:64px; border-radius:50%; display:grid; place-items:center; background:conic-gradient(var(--c) var(--p), var(--track) 0); position:relative; }
     .rg[data-t=ok] { --c:var(--ok); } .rg[data-t=warn] { --c:var(--warn); } .rg[data-t=bad] { --c:var(--bad); } .rg::after { content:""; position:absolute; inset:-3px; border-radius:50%; background:conic-gradient(transparent calc(var(--m) - .8%), var(--coral) 0 calc(var(--m) + .8%), transparent 0); -webkit-mask:radial-gradient(circle, transparent 22px, #000 23px); mask:radial-gradient(circle, transparent 22px, #000 23px); }   /* the meta: a tick across the ring */
-    .rg > b { display:grid; place-items:center; width:48px; height:48px; border-radius:50%; background:var(--bg); font:700 14px/1 var(--sans); }
+    .rg > b { display:grid; place-items:center; width:48px; height:48px; border-radius:50%; background:var(--bg); font:700 var(--fs-base)/1 var(--sans); }
     .ovdet { display:grid; gap:10px; margin-top:6px; padding-top:10px; border-top:1px solid var(--line); } .ovstats { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; }
-    .ovst { display:grid; gap:2px; padding:8px 10px; border-radius:10px; background:var(--soft); } .ovst b { font:600 18px/1.1 var(--serif); } .ovdet > .k { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
-    .ovacts { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:6px 18px; } .ovact { display:grid; grid-template-columns:minmax(0,1fr) 90px 64px; gap:8px; align-items:center; font-size:12.5px; }
-    .ovact .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:inherit; } .ovact a.n:hover { text-decoration:underline; } .ovact .c { text-align:right; font-size:11.5px; } .ovbar.sm { height:8px; } .ovact.more { grid-template-columns:1fr; }
-    .ovcap { margin-top:8px; } @media (max-width:560px) { .ovr { grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto; } } .ov h3 { margin:0 0 6px; } .ov .row .mid .c { white-space:normal; overflow:visible; line-height:1.35; }
-    .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:13.5px; }
+    .ovst { display:grid; gap:2px; padding:8px 10px; border-radius:var(--r-md); background:var(--soft); } .ovst b { font:600 var(--fs-xl)/1.1 var(--serif); } .ovdet > .k { font-size:var(--fs-xs); font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .ovacts { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:6px 18px; } .ovact { display:grid; grid-template-columns:minmax(0,1fr) 90px 64px; gap:8px; align-items:center; font-size:var(--fs-sm); }
+    .ovact .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:inherit; } .ovact a.n:hover { text-decoration:underline; } .ovact .c { text-align:right; font-size:var(--fs-sm); } .ovbar.sm { height:8px; } .ovact.more { grid-template-columns:1fr; }
+    .ovcap { margin-top:8px; } @media (max-width:560px) { .ovr { grid-template-columns:minmax(70px,110px) minmax(0,1fr) 72px; } } .ov h3 { margin:0 0 6px; } .ov .row .mid .c { white-space:normal; overflow:visible; line-height:1.35; }
+    .centro-ask { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 14px; margin-bottom:10px; } .centro-ask .mid { flex:1 1 260px; font-size:var(--fs-md); } .centro-ask .acts { display:flex; gap:8px; flex-wrap:wrap; }
     .formula { padding:12px 14px; } .formula .acts { justify-content:flex-start; } .formula .from { opacity:.8; } .formula .res { font-weight:600; color:var(--fg); margin-top:8px; }
-    .formula .lbl { margin-top:10px; } .formula .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .formula .chip { padding:3px 9px; border:1px solid var(--line); border-radius:999px; background:var(--bg); color:var(--fg); font:12px/1.3 var(--sans); cursor:pointer; } .formula .chip:hover { border-color:var(--coral); }
-    .formula .back { margin-top:12px; } .formula .found-d { margin-top:10px; font-size:13px; } .formula .found-d summary { cursor:pointer; color:var(--muted); } .formula p.c, .formula .found li { white-space:normal; overflow:visible; text-overflow:clip; } .formula textarea { box-sizing:border-box; width:100%; margin:8px 0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; resize:vertical; }
-    .formula .acts { display:flex; gap:8px; align-items:center; } .formula .err { color:var(--bad); } .formula .found { margin:10px 0 0; padding-left:18px; font-size:13px; } .formula .found .miss { color:var(--warn); } .formula > .mini { margin-top:10px; }
-    .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:12.5px; } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
-    .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
-    .ih { border-top:0; background:var(--track); font-size:11px; font-weight:600; color:var(--muted); padding:7px 12px; }
-    .ir .n { display:flex; align-items:center; gap:8px; min-width:0; } .ir .n .pill { font-size:10.5px; line-height:18px; } .ir .dt { color:var(--muted); font-size:11.5px; }
-    .ir .w { color:var(--muted); font-size:12px; } .ir .g { font:600 15px/1.2 var(--serif); } .ir .g small { font:500 11px var(--sans); color:var(--muted); } .ir .g.e { font:400 12px/1.3 var(--sans); color:var(--muted); }
+    .formula .lbl { margin-top:10px; } .formula .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .formula .chip { padding:3px 9px; border:1px solid var(--line); border-radius:var(--r-pill); background:var(--bg); color:var(--fg); font:12px/1.3 var(--sans); cursor:pointer; } .formula .chip:hover { border-color:var(--coral); }
+    .formula .back { margin-top:12px; } .formula .found-d { margin-top:10px; font-size:var(--fs-md); } .formula .found-d summary { cursor:pointer; color:var(--muted); } .formula p.c, .formula .found li { white-space:normal; overflow:visible; text-overflow:clip; } .formula textarea { box-sizing:border-box; width:100%; margin:8px 0; padding:10px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; resize:vertical; }
+    .formula .acts { display:flex; gap:8px; align-items:center; } .formula .dirty { font-size:var(--fs-sm); color:var(--warn); }
+    .rb { margin:10px 0 12px; } .rb-h { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } .rb-h .seg { margin:0; } .rb-n button { min-width:30px; font-weight:600; }
+    .rb-md { display:inline-flex; width:auto; align-self:flex-start; margin:2px 0 6px; } .rb-i.pts { grid-template-columns:minmax(0,1fr) auto 26px; } .rb-pt { text-align:right; white-space:nowrap; } .rb-p .rb-sum { white-space:normal; overflow:visible; text-overflow:clip; }
+    .rb-cur { white-space:pre-wrap; font:12px/1.5 ui-monospace,monospace; background:var(--soft, rgba(0,0,0,.04)); padding:8px; border-radius:8px; margin:4px 0 8px; }
+    .rb-sum { margin-top:8px; color:var(--ok); } .rb-sum.warn { color:var(--warn); }
+    .rb-g { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:10px; margin-top:10px; }
+    .rb-p { border:1px solid var(--line); border-radius:var(--r-md); padding:10px; background:var(--bg); display:flex; flex-direction:column; gap:6px; min-width:0; }
+    .rb-ph { display:flex; align-items:center; gap:6px; padding-bottom:6px; border-bottom:1px solid var(--line); } .rb-ph .rb-name { flex:1; font-weight:600; }
+    .rb-i { display:grid; grid-template-columns:minmax(0,1fr) 56px auto 26px; align-items:center; gap:4px 6px; } .rb-i .rb-st { grid-column:1 / -1; font-size:var(--fs-sm); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .rb-st.okc { color:var(--ok); } .rb-st.warn { color:var(--warn); }
+    .rb input { box-sizing:border-box; min-width:0; width:100%; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:13px/1.3 var(--sans); } .rb input:focus { outline:2px solid var(--coral); outline-offset:-1px; }
+    .rb-ph .rb-w, .rb-i .rb-w { width:56px; text-align:right; } .rb-ph .rb-w { flex:none; } .rb .u { font-size:var(--fs-sm); color:var(--muted); white-space:nowrap; }
+    .rb-x { width:26px; height:26px; padding:0; border:1px solid var(--line); border-radius:8px; background:none; color:var(--muted); cursor:pointer; } .rb-x:hover { color:var(--bad); border-color:var(--bad); }
+    .rb-p > .mini { align-self:flex-start; margin-top:2px; }
+    .rb-m { margin-top:12px; } .rb-mr { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--line); } .rb-mr .n { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--fs-md); } .rb-mr .seg { margin:0; flex:none; } .rb-ml { margin:0 0 6px; white-space:normal; } .rb-mr .seg button[aria-pressed="true"] { background:var(--fg); color:var(--bg); }
+    .rb-txt { margin-top:12px; } .formula .err { color:var(--bad); } .formula .found { margin:10px 0 0; padding-left:18px; font-size:var(--fs-md); } .formula .found .miss { color:var(--warn); } .formula > .mini { margin-top:10px; }
+    .rule select.part { margin-left:auto; padding:2px 4px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--bg); color:var(--fg); font:inherit; font-size:var(--fs-sm); } .rule .parts .pk { font-weight:600; margin-left:6px; } .rule .parts input { width:56px; }
+    .rule .tot { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border-top:1px solid var(--line); } .rule .tot input { width:72px; padding:4px 8px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--bg); color:var(--fg); font:inherit; } .rule > .mini { margin:0 12px 12px; }
+    .ih { border-top:0; background:var(--track); font-size:var(--fs-xs); font-weight:600; color:var(--muted); padding:7px 12px; }
+    .ir .n { display:flex; align-items:center; gap:8px; min-width:0; } .ir .n .pill { font-size:var(--fs-xs); line-height:18px; } .ir .dt { color:var(--muted); font-size:var(--fs-sm); }
+    .ir .w { color:var(--muted); font-size:var(--fs-sm); } .ir .g { font:600 var(--fs-lg)/1.2 var(--serif); } .ir .g small { font:500 var(--fs-xs) var(--sans); color:var(--muted); } .ir .g.e { font:400 var(--fs-sm)/1.3 var(--sans); color:var(--muted); }
     .card.week, .card.news { padding:12px 14px; }
     @container cp (max-width:700px) { .tiles { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-    @container cp (max-width:560px) { .kpis { grid-template-columns:minmax(0,1fr); } .upnext .t { font-size:15px; } .big .v { font-size:26px; } .ir { grid-template-columns:minmax(0,1fr) 40px 104px; } }
+    @container cp (max-width:560px) { .kpis { grid-template-columns:minmax(0,1fr); } .upnext .t { font-size:var(--fs-lg); } .big .v { font-size:var(--fs-2xl); } .ir { grid-template-columns:minmax(0,1fr) 40px 104px; } }
     @container cp (max-width:420px) { .tiles { grid-template-columns:minmax(0,1fr); } .cring .ring { display:none; } }
     .hd { display:flex; align-items:center; gap:8px; margin:0 -14px 12px; padding:10px 14px; border-bottom:1px solid var(--line); }
-    .hd b { font:600 15px/1 var(--serif); letter-spacing:-.01em; } .hd b i { font-style:normal; color:var(--coral-ink); }
-    .brand { margin-left:auto; font-size:12px; font-weight:600; color:var(--muted); }
-    .mk { position:relative; flex:none; width:18px; height:18px; border-radius:4.5px; background:var(--tile); }
-    .mk::before { content:"C"; position:absolute; left:2.5px; top:0; font:600 14px/18px var(--serif); color:var(--tile-c); }
+    .hd b { font:600 var(--fs-lg)/1 var(--serif); letter-spacing:-.01em; } .hd b i { font-style:normal; color:var(--coral-ink); }
+    .brand { margin-left:auto; font-size:var(--fs-sm); font-weight:600; color:var(--muted); }
+    .mk { position:relative; flex:none; width:18px; height:18px; border-radius:var(--r-xs); background:var(--tile); }
+    .mk::before { content:"C"; position:absolute; left:2.5px; top:0; font:600 var(--fs-base)/18px var(--serif); color:var(--tile-c); }
     .mk::after { content:""; position:absolute; right:2px; top:3px; width:5px; height:5px;
       background:linear-gradient(var(--coral),var(--coral)) center/100% 1.6px no-repeat, linear-gradient(var(--coral),var(--coral)) center/1.6px 100% no-repeat; }
-    .muted { color:var(--muted); font-size:12.5px; } .muted.read { margin:10px 2px 0; font-size:11.5px; text-align:right; } .muted.src { margin:-2px 0 10px; font-size:11.5px; } .acts + .muted.src, .items + .muted.src { margin-top:8px; } .muted.why { margin:0 0 10px; }
-    h3 { margin:0 0 6px; font:600 17px/1.3 var(--serif); letter-spacing:-.01em; display:flex; gap:8px; align-items:center; }
-    .lbl { margin:12px 0 2px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
-    .pill { flex:none; padding:0 8px; border-radius:999px; font:600 11.5px/20px var(--sans); white-space:nowrap; }
+    .muted { color:var(--muted); font-size:var(--fs-sm); } .muted.read { margin:10px 2px 0; font-size:var(--fs-sm); text-align:right; } .muted.src { margin:-2px 0 10px; font-size:var(--fs-sm); } .acts + .muted.src, .items + .muted.src { margin-top:8px; } .muted.why { margin:0 0 10px; }
+    h3 { margin:0 0 6px; font:600 var(--fs-xl)/1.3 var(--serif); letter-spacing:-.01em; display:flex; gap:8px; align-items:center; }
+    .lbl { margin:12px 0 2px; font-size:var(--fs-xs); font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .pill { flex:none; padding:0 8px; border-radius:var(--r-pill); font:600 var(--fs-sm)/20px var(--sans); white-space:nowrap; }
     .ok { background:#E2F1E9; color:#1F5C42; } .warn { background:#FBEFD6; color:#744405; } .bad { background:#FCE4DD; color:#912713; } .nt { background:var(--soft); color:var(--fg); }
     ul { list-style:none; margin:0; padding:0; }
     .day + .day { margin-top:4px; }
-    .dh { padding:4px 0 1px; font-size:11.5px; font-weight:600; color:var(--muted); }
+    .dh { padding:4px 0 1px; font-size:var(--fs-sm); font-weight:600; color:var(--muted); }
     .row { display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:10px; align-items:center; padding:3px 0; }
     .news .row { grid-template-columns:8px minmax(0,1fr) auto; }
-    .d { color:var(--muted); font-size:12.5px; white-space:nowrap; }
-    .mid { min-width:0; } .n { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .c { color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .d { color:var(--muted); font-size:var(--fs-sm); white-space:nowrap; }
+    .mid { min-width:0; } .n { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .c { color:var(--muted); font-size:var(--fs-sm); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .unread .n { font-weight:600; } .dot { width:6px; height:6px; border-radius:50%; background:var(--coral); overflow:hidden; color:transparent; font-size:0; }
     .acts { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
-    button { font:inherit; font-size:13px; font-weight:550; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:6px 12px; cursor:pointer; transition:background-color .15s, border-color .15s, box-shadow .15s, transform .15s cubic-bezier(.23,1,.32,1); }
+    button { font:inherit; font-size:var(--fs-md); font-weight:600; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:var(--r-sm); padding:6px 12px; cursor:pointer; transition:background-color .15s, border-color .15s, box-shadow .15s, transform .15s cubic-bezier(.23,1,.32,1); }
     button:hover:not(:disabled) { background:var(--soft); border-color:var(--muted); transform:translateY(-1px); } button:active:not(:disabled) { transform:scale(.97); }
     button.primary { background:var(--fg); color:var(--bg); border-color:var(--fg); } button.primary:hover:not(:disabled) { background:var(--fg); border-color:var(--fg); box-shadow:0 2px 0 var(--coral); }
     button:disabled { opacity:.5; cursor:default; }
     a { color:inherit; text-decoration:none; } a:hover { text-decoration:underline; text-decoration-color:var(--coral); text-underline-offset:3px; }
-    :is(a, button, input, textarea, select):focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:6px; }   /* fields too: some reset everything with all:unset */
+    :is(a, button, input, textarea, select):focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:var(--r-sm); }   /* fields too: some reset everything with all:unset */
     .grid { display:grid; gap:10px; }
     @container cp (min-width:760px) { .news > ul { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:32px; } }
     @container cp (min-width:1240px) { .news > ul { grid-template-columns:repeat(3, minmax(0,1fr)); column-gap:24px; } }   /* wide screens: the date stays near its line */
-    .news .row { margin:0 -8px; padding:5px 8px; border-radius:10px; transition:background-color .15s; } .news .row:hover { background:var(--soft); }
-    .empty { padding:14px 12px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); font:italic 14px/1.4 var(--serif); text-align:center; }
+    .news .row { margin:0 -8px; padding:5px 8px; border-radius:var(--r-md); transition:background-color .15s; } .news .row:hover { background:var(--soft); }
+    .empty { padding:14px 12px; border:1px dashed var(--line); border-radius:var(--r-md); color:var(--muted); font:italic 14px/1.4 var(--serif); text-align:center; }
     .late { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:4px 0 12px; }
     .late .ev { max-width:240px; } .late .evw { flex:none; }
     .tl { position:relative; margin-top:6px; }
     .heads, .lanes, .rules { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
-    .heads .dh { padding:0 6px 6px; font-size:11.5px; font-weight:600; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .heads .dh { padding:0 6px 6px; font-size:var(--fs-sm); font-weight:600; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .heads .we { color:var(--muted); font-weight:500; } .heads .today { color:var(--coral-ink); }
     .rules { position:absolute; left:0; right:0; top:24px; bottom:0; border-top:1px solid var(--line); }
     .rules > span { border-left:1px solid var(--line); } .rules > span:last-of-type { border-right:1px solid var(--line); }
     .rules > span.today { background:color-mix(in srgb, var(--coral) 5%, transparent); }
     .band { position:absolute; top:0; bottom:0; background:var(--band2); border-left:2px solid var(--band1); border-right:2px solid var(--band1); }
-    .band b { position:absolute; left:7px; bottom:5px; font:700 10px/1 var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--coral-ink); white-space:nowrap; }
+    .band b { position:absolute; left:7px; bottom:5px; font:700 var(--fs-xs)/1 var(--sans); letter-spacing:.07em; text-transform:uppercase; color:var(--coral-ink); white-space:nowrap; }
     .now { position:absolute; top:-3px; bottom:0; width:2px; margin-left:-1px; background:var(--coral); border-radius:2px; }
     .now::before { content:""; position:absolute; top:-3px; left:-3px; width:8px; height:8px; border-radius:50%; background:var(--coral); }
     .lanes { position:relative; padding:10px 0 12px; } .banded .lanes { padding-bottom:26px; }
     .col { display:flex; flex-direction:column; gap:5px; min-width:0; padding:0 4px; }
-    .ev { position:relative; display:flex; align-items:center; min-width:0; height:26px; padding:0 8px; border-radius:7px; border:1px solid transparent; font:600 11.5px/1 var(--sans);
+    .ev { position:relative; display:flex; align-items:center; min-width:0; height:26px; padding:0 8px; border-radius:var(--r-sm); border:1px solid transparent; font:600 var(--fs-sm)/1 var(--sans);
       white-space:nowrap; cursor:pointer; outline-offset:2px; transition:transform .15s cubic-bezier(.23,1,.32,1), box-shadow .15s; }
     .ev .t { overflow:hidden; text-overflow:ellipsis; }
     .col .ev { display:block; height:auto; padding:5px 7px 6px; white-space:normal; }
     .col .ev .t { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-height:1.2; overflow-wrap:anywhere; }
-    .col .ev .s { display:block; margin-top:2px; font-weight:500; font-size:10.5px; line-height:1.2; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .col .ev .s { display:block; margin-top:2px; font-weight:500; font-size:var(--fs-xs); line-height:1.2; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .col .ev.more { padding:4px 7px; text-align:center; background:var(--soft); color:var(--fg); border-color:var(--line); }
-    .ev:hover, .ev:focus-visible { z-index:4; transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); text-decoration:none; } .ev:active { transform:scale(.98); } .ev:focus-visible { outline:2px solid var(--ring); border-radius:7px; }
+    .ev:hover, .ev:focus-visible { z-index:4; transform:translateY(-1px); box-shadow:0 6px 14px -6px rgba(29,36,51,.45); text-decoration:none; } .ev:active { transform:scale(.98); } .ev:focus-visible { outline:2px solid var(--ring); border-radius:var(--r-sm); }
     .ev.ok { background:#E2F1E9; color:#1F5C42; border-color:#BFE0CC; } .ev.wa { background:#FBEFD6; color:#744405; border-color:#F0D9A8; }
-    .ev.ex { background:var(--coral); color:var(--on-coral); } .ev.in { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:3px solid var(--fg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
-    .tip { position:absolute; left:0; bottom:calc(100% + 7px); z-index:5; display:grid; gap:1px; width:max-content; max-width:260px; padding:7px 10px; border-radius:8px;
-      background:var(--fg); color:var(--bg); font:500 12px/1.4 var(--sans); white-space:normal; text-align:left; box-shadow:0 10px 24px -10px rgba(29,36,51,.5);
+    .ev.ex { background:color-mix(in srgb, var(--coral) 82%, #000); color:var(--on-coral); } .ev.ex .s { opacity:1; } .ev.in { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:3px solid var(--fg); } .ev.bd { background:#FCE4DD; color:#912713; border-color:#F6C3B5; }
+    .tip { position:absolute; left:0; bottom:calc(100% + 7px); z-index:5; display:grid; gap:1px; width:max-content; max-width:260px; padding:7px 10px; border-radius:var(--r-sm);
+      background:var(--fg); color:var(--bg); font:500 var(--fs-sm)/1.4 var(--sans); white-space:normal; text-align:left; box-shadow:0 10px 24px -10px rgba(29,36,51,.5);
       opacity:0; visibility:hidden; transform:translateY(3px); pointer-events:none; transition:opacity .12s, transform .12s, visibility 0s .12s; }
-    .tip b { font-weight:650; } .tip span { opacity:.78; }
+    .tip b { font-weight:600; } .tip span { opacity:.78; }
     .ev.r .tip { left:auto; right:0; }
     .ev:hover .tip, .ev:focus-visible .tip { opacity:1; visibility:visible; transform:none; transition-delay:0s; }
     .evw { position:relative; min-width:0; }
-    .ck { position:absolute; top:-7px; right:-5px; z-index:3; width:20px; height:20px; padding:0; border-radius:50%; font:700 11px/18px var(--sans); text-align:center; color:var(--muted); background:var(--bg); border:1px solid var(--line);
+    .ck { position:absolute; top:-7px; right:-5px; z-index:3; width:20px; height:20px; padding:0; border-radius:50%; font:700 var(--fs-xs)/18px var(--sans); text-align:center; color:var(--muted); background:var(--bg); border:1px solid var(--line);
       opacity:0; transition:opacity .12s, background-color .15s, color .15s; }
-    .evw:hover .ck, .ck:focus-visible, .ck[aria-pressed="true"], .row .ck { opacity:1; } .ck[aria-pressed="true"] { background:var(--ok); border-color:var(--ok); color:var(--bg); }
+    .ck { opacity:.45; } .evw:hover .ck, .ck:focus-visible, .ck[aria-pressed="true"], .row .ck { opacity:1; } .ck[aria-pressed="true"] { background:var(--ok); border-color:var(--ok); color:var(--bg); }
     .row .ck { position:static; margin-right:6px; } .mc-i .ck { position:static; opacity:1; } .end { display:flex; align-items:center; } .row.dn .n { color:var(--muted); text-decoration:line-through; }
     .ev.dn { opacity:.55; } .ev.dn .t { text-decoration:line-through; } .ev.dn:hover, .ev.dn:focus-visible { opacity:1; }
-    .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 12px/1 var(--sans); color:var(--muted); }
+    .prog { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font:500 var(--fs-sm)/1 var(--sans); color:var(--muted); }
     .prog i { position:relative; width:18px; height:18px; border-radius:50%; } .prog i::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg); }
-    .mini { margin-left:auto; padding:2px 8px; font-size:11.5px; color:var(--muted); } .prog + .mini, .mini + .mini { margin-left:8px; } a.mini { border:1px solid var(--line); border-radius:9px; text-decoration:none; }
-    .seg { display:inline-flex; margin-left:12px; padding:2px; border-radius:999px; background:var(--track); }
-    .seg button { padding:3px 10px; border:0; border-radius:999px; background:none; font-size:12px; color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
+    .mini { margin-left:auto; padding:2px 8px; font-size:var(--fs-sm); color:var(--muted); } .prog + .mini, .mini + .mini { margin-left:8px; } a.mini { border:1px solid var(--line); border-radius:var(--r-sm); text-decoration:none; }
+    .seg { display:inline-flex; margin-left:12px; padding:2px; border-radius:var(--r-pill); background:var(--track); }
+    .seg button { padding:3px 10px; border:0; border-radius:var(--r-pill); background:none; font-size:var(--fs-sm); color:var(--muted); } .seg button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
     .focus .row { padding:7px 0; border-top:1px solid var(--line); } .focus .row:first-child { border-top:0; } .focus .row { grid-template-columns:112px minmax(0,1fr) auto; }
-    .natv + .find, .find + .natv { margin-left:8px; } .find { margin-left:auto; padding:4px 10px; font-size:12px; color:var(--muted); } .find + .brand { margin-left:12px; }
+    .natv + .find, .find + .natv { margin-left:8px; } .find { margin-left:auto; padding:4px 10px; font-size:var(--fs-sm); color:var(--muted); } .find + .brand { margin-left:12px; }
     .pal-back { position:fixed; inset:0; background:rgba(29,36,51,.38); }
-    .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
+    .pal { position:fixed; left:50%; top:12vh; width:min(620px, calc(100vw - 32px)); transform:translateX(-50%); background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:0 24px 60px -20px rgba(29,36,51,.55); overflow:hidden; }
     .pal-q { all:unset; box-sizing:border-box; display:block; width:100%; padding:14px 16px; font:500 16px/1.3 var(--sans); color:var(--fg); border-bottom:1px solid var(--line); }
     .pal-r { max-height:min(420px, 60vh); overflow:auto; padding:6px; }
-    .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:9px; cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
-    .pal-k { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral-ink); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
+    .pal-i { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:7px 10px; border-radius:var(--r-sm); cursor:pointer; } .pal-i.on { background:var(--bg); box-shadow:inset 0 0 0 1px var(--line); }
+    .pal-k { font-size:var(--fs-xs); font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--coral-ink); } .pal-e { padding:14px 10px; color:var(--muted); font:italic 14px/1.4 var(--serif); }
     .wnew .nt-i { display:block; padding-left:16px; position:relative; } .wnew .nt-i::before { content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--coral); }
-    .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
-    .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
-    .sc { font:600 15px/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 11px var(--sans); color:var(--muted); }
+    .changes .row { grid-template-columns:72px minmax(0,1fr) auto; } .changes .pill.nt { justify-self:start; text-transform:uppercase; font-size:var(--fs-xs); letter-spacing:.05em; }
+    .pal-s { padding:8px 16px; border-top:1px solid var(--line); font-size:var(--fs-sm); color:var(--muted); }
+    .sc { font:600 var(--fs-lg)/1.2 var(--serif); white-space:nowrap; } .sc small { font:500 var(--fs-xs) var(--sans); color:var(--muted); }
     h3[role=button] { cursor:pointer; user-select:none; } h3[role=button]::before { content:"▾"; font:12px/1 var(--sans); color:var(--muted); transition:transform .15s; }
     .folded > h3[role=button]::before { transform:rotate(-90deg); } .folded > :not(h3) { display:none !important; } .folded > h3 { margin-bottom:0; }
-    .simi { all:unset; box-sizing:border-box; width:100%; max-width:180px; padding:4px 8px; border:1px dashed var(--coral); border-radius:7px; background:var(--bg); font:600 13px/1.2 var(--sans); color:var(--fg); }
-    .simi::placeholder { font-weight:400; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
+    .simi { all:unset; box-sizing:border-box; width:100%; max-width:180px; padding:4px 8px; border:1px dashed var(--coral); border-radius:var(--r-sm); background:var(--bg); font:600 var(--fs-md)/1.2 var(--sans); color:var(--fg); }
+    .simi::placeholder { font-weight:400; font-style:italic; color:var(--muted); } .simi:focus { border-style:solid; } .cring.simulating { border-color:var(--coral); border-style:dashed; }
     .notes { margin-top:10px; padding:10px 12px; } .notes[hidden] { display:none; } .notes textarea { all:unset; box-sizing:border-box; display:block; width:100%; min-height:90px; font:14px/1.5 var(--sans); color:var(--fg); white-space:pre-wrap; }
     .add { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:6px; margin:4px 0 8px; }
-    .side { padding:12px; } .side-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font:600 15px/1.2 var(--serif); } .side .notes:first-of-type { margin-top:0; }
+    .side { padding:12px; } .side-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font:600 var(--fs-lg)/1.2 var(--serif); } .side .notes:first-of-type { margin-top:0; }
     .chk h3 { margin:0 0 6px; } .chk .add { grid-template-columns:minmax(0,1fr) 140px auto; } .side .chk .add { grid-template-columns:1fr auto; } .side .chk .add input[type=text] { grid-column:1 / -1; } .side .chk .row { grid-template-columns:64px minmax(0,1fr) auto; } .chk ul { list-style:none; margin:0; padding:0; } .chk .row { grid-template-columns:76px minmax(0,1fr) auto; border-top:1px solid var(--line); padding:5px 0; } .chk .row:first-child { border-top:0; }
-    .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
+    .add input { all:unset; box-sizing:border-box; padding:6px 10px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
     .add input:focus { border-color:var(--coral); } .tasks .row { grid-template-columns:76px minmax(0,1fr) auto; } .tasks .row.sub { padding-top:2px; padding-bottom:2px; border-top:0; font-size:.94em; } .tasks .row.sub .add { grid-column:2 / -1; margin:0; grid-template-columns:minmax(0,1fr) auto; } .ck.del { margin-left:2px; }
     @container cp (max-width:520px) { .add { grid-template-columns:1fr 1fr; } .add button { grid-column:1 / -1; } }
-    .meta { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:12px; color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 14px/1 var(--serif); color:var(--fg); }
-    .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:13px; line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
+    .meta { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:var(--fs-sm); color:var(--muted); } .meta b { min-width:22px; text-align:center; font:600 var(--fs-base)/1 var(--serif); color:var(--fg); }
+    .meta button { width:22px; height:22px; padding:0; border-radius:50%; font-size:var(--fs-md); line-height:20px; } .keep { display:inline-flex; align-items:center; gap:4px; } .keep[hidden] { display:none; }
     .calnav { display:inline-flex; align-items:center; gap:6px; margin-left:14px; } .calnav button { padding:3px 10px; } .calt { min-width:150px; text-align:center; font:600 16px/1 var(--serif); text-transform:capitalize; }
     .cal { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; padding:0; overflow:hidden; background:var(--line); }
-    .cwd { padding:8px 10px; background:var(--soft); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .cwd { padding:8px 10px; background:var(--soft); font-size:var(--fs-xs); font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
     .cday { min-height:118px; padding:6px; background:var(--bg); display:flex; flex-direction:column; gap:4px; min-width:0; } .cday.off { background:var(--soft); } .cday.we { background:color-mix(in srgb, var(--soft) 55%, var(--bg)); }
-    .cday .cn { display:inline-grid; place-items:center; height:24px; font:600 13px/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:var(--on-coral); }
-    .cday .ev { height:auto; padding:3px 6px; font-size:11px; border-radius:6px; } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cday .cn { display:inline-grid; place-items:center; height:24px; font:600 var(--fs-md)/1 var(--serif); color:var(--muted); } .cday.today .cn { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--coral); color:var(--on-coral); }
+    .cday .ev { height:auto; padding:3px 6px; font-size:var(--fs-xs); border-radius:var(--r-sm); } .cday .ev .t { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .cday .ev.more { background:var(--soft); color:var(--fg); border-color:var(--line); justify-content:center; }
-    .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 11px/1 var(--sans); border:1px solid var(--line); }
+    .av { display:inline-grid; place-items:center; flex:none; border-radius:50%; overflow:hidden; background:var(--soft); color:var(--muted); font:600 var(--fs-xs)/1 var(--sans); border:1px solid var(--line); }
     .av img { width:100%; height:100%; object-fit:cover; display:block; }
     :host-context(html.cp-dark) :is(img, .band-c) { filter:invert(1) hue-rotate(180deg); }   /* the panel darkens with the page (same inversion); photos and the course color stay true */
     .news .row { grid-template-columns:auto minmax(0,1fr) auto; } .news .row > .d:first-child { min-width:96px; } .d.lt { color:var(--bad); font-weight:600; } .who { position:relative; display:inline-flex; } .who .dot { position:absolute; right:-1px; top:-1px; border:2px solid var(--bg); width:9px; height:9px; }
     .teachers { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
-    .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
+    .teacher { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--bg); }
     .ask-b { margin-left:0 !important; color:var(--coral-ink) !important; border-color:color-mix(in srgb, var(--coral) 40%, var(--line)) !important; font-weight:600; }
-    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
-    .gt .gtn { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .gt .ir .n .dt { flex:none; } .gt .g small { color:var(--muted); font-weight:400; } .gt .simi { max-width:72px; text-align:center; }
-    .gt-f { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-top:1px solid var(--line); } .gt-f .t { font-size:14px; white-space:normal; } .gt-f .t-ok { color:var(--ok); } .gt-f .t-warn { color:var(--warn); } .gt-f .t-bad { color:var(--bad); }
-    .fdet { margin:0 0 12px; } .fdet > summary { cursor:pointer; padding:6px 2px; color:var(--muted); font-size:13px; } .fdet[open] > summary { margin-bottom:8px; }
+    .hero { position:relative; display:flex; align-items:center; gap:14px; margin:0 -14px 12px; padding:16px 14px 14px; border-bottom:1px solid var(--line); border-radius:var(--r-md) 13px 0 0; overflow:hidden; }   /* the color band follows the box corners */
+    .gt .gtn { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .gcard { display:grid; gap:10px; margin-bottom:12px; } .gcard > div > .card { margin:0; }
+    .gt-top { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; padding:10px 12px; border-bottom:1px solid var(--line); } .gt-top .seg { margin:0; } .gt-help { font-size:var(--fs-sm); }
+    .seg button[aria-pressed="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); font-weight:600; }
+    .gt .simi.mine { border-style:solid; border-color:var(--ok); color:var(--ok); } .gt .simi[aria-invalid="true"] { border-color:var(--bad); color:var(--bad); } .gt .ir .n .dt { flex:none; } .gt .g small { color:var(--muted); font-weight:400; } .gt .simi { max-width:72px; text-align:center; }
+    .gt-f { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-top:1px solid var(--line); } .gt-f .t { font-size:var(--fs-base); white-space:normal; } .gt-f .t-ok { color:var(--ok); } .gt-f .t-warn { color:var(--warn); } .gt-f .t-bad { color:var(--bad); }
+    .fdet { margin:0 0 12px; } .fdet > summary { cursor:pointer; padding:6px 2px; color:var(--muted); font-size:var(--fs-md); } .fdet[open] > summary { margin-bottom:8px; }
     .centro-sim { display:grid; gap:8px; } .sim-h { display:flex; justify-content:space-between; align-items:center; } .sim-rows { display:grid; gap:4px; }
-    .sim-r { display:grid; grid-template-columns:minmax(0,1fr) auto 70px; gap:10px; align-items:center; padding:4px 0; border-top:1px solid var(--line); } .sim-r .n { font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .sim-r input { width:70px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:600 14px var(--sans); text-align:center; } .sim-r input:focus { outline:2px solid var(--coral); outline-offset:1px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
+    .sim-r { display:grid; grid-template-columns:minmax(0,1fr) auto 70px; gap:10px; align-items:center; padding:4px 0; border-top:1px solid var(--line); } .sim-r .n { font-size:var(--fs-md); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sim-r input { width:70px; padding:5px 8px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--bg); color:var(--fg); font:600 var(--fs-base) var(--sans); text-align:center; } .sim-r input:focus { outline:2px solid var(--coral); outline-offset:1px; } .centro-sim label { display:flex; align-items:center; gap:10px; } .centro-sim input[type=range] { flex:1; accent-color:var(--coral); }
     .band-c { position:absolute; left:0; right:0; top:0; height:4px; background:var(--coral); } .htxt { flex:1; min-width:0; }
-    .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 21px/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .hs { margin-top:3px; color:var(--muted); font-size:12.5px; } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
-    .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:12px; background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
-    .ctabs button { border:0; background:none; padding:6px 14px; border-radius:9px; font-size:13px; color:var(--muted); white-space:nowrap; } .ctabs button:hover:not(:disabled) { transform:none; background:var(--bg); }
+    .ht { display:flex; align-items:center; gap:8px; } .ht b { font:600 var(--fs-2xl)/1.2 var(--serif); letter-spacing:-.01em; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow-wrap:anywhere; }   /* a long course name: two lines, not cut at "Banco de D..." */
+    .hs { margin-top:3px; color:var(--muted); font-size:var(--fs-sm); } .hteach { display:flex; align-items:center; gap:10px; flex:none; } .hteach .mid { max-width:180px; }
+    .ctabs { display:flex; gap:4px; margin:12px 0 10px; padding:3px; border-radius:var(--r-md); background:var(--track); width:fit-content; max-width:100%; overflow-x:auto; }
+    .ctabs button { border:0; background:none; padding:6px 14px; border-radius:var(--r-sm); font-size:var(--fs-md); color:var(--muted); white-space:nowrap; } .ctabs button:hover:not(:disabled) { transform:none; background:var(--bg); }
     .ctabs button[aria-selected="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(29,36,51,.12); }
     .cpane[hidden] { display:none; } .cpane > * + * { margin-top:10px; }
-    .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
-    .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:11.5px; font-weight:650; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+    .mq { all:unset; box-sizing:border-box; display:block; width:100%; margin:4px 0 10px; padding:7px 10px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--bg); font:13px/1.3 var(--sans); color:var(--fg); }
+    .mod + .mod { margin-top:10px; } .mh { padding:4px 0; font-size:var(--fs-sm); font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
     .mi { display:grid; grid-template-columns:76px minmax(0,1fr); gap:10px; align-items:center; padding:6px 4px; border-top:1px solid var(--line); }
     .mcal { display:grid; grid-template-columns:260px minmax(0,1fr); gap:20px; padding:14px; }
-    .mc-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; } .mc-h b { font:600 14px/1 var(--serif); text-transform:capitalize; }
-    .mc-h button { width:26px; height:26px; padding:0; border-radius:8px; font-size:14px; }
-    .mc-g { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; } .mc-w { text-align:center; font-size:10.5px; font-weight:600; color:var(--muted); padding:2px 0 4px; }
-    .mc-day { position:relative; display:grid; place-items:center; height:34px; padding:0; border:0; border-radius:8px; background:none; font:500 12.5px/1 var(--sans); color:var(--fg); }
+    .mc-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; } .mc-h b { font:600 var(--fs-base)/1 var(--serif); text-transform:capitalize; }
+    .mc-h button { width:26px; height:26px; padding:0; border-radius:var(--r-sm); font-size:var(--fs-base); }
+    .mc-g { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; } .mc-w { text-align:center; font-size:var(--fs-xs); font-weight:600; color:var(--muted); padding:2px 0 4px; }
+    .mc-day { position:relative; display:grid; place-items:center; height:34px; padding:0; border:0; border-radius:var(--r-sm); background:none; font:500 var(--fs-sm)/1 var(--sans); color:var(--fg); }
     .mc-day:hover:not(:disabled) { background:var(--soft); transform:none; } .mc-day.has { font-weight:700; } .mc-day.on { background:var(--fg); color:var(--bg); }
     .mc-day.today > span:first-child { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; box-shadow:inset 0 0 0 1.5px var(--coral); }
     .mc-dots { position:absolute; bottom:3px; left:0; right:0; display:flex; justify-content:center; gap:2px; } .mc-dots i, .mc-i > i { width:5px; height:5px; border-radius:50%; background:var(--warn); }
     .mc-dots i.ex, .mc-i.ex > i { background:var(--coral); } .mc-dots i.ok, .mc-i.ok > i { background:var(--ok); }
-    .mc-k { display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:4px 0 8px; }
+    .mc-k { display:flex; justify-content:space-between; align-items:center; font-size:var(--fs-xs); font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:4px 0 8px; }
     .mc-i { display:grid; grid-template-columns:8px 78px minmax(0,1fr) 20px; gap:8px; align-items:center; padding:7px 0; border-top:1px solid var(--line); } .mc-i:first-of-type { border-top:0; }
-    .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:12px; color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
+    .mc-i.ok .n { color:var(--muted); text-decoration:line-through; } .mc-d { font-size:var(--fs-sm); color:var(--muted); white-space:nowrap; } .mc-d.lt { color:var(--bad); font-weight:600; }
     @container cp (max-width:620px) { .mcal { grid-template-columns:minmax(0,1fr); } }
     :host(.cp-headhost) { display:inline-block; margin:0 8px 0 0; vertical-align:middle; }
     .box.head { container-type:normal; border:0; background:none; box-shadow:none; padding:0; }
-    .box.head .hd { margin:0; gap:0; height:42px; box-sizing:border-box; padding:4px 4px 4px 12px; border:1px solid var(--line); border-radius:14px; background:var(--bg); box-shadow:0 1px 2px rgba(29,36,51,.06); }
+    .box.head .hd { margin:0; gap:0; height:42px; box-sizing:border-box; padding:4px 4px 4px 12px; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--bg); box-shadow:0 1px 2px rgba(29,36,51,.06); }
     .box.head .hd b { margin-left:8px; }
-    .box.head .seg { margin:0 10px 0 14px; } .box.head .seg button { padding:5px 12px; font-size:12.5px; }
+    .box.head .seg { margin:0 10px 0 14px; } .box.head .seg button { padding:5px 12px; font-size:var(--fs-sm); }
     .box.head .meta { margin:0; padding:0 10px; height:22px; border-left:1px solid var(--line); }
-    .box.head .pfold { margin:0; height:32px; padding:0 12px; border:0; border-left:1px solid var(--line); border-radius:0 10px 10px 0; background:none; font-size:12.5px; } .box.head .pfold:hover { background:var(--soft); color:var(--fg); transform:none; }
+    .box.head .pfold { margin:0; height:32px; padding:0 12px; border:0; border-left:1px solid var(--line); border-radius:0 10px 10px 0; background:none; font-size:var(--fs-sm); } .box.head .pfold:hover { background:var(--soft); color:var(--fg); transform:none; }
     .box.nohd { padding-top:14px; }
     /* phones (Canvas in a mobile browser, with the bookmarklet or a mobile extension): nothing wider than the screen */
-    @media (max-width:600px) {
+    @media (max-width:1024px) {   /* the bar next to the greeting overflowed the window between 600 and 1024px */
       :host(.cp-headhost) { display:block; max-width:100%; margin:8px 0 0; }
       .box.head .hd { flex-wrap:wrap; height:auto; row-gap:6px; padding:6px 6px 6px 10px; } .box.head .seg { margin:0 6px; } .box.head .meta, .box.head .pfold { border-left:0; }
       h3 { flex-wrap:wrap; row-gap:4px; }
       .hero { flex-wrap:wrap; } .hero .htxt { flex:1 1 100%; } .hteach { flex:1 1 100%; }
     }
-    .pfold { margin-left:10px; padding:4px 10px; font-size:12px; color:var(--muted); }
+    .pfold { margin-left:10px; padding:4px 10px; font-size:var(--fs-sm); color:var(--muted); }
     .box.pfolded { padding-bottom:0; } .box.pfolded > :not(.hd) { display:none !important; } .box.pfolded > .hd { margin-bottom:0; border-bottom:0; } .box.pfolded .seg, .box.pfolded .meta { display:none; } .box.pfolded .pfold:not(.pnotes) { margin-left:auto; } .box.pfolded .pnotes { display:none; } .box.head .pnotes { border-radius:0; } .pnotes[aria-pressed="true"] { color:var(--coral-ink); }
     .wl { display:none; }
     @container cp (max-width:760px) { .tl { display:none; } .wl { display:block; } }
@@ -981,8 +1112,8 @@
     let at = acts;   // next to the buttons themselves, so the ⋮ stays on the same line
     for (const b of acts.querySelectorAll("button")) if (/nova visualiza/i.test(b.textContent || "") || /switch-to-new/.test(b.getAttribute("data-testid") || "")) { b.classList.add("cp-off"); at = b.parentNode || acts; }
     const host = el("div", "cp-host cp-headhost"); host.id = "cp-head";
-    // a phone: Canvas keeps the greeting and its buttons on one row; the bar goes under the greeting instead of past the screen
-    if (typeof matchMedia === "function" && matchMedia("(max-width:600px)").matches && row.style && acts.style) { row.style.flexWrap = "wrap"; acts.style.flex = "1 1 100%"; acts.style.maxWidth = "100%"; acts.style.minWidth = "0"; }
+    // a phone or a narrow window (up to 1024px): Canvas keeps the greeting and its buttons on one row; the bar goes under the greeting instead of past the screen
+    if (typeof matchMedia === "function" && matchMedia("(max-width:1024px)").matches && row.style && acts.style) { row.style.flexWrap = "wrap"; acts.style.flex = "1 1 100%"; acts.style.maxWidth = "100%"; acts.style.minWidth = "0"; }
     const root = shadow(host), wrap = el("div", "box head");
     styleRoot(root); wrap.appendChild(hd); root.append(wrap); at.prepend(host);
     return true;
@@ -994,12 +1125,21 @@
     try { if (sheet) { root.adoptedStyleSheets = [sheet]; return; } } catch (e) { sheet = null; }
     const st = el("style"); st.textContent = CSS; root.append(st);
   };
+  // Labs: the new look being tested, for the students who turn it on (popup, aba Mais); a bar says so, with the way back
+  let labsOn = false;
+  const LABS_ISSUE = "https://github.com/Bossmann007/Campus/issues/new?title=" + encodeURIComponent("Labs: o que achei do visual novo") + "&body=" + encodeURIComponent("Versão " + chrome.runtime.getManifest().version + "\n\nO que ficou melhor:\n\nO que piorou ou ficou estranho:\n\n(página pública: não ponha notas nem dados pessoais)");
+  const labsBar = () => { const b = el("div", "labs-bar"), say = el("a", "labs-say", "Dar opinião ↗"), back = el("button", "labs-back", "Voltar ao visual normal");
+    say.href = LABS_ISSUE; say.target = "_blank"; say.rel = "noopener noreferrer"; back.type = "button";
+    back.addEventListener("click", async () => { const { prefs: p } = await chrome.storage.local.get("prefs"); await chrome.storage.local.set({ prefs: Object.assign({}, p, { labs: false }) }); });
+    b.append(el("span", "labs-tag", "Labs"), el("span", "labs-t", "Você está testando o visual novo do Caderno+"), say, back); return b; };
+  const setLabs = on => { labsOn = !!on; for (const h of document.querySelectorAll ? document.querySelectorAll(".cp-host") : []) if (h.classList) h.classList.toggle("labs", labsOn); };
   function panelHost(id) {
     const anchor = document.getElementById("content");
     if (document.getElementById(id) || !anchor) return null;
-    const host = el("div", "cp-host"); host.id = id;
+    const host = el("div", "cp-host" + (labsOn ? " labs" : "")); host.id = id;
     const root = shadow(host), box = el("div", "box");
-    styleRoot(root); root.append(box); anchor.prepend(host);
+    styleRoot(root); box.appendChild(labsBar()); root.append(box); anchor.prepend(host);
+    root.addEventListener("pointermove", e => { if (!labsOn || !e.target || !e.target.closest) return; const c = e.target.closest(".card"); if (!c || !c.getBoundingClientRect) return; const r = c.getBoundingClientRect(); c.style.setProperty("--mx", (e.clientX - r.left) + "px"); c.style.setProperty("--my", (e.clientY - r.top) + "px"); }, { passive: true });   // Labs: the border light follows the mouse
     return box;
   }
   // Placement: on the classic dashboard, right above its course cards (#DashboardCard_Container, outside its React root);
@@ -1215,6 +1355,9 @@
     r.append(goal, el("b", null, earnedText(st))); r.setAttribute("aria-hidden", "true");
     return r;
   }
+  // the same hero for every source: a Centro or own-rule result {status, now, need} as a course state for ring/needBig
+  const stOfResult = r => ({ status: r.status, earned: Math.max(0, r.now || 0), futureMax: Math.max(0, 10 - (r.now || 0)), fraction: r.status === "nao-da" ? 2 : r.need != null ? r.need / 10 : 0 });
+  const gapText = r => r.status === "garantido" ? "meta " + fmt(T, T % 1 ? 1 : 0) + " garantida" : r.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "faltam " + up(Math.max(0, T - r.now), 1) + " pontos pra meta " + fmt(T, T % 1 ? 1 : 0);
   // Big needed grade on 0-10 and its caption, as the calculator's hero card shows it.
   function needBig(st) {
     const nd = C.courseNeed(st), box = el("div", "big");
@@ -1241,11 +1384,12 @@
       if (pack && sem && a.has && sem.states[pack.id]) { const st = sem.states[pack.id];   // as the course page: the Plano only once a grade was read
         U.push({ cid, name: C.SHORT[pack.id] || nick(cv.name), full: shortName(cv.name), src: "plano", now: Math.min(10, st.earned), need: st.status === "precisa" ? st.fraction * 10 : null, status: st.status === "depende-atrasadas" ? "faltam" : st.status,
           items: sem.items.filter(x => x.course === pack).map(x => ({ s: x.s, date: x.item.date, tip: (C.SHORT[pack.id] || "") + " · " + x.item.name + " · " + dmy(x.item.date) })) }); continue; }
-      const ownR = !!(myRules[cid] && myRules[cid].own), cr = ownR ? null : centroOf(cid);
+      const ownR = !!(myRules[cid] && (myRules[cid].own || myRules[cid].formula)), cr = ownR ? null : centroOf(cid);
       if (!cr && (a.expired || !acts.length)) continue;   // a Centro formula counts even with no Canvas activity
       const r = cr || customOf(cid), src = cr ? "centro" : r && r.mine ? "aluno" : r && r.canvasWeights ? "canvas" : "soma";   // the student's own rule first
-      const sure = r && !["erro", "acima", "vazio"].includes(r.status) && !r.unsure && r.now != null;
-      U.push({ cid, name: nick(cv.name), full: shortName(cv.name), src, now: sure ? r.now : null, need: sure && r.status === "precisa" ? r.need : null, scaled: r && r.scaled ? r.total : 0, status: !r ? "sem" : r.status === "erro" ? "erro" : r.status === "acima" ? "acima" : r.unsure ? "confira" : r.status, r,
+      // now: a Centro formula with a hidden part keeps its value, marked ≈ (approx); a plain sum to check gets no number
+      const guess = r && (r.unsure || (r.approx && r.status !== "precisa")), sure = r && !["erro", "acima", "vazio"].includes(r.status) && !guess && r.now != null;   // AGENTS.md §5: no "garantido" from a guess
+      U.push({ cid, name: nick(cv.name), full: shortName(cv.name), src, now: sure ? r.now : r && r.approx && !r.unsure && r.now != null && r.status !== "erro" ? r.now : null, approx: !!(r && r.approx && !r.unsure), need: sure && r.status === "precisa" ? r.need : null, scaled: r && r.scaled ? r.total : 0, status: !r ? "sem" : r.status === "erro" ? "erro" : r.status === "acima" ? "acima" : guess ? "confira" : r.status, r,
         items: acts.map(x => { const d = x.due ? C.localISO(new Date(x.due)) : "9999-12-31"; return { s: x.score != null ? "ok" : x.submitted ? "sent" : x.missing || (x.due && Date.parse(x.due) < nowMs) ? "late" : "next", date: d, tip: shortName(cv.name) + " · " + x.name + (x.due ? " · " + dmy(d) : "") }; }) });
     }
     for (const u of U) { u.tone = u.need != null ? (u.need > 8 ? "bad" : "warn") : u.status === "garantido" ? "ok" : u.status === "nao-da" ? "bad" : "nt";
@@ -1264,25 +1408,26 @@
     if (nx) { const card = el("a", "card upnext"), left = el("div", "mid"), dd = C.localISO(new Date(nx.x.due)), d = days(dd), u = byCid.get(String(nx.c.id)), big = el("div", "big");
       if (typeof nx.x.url === "string" && nx.x.url.startsWith(location.origin + "/")) card.href = nx.x.url;
       left.append(el("div", "k", "Próxima entrega"), el("div", "t", nx.x.name), el("div", "c", (u ? u.name : shortName(nx.c.name)) + " · " + dmy(dd) + " " + hhmm(nx.x.due) + ", " + (d === 0 ? "hoje" : d === 1 ? "amanhã" : "em " + d + " dias") + " · " + fmt(nx.x.points, 2) + " pts"));
-      if (u && u.need != null) big.append(el("b", "v t-" + (u.need > 8 ? "bad" : "warn"), up(u.need, 1)), el("span", null, "média que falta tirar (de 10)")); else if (u && u.status === "garantido") big.append(el("b", "v t-ok", "✓"), el("span", null, "meta garantida"));
+      if (u && u.need != null) big.append(el("span", null, "precisa"), el("b", "v t-" + (u.need > 8 ? "bad" : "warn"), up(u.need, 1)), el("span", null, "de média no que falta (de 10)")); else if (u && u.status === "garantido") big.append(el("b", "v t-ok", "✓"), el("span", null, "meta garantida"));
       card.append(left, big); nextSlot.appendChild(card); } };
     nextCard(); out.push(nextSlot);
     const kpis = el("div", "kpis"), kpi = (k, v, cls, subEl) => { const d = el("div", "card kpi"); d.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), v)); if (subEl) d.appendChild(subEl); kpis.appendChild(d); };
     const meterOf = x => { const m = el("div", "meter"), f = el("i"), g = el("b"); m.setAttribute("aria-hidden", "true"); f.style.width = Math.min(100, x * 10) + "%"; g.style.left = Math.min(99.5, T * 10) + "%"; m.append(f, g); return m; };
     const trackOf = items => { const trk = el("div", "trk"), its = items.slice().sort((p, q) => p.date.localeCompare(q.date)), n = k => its.filter(x => x.s === k).length;
       trk.setAttribute("aria-label", n("ok") + " com nota, " + n("sent") + " entregues esperando nota, " + n("late") + " sem nota e com prazo vencido, " + n("next") + " pela frente");
+      trk.title = "verde: com nota · verde claro: entregue, esperando nota · laranja: vencida · cinza: pela frente";
       for (const x of its) { const b = el("i", x.s); b.dataset.tip = x.tip + " · " + (x.s === "ok" ? "com nota" : x.s === "sent" ? "entregue, esperando a nota" : x.s === "late" ? "prazo vencido, sem nota" : "pela frente"); trk.appendChild(b); }
       return { trk, done: n("ok") + n("sent"), total: its.length }; };
     const fill = cid => {
-      kpis.replaceChildren(); const one = cid && byCid.get(cid), list = one ? [one] : U, num = list.filter(u => u.now != null);
-      if (num.length) { const mean = num.reduce((s, u) => s + u.now, 0) / num.length, w = el("div"); w.append(meterOf(mean), el("div", "c", one ? one.name + " · " + SRC[one.src] : num.length === 1 ? "1 matéria com nota calculada" : "média das " + num.length + " matérias"));
+      kpis.replaceChildren(); const one = cid && byCid.get(cid), list = one ? [one] : U, num = list.filter(u => u.now != null && !u.approx);
+      if (num.length) { const mean = num.reduce((s, u) => s + u.now, 0) / num.length, w = el("div"); w.append(meterOf(mean), el("div", "c", one ? one.name + " · " + SRC[one.src] : num.length === 1 ? "1 matéria com nota calculada" : "média das " + num.length + " matérias" + (num.some(u => u.status === "garantido") ? " · " + num.filter(u => u.status === "garantido").length + " já na meta" : "")));
         kpi("Garantido até agora", dn(mean), null, w); }
       else kpi("Garantido até agora", "—", null, el("div", "c", one ? (one.status === "erro" ? "a fórmula tem um erro: abra a matéria" : "sem número: confira a regra na matéria") : "nenhuma matéria com nota calculada"));
       const tight = list.filter(u => u.need != null).sort((p, q) => q.need - p.need)[0], rec = list.some(u => u.status === "nao-da"), anyFaltam = list.some(u => u.status === "faltam" || u.status === "confira" || u.status === "acima");
-      if (tight) kpi("Quanto falta", up(tight.need, 1), "need", el("div", "c", one ? one.name + ", em 10 no que falta" : tight.name + ", a mais apertada"));
-      else if (rec) kpi("Quanto falta", "—", "need", el("div", "c", one ? one.name + ", recuperação" : "recuperação em alguma matéria"));
-      else if (num.length && !anyFaltam) kpi("Quanto falta", "0", "need t-ok", el("div", "c", one ? one.name + ", garantido" : "tudo garantido"));
-      else kpi("Quanto falta", "?", "need", el("div", "c", one ? one.name + ", " + (one.status === "faltam" ? "faltam notas antigas" : "confira a regra na matéria") : "faltam notas ou regras: veja abaixo"));
+      if (tight) kpi("Precisa tirar", up(tight.need, 1), "need", el("div", "c", "média no que falta · " + (one ? one.name : tight.name + ", a mais apertada")));
+      else if (rec) kpi("Precisa tirar", "—", "need", el("div", "c", one ? one.name + ", recuperação" : "recuperação em alguma matéria"));
+      else if (num.length && !anyFaltam) kpi("Precisa tirar", "0", "need t-ok", el("div", "c", one ? one.name + ", garantido" : "tudo garantido"));
+      else kpi("Precisa tirar", "?", "need", el("div", "c", one ? one.name + ", " + (one.status === "faltam" ? "faltam notas antigas" : "confira a regra na matéria") : "faltam notas ou regras: veja abaixo"));
       const tr = trackOf(list.flatMap(u => u.items)), w2 = el("div"); w2.append(tr.trk, el("div", "c per", one ? one.name : U.map(u => { const k = trackOf(u.items); return u.name + " " + k.done + "/" + k.total; }).join(" · ")));
       kpi("Entregues", tr.done + " de " + tr.total, null, w2);
     };
@@ -1303,16 +1448,18 @@
     const tipOf = u => u.full + " · " + (u.now == null ? "sem nota calculada" : dn(u.now) + " de 10 agora") + " · " + u.label + " · " + SRCS[u.src] + (u.scaled ? " (" + fmt(u.scaled, 0) + " pontos levados a 10)" : "");
     const nameCell = u => { const n = el("a", "ovn"); n.href = "/courses/" + u.cid; n.append(el("span", "n", u.name), el("span", "c", SRCS[u.src])); n.title = u.full; return n; };
     const gap = u => u.now == null ? null : Math.max(0, T - u.now);   // points still missing to the student's meta (BD: 7 − 6,5 = 0,5)
-    const valCell = u => { const g = gap(u), v = el("span", "ovv pill " + u.tone, u.status === "garantido" || g === 0 ? "✓" : u.status === "erro" ? "erro" : g == null ? "?" : "+" + up(g, 1));
-      v.title = u.status === "garantido" || g === 0 ? "meta garantida" : g == null ? "sem nota calculada" : "faltam " + up(g, 1) + " pontos para a meta " + fmt(T, T % 1 ? 1 : 0) + (u.need != null ? " (média de " + up(u.need, 1) + " no que falta)" : u.status === "nao-da" ? " · nem com 10 no que falta" : ""); return v; };
-    const scale = () => { const r = el("div", "ovr ovscale"), ax = el("div", "ovbar ovax"); for (const v of ["0", "5", "10"]) ax.appendChild(el("span", null, v)); r.setAttribute("aria-hidden", "true"); r.append(el("span"), ax, el("span", "ovv")); return r; };
+    const valCell = u => { const g = gap(u), v = el("span", "ovv pill " + u.tone, u.status === "confira" ? "confira" : u.status === "garantido" || g === 0 ? "✓" : u.status === "erro" ? "erro" : g == null ? "?" : "+" + up(g, 1) + " pts");
+      v.title = u.status === "confira" ? "estimativa: confira na matéria" : u.status === "garantido" || g === 0 ? "meta garantida" : g == null ? "sem nota calculada" : "faltam " + up(g, 1) + " pontos para a meta " + fmt(T, T % 1 ? 1 : 0) + (u.need != null ? " (média de " + up(u.need, 1) + " no que falta)" : u.status === "nao-da" ? " · nem com 10 no que falta" : ""); return v; };
+    const scale = () => { const r = el("div", "ovr ovscale"), ax = el("div", "ovbar ovax"); for (const v of ["0", "5", "10"]) ax.appendChild(el("span", null, v)); const mk = el("span", "ovmeta", "meta " + fmt(T, T % 1 ? 1 : 0)); mk.style.left = Math.min(99.5, T * 10) + "%"; ax.appendChild(mk); r.setAttribute("aria-hidden", "true"); r.append(el("span"), ax, el("span", "ovv")); return r; };
     const VIEWS = {
-      barras: ["Barras", "nota garantida em cada matéria, de 0 a 10; o risco é a meta", () => { const rows = shownU().map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone), m = el("b");
+      barras: ["Barras", "nota garantida em cada matéria, de 0 a 10; a linha vermelha é a meta; cinza: faltam notas antigas", () => { const rows = shownU().map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone), m = el("b");
           f.style.width = (u.now == null ? 0 : Math.min(100, u.now * 10)) + "%"; m.style.left = Math.min(99.5, T * 10) + "%"; bar.append(f, m); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
-          if (u.now != null && u.now >= 1.2) bar.appendChild(el("span", "ovin", dn(u.now)));   // inside the bar only when it fits
+          if (u.now != null) bar.appendChild(el("span", "ovin" + (u.now < 1.2 ? " low" : ""), (u.approx ? "≈ " : "") + dn(u.now)));   // inside the bar only when it fits (Labs: above it, always)
+          else { const o = el("span", "ovin out", u.now != null ? dn(u.now) : u.status === "confira" ? "confira" : u.status === "erro" || u.status === "acima" ? "veja na matéria" : "sem nota"); o.style.left = "calc(" + (u.now == null ? 0 : Math.min(100, u.now * 10)) + "% + 6px)"; bar.appendChild(o); }   // and just after it when it does not
+          bar.setAttribute("role", "img");
           r.append(nameCell(u), bar, valCell(u)); return r; }); return rows.concat(scale()); }],
       falta: ["Falta", "pontos que faltam até a meta em cada matéria, de quem falta mais para quem falta menos", () => shownU().slice().sort((p, q) => (gap(q) == null ? -1 : gap(q)) - (gap(p) == null ? -1 : gap(p))).map(u => { const r = el("div", "ovr"), bar = el("div", "ovbar"), f = el("i", u.tone);
-          f.style.width = (gap(u) == null ? 0 : Math.min(100, gap(u) * 10)) + "%"; if (u.status === "nao-da") f.className = "bad hatch"; bar.append(f); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u));
+          f.style.width = (gap(u) == null ? 0 : Math.min(100, gap(u) * 10)) + "%"; if (u.status === "nao-da") f.className = "bad hatch"; bar.append(f); bar.dataset.tip = tipOf(u); bar.setAttribute("aria-label", tipOf(u)); bar.setAttribute("role", "img");
           r.append(nameCell(u), bar, valCell(u)); return r; }).concat(scale())],
       aneis: ["Anéis", "quanto de 10 já está garantido; no meio, os pontos que faltam até a meta", () => { const g = el("div", "ovrings"); for (const u of shownU()) { const c = el("a", "ovring"), ring = el("div", "rg"), mid = el("b", null, u.status === "garantido" || gap(u) === 0 ? "✓" : gap(u) == null ? "?" : "+" + up(gap(u), 1));
           const pct = u.now == null ? 0 : Math.min(100, u.now * 10); ring.dataset.t = u.tone; ring.style.cssText = "--p:" + pct + "%;--m:" + Math.min(100, T * 10) + "%"; ring.appendChild(mid);
@@ -1510,7 +1657,7 @@
       yes.type = no.type = "button"; yes.addEventListener("click", () => answer(a.turma)); no.addEventListener("click", () => answer("outro"));
     }
     if (!prefs.dash) return;   // panel switched off: only the turma question
-    if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
+    if (centroOff && !centroSnoozed && prefs.grades && EXT) box.appendChild(centroOffer());
     if (mode === "foco") { box.appendChild(focusView(agenda(a, cache, marks))); return; }
     // Canvas's course cards (either dashboard) carry our numbers: no subject tiles of ours next to them
     if (prefs.grades) { const ov = gradesOverview(a, cache, clean, prefs); if (ov.length) box.append(...ov); else if (why) box.append(el("div", "muted why", why)); }
@@ -1579,7 +1726,7 @@
   function coursePanel(courseId, a, cache, prefs) {
     const c = prefs.grades && a.has ? a.byCanvasId[courseId] : null, cv = cache.ids.find(x => String(x.id) === courseId);
     const own = !!(myRules[courseId] && myRules[courseId].own);   // the student builds this course's rule (over the ready-made one or the Centro's)
-    const cr = !c && !own && prefs.grades ? centroOf(courseId) : null;   // no rules of ours: the professor's formula from the Centro de Notas
+    const cr = !c && !own && !(myRules[courseId] && myRules[courseId].formula) && prefs.grades ? centroOf(courseId) : null;   // a formula the student wrote is theirs, even made before the Centro came   // no rules of ours: the professor's formula from the Centro de Notas
     ruleCache = cache;
     const mr = !c && !cr && prefs.grades && !a.expired && ruleItems(courseId).length ? customOf(courseId) || { status: "vazio" } : null;   // neither (or chosen): the student's own rule
     const ownBtn = () => { const b = el("button", "mini own-b", "Montar minha própria regra"); b.type = "button"; b.title = "Usar os pontos do Canvas desta matéria, com o que você tira da conta e os pesos que você puser, no lugar desta regra";
@@ -1593,185 +1740,316 @@
     title.append(mark(), el("b", null, shortName(cv ? cv.name : document.title)));
     heroSub.textContent = (c ? "meta " + fmt(T, T % 1 ? 1 : 0) + " · " : "") + "lido do Canvas " + ago(C.localISO(new Date(cache.at)));
     const official = c && prefs.grades ? centroOf(courseId) : null;   // with our rules too: the Centro de Notas number beside them, to compare
-    if (official) heroSub.textContent += " · Centro de Notas: " + dn(official.now) + " agora" + (official.status === "precisa" ? ", precisa " + up(official.need, 1) + (official.approx ? " (aprox.)" : "") : official.status === "garantido" ? ", garantido" : official.status === "nao-da" ? ", recuperação" : "");
+    if (official) heroSub.textContent += " · Centro de Notas: " + dn(official.now) + " agora" + (official.status === "precisa" ? ", precisa " + up(official.need, 1) + (official.approx ? " (aprox.)" : "") : official.approx ? ", confira (aprox.)" : official.status === "garantido" ? ", garantido" : official.status === "nao-da" ? ", recuperação" : "");
     const htxt = el("div", "htxt"); htxt.append(title, heroSub); hero.append(band, htxt, teach); box.appendChild(hero);
-    if (centroOff && prefs.grades && EXT) box.appendChild(centroOffer());
+    if (centroOff && !centroSnoozed && prefs.grades && EXT) box.appendChild(centroOffer());
     if (prefs.grades) watchStore(ch => { if (gone(box)) return false;   // the Centro de Notas landed: draw this course again (a fresh analyse: its formula may now beat the Plano)
       if (ch.centro) loadCentro(cache.user).then(() => { if (JSON.stringify(own ? null : centroOf(courseId)) !== JSON.stringify(cr)) { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, analyse(cache, a.hand), cache, prefs); } }); });
-    // The table of assessments (as the ready-made rules always showed it): each one, its weight in the final grade, its grade;
-    // where there is none, a box to type the grade you expect (0 to what it is worth) and the result right under it. Typed
-    // grades are kept on this computer (centroSim[user][course][id], 0-10). rows: [{ id, name, date, max, got, w, missing }];
-    // proj({ id: 0-10 }) → { status, need, final } (final: the rest at 0).
-    const gradeTable = (rows, proj) => {
-      const tbl = el("div", "card items gt"), th = el("div", "ir ih"), out = el("b", "t muted"), boxes = [], clear = el("button", "mini", "Limpar"), dd = r => r.max >= 5 ? 1 : 2;
-      th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota")); tbl.appendChild(th);
-      const typed = () => { const g = {}; for (const b of boxes) { const t = String(b.inp.value).trim().replace(",", "."), n = Number(t); if (t !== "" && Number.isFinite(n)) g[b.r.id] = Math.min(10, Math.max(0, n * 10 / b.r.max)); } return g; };
-      const show = () => { const g = typed(), n = Object.keys(g).length, p = proj(g);
-        for (const b of boxes) b.inp.placeholder = p.status === "precisa" ? up(p.need * b.r.max / 10, dd(b.r)) : p.status === "nao-da" ? fmt(b.r.max, dd(b.r)) : "e se?";   // what is needed in each, at its scale
-        if (!n) { out.className = "t muted"; out.textContent = "Digite a nota que você espera nas caixas: o resultado aparece aqui."; return; }
-        out.className = "t " + (p.status === "garantido" ? "t-ok" : p.status === "nao-da" ? "t-bad" : "t-warn");
-        out.textContent = n >= boxes.length ? "Com essas notas você fica com " + dn(p.final) + (p.final >= T - 1e-9 ? " ✓ meta " + fmt(T, T % 1 ? 1 : 0) : ": faltam " + up(T - p.final, 1) + " para a meta")
-          : p.status === "garantido" ? "Com essas notas a meta já fica garantida ✓" : p.status === "nao-da" ? "Com essas notas não dá para chegar à meta, nem com 10 no resto" : "Com essas notas, precisa " + up(p.need, 1) + "/10 em média no resto"; };
-      const save = async () => { const { centroSim = {} } = await chrome.storage.local.get("centroSim"), mine = Object.assign({}, centroSim[cache.user]), g = typed();
-        if (Object.keys(g).length) mine[courseId] = g; else delete mine[courseId];
-        await chrome.storage.local.set({ centroSim: Object.assign({}, centroSim, { [cache.user]: mine }) }); };
-      for (const r of rows) { const row = el("div", "ir"), name = el("span", "n"); name.appendChild(el("span", "gtn", r.name)); name.title = r.name; let g;
+    // The grade card, the same for every source (Plano de Ensino, Centro de Notas, Canvas weights, the student's rule):
+    // the hero (ring, what is guaranteed, the mean still needed) redrawn live, two modes and the table of assessments.
+    // - Simular: grades typed where Canvas has none change the hero and the result; nothing is saved (centroSim keeps the
+    //   boxes for this course), the dashboard does not change.
+    // - Minhas notas: the same boxes are the student's own grades (a grade the professor gave but Canvas does not show);
+    //   saved on this computer per user and counted everywhere: this page, the dashboard, the cards.
+    // src: { rows: [{ id, name, date, max, got (Canvas, on max), w (share of the final, 0-1) | null, missing, tag }],
+    //        saved: { id: 0-10 }, calc(g { id: 0-10 }) → { status, need (0-10 mean in what is left), final (0-10) },
+    //        hero(g, simulating) → element, save(g) → Promise, hint(row, r) → placeholder (optional), id: storage key }
+    const gradeCard = src => {
+      const wrap = el("div", "gcard"), heroBox = el("div"), tbl = el("div", "card items gt"), out = el("b", "t muted"), boxes = [], dd = r => r.max >= 5 ? 1 : 2;
+      const saved = Object.assign({}, src.saved), sim = {}; let mode = gtMode === "mine" ? "mine" : "sim";
+      const segB = el("div", "seg gt-mode"), bSim = el("button", null, "Simular"), bMine = el("button", null, "Minhas notas"), help = el("span", "muted gt-help");
+      segB.setAttribute("role", "group"); segB.setAttribute("aria-label", "O que as caixas fazem"); bSim.type = bMine.type = "button";
+      const g = () => Object.assign({}, saved, mode === "sim" ? sim : {});
+      const of10 = (b, t) => { const v = String(t).trim().replace(",", "."), n = Number(v); return v !== "" && Number.isFinite(n) && n >= 0 && n <= b.r.max + 1e-9 ? n * 10 / b.r.max : null; };   // above what it is worth: not taken
+      const paint = () => { const cur = g(), r = src.calc(cur), simu = mode === "sim" && Object.keys(sim).length > 0;
+        heroBox.replaceChildren(src.hero(cur, simu));
+        for (const b of boxes) { const v = mode === "sim" ? (b.r.id in sim ? sim[b.r.id] : saved[b.r.id]) : saved[b.r.id];
+          if (document.activeElement !== b.inp && (!wrap.getRootNode || wrap.getRootNode().activeElement !== b.inp)) b.inp.value = v != null ? fmt(v * b.r.max / 10, dd(b.r)) : "";
+          b.inp.className = "simi" + (mode === "mine" || (!(b.r.id in sim) && saved[b.r.id] != null) ? " mine" : "");
+          b.inp.placeholder = src.hint ? src.hint(b.r, r) : r.status === "precisa" && r.need != null ? up(r.need * b.r.max / 10, dd(b.r)) : r.status === "nao-da" ? fmt(b.r.max, dd(b.r)) : "e se?"; }
+        const n = boxes.filter(b => cur[b.r.id] != null).length;
+        if (!boxes.length) { out.textContent = ""; }
+        else if (!n) { out.className = "t muted"; out.textContent = mode === "sim" ? "Digite uma nota nas caixas para ver com quanto você fica. Nada fica salvo." : "Digite as notas que você já tirou e o Canvas ainda não mostra: elas contam no painel."; }
+        else { out.className = "t " + (r.status === "garantido" ? "t-ok" : r.status === "nao-da" ? "t-bad" : "t-warn");
+          out.textContent = (mode === "mine" ? "Com as suas notas" : "Com essas notas") + (n >= boxes.length && r.final != null && !r.notYet && !src.rows.some(x => x.missing) ? " você fica com " + dn(r.final) + (r.final >= T - 1e-9 ? " ✓ meta " + fmt(T, T % 1 ? 1 : 0) : ": faltam " + up(T - r.final, 1) + " para a meta")
+            : r.status === "garantido" ? " a meta já fica garantida ✓" : r.status === "nao-da" ? " não dá para chegar à meta, nem com 10 no resto" : r.status === "depende-atrasadas" ? ", ainda faltam notas de atividades atrasadas" : ", precisa " + up(r.need, 1) + "/10 em média no resto"); }
+        bSim.setAttribute("aria-pressed", String(mode === "sim")); bMine.setAttribute("aria-pressed", String(mode === "mine"));
+        help.textContent = mode === "sim" ? "não fica salvo e não muda o painel" : "fica salvo neste computador e conta no painel";
+        clear.hidden = !(mode === "sim" ? Object.keys(sim).length : Object.keys(saved).length); };
+      const keepSim = () => chrome.storage.local.get("centroSim").then(({ centroSim = {} }) => { const mine = Object.assign({}, centroSim[cache.user]); if (Object.keys(sim).length) mine[src.id] = Object.assign({}, sim); else delete mine[src.id]; return chrome.storage.local.set({ centroSim: Object.assign({}, centroSim, { [cache.user]: mine }) }); }).catch(() => {});
+      let saving = Promise.resolve();
+      const commit = () => { const snap = Object.assign({}, saved); saving = saving.then(() => src.save(snap)).catch(() => {}); };
+      const setMode = m => { mode = m; gtMode = m; chrome.storage.local.set({ gtMode: m }).catch(() => {}); paint(); };
+      bSim.addEventListener("click", () => setMode("sim")); bMine.addEventListener("click", () => setMode("mine"));
+      segB.append(bSim, bMine);
+      const th = el("div", "ir ih"); th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota"));
+      const top = el("div", "gt-top"); top.append(segB, help); tbl.append(top, th);
+      for (const r of src.rows) { const row = el("div", "ir"), name = el("span", "n"); name.appendChild(el("span", "gtn", r.name)); name.title = r.name; let gc;
         if (r.date) name.appendChild(el("span", "dt", dmy(r.date)));
-        if (r.got != null) { g = el("span", "g", fmt(r.got, dd(r))); g.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); }
-        else if (r.missing) g = el("span", "g e", "ainda não está no Canvas");
-        else { g = el("span", "g e"); const inp = el("input", "simi"); inp.type = "text"; inp.inputMode = "decimal";
-          inp.setAttribute("aria-label", "Nota esperada em " + r.name + " (de " + fmt(r.max, dd(r)) + ")"); inp.addEventListener("input", () => { show(); save(); });
-          g.appendChild(inp); g.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); boxes.push({ r, inp }); }
-        row.append(name, el("span", "w", r.w == null ? "—" : Math.round(r.w * 10) + "%"), g); tbl.appendChild(row); }
-      if (boxes.length) { const ft = el("div", "gt-f"); clear.type = "button"; clear.addEventListener("click", () => { for (const b of boxes) b.inp.value = ""; show(); save(); }); ft.append(out, clear); tbl.appendChild(ft); show();
-        chrome.storage.local.get("centroSim").then(({ centroSim }) => { const g = centroSim && centroSim[cache.user] && centroSim[cache.user][courseId]; if (!g) return;
-          for (const b of boxes) if (g[b.r.id] != null && Number.isFinite(Number(g[b.r.id]))) b.inp.value = fmt(Number(g[b.r.id]) * b.r.max / 10, dd(b.r)); show(); }).catch(() => {}); }
-      return tbl; };
+        if (r.tag) name.appendChild(el("span", "dt unv", r.tag));
+        if (r.got != null) { gc = el("span", "g", fmt(r.got, dd(r))); gc.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); }
+        else if (r.missing) gc = el("span", "g e", "ainda não está no Canvas");
+        else { gc = el("span", "g e"); const inp = el("input", "simi"), b = { r, inp }; inp.type = "text"; inp.inputMode = "decimal";
+          inp.setAttribute("aria-label", "Nota de " + r.name + " (de " + fmt(r.max, dd(r)) + ")");
+          inp.addEventListener("input", () => { const v = of10(b, inp.value); inp.setAttribute("aria-invalid", String(v == null && String(inp.value).trim() !== ""));
+            if (mode === "sim") { if (v == null) delete sim[r.id]; else sim[r.id] = v; keepSim(); }
+            else { if (v == null) delete saved[r.id]; else saved[r.id] = v; commit(); }
+            paint(); });
+          gc.appendChild(inp); gc.appendChild(el("small", null, " de " + fmt(r.max, r.max % 1 ? dd(r) : 0))); boxes.push(b); }
+        row.append(name, el("span", "w", r.w == null ? "—" : (v => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1).replace(".", ",")) + "%")(r.w * 100)), gc); tbl.appendChild(row); }
+      const clear = el("button", "mini", "Limpar"); clear.type = "button";
+      clear.addEventListener("click", () => { if (mode === "sim") { for (const k of Object.keys(sim)) delete sim[k]; keepSim(); } else { for (const k of Object.keys(saved)) delete saved[k]; commit(); } paint(); });
+      if (boxes.length) { const ft = el("div", "gt-f"); ft.append(out, clear); tbl.appendChild(ft); }
+      else { top.hidden = true; }
+      wrap.append(heroBox, tbl);
+      chrome.storage.local.get("centroSim").then(({ centroSim }) => { const k = centroSim && centroSim[cache.user] && centroSim[cache.user][src.id]; if (k && typeof k === "object") for (const [id, v] of Object.entries(k)) if (boxes.some(b => String(b.r.id) === id) && Number.isFinite(Number(v))) sim[boxes.find(b => String(b.r.id) === id).r.id] = Number(v); paint(); }).catch(() => paint());
+      paint(); return wrap; };
     if (cr) {   // quanto falta from the Centro de Notas: now, what is needed in what is left, and which items are left
-      const card = el("div", "card cring"), m = el("div", "mid"), names = new Map();
-      for (const g of Array.isArray(myCentro[courseId].grupos) ? myCentro[courseId].grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
-      m.append(el("div", "t", dn(cr.now) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
-        el("div", "c", cr.status === "garantido" ? "meta garantida pela fórmula do professor" : cr.status === "nao-da" ? "nem com 10 no que falta: recuperação" : "precisa " + up(cr.need, 1) + "/10 em média no que falta" + (cr.approx ? " (aproximado: parte da fórmula está escondida para o aluno e pode contar outras atividades)" : "")),
-        el("div", "c", "Falta: " + (cr.left.map(id => names.get(id)).filter(Boolean).slice(0, 8).join(", ") || "nada lançado em aberto") + " · fórmula do Centro de Notas"));
-      card.append(m, el("span", "pill " + centroTone(cr), cr.status === "garantido" ? "garantido" : cr.status === "nao-da" ? "recuperação" : "precisa " + up(cr.need, 1)));
-      box.appendChild(card);
+      const cu = myCentro[courseId], names = new Map();
+      for (const g of Array.isArray(cu.grupos) ? cu.grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) if (gc && gc.coluna) names.set(gc.coluna.id_coluna, gc.coluna.nome_coluna);
+      const calcC = g => C.centro(cu, T, Object.keys(g).length ? { grades: g, rest: 0 } : undefined);
+      const heroC = (g, simu) => { const r = calcC(g), card = el("div", "card cring" + (simu ? " simulating" : "")), m = el("div", "mid"), est = r.approx && r.status !== "precisa";
+        m.append(el("div", "t", (r.approx ? "≈ " + dn(r.now) + " de 10 agora" : earnedText(stOfResult(r)) + " garantidos de 10") + (simu ? " (simulação)" : "")),
+          el("div", "c", (est ? "confira no Centro de Notas" : gapText(r)) + (r.approx ? " (aproximado: parte da fórmula está escondida para o aluno e pode contar outras atividades)" : "")),
+          el("div", "c", "Falta: " + (r.left.map(id => names.get(id)).filter(Boolean).slice(0, 8).join(", ") || "nada em aberto") + " · fórmula do Centro de Notas"));
+        if (r.status === "nao-da" && r.rec) { const rn = r.rec.left.map(id => names.get(id)).filter(Boolean).slice(0, 3).join(", ") || "recuperação";   // below the meta: what the recovery exam needs
+          m.appendChild(el("div", "c rec-l", r.rec.need != null ? "Recuperação: precisa " + up(r.rec.need, 1) + " na " + rn + (r.left.length ? " (com 10 no que falta)" : "") : "Nem com 10 na " + rn + " chega à meta")); }
+        if (!["garantido", "precisa", "nao-da"].includes(r.status)) { card.appendChild(m); return card; }
+        if (est) { card.append(ring(stOfResult(Object.assign({}, r, { status: "depende-atrasadas", need: null })), true), m); return card; }
+        const nb = needBig(stOfResult(r)), v0 = (nb.children || nb.kids || [])[0]; if (r.approx && v0) v0.textContent = "≈ " + v0.textContent;   // part of the formula is hidden from the student
+        card.append(ring(stOfResult(r), true), m, nb); return card; };
+      // each Centro column that counts: its weight in the final grade, its grade or a box
+      const r00 = C.centro(cu, T), leaves = [], seen = new Set(), open = new Set(r00.left), recIds = new Set((r00.rec && r00.rec.left) || []);   // recovery exams: a box too (simulate it, or type the grade)
+      for (const g of Array.isArray(cu.grupos) ? cu.grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) { const col = gc && gc.coluna;
+        if (col && col.tipo_coluna === "padrao" && !seen.has(col.id_coluna) && !(col.atividade && col.atividade.omitir_nota_final)) { seen.add(col.id_coluna); leaves.push(col); } }
+      const wOf = id => { const cl = JSON.parse(JSON.stringify(cu)), cols = (cl.colunas || []).concat(...(cl.grupos || []).map(g => (g && g.grupo_colunas || []).map(gc => gc && gc.coluna).filter(Boolean)));
+        for (const x of cols) if (x && (x.id_coluna === id || x.tipo_coluna === "final")) x.notas = [];   // as if still open: what 10 in it adds to the final
+        const hi = C.centro(cl, T, { grades: { [id]: 10 }, rest: 0 }).projected, lo = C.centro(cl, T, { grades: { [id]: 0 }, rest: 0 }).projected; return hi != null && lo != null ? Math.max(0, hi - lo) / 10 : null; };
+      const rows = [];
+      for (const col of leaves.slice(0, 40)) { const pmax = col.atividade && Number(col.atividade.pontos_possiveis) > 0 ? Number(col.atividade.pontos_possiveis) : 10, v = col.notas && col.notas[0] ? parseFloat(String(col.notas[0].nota).replace(",", ".")) : NaN, w = wOf(col.id_coluna);
+        const rec = recIds.has(col.id_coluna);
+        if (!rec && !open.has(col.id_coluna) && !(w > 0.0004)) continue;   // outside the final grade (or a recovery that does not count now)
+        if (!rec && !Number.isFinite(v) && !open.has(col.id_coluna)) continue;
+        rows.push({ id: col.id_coluna, name: col.nome_coluna || "Atividade", max: pmax, got: Number.isFinite(v) ? v : null, w: rec ? null : w, tag: rec ? "recuperação" : "" }); }
+      box.appendChild(gradeCard({ id: courseId, rows, saved: gradesOf(courseId), hero: heroC,
+        calc: g => { const r = calcC(g); return { status: r.status, need: r.need, final: r.now }; },
+        save: async g => { await setGrades(cache.user, courseId, g); } }));
       if (!a.expired && ruleItems(courseId).length) { const r0 = el("div", "muted src own-row"); r0.append(el("span", null, "Pela fórmula do Centro de Notas."), ownBtn()); box.appendChild(r0); }
-      {   // the table of assessments, as before: each Centro column, its weight in the final grade, its grade or a box to type it
-        const cu = myCentro[courseId], leaves = [], seen = new Set(), open = new Set(cr.left);
-        for (const g of Array.isArray(cu.grupos) ? cu.grupos : []) for (const gc of g && Array.isArray(g.grupo_colunas) ? g.grupo_colunas : []) { const col = gc && gc.coluna;
-          if (col && col.tipo_coluna === "padrao" && !seen.has(col.id_coluna) && !(col.atividade && col.atividade.omitir_nota_final)) { seen.add(col.id_coluna); leaves.push(col); } }
-        const wOf = id => { const cl = JSON.parse(JSON.stringify(cu)), cols = (cl.colunas || []).concat(...(cl.grupos || []).map(g => (g && g.grupo_colunas || []).map(gc => gc && gc.coluna).filter(Boolean)));
-          for (const x of cols) if (x && (x.id_coluna === id || x.tipo_coluna === "final")) x.notas = [];   // as if still open: what 10 in it adds to the final
-          const hi = C.centro(cl, T, { grades: { [id]: 10 }, rest: 0 }).projected, lo = C.centro(cl, T, { grades: { [id]: 0 }, rest: 0 }).projected; return hi != null && lo != null ? Math.max(0, hi - lo) : null; };
-        const rows = [];
-        for (const col of leaves.slice(0, 40)) { const p = col.atividade && Number(col.atividade.pontos_possiveis) > 0 ? Number(col.atividade.pontos_possiveis) : 10, v = col.notas && col.notas[0] ? parseFloat(String(col.notas[0].nota).replace(",", ".")) : NaN, w = wOf(col.id_coluna);
-          if (!open.has(col.id_coluna) && !(w > 0.004)) continue;   // outside the final grade (or a recovery that does not count now)
-          rows.push({ id: col.id_coluna, name: col.nome_coluna || "Atividade", max: p, got: Number.isFinite(v) ? v : null, w, open: open.has(col.id_coluna) }); }
-        const proj = g => { const p = C.centro(cu, T, { grades: g, rest: 0 }); return { status: p.status, need: p.need, final: p.projected }; };
-        if (rows.length) box.appendChild(gradeTable(rows.filter(r => r.got != null || r.open), proj));
-      }
     }
     if (mr) {   // the student's rule: the Canvas items that count (untick what is not graded) and how far the grade goes
       const items = ruleItems(courseId), rule = myRules[courseId] || { off: [], total: 10 }, off = new Set(rule.off || []);
-      const card = el("div", "card cring"), m = el("div", "mid");
-      m.append(el("div", "t", mr.status === "erro" ? "A fórmula tem um erro: veja abaixo" : mr.status === "vazio" ? (mr.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " passou dos pontos dela" : "Os pontos somam " + fmt(mr.planned, 1) + ", mais que " + fmt(mr.total, 0)) : dn(mr.now) + " de 10 agora · meta " + fmt(T, T % 1 ? 1 : 0)),
-        el("div", "c", mr.status === "vazio" ? (mr.parts ? (mr.emptyPart ? "A parte " + mr.emptyPart + " ainda não tem atividade: escolha a parte de cada atividade na lista (ou diga quantos pontos ela vale)." : "Escolha a parte de cada atividade na lista abaixo.") : "Marque o que vale nota na lista abaixo.")
-          : mr.status === "acima" ? (mr.part ? "A parte " + mr.part + " soma " + fmt(mr.planned, 1) + " pontos, mais que os " + fmt(mr.total, 1) + " dela: tire o que não vale nota ou aumente os pontos da parte " + mr.part + "." : "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz).") : mr.unsure ? "Pela soma dos pontos daria " + (mr.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : customText(mr) + (mr.notYet > 0.001 ? " · " + fmt(mr.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
-        el("div", "c", mr.canvasWeights ? "Pelos pesos que o professor pôs no Canvas: " + (mr.parts || []).map(pp => { const cw = canvasWeightsRule(courseId); return (cw && cw.names[pp.id] || "parte " + pp.id) + " " + fmt(pp.w, 0) + "% (" + dn(pp.now) + "/10)"; }).join(" · ") : rule.formula ? "Pela sua fórmula" + (mr.notYet ? " · " + mr.notYet + (mr.notYet === 1 ? " parte ainda não está" : " partes ainda não estão") + " no Canvas (contam como o que falta)" : "") : mr.parts && mr.parts.length ? "Sua regra: " + mr.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + dn(p.now) + "/10").join(" · ") + (mr.emptyPart ? " · a parte " + mr.emptyPart + " não tem atividade" : "")
-          : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
-      if (mr.status !== "vazio" && mr.status !== "acima" && mr.status !== "erro" && !mr.unsure) card.append(m, el("span", "pill " + centroTone(mr), mr.status === "garantido" ? "garantido" : mr.status === "nao-da" ? "recuperação" : "precisa " + up(mr.need, 1))); else card.appendChild(m);
-      box.appendChild(card);
+      const heroR = (r, simu) => {
+        const card = el("div", "card cring" + (simu ? " simulating" : "")), m = el("div", "mid");
+        m.append(el("div", "t", r.status === "erro" ? "A fórmula tem um erro: veja abaixo" : r.status === "vazio" ? (r.parts ? "Ponha as atividades nas partes" : "Nada conta na nota ainda") : r.status === "acima" ? (r.part ? "A parte " + r.part + " passou dos pontos dela" : "Os pontos somam " + fmt(r.planned, 1) + ", mais que " + fmt(r.total, 0)) : (r.unsure ? dn(r.now) + " de 10 pela soma (confira)" : !r.canvasWeights && !myRules[courseId] ? dn(r.now) + " de 10 pela soma dos pontos" : earnedText(stOfResult(r)) + " garantidos de 10")),
+          el("div", "c", r.status === "vazio" ? (r.parts ? (r.emptyPart ? "A parte " + r.emptyPart + " ainda não tem atividade: escolha a parte de cada atividade na lista (ou diga quantos pontos ela vale)." : "Escolha a parte de cada atividade na lista abaixo.") : "Marque o que vale nota na lista abaixo.")
+            : r.status === "acima" ? (r.part ? "A parte " + r.part + " soma " + fmt(r.planned, 1) + " pontos, mais que os " + fmt(r.total, 1) + " dela: tire o que não vale nota ou aumente os pontos da parte " + r.part + "." : "Então a soma não é a nota: tire da conta o que não vale nota, ou diga até quanto a nota vai (o Plano de Ensino diz).") : r.unsure ? "Pela soma dos pontos daria " + (r.status === "garantido" ? "meta garantida" : "recuperação") + ", mas confira: o Plano de Ensino pode ter provas que ainda não estão no Canvas. Ajuste abaixo." : gapText(r) + (r.notYet > 0.001 && !rule.formula ? " · " + fmt(r.notYet, 2) + " pontos ainda não estão no Canvas e contam como o que falta" : "")),
+          el("div", "c", r.canvasWeights ? "Pelos pesos que o professor pôs no Canvas: " + (r.parts || []).map(pp => { const cw = canvasWeightsRule(courseId); return (cw && cw.names[pp.id] || "parte " + pp.id) + " " + fmt(pp.w, 0) + "% (" + dn(pp.now) + "/10)"; }).join(" · ") : rule.formula ? "Pela sua fórmula" + (r.notYet ? " · " + r.notYet + (r.notYet === 1 ? " parte ainda não está" : " partes ainda não estão") + " no Canvas (contam como o que falta)" : "") : r.parts && r.parts.length ? "Sua regra: " + r.parts.map(p => "parte " + p.id + " (" + fmt(p.w, 0) + "%) " + dn(p.now) + "/10").join(" · ") + (r.emptyPart ? " · a parte " + r.emptyPart + " não tem atividade" : "")
+            : (rule && myRules[courseId] ? "Sua regra" : "Soma dos pontos do Canvas") + ": tire da conta o que não vale nota e diga até quanto a nota vai."));
+        if (r.status !== "vazio" && r.status !== "acima" && r.status !== "erro" && !r.unsure) card.append(ring(stOfResult(r), true), m, needBig(stOfResult(r))); else card.appendChild(m);
+        { const t0 = (m.children || m.kids || [])[0]; if (simu && t0) t0.textContent += " (simulação)"; }
+        return card;
+      };
       const bad = mr.status === "vazio" || mr.status === "acima" || mr.status === "erro", rl = myRules[courseId] || canvasWeightsRule(courseId);
-      if (!bad) {   // the table: each activity that counts, its weight in the final grade, its grade or a box to type the one you expect
-        const at = (it, sc) => items.map(x => x === it ? Object.assign({}, x, { score: sc }) : x), nowOf = list => { const r = C.custom(list, rl, T); return r.now; };
+      // the activities with Canvas's grades only; the student's own grades (Minhas notas) and the simulation come in as g
+      const base = items.map(x => Object.assign({}, x, { score: x.canvasScore }));
+      const ruleR = g => { const extra = Object.entries(g).filter(([k, v]) => k[0] === "-" && v != null && !base.some(x => x.key === k)).map(([k, v]) => ({ key: k, name: k.slice(1), points: 10, score: v }));   // a grade typed for a part not in Canvas
+        const r = C.custom(base.map(x => x.score == null && g[x.key] != null ? Object.assign({}, x, { score: g[x.key] * Number(x.points) / 10 }) : x).concat(extra), rl, T), mine = !!myRules[courseId], cw = !mine && !!canvasWeightsRule(courseId);
+        return Object.assign(r, { mine, canvasWeights: cw, unsure: !mine && !cw && (r.status === "garantido" || r.status === "nao-da") }); };
+      if (bad) box.appendChild(heroR(mr, false));
+      else {   // the table: each activity that counts, its weight in the final grade, its grade or a box
+        const at = (it, sc) => base.map(x => x.key === it.key ? Object.assign({}, x, { score: sc }) : x), nowOf = list => { const r = C.custom(list, rl, T); return r.now; };
         const rows = [];
-        for (const it of items.slice(0, 40)) { const hi = nowOf(at(it, it.points)), lo = nowOf(at(it, 0)), w = hi != null && lo != null ? Math.max(0, hi - lo) : null;
-          if (!(w > 0.004)) continue;   // not in the rule (unticked, or a name no line uses)
-          rows.push({ id: it.key, name: it.name, date: it.due ? C.localISO(new Date(it.due)) : null, max: Number(it.points), got: it.score == null || !Number.isFinite(Number(it.score)) ? null : Number(it.score), w }); }
-        for (const l of mr.leaves || []) if (l.missing) rows.push({ id: "-" + l.name, name: l.name, max: 10, got: null, w: null, missing: true });
-        const proj = g => { const r = C.custom(items.map(x => g[x.key] != null ? Object.assign({}, x, { score: g[x.key] * Number(x.points) / 10 }) : x), rl, T); return { status: r.status, need: r.need, final: r.now }; };
-        if (rows.length) box.appendChild(gradeTable(rows, proj));
+        for (const it of base.slice(0, 40)) { const hi = nowOf(at(it, it.points)), lo = nowOf(at(it, 0)), w = hi != null && lo != null ? Math.max(0, hi - lo) / 10 : null;
+          if (!(w > 0.0004)) continue;   // not in the rule (unticked, or a name no line uses)
+          rows.push({ id: it.key, name: it.name, date: it.due ? C.localISO(new Date(it.due)) : null, max: Number(it.points), got: it.score == null || !Number.isFinite(Number(it.score)) ? null : Number(it.score), w, tag: it.typed ? "ainda não está no Canvas" : "" }); }
+        for (const l of mr.leaves || []) if (l.missing) rows.push({ id: "-" + l.name, name: l.name, max: 10, got: null, w: null, tag: "ainda não está no Canvas" });   // a box too: a grade the student already knows (a paper exam) goes in Minhas notas
+        box.appendChild(gradeCard({ id: courseId, rows, saved: gradesOf(courseId), hero: (g, simu) => heroR(ruleR(g), simu),
+          calc: g => { const r = ruleR(g); return { status: r.status, need: r.need, final: r.now, notYet: r.notYet }; },
+          save: async g => { await setGrades(cache.user, courseId, g); } }));
       }
       // the editor: the formula as the Plano de Ensino writes it; it starts from the professor's (Centro de Notas) or the
       // Plano's weights, shows the result while typing, and offers the course's activities as short names to insert
       const redraw = () => { const h = document.getElementById("qf-panel"); if (h) h.remove(); coursePanel(courseId, a, cache, prefs); };
-      const ed = el("div", "card rule formula"), ta = el("textarea"), acts = el("div", "acts"), apply = el("button", "primary", "Aplicar"), restart = el("button", "mini", "Recomeçar");
+      const ed = el("div", "card rule formula"), ta = { value: "" }, acts = el("div", "acts"), apply = el("button", "primary", "Aplicar"), restart = el("button", "mini", "Recomeçar"), dirtyNote = el("span", "muted dirty");
       const shortRef = shortName2;
       const start = startFormula(courseId, items, shortRef);
-      ta.value = rule.formula || start.text; ta.rows = Math.min(16, Math.max(4, ta.value.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 64)), 0) + 1));   // long lines wrap: count them ta.spellcheck = false; ta.setAttribute("aria-label", "Fórmula da nota desta matéria");
+      ta.value = rule.formula || start.text;   // the formula the builder writes; Aplicar saves it
       apply.type = restart.type = "button"; restart.title = "Voltar à fórmula inicial (" + start.from + ")";
       const pv = el("div", "pv"), found = el("div");
       const preview = () => {   // the result of what is typed now (nothing saved until Aplicar)
-        const r = C.custom(items, { formula: ta.value }, T); pv.replaceChildren(); found.replaceChildren();
+        const r = C.custom(items, { formula: ta.value }, T); pv.replaceChildren(); found.replaceChildren(); ed.dataset.formula = String(ta.value);
+        dirtyNote.textContent = String(ta.value).trim() !== String(rule.formula || "").trim() ? "mudou: clique em Aplicar para valer no painel" : "";
         if (r.status === "erro") { for (const e of r.errors || []) pv.appendChild(el("p", "c err", e)); return; }
         pv.appendChild(el("p", "c res", "Com esta fórmula: " + (r.now == null ? "—" : dn(r.now)) + " agora · " + (r.status === "garantido" ? "meta " + fmt(T, T % 1 ? 1 : 0) + " garantida" : r.status === "nao-da" ? "nem com 10 no que falta" : "precisa " + up(r.need, 1) + " em média no que falta")
           + (r.weights && r.weights.length ? " · os pesos de " + r.weights.join(", ") + " não somam 100% (ajustados)" : "")));
+        for (const e of r.errors || []) pv.appendChild(el("p", "c err", e));
         if (r.leaves && r.leaves.length) {   // what each name found: open by itself only when a name found nothing
           const miss = r.leaves.filter(l => l.missing).length, det = el("details", "found-d"), ul = el("ul", "found");
           det.appendChild(el("summary", null, "O que cada nome achou no Canvas (" + r.leaves.length + ")" + (miss ? " · " + miss + " sem atividade" : ""))); if (miss) det.open = true;
-          for (const l of r.leaves) { const li = el("li", l.missing ? "miss" : null); li.append(el("b", null, l.name), el("span", null, l.missing ? " → não achei no Canvas (conta como o que falta)" : " → " + l.items.join("; "))); ul.appendChild(li); }
+          for (const l of r.leaves) { const li = el("li", l.missing ? "miss" : null); li.append(el("b", null, l.name), el("span", null, l.excused ? " → dispensada no Canvas (fica fora da conta)" : l.missing ? " → não achei no Canvas (conta como o que falta)" : " → " + l.items.join("; "))); ul.appendChild(li); }
           det.appendChild(ul); found.appendChild(det); }
       };
-      let pt = 0; ta.addEventListener("input", () => { clearTimeout(pt); pt = setTimeout(preview, 250); });
-      apply.addEventListener("click", async () => { await saveRule(cache.user, courseId, { merge: true, formula: String(ta.value).slice(0, 4000), own: own || undefined }); redraw(); });
-      restart.addEventListener("click", () => { ta.value = start.text; preview(); });
-      acts.append(apply, restart);
-      // the course's activities: a click puts the short name where the cursor is
-      const chips = el("div", "chips");
+      // The builder, over the same text: how many RAs and what each is worth, then which grade goes in which RA and what it
+      // is worth there. One Canvas activity may go in several RAs (a TDE graded once for the 3 RAs). A grade not in Canvas
+      // yet is a name typed by hand: it counts as what is left until an activity with that name shows up.
+      // Only the two-level shape (Final = w% RA…, RA = w% nota…) is drawn; anything else stays in the text below.
+      const NONE = "ainda não saiu", bName = x => String(x == null ? "" : x).replace(/[=+%;#,()\n\r]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+      const wTxt = x => String(Math.round((Number(x) || 0) * 100) / 100).replace(".", ","), pctB = x => wTxt(x) + "%";
+      const raPts = (w, sumW) => sumW > 0 ? Math.round((Number(w) || 0) / sumW * 1000) / 100 : 0;   // what a RA is worth in points of the final (0-10)
+      const ptsOf = ref => actsOf(ref).reduce((t, a) => t + Number(a.points || 0), 0);
+      const numIn = v => { const n = Number(String(v).replace("%", "").trim().replace(",", ".")); return String(v).trim() !== "" && Number.isFinite(n) && n >= 0 && n <= 100 ? n : null; };
+      const actsOf = ref => { const k = foldRef(ref); if (!k) return []; const ex = items.filter(a => foldRef(a.name) === k); return ex.length ? ex : items.filter(a => (" " + foldRef(a.name) + " ").includes(" " + k + " ")); };   // as the formula finds a name
+      const bParse = text => { const { lines, errors } = C.formulaParse(text); if (errors.length || !lines.length) return null;
+        const by = new Map(lines.map(l => [foldRef(l.name), l])), used = new Set(lines.flatMap(l => l.terms.map(t => foldRef(t.ref))));
+        const top = lines.find(l => /^(nota |media )?final$/.test(foldRef(l.name))) || lines.find(l => !used.has(foldRef(l.name))) || lines[0];
+        const ptsItems = l => l.terms.filter(x => foldRef(x.ref) !== foldRef(NONE)).map(x => ({ ref: x.ref, w: 0 }));
+        if (top.op !== "w" || top.terms.length > 8) return null; const parts = [], reached = new Set([top]);
+        for (const t of top.terms) { const l = by.get(foldRef(t.ref));
+          if (!l) { parts.push({ name: t.ref, w: t.w, items: [{ ref: t.ref, w: 100 }] }); continue; }   // a grade straight in the final: a part of its own
+          if (l.terms.some(x => by.has(foldRef(x.ref)))) return null; reached.add(l);
+          if (l.op === "sum") {   // soma(A, B) of activities all in Canvas = each one weighted by its points; with "de N" (points still to come) it is not
+            const pts = l.terms.map(x => actsOf(x.ref).reduce((s, a) => s + Number(a.points), 0)), tot = pts.reduce((s, v) => s + v, 0);
+            if (l.top) { parts.push({ name: l.name, w: t.w, mode: "pts", top: l.top, items: ptsItems(l) }); continue; }   // top: the points written, kept until the RA's weight changes   // "de N": the Canvas grades are already points of the final
+            if (pts.some(v => !(v > 0))) return null;
+            parts.push({ name: l.name, w: t.w, items: l.terms.map((x, i) => ({ ref: x.ref, w: Math.round(pts[i] / tot * 10000) / 100 })) }); continue; }
+          parts.push({ name: l.name, w: t.w, items: l.terms.filter(x => foldRef(x.ref) !== foldRef(NONE)).map(x => ({ ref: x.ref, w: l.op === "avg" ? Math.round(10000 / l.terms.length) / 100 : x.w })) }); }
+        return lines.every(l => reached.has(l)) ? { parts } : null; };
+      const bText = m => { const seen = new Set(), refs = new Set(m.parts.flatMap(p => p.items.map(x => foldRef(bName(x.ref)))));
+        const ps = m.parts.map((p, i) => { let name = bName(p.name) || "RA" + (i + 1); const solo1 = p.items.length === 1 && foldRef(bName(p.items[0].ref)) === foldRef(name);
+          if (seen.has(foldRef(name)) || /^(nota |media )?final$/.test(foldRef(name)) || (!solo1 && refs.has(foldRef(name)))) name = "Parte " + (i + 1); seen.add(foldRef(name));   // never the name of a grade used elsewhere (it would point at itself)
+          return { name, w: Number(p.w) || 0, items: p.items.map(x => ({ ref: bName(x.ref), w: Number(x.w) || 0 })).filter(x => x.ref) }; });
+        m.parts.forEach((p, i) => { ps[i].mode = p.mode; ps[i].top = p.top; }); const sumW = ps.reduce((t, p) => t + p.w, 0);
+        const solo = p => p.mode !== "pts" && p.items.length === 1 && foldRef(p.items[0].ref) === foldRef(p.name);
+        return ["Final = " + ps.map(p => pctB(p.w) + " " + p.name).join(" + ")].concat(ps.filter(p => !solo(p)).map(p => p.name + " = " + (p.mode === "pts" ? "soma(" + (p.items.length ? p.items.map(x => x.ref).join(", ") : NONE) + ") de " + wTxt(p.top > 0 ? p.top : raPts(p.w, sumW))
+          : p.items.length ? p.items.map(x => pctB(x.w) + " " + x.ref).join(" + ") : "100% " + NONE))).join("\n"); };
       const crefs = shortRefs(items);
-      for (const it of items.slice(0, 40)) { const add = crefs.get(it.name) || shortRef(it.name), b = el("button", "chip", add); b.type = "button"; b.title = it.name + " · " + fmt(it.points, 2) + " pts";
-        b.addEventListener("click", () => { const v = String(ta.value), at = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length;
-          ta.value = v.slice(0, at) + add + v.slice(typeof ta.selectionEnd === "number" ? ta.selectionEnd : at); if (ta.focus) ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(at + add.length, at + add.length); preview(); });
-        chips.appendChild(b); }
-      ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Uma parte por linha, como no Plano de Ensino: pesos em % (Final = 40% RA1 + 60% RA2), média(A, B) ou soma(A, B) de N. Um nome que nenhuma linha define é uma atividade do Canvas."),
-        el("p", "c from", "Começou " + start.from + "."), ta, acts, pv, el("div", "c lbl", "Atividades desta matéria (clique para pôr na fórmula):"), chips, found);
-      preview();
+      let model = bParse(ta.value);
+      const bWrap = el("div", "rb"), keyed = new Map();
+      const addItem = (p, ref) => { const n = p.items.length, even = !n || p.items.every(x => Math.abs(Number(x.w) - Number(p.items[0].w)) < 0.01);
+        if (even) { const w = Math.round(10000 / (n + 1)) / 100; for (const x of p.items) x.w = w; p.items.push({ ref, w }); }
+        else { const left = 100 - p.items.reduce((t, x) => t + (Number(x.w) || 0), 0); p.items.push({ ref, w: left > 0 ? Math.round(left * 100) / 100 : 10 }); } };
+      const dropped = [];   // RAs taken off by the count, back with their grades if the count goes up again
+      const setCount = n => { if (model && model.parts.length === n) return false; const parts = model ? model.parts : [], even = parts.every(p => Math.abs(Number(p.w) - Number(parts[0].w)) < 0.01);
+        while (parts.length > n) dropped.push(parts.pop());
+        while (parts.length < n) { const back = dropped.pop(); if (back) { parts.push(back); continue; } let k = parts.length + 1; while (parts.some(p => foldRef(p.name) === "ra" + k)) k++;
+          const left = 100 - parts.reduce((t, p) => t + (Number(p.w) || 0), 0); parts.push({ name: "RA" + k, w: even ? 0 : Math.max(0, Math.round(left * 100) / 100), items: [] }); }
+        if (even) for (const p of parts) p.w = Math.round(10000 / n) / 100;   // weights still split evenly (or a fresh start): split again; set by hand: kept
+        model = { parts }; return true; };
+      const raw = new Map();   // what is being typed in a field ("12," on the way to 12,5; empty before a new number): kept over the redraw
+      const sync = (k, pos) => { if (!k) raw.clear(); ta.value = bText(model); preview(); bDraw();
+        const f = k && keyed.get(k); if (f && f.focus) { f.focus(); if (pos != null && f.setSelectionRange) try { f.setSelectionRange(pos, pos); } catch (e) {} } };
+      const field = (cls, k, value, label, onIn) => { const i = el("input", cls); i.type = "text"; i.value = raw.has(k) ? raw.get(k) : value; i.setAttribute("aria-label", label); i.dataset.k = k; keyed.set(k, i);
+        i.addEventListener("input", () => { raw.clear(); raw.set(k, i.value); onIn(i.value); sync(k, typeof i.selectionStart === "number" ? i.selectionStart : null); }); return i; };
+      function bDraw() {
+        bWrap.replaceChildren(); keyed.clear();
+        const head = el("div", "rb-h"), seg = el("div", "seg rb-n"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Quantos RAs a matéria tem");
+        for (let n = 1; n <= 4; n++) { const b = el("button", null, String(n)); b.type = "button"; b.setAttribute("aria-pressed", String(!!model && model.parts.length === n));
+          b.addEventListener("click", () => { if (setCount(n)) sync(); }); seg.appendChild(b); }
+        head.append(el("b", null, "Quantos RAs?"), seg); bWrap.appendChild(head);
+        if (!model) { bWrap.appendChild(el("p", "c", "Escolha quantos RAs a matéria tem para pôr cada atividade no RA dela."));
+          if (String(ta.value).trim()) bWrap.append(el("p", "c muted", "A fórmula de agora (o montador não desenha esta forma; escolher quantos RAs começa uma nova, que só vale depois de Aplicar):"), el("pre", "rb-cur", String(ta.value))); }
+        const hit = ref => { const as = actsOf(bName(ref)); return as.length ? { items: as.map(a => a.name) } : null; };   // what a name finds, as the formula finds it (also while the formula has an error)
+        if (items.length) {   // each Canvas activity and the RAs it is in: a click puts it in (or takes it out of) that RA
+          const mx = el("div", "rb-m"); const cItems = items.filter(x => !x.typed); mx.append(el("b", null, "Atividades desta matéria (" + cItems.length + ")"), el("p", "c rb-ml", model ? "Clique no RA em que cada uma entra. Pode ser mais de um: uma TDE lançada uma vez para os 3 RAs entra nos 3." : "Lidas agora do Canvas."));
+          for (const a of cItems.slice(0, 40)) { const ref = crefs.get(a.name) || shortRef(a.name), row = el("div", "rb-mr"), lab = el("span", "n", a.name), btns = el("span", "seg");
+            lab.title = a.name + " · " + fmt(a.points, 2) + " pts"; btns.setAttribute("role", "group"); btns.setAttribute("aria-label", "RAs de " + a.name);
+            for (const p of model ? model.parts : []) { const has = p.items.find(x => { const l = hit(x.ref); return l && l.items.includes(a.name); }), b = el("button", null, bName(p.name) || "RA");
+              b.type = "button"; b.setAttribute("aria-pressed", String(!!has)); b.title = (has ? "Tirar de " : "Pôr em ") + bName(p.name);
+              b.addEventListener("click", () => { if (has) p.items.splice(p.items.indexOf(has), 1); else {
+                for (const q of model.parts) if (q !== p && (p.mode === "pts" || q.mode === "pts")) q.items = q.items.filter(x => { const l = hit(x.ref); return !(l && l.items.includes(a.name)); });   // points add up: one activity in two RAs would count twice
+                const ph = slotFor(p, a); if (ph) ph.ref = ref; else addItem(p, ref); } sync(); }); btns.appendChild(b); }
+            row.append(lab, btns); mx.appendChild(row); }
+          bWrap.appendChild(mx); }
+        if (!model) return;
+        const sumP = model.parts.reduce((t, p) => t + (Number(p.w) || 0), 0), offP = Math.abs(sumP - 100) > 0.5;
+        bWrap.appendChild(el("div", "c rb-sum" + (offP ? " warn" : ""), offP ? "Os RAs somam " + pctB(sumP) + ": no Plano de Ensino somam 100% (a conta divide pelo total)" : "Os RAs somam 100% ✓"));
+        const grid = el("div", "rb-g");
+        model.parts.forEach((p, pi) => { const card = el("div", "rb-p"), ph = el("div", "rb-ph"), sumI = p.items.reduce((t, x) => t + (Number(x.w) || 0), 0), pts = p.mode === "pts", top = p.top > 0 ? p.top : raPts(p.w, sumP);
+          const known = p.items.reduce((t, x) => t + (hit(x.ref) ? ptsOf(x.ref) : 0), 0);
+          ph.append(field("rb-name", "p" + pi, p.name, "Nome da parte " + (pi + 1), v => { p.name = v; }),
+            field("rb-w", "pw" + pi, wTxt(p.w), "Quanto " + bName(p.name) + " vale na nota final (%)", v => { const n = numIn(v); if (n != null) { p.w = n; delete p.top; } }), el("span", "u", "% da final" + (pts ? " = " + wTxt(top) + " pts" : "")));
+          card.appendChild(ph);
+          const md = el("div", "seg rb-md"); md.setAttribute("role", "group"); md.setAttribute("aria-label", "Como o professor lança as notas de " + bName(p.name));
+          for (const [v, t, tip] of [["", "% do RA", "Cada nota vale um % do RA (como no Plano de Ensino)"], ["pts", "pontos da final", "A nota do Canvas já é o ponto da final: o RA soma os pontos"]]) { const b = el("button", null, t); b.type = "button"; b.title = tip; b.setAttribute("aria-pressed", String((p.mode || "") === v));
+            b.addEventListener("click", () => { if ((p.mode || "") === v) return; p.mode = v || undefined;
+              if (!v) { const ps = p.items.map(x => ptsOf(x.ref)), t = ps.reduce((s, n) => s + n, 0); p.items.forEach((x, i) => { x.w = t > 0 && ps.every(n => n > 0) ? Math.round(ps[i] / t * 10000) / 100 : Math.round(10000 / p.items.length) / 100; }); }   // back to %: the Canvas points give the weights
+              sync(); }); md.appendChild(b); }
+          card.append(el("small", "muted rb-ml", "As notas de " + (bName(p.name) || "este RA") + " no Canvas são:"), md);
+          p.items.forEach((x, xi) => { const row = el("div", "rb-i" + (pts ? " pts" : "")), l = hit(x.ref), share = sumP > 0 && sumI > 0 ? (Number(p.w) || 0) / sumP * (Number(x.w) || 0) / sumI * 100 : 0, del = el("button", "rb-x", "×");
+            const ref = field("rb-ref", "i" + pi + "-" + xi, x.ref, "Nota de " + bName(p.name), v => { x.ref = v; }); ref.placeholder = "nome da nota (ex.: Prova " + bName(p.name) + ")";
+            del.type = "button"; del.title = "Tirar de " + bName(p.name); del.setAttribute("aria-label", "Tirar " + (bName(x.ref) || "esta nota") + " de " + bName(p.name));
+            del.addEventListener("click", () => { p.items.splice(xi, 1); sync(); });
+            const fnd = l ? "✓ " + l.items[0] + (l.items.length > 1 ? " +" + (l.items.length - 1) : "") : bName(x.ref) ? NONE + ": conta como o que falta" : "digite o nome";
+            if (pts) row.append(ref, el("span", "u rb-pt", l ? fmt(ptsOf(x.ref), 2) + " pts" : "— pts"), del, el("small", "rb-st" + (l ? " okc" : bName(x.ref) ? " warn" : ""), (l ? "vale " + fmt(ptsOf(x.ref), 2) + " pts na final (do Canvas) · " : "") + fnd));
+            else row.append(ref, field("rb-w", "iw" + pi + "-" + xi, wTxt(x.w), "Quanto " + (bName(x.ref) || "esta nota") + " vale em " + bName(p.name) + " (%)", v => { const n = numIn(v); if (n != null) x.w = n; }), el("span", "u", "%"), del,
+              el("small", "rb-st" + (l ? " okc" : bName(x.ref) ? " warn" : ""), "= " + pctB(Math.round(share * 10) / 10) + " da final · " + fnd));
+            card.appendChild(row); });
+          if (pts) card.appendChild(known > top + 0.011 ? el("div", "c rb-sum warn", "As atividades do Canvas aqui somam " + fmt(known, 2) + " pts, mais que os " + fmt(top, 2) + " pts que " + bName(p.name) + " vale: o professor lança em pontos da final? Se não, escolha % do RA")
+            : el("div", "c rb-sum", Math.abs(known - top) < 0.011 ? "As notas do Canvas fecham os " + fmt(top, 2) + " pts de " + bName(p.name) + " ✓" : "No Canvas: " + fmt(known, 2) + " de " + fmt(top, 2) + " pts · os outros " + fmt(top - known, 2) + " pts ainda não saíram (contam como o que falta)"));
+          else if (p.items.length && p.items.every(x => hit(x.ref)) && known > 0 && Math.abs(known - top) < 0.011) card.appendChild(el("div", "c rb-sum", "As notas do Canvas aqui somam " + fmt(known, 2) + " pts, o que " + bName(p.name) + " vale na final: se o professor lança em pontos da final, escolha pontos da final"));
+          if (!pts && p.items.length && Math.abs(sumI - 100) > 0.5) card.appendChild(el("div", "c rb-sum warn", "As notas de " + bName(p.name) + " somam " + pctB(sumI) + " (a conta divide pelo total)"));
+          if (!p.items.length) card.appendChild(el("div", "c muted", "Nenhuma nota ainda: conta como o que falta."));
+          if (pts && model.parts.some(q => q !== p && q.items.some(x => { const l = hit(x.ref); return l && p.items.some(y => { const m = hit(y.ref); return m && m.items.some(n => l.items.includes(n)); }); }))) card.appendChild(el("div", "c rb-sum warn", "Uma atividade daqui também está em outro RA: em pontos ela contaria duas vezes (uma Entrega TDE dos 3 RAs fica em % do RA)"));
+          const add = el("button", "mini", "+ nota que ainda não saiu"); add.type = "button";
+          add.addEventListener("click", () => { addItem(p, ""); sync("i" + pi + "-" + (p.items.length - 1)); }); card.appendChild(add);
+          grid.appendChild(card); });
+        bWrap.appendChild(grid);
+        // a grade of this RA not in Canvas yet that shares a word with the activity ("RA1 TDE" and "Entrega TDE"): the activity takes its place and weight
+        const words = x => new Set(foldRef(x).split(" ").filter(w => w.length > 2 && !/^ra\d$/.test(w)));
+        const slotFor = (p, a) => { const aw = words(a.name); return p.items.find(x => bName(x.ref) && !hit(x.ref) && [...words(x.ref)].some(w => aw.has(w))); };
+      }
+      apply.addEventListener("click", async () => { await saveRule(cache.user, courseId, { merge: true, formula: String(ta.value).slice(0, 4000), own: own || undefined }); redraw(); });
+      restart.addEventListener("click", () => { ta.value = start.text; model = bParse(ta.value); raw.clear(); dropped.length = 0; preview(); bDraw(); });
+      acts.append(apply, restart, dirtyNote);
+      ed.append(el("h3", null, "Sua fórmula"), el("p", "c", "Escolha quantos RAs e quanto vale cada um. Conforme as notas saem, ponha cada uma no RA dela e diga quanto vale lá, ou, se o professor já lança a nota em pontos da final, escolha pontos da final e o RA soma o que está no Canvas."),
+        el("p", "c from", "Começou " + start.from + "."), bWrap, acts, pv, found);
+      preview(); bDraw();
       if (myRules[courseId]) { const rs = el("button", "mini back", own ? "Voltar à regra pronta" : "Voltar ao padrão"); rs.type = "button"; rs.addEventListener("click", async () => { const { myRules: all } = await chrome.storage.local.get("myRules"), base = Object.assign({}, all), mine = Object.assign({}, base[cache.user]); delete mine[courseId]; base[cache.user] = mine; myRules = mine; await chrome.storage.local.set({ myRules: base }); if (own) location.reload(); else redraw(); }); ed.appendChild(rs); }
-      const fd = el("details", "fdet"); fd.appendChild(el("summary", null, "Como a nota é calculada · editar a fórmula")); fd.appendChild(ed); if (bad) fd.open = true;
+      const fd = el("details", "fdet"); fd.appendChild(el("summary", null, "Como a nota é calculada · editar a fórmula por RA")); fd.appendChild(ed); if (bad) fd.open = true;
       box.appendChild(fd);
     }
     courseColor(cache, courseId).then(col => { if (col) band.style.background = col; }, () => {});
     teachersOf(cache).then(list => { const t = list.find(x => String(x.course) === courseId); if (!t) return;
       const go = el("a", "mini ask-b", "Perguntar"); go.href = location.origin + "/conversations?user_id=" + encodeURIComponent(t.id) + "&user_name=" + encodeURIComponent(t.name) + "&context_id=course_" + encodeURIComponent(t.course);
       go.title = "Abrir uma mensagem para " + t.name + " na caixa de entrada do Canvas"; teach.append(avatar(t.avatar, t.name, 34), mid(t.name, null, "professor(a)"), go); }, () => {});
-    // Simular: type a grade in the items without one and see the ring, the need and the other items change (nothing is saved).
-    const sim = {}; let simOn = false, paint = () => {};
-    const parts = { notas: [] }, simActs = el("div", "acts");
+    // the Plano de Ensino course: the same grade card; "Minhas notas" is the hand grades (hand[user][key], on the item's scale)
+    const simOn = false, parts = { notas: [] };
     if (c) {
-      const headBox = el("div"), st0 = a.state(c), nx = C.nextItem(st0);
-      const headCard = st => {
-        const head = el("div", "card cring" + (simOn ? " simulating" : "")), mid = el("div", "mid");
-        mid.append(el("div", "t", earnedText(st) + " garantidos de 10" + (simOn ? " (simulação)" : "")),
-          el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, 0) + " garantida" + (simOn ? " com essas notas" : " pelas notas lançadas") : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
+      const st0 = a.state(c), nx = C.nextItem(st0), total = C.weightSum(c), byKey = new Map(c.items.map(it => [C.key(c, it), it]));
+      const headCard = (st, simu) => {
+        const head = el("div", "card cring" + (simu ? " simulating" : "")), mid = el("div", "mid");
+        mid.append(el("div", "t", earnedText(st) + " garantidos de 10" + (simu ? " (simulação)" : "")),
+          el("div", "c", (st.status === "garantido" ? "meta " + fmt(T, T % 1 ? 1 : 0) + " garantida" + (simu ? " com essas notas" : " pelas notas lançadas") : "faltam " + up(st.need, 1) + " pontos pra meta " + fmt(T, T % 1 ? 1 : 0)) + (nx ? " · próxima " + dmy(nx.date) : "")));
         // the Canvas sum and ours differ when an item is graded on another scale than what it is worth (PjBL II of BD:
         // Canvas 0-2, worth 1,5 of the final): said, item by item, so the two numbers are not a mystery
-        { let raw = 0; const scaled = [];   // the grades in Canvas only (a simulation does not change this line)
-          for (const it of c.items) { const g = C.parseNum(a.canvas[C.key(c, it)]); if (g == null || Number.isNaN(g)) continue; raw += g; if (Math.abs(it.inMax - it.max) > 1e-9) scaled.push(it.name.replace(/^RA\d · /, "") + ": o Canvas lança de 0 a " + fmt(it.inMax, 2) + ", vale " + fmt(it.max, 2)); }
+        { let raw = 0; const scaled = [], used = new Set();   // the grades in Canvas only, on Canvas's own points (a simulation does not change this line)
+          const cvA = ((cache.data && Array.isArray(cache.data.courses) ? cache.data.courses : []).find(x => String(x.id) === String(courseId)) || {}).assignments || [], map = (C.CANVAS[c.id] || {}).items || {};
+          for (const it of c.items) { const g = C.parseNum(a.canvas[C.key(c, it)]); if (g == null || Number.isNaN(g)) continue;
+            const r = map[it.id], one = r && r.one ? cvA.filter(x => x && String(x.name).includes(r.one)) : [], hit = one.length === 1 ? one[0] : null;
+            const cp = hit && Number(hit.points) > 0 ? Number(hit.points) : r && r.pts > 0 ? r.pts : it.inMax;   // the points Canvas grades it on
+            if (hit && used.has(hit)) { scaled.push(it.name.replace(/^RA\d · /, "") + ": a mesma atividade do Canvas (" + hit.name + ")"); continue; } if (hit) used.add(hit);   // one Canvas grade for two items (BD's Entrega TDE): counted once
+            raw += hit && hit.score != null && Number.isFinite(Number(hit.score)) ? Number(hit.score) : g * cp / it.inMax;
+            if (Math.abs(cp - it.max) > 0.01) scaled.push(it.name.replace(/^RA\d · /, "") + ": o Canvas lança de 0 a " + fmt(cp, 2) + ", vale " + fmt(it.max, 2)); }
           const e0 = C.courseState(c, a.canvas, today(), T).earned;
-          if (Math.abs(raw - e0) >= 0.05) mid.appendChild(el("div", "c scale", "No Canvas as notas somam " + fmt(raw, 2) + "; pelos pesos do Plano de Ensino valem " + fmt(e0, 2) + (scaled.length ? " (" + scaled.slice(0, 3).join("; ") + ")" : ""))); }
+          if (Math.abs(raw - e0) >= 0.05) { const line = "No Canvas as notas somam " + fmt(raw, 2) + "; pelos pesos do Plano de Ensino valem " + fmt(e0, 2);
+            if (!scaled.length) mid.appendChild(el("div", "c scale", line));
+            else { const d = el("details", "c scale"), ul = el("ul", "scale-l"); d.appendChild(el("summary", null, line + " · por quê?")); for (const t of scaled.slice(0, 6)) ul.appendChild(el("li", null, t)); d.appendChild(ul); mid.appendChild(d); } } }
         head.append(ring(st, true), mid, needBig(st)); return head;
       };
-      box.appendChild(headBox);
-      const tbl = el("div", "card items"), th = el("div", "ir ih"); th.append(el("span", null, "Avaliação"), el("span", null, "Peso"), el("span", null, "Nota"));
-      tbl.appendChild(th);
-      const total = C.weightSum(c), d2 = it => it.inMax >= 5 ? 1 : 2, open = [];
-      for (const it of c.items) {
-        const row = el("div", "ir"), k = C.key(c, it), p = C.itemPoints(it, a.canvas[k]), name = el("span", "n", it.name);
-        if (nx === it) name.appendChild(el("span", "pill ok", dmy(it.date))); else if (st0.future.includes(it)) name.appendChild(el("span", "dt", dmy(it.date)));
-        if (!it.fromCanvas && it.unv) name.appendChild(el("span", "dt unv", "data a confirmar"));   // a Plano date the Plano itself does not confirm, and no Canvas activity yet
-        else if (!it.fromCanvas && it.date) name.title = "Data do Plano de Ensino (ainda não está no Canvas)";
-        let g;
-        if (Number.isNaN(p)) g = el("span", "g e", "nota inválida");
-        else if (p !== null) { g = el("span", "g", fmt(C.parseNum(a.canvas[k]), d2(it))); if (it.inMax !== 10) g.appendChild(el("small", null, " de " + fmt(it.inMax, d2(it)))); }
-        else { g = el("span", "g e"); open.push({ it, k, g }); }
-        row.append(name, el("span", "w", Math.round(it.max / total * 100) + "%"), g); tbl.appendChild(row);
-      }
-      const hint = it => st => st.late.includes(it) && !(C.key(c, it) in sim) ? "falta a nota" : st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it });
-      paint = () => {
-        const g = Object.assign({}, a.canvas, simOn ? {} : a.hand, sim), st = C.courseState(c, g, today(), T);
-        headBox.replaceChildren(headCard(st));
-        for (const o of open) {
-          const txt = (o.k in sim) ? "" : hint(o.it)(st), mineV = a.hand[o.k];
-          if (!simOn) {
-            o.g.replaceChildren(); o.mounted = false;
-            if (mineV != null && !Number.isNaN(C.itemPoints(o.it, mineV)) && C.itemPoints(o.it, mineV) !== null) { o.g.className = "g"; o.g.textContent = fmt(C.parseNum(mineV), d2(o.it)); o.g.appendChild(el("small", null, " sua nota")); }
-            else { o.g.className = "g e"; o.g.textContent = txt; }
-            continue;
-          }
-          o.g.className = "g e";
-          if (!o.input) {
-            o.input = el("input", "simi"); o.input.type = "text"; o.input.inputMode = "decimal"; o.input.setAttribute("aria-label", "Simular a nota de " + o.it.name + " (de " + fmt(o.it.inMax, d2(o.it)) + ")");
-            o.input.addEventListener("input", () => { const v = String(o.input.value || "").trim(), pp = v && C.itemPoints(o.it, v);
-              if (typeof pp === "number" && !Number.isNaN(pp)) sim[o.k] = v; else delete sim[o.k]; paint(); });
-          }
-          if (!o.mounted) { o.g.textContent = ""; o.g.replaceChildren(o.input); o.mounted = true; o.input.value = sim[o.k] || ""; }
-          o.input.placeholder = txt || "e se?";
-        }
-      };
-      paint();
+      const open = it => { const p = C.itemPoints(it, a.canvas[C.key(c, it)]); return p === null || Number.isNaN(p); };
+      const stOf = g => C.courseState(c, Object.assign({}, a.canvas, Object.fromEntries(Object.entries(g).filter(([k]) => byKey.has(k)).map(([k, v]) => [k, String(Math.round(v * byKey.get(k).inMax / 10 * 100) / 100)]))), today(), T);
+      const rows = c.items.map(it => { const k = C.key(c, it), p = C.itemPoints(it, a.canvas[k]);
+        return { id: k, name: it.name, date: st0.future.includes(it) || nx === it ? it.date : null, max: it.inMax, got: p !== null && !Number.isNaN(p) ? C.parseNum(a.canvas[k]) : null, w: total ? it.max / total : null,
+          tag: Number.isNaN(p) ? "nota inválida no Canvas" : !it.fromCanvas && it.unv ? "data a confirmar" : "" }; });
+      const saved = {}; for (const it of c.items) { const k = C.key(c, it), v = C.parseNum(a.hand[k]); if (open(it) && v != null && !Number.isNaN(v)) saved[k] = Math.min(10, v * 10 / it.inMax); }
+      parts.notas.push(gradeCard({ id: courseId, rows, saved, hero: (g, simu) => headCard(stOf(g), simu),
+        calc: g => { const st = stOf(g); return { status: st.status, need: st.fraction != null ? st.fraction * 10 : null, final: st.earned, st }; },
+        hint: (row, r) => { const it = byKey.get(row.id), st = r.st; return st.late.includes(it) ? "atrasada" : st.status === "depende-atrasadas" ? "—" : need({ req: C.requiredFor(st, it), item: it }).replace(/^precisa /, "").replace(/ de [\d,]+$/, "").replace(/^já garantido$/, "ok").replace(/^nem com 10$/, "—"); },   // short: the box is narrow and "de X" is beside it
+        save: async g => { const ch = {}; for (const it of c.items) { const k = C.key(c, it); if (open(it)) ch[k] = g[k] != null ? String(Math.round(g[k] * it.inMax / 10 * 100) / 100) : null; }
+          a.hand = await setHand(cache.user, ch); a.grades = Object.assign({}, a.hand, a.canvas); } }));
       const srcRow = el("div", "muted src own-row"); srcRow.append(el("span", null, source([c])));
       if (!a.expired && ruleItems(courseId).length) srcRow.appendChild(ownBtn());   // the ready-made weights do not match? build your own
-      parts.notas.push(tbl, srcRow);
+      parts.notas.push(srcRow);
     }
     const acts = el("div", "acts"), status = el("span", "muted");
     if (prefs.files) {
@@ -1779,32 +2057,12 @@
       files.addEventListener("click", () => listFiles(courseId, cv ? cv.name : document.title, acts, files, status));
       acts.appendChild(files);
     }
-    // Simular (nothing saved) or, with "Guardar como minhas notas", the grades typed where Canvas has none (kept per user)
-    if (c && c.items.some(it => C.itemPoints(it, a.canvas[C.key(c, it)]) === null)) {
-      const sb = el("button", null, "Simular ou lançar notas"), note = el("label", "muted keep"), keep = el("input"), save = el("button", "primary", "Guardar");
-      keep.type = "checkbox"; note.append(keep, el("span", null, " guardar como minhas notas")); note.hidden = true; save.hidden = true;
-      const ownOpen = () => c.items.filter(it => C.itemPoints(it, a.canvas[C.key(c, it)]) === null).map(it => C.key(c, it));
-      sb.addEventListener("click", () => {
-        simOn = !simOn; for (const k of Object.keys(sim)) delete sim[k];
-        if (simOn) for (const k of ownOpen()) if (a.hand[k] != null) sim[k] = a.hand[k];   // start from the grades already typed
-        sb.textContent = simOn ? "Sair sem guardar" : "Simular ou lançar notas"; note.hidden = save.hidden = !simOn; keep.checked = false;
-        paint();
-      });
-      save.addEventListener("click", async () => {
-        if (!keep.checked) { note.textContent = ""; note.append(keep, el("span", null, " marque para guardar (senão é só simulação)")); return; }
-        const ch = {}; for (const k of ownOpen()) ch[k] = k in sim ? sim[k] : null;
-        a.hand = await setHand(cache.user, ch); a.grades = Object.assign({}, a.hand, a.canvas);
-        simOn = false; for (const k of Object.keys(sim)) delete sim[k]; sb.textContent = "Simular ou lançar notas"; note.hidden = save.hidden = true; status.textContent = "Notas guardadas neste computador";
-        paint();
-      });
-      simActs.append(sb, note, save);
-    }
     const resend = async () => sendReminders(agenda(a, cache, await myMarks(cache.user)), prefs, cache);   // a tick or a dated item here changes the reminders
     const nb = notesBlock(cache, courseId, () => { if (btns.anot) btns.anot.textContent = "Anotações ✓"; }, resend);
     const host = document.getElementById("qf-panel"); if (host) host.cpBusy = () => simOn || nb.busy() || (!!host.cpRoot && !!host.cpRoot.activeElement && /^(INPUT)$/.test(host.cpRoot.activeElement.tagName || ""));   // typing the rule's top: not redrawn under the cursor
     acts.appendChild(status);
-    // tabs: Visão geral, Notas (table and simulator), Materiais (modules, files), Avisos, Anotações; the last one opened is kept
-    const tabs = [["geral", "Visão geral"]].concat(c ? [["notas", "Notas"]] : [], [["materiais", "Materiais"], ["avisos", "Avisos"]], EXT ? [["anot", "Anotações"]] : []);
+    // tabs: Visão geral, Materiais (modules, files), Avisos, Anotações; the last one opened is kept (the grades are above them)
+    const tabs = [["geral", "Visão geral"], ["materiais", "Materiais"], ["avisos", "Avisos"]].concat(EXT ? [["anot", "Anotações"]] : []);
     const bar = el("div", "ctabs"), panes = {}, btns = {}; bar.setAttribute("role", "tablist"); bar.setAttribute("aria-label", "Seções da matéria");
     bar.addEventListener("keydown", e => {
       const keys = tabs.map(([k]) => k), cur = keys.findIndex(k => btns[k].getAttribute ? btns[k].getAttribute("aria-selected") === "true" : btns[k]["aria-selected"] === "true");
@@ -1822,11 +2080,10 @@
       panes[k] = el("div", "cpane"); panes[k].setAttribute("role", "tabpanel"); panes[k].hidden = k !== "geral";   // no flash of every tab before the kept one is read
     }
     panes.geral.append(...overview(courseId, c, a, cache, prefs));
-    if (c) panes.notas.append(...parts.notas, simActs);
     panes.materiais.appendChild(acts);
     panes.avisos.appendChild(courseNews(cache, courseId));
     if (EXT) panes.anot.append(...nb.nodes);
-    box.append(bar, ...tabs.map(([k]) => panes[k]));
+    box.append(...parts.notas, bar, ...tabs.map(([k]) => panes[k]));
     if (EXT && host) host.cpOpenNotes = () => { show("anot", true); if (nb.ta.scrollIntoView) nb.ta.scrollIntoView({ block: "center" }); };
     if (EXT && location.hash === "#anot") show("anot"); else chrome.storage.local.get("ctab").then(({ ctab }) => show(tabs.some(([k]) => k === ctab) ? ctab : "geral"));
 
@@ -2349,7 +2606,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
   }
   async function run() {
     if (SIGN.test(location.pathname)) { await signedOut(); return; }
-    const first = await chrome.storage.local.get(["prefs", "cache", "refreshing"]); let prefs = cpPrefs(first.prefs);
+    const first = await chrome.storage.local.get(["prefs", "cache", "refreshing"]); let prefs = cpPrefs(first.prefs); labsOn = !!prefs.labs;
     if (prefs.scroll) scrollButtons();
     let cache;
     let queue = Promise.resolve();   // one drawing at a time, in order: the newer reading never loses to the older one
@@ -2363,12 +2620,14 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
     if (ownerSwapped) { prefs = cpPrefs((await chrome.storage.local.get("prefs")).prefs); livePrefs = prefs; }   // another student: their turma, not the previous one's
     window.cpRepaint = () => paintAll(cache, true);   // the latest reading drawn again (the Centro de Notas landed)
     await paintAll(cache, false);
+    const cp = /^\/courses\/(\d+)(\/(modules|files|assignments|grades|announcements))?\/?$/.exec(location.pathname);
+    if (cp && Date.now() - cache.at > 60000) freshCourse(cp[1]).then(c => { if (c) { cache = c; paintAll(c, true); } }, () => {});   // this course's activities read again
   }
   // Everything drawn from one reading; again: a newer reading replaces what the older one drew.
   let cardWatch = null, livePrefs = null;
   async function draw(cache, prefs, again) {
     T = Math.min(10, Math.max(5, Number(String(prefs.meta).replace(",", ".")) || 7)); TURMA_PREF = prefs.turma || null; KPI_COURSE = typeof prefs.kpiCourse === "string" ? prefs.kpiCourse : "";
-    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user), loadRules(cache.user)]);   // side by side, not one after another
+    const [hand, marks] = await Promise.all([myHand(cache.user), myMarks(cache.user), loadTasks(cache.user), loadChanges(cache.user), loadChecks(cache.user), loadCentro(cache.user), loadGrades(cache.user), loadRules(cache.user)]);   // side by side, not one after another
     let a = analyse(cache, hand);
     let keepCourse = false;   // a course panel in use (simulating, or a note typed in the last 30 s) is not swapped under the student
     if (again) for (const id of ["cp-dash", "qf-panel", "cp-cal"]) { const old = document.getElementById(id); if (!old) continue; if (old.cpBusy && old.cpBusy()) keepCourse = true; else old.remove(); }
@@ -2418,7 +2677,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       window.cpRedraw = () => onMode(prefs.mode);
       // the popup changes the mode, the meta or the native dashboard: the panel follows at once (one listener per page)
       window.cpPrefsChanged = async next => {
-        const p2 = cpPrefs(next);
+        const p2 = cpPrefs(next); setLabs(p2.labs);   // Labs on or off: at once, every panel
         if (!!p2.cardsFirst !== cardsFirst) { cardsFirst = !!p2.cardsFirst; placeDash(); }
         // the switches in the popup that shape the panel: redrawn at once, not only on the next page
         const PANEL = ["mode", "meta", "native", "grades", "week", "news", "tasks", "changes", "inbox", "newgrades", "dash", "cardPct", "remind"];   // cardImg is theme CSS only
@@ -2444,6 +2703,7 @@ ${pfx} .cp-eye.off { -webkit-mask-image:${EYE_OFF}; mask-image:${EYE_OFF}; opaci
       window.cpGreet = () => { if (++greetTries > 12 || (document.querySelector && document.querySelector(".cp-greet"))) { window.cpGreet = null; return; } greet(agenda(a, cache, marks)); };
       window.cpCards = a2 => decorateCards(a2, true, ctx);   // a new meta repaints the card pills
       if (!window.cpCentroWatch) { window.cpCentroWatch = 1; watchStore(ch => { if (ch.centroOff && !ch.centroOff.newValue) { centroOff = false; for (const h of ["cp-dash", "qf-panel"]) { const x = document.getElementById(h), r = x && x.cpRoot; for (const o of r && r.querySelectorAll ? r.querySelectorAll(".centro-ask") : []) o.remove(); } }   // allowed: the offer goes at once
+        if ((ch.myGrades || ch.hand) && !document.getElementById("qf-panel") && window.cpRepaint) window.cpRepaint();   // grades entered in another tab ("Minhas notas"): this dashboard redrawn with them
         if (ch.centro) loadCentro(cache.user).then(() => { if (window.cpRepaint) window.cpRepaint(); const a2 = analyse(cache, gradeA && gradeA.hand); if (window.cpCards) window.cpCards(a2); if (trayA) { trayA = a2; enhanceTray(trayA, trayHidden); } }); }); }   // both: the cards were drawn before the Centro landed   // the Centro de Notas landed: the panel and the cards again
       // the cards render late (React): watch the page for 20 seconds, then stop
       if (cardWatch) cardWatch.disconnect();

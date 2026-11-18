@@ -123,7 +123,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
     if (url === "/api/v1/users/self") return page({ id: opts.selfId || 5 });
     if (url.startsWith("/api/v1/courses?") && opts.failCourses) return { ok: false, status: 500, text: async () => "", headers: { get: () => null } };
     if (url.startsWith("/api/v1/courses?")) return page([Object.assign({ id: cid, name: opts.courseName || BD }, opts.groups ? { apply_assignment_group_weights: true } : {})].concat(opts.more || []));
-    if (opts.groups && url.startsWith("/api/v1/courses/" + cid + "/assignment_groups")) return page(opts.groups);
+    if ((opts.groups || opts.raGroups) && url.startsWith("/api/v1/courses/" + cid + "/assignment_groups")) return page(opts.groups || opts.raGroups);
     if (url.startsWith("/api/v1/courses/" + cid + "/assignments")) return page([{ name: "Entrega PjBL - Parte 1 03/09", points_possible: 1, html_url: "/courses/71306/assignments/11", submission: { score: 1 } },
       { name: "Avaliação somativa RA1 10/09", points_possible: 1.25, submission: { score: 1.25 } }, { name: "Avaliação somativa RA2 22/10", points_possible: 3, submission: { score: 3 } },
       { name: "Entrega PjBL - Parte 2 15/10", points_possible: 2, submission: { score: 2 } }].concat(opts.extraAsg || []));
@@ -249,11 +249,11 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const abd = C.COURSES.find(c => c.id === "abd"), st42 = C.courseState(abd, C.fromCanvas(course.store.cache.data).grades, isoIn(0), 7);
   assert.match(text(host), new RegExp((st42.earned >= 10 ? "10" : f1(Math.floor(st42.earned * 10) / 10)) + " garantidos de 10"), "ring card: points earned, from the core");
   const irows = all(host).filter(e => e.className === "ir");
-  assert.deepStrictEqual(irows.map(r => r.kids[0].textContent), abd.items.map(it => it.name), "one row per assessment, in order");
+  assert.deepStrictEqual(irows.map(r => r.kids[0].kids[0].textContent), abd.items.map(it => it.name), "one row per assessment, in order");
   assert(Math.abs(irows.reduce((t, r) => t + parseInt(r.kids[1].textContent, 10), 0) - 100) <= abd.items.length, "weights add up to 100%");
   const pj1 = irows[abd.items.findIndex(it => it.id === "pj1")];
   assert(pj1.kids[2].className === "g" && /^1,00/.test(pj1.kids[2].textContent), "a graded item shows its grade");
-  irows.filter((r, i) => st42.future.includes(abd.items[i])).forEach(r => assert(/^g e$/.test(r.kids[2].className) && /^(precisa [\d,]+|já garantido|não dá|—)/.test(r.kids[2].textContent), "an open item shows what it needs"));
+  irows.filter((r, i) => st42.future.includes(abd.items[i])).forEach(r => { const box = r.kids[2].kids.find(k => k.tag === "input"); assert(/^g e$/.test(r.kids[2].className) && box && /^([\d,]+|ok|atrasada|—)$/.test(box.placeholder), "an open item: a box whose placeholder is what it needs: " + (box && box.placeholder)); });
   const btn = all(host).find(e => e.textContent === "Baixar arquivos da matéria");
   await btn.listeners.click(); await new Promise(r => setTimeout(r, 20));
   assert.match(text(host), /1 arquivo, 1 novo/, "blocked and locked files left out");
@@ -462,16 +462,20 @@ async function runContent(pathname, files, preStore, opts = {}) {
     const cp = await runContent("/courses/42", null, {}, { courseId: 42 }), pb = () => cp.anchor.kids.find(k => k.id === "qf-panel") || all(cp.body).find(k => k.id === "qf-panel") || all(cp.anchor).find(k => k.id === "qf-panel");
     { const dash = await runContent("/", null, {}, { courseId: 42 }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
       assert(!/meta garantida · soma dos pontos/.test(dt) && !/recuperação · soma dos pontos/.test(dt), "no garantido or recuperação from the plain sum before the student checks the rule"); }
-    const p0 = pb(); assert(p0 && /Sua fórmula/.test(text(p0)) && all(p0).some(e => e.tag === "textarea"), "course page: the rule card and the formula editor");
-    const ta = () => all(pb()).find(e => e.tag === "textarea"), applyF = async v => { ta().value = v; await all(pb()).find(e => e.textContent === "Aplicar").listeners.click(); await new Promise(r => setTimeout(r, 20)); };
-    assert(/^Final = soma\(/.test(ta().value) && /Começou da soma dos pontos do Canvas/.test(text(pb())) && /Com esta fórmula:/.test(text(pb())), "starts from the sum of this course's Canvas activities, with a live result");
-    { const chip = all(pb()).find(e => e.className === "chip"); assert(chip, "the course's activities as chips"); const before = ta().value; ta().selectionStart = ta().selectionEnd = 0; chip.listeners.click(); assert(ta().value.length > before.length && ta().value.startsWith(chip.textContent), "a chip puts its name at the cursor"); }
+    const p0 = pb(); assert(p0 && /Sua fórmula/.test(text(p0)) && !all(p0).some(e => e.tag === "textarea" && /Fórmula/.test(e["aria-label"] || "")), "course page: the rule card and the builder, no formula text to edit");
+    const fml = () => (all(pb()).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula, applyB = async () => { await all(pb()).find(e => e.textContent === "Aplicar").listeners.click(); await new Promise(r => setTimeout(r, 20)); };
     const names = (cp.store.cache.data.courses.find(c => c.id === 42).assignments || []).filter(x => x.points > 0).map(x => x.name);
-    await applyF("Final = 40% A\nA = média(" + names[0] + ")\n# a part with nothing in Canvas yet:\nB = soma(Nada assim) de 4\nFinal2 = 60% B");
+    assert(/^Final = soma\(/.test(fml()) && /Começou da soma dos pontos do Canvas/.test(text(pb())) && /Com esta fórmula:/.test(text(pb())), "starts from the sum of this course's Canvas activities, with a live result");
+    { const mx = all(pb()).find(e => e.className === "rb-m"); assert(mx && /Atividades desta matéria \(\d+\)/.test(text(mx)) && names.every(n => text(mx).includes(n)) && /Escolha quantos RAs/.test(text(pb())), "the course's activities listed on top, and the count to choose first"); }
+    all(pb()).find(e => /seg rb-n/.test(e.className || "")).kids[1].listeners.click();
+    { const row = all(pb()).find(e => e.className === "rb-mr" && e.kids[0].textContent === names[0]); row.kids[1].kids[0].listeners.click(); }
+    assert(/^Final = 50% RA1 \+ 50% RA2\nRA1 = 100% /.test(fml()) && /^RA2 = 100% ainda não saiu$/m.test(fml()), "2 RAs, the first activity in RA1, RA2 still empty (counts as what is left): " + fml());
+    await applyB();
     const saved = cp.store.myRules && cp.store.myRules[5] && cp.store.myRules[5]["42"];
-    assert(saved && /Final = 40% A/.test(saved.formula), "the formula saved for this user and this course");
+    assert(saved && /^Final = 50% RA1 \+ 50% RA2/.test(saved.formula), "the formula saved for this user and this course");
     assert(/Pela sua fórmula/.test(text(pb())) && new RegExp(names[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(text(pb())), "the card says it is the formula; each name shows its Canvas activity");
-    await applyF("Final = 40 RA1"); assert(/sem peso/.test(text(pb())) && /A fórmula tem um erro/.test(text(pb())), "a formula with an error says which line, and gives no number");
+    { const bad = await runContent("/courses/42", null, { myRules: { 5: { 42: { off: [], total: 10, formula: "Final = 40 RA1" } } } }, { courseId: 42 }), bt = text(bad.anchor.kids.find(k => k.id === "qf-panel") || all(bad.anchor).find(k => k.id === "qf-panel"));
+      assert(/sem peso/.test(bt) && /A fórmula tem um erro/.test(bt), "a saved formula with an error says which line, and gives no number"); }
     const back = all(pb()).find(e => e.textContent === "Voltar ao padrão"); await back.listeners.click(); await new Promise(r => setTimeout(r, 20));
     assert(!cp.store.myRules[5]["42"], "back to the default: the rule removed");
     ok(); }
@@ -481,6 +485,50 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert(!ot.sent.find(m => m.type === "remind").items.some(i => i.key.startsWith("qf:")), "no Plano exams in the reminders");
   assert(ot.sent.find(m => m.type === "remind").items.some(i => i.key === "assignment:1"), "real Canvas tasks still reminded");
   assert.strictEqual(ot.sent.find(m => m.type === "next").date, null, "no exam on the icon");
+  { // the professor named the assignment groups by RA in Canvas: the formula starts from them; points adding up to 10 are points of the final
+    const raGroups = [{ id: 1, name: "RA1" }, { id: 2, name: "RA2/RA3 - Avaliações" }, { id: 3, name: "Tarefas" }];
+    const extraAsg = [{ name: "Prova A", points_possible: 4, assignment_group_id: 1, html_url: "/courses/42/assignments/91", submission: { score: 3 } }, { name: "Projeto B", points_possible: 6, assignment_group_id: 2, html_url: "/courses/42/assignments/92", submission: { score: null } },
+      { name: "Lista C", points_possible: 1, assignment_group_id: 3, html_url: "/courses/42/assignments/93", submission: { score: 1 } }];
+    const rg = await runContent("/courses/42", null, {}, { courseId: 42, raGroups, extraAsg }), rp = rg.anchor.kids.find(k => k.id === "qf-panel") || all(rg.anchor).find(k => k.id === "qf-panel");
+    const f = (all(rp).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula;
+    assert(rg.store.cache.data.courses[0].ras.length === 2 && f === "Final = 40% RA1 + 60% RA2 e RA3\nRA1 = soma(Prova A) de 4\nRA2 e RA3 = soma(Projeto B) de 6" && /Começou dos grupos RA do Canvas: as notas já somam os 10 pontos da final/.test(text(rp)), "the RA groups of Canvas: one line per RA, in points of the final (4 + 6 = 10): " + f);
+    assert(all(rp).filter(e => /seg rb-md/.test(e.className || "")).every(m => m.kids[1]["aria-pressed"] === "true"), "the builder draws them in points of the final");
+    const rg2 = await runContent("/courses/42", null, {}, { courseId: 42, raGroups, extraAsg: [extraAsg[0], Object.assign({}, extraAsg[1], { points_possible: 2 })] }), rp2 = rg2.anchor.kids.find(k => k.id === "qf-panel") || all(rg2.anchor).find(k => k.id === "qf-panel");
+    const f2 = (all(rp2).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula;
+    assert(f2 === "Final = 66,67% RA1 + 33,33% RA2 e RA3\nRA1 = soma(Prova A)\nRA2 e RA3 = soma(Projeto B)" && /confira no Plano de Ensino/.test(text(rp2)), "points not adding up to 10: the RAs weigh by their points so far, said to check: " + f2);
+    const rg3 = await runContent("/courses/42", null, {}, { courseId: 42, raGroups: [{ id: 1, name: "RA1 - Provas" }, { id: 2, name: "RA1 - Trabalhos" }, { id: 4, name: "RA2" }], extraAsg: [extraAsg[0], Object.assign({}, extraAsg[1], { assignment_group_id: 2, points_possible: 1 }), Object.assign({}, extraAsg[2], { assignment_group_id: 4, points_possible: 5 })] });
+    const f3 = (all(rg3.anchor).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula;
+    assert(f3 === "Final = 50% RA1 + 50% RA2\nRA1 = soma(Prova A, Projeto B) de 5\nRA2 = soma(Lista C) de 5", "two groups of the same RA are one RA (none of its activities dropped): " + f3); }
+  { // a part of the formula not in Canvas yet (a paper exam): a box; the grade typed in Minhas notas counts, here and after a reload
+    const own = { 5: { 42: { off: [], total: 10, formula: "Final = 50% Avaliação somativa RA1 + 50% Prova papel" } } };
+    const tp = await runContent("/courses/42", null, { myRules: own, gtMode: "mine" }, { courseId: 42 }), tq = () => tp.anchor.kids.find(k => k.id === "qf-panel") || all(tp.anchor).find(k => k.id === "qf-panel");
+    const inp = all(tq()).find(e => e.tag === "input" && /Nota de Prova papel/.test(e["aria-label"] || (e.attrs && e.attrs["aria-label"]) || ""));
+    assert(inp && /ainda não está no Canvas/.test(text(tq())), "the part not in Canvas has a box: " + !!inp);
+    inp.value = "8"; inp.listeners.input(); await new Promise(r => setTimeout(r, 30));
+    assert(tp.store.myGrades && tp.store.myGrades[5][42]["-Prova papel"] === 8, "saved in Minhas notas under the part's name: " + JSON.stringify(tp.store.myGrades));
+    const again = await runContent("/courses/42", null, { myRules: own, myGrades: tp.store.myGrades, gtMode: "mine" }, { courseId: 42 }), at = text(again.anchor.kids.find(k => k.id === "qf-panel") || all(again.anchor).find(k => k.id === "qf-panel"));
+    assert(/9,0 garantidos de 10|9,0/.test(at) && /meta 7 garantida/.test(at), "after a reload it counts: 50% of 10 + 50% of 8 = 9,0: " + (at.match(/.{0,60}garantid.{0,60}/) || [""])[0]); }
+  { // a formula the student wrote (even without "own") is theirs: the Centro de Notas arriving later does not take its place
+    const L = (id, n, nota) => ({ coluna: { id_coluna: id, tipo_coluna: "padrao", nome_coluna: n, notas: nota == null ? [] : [{ nota }], atividade: { pontos_possiveis: 10 } } });
+    const cu = { grupos: [{ id_grupo: 1, grupo_colunas: [L(1, "P1", "2,00"), L(2, "P2", null)] }], colunas: [{ id_coluna: 9, tipo_coluna: "final", tipo_calculo: "media_ponderada", colunas_associadas_pai: [{ id_coluna: 1, pivot: { peso_coluna_filho: 50 } }, { id_coluna: 2, pivot: { peso_coluna_filho: 50 } }] }] };
+    const fb = await runContent("/courses/42", null, { myRules: { 5: { 42: { off: [], total: 10, formula: "Final = 100% Avaliação somativa RA1" } } }, centro: { user: 5, at: Date.now(), courses: { 42: cu } } }, { courseId: 42 });
+    const ft = text(fb.anchor.kids.find(k => k.id === "qf-panel") || all(fb.anchor).find(k => k.id === "qf-panel"));
+    assert(/Pela sua fórmula/.test(ft) && !/Pela fórmula do Centro de Notas/.test(ft), "the student's formula wins over the Centro: " + (ft.match(/Pela.{0,60}/) || [""])[0]); }
+  { // a "de N" the student wrote stays through any click; it follows the RA's weight only once that weight is changed
+    const own = { 5: { 42: { off: [], total: 10, formula: "Final = 50% RA1 + 50% RA2\nRA1 = soma(Avaliação somativa RA1) de 10\nRA2 = 100% ainda não saiu" } } };
+    const dn = await runContent("/courses/42", null, { myRules: own }, { courseId: 42 }), dp = () => dn.anchor.kids.find(k => k.id === "qf-panel") || all(dn.anchor).find(k => k.id === "qf-panel");
+    const df = () => (all(dp()).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula;
+    all(dp()).find(e => e.className === "rb-mr" && /^Avaliação somativa RA2/.test(e.kids[0].textContent)).kids[1].kids[1].listeners.click();
+    assert(/^RA1 = soma\(Avaliação somativa RA1\) de 10$/m.test(df()) && /^RA2 = 100% Avaliação somativa RA2/m.test(df()), "a click in RA2 keeps RA1's de 10: " + df());
+    const w = all(dp()).find(e => e.dataset && e.dataset.k === "pw0"); w.value = "40"; w.listeners.input();
+    assert(/^RA1 = soma\(Avaliação somativa RA1\) de 4,44$/m.test(df()), "RA1 weight changed: its points follow (40 of the 90% typed = 4,44 of 10): " + df()); }
+  { // Labs: the new look only for who turned it on; its bar says so, with the opinion and the way back
+    const off = await runContent("/courses/42", null, {}, { courseId: 42 }), on = await runContent("/courses/42", null, { prefs: { labs: true } }, { courseId: 42 });
+    const host = r => r.anchor.kids.find(k => k.id === "qf-panel") || all(r.anchor).find(k => k.id === "qf-panel");
+    assert(!/\blabs\b/.test(host(off).className) && /\blabs\b/.test(host(on).className), "the host carries the labs class only when Labs is on: " + host(on).className);
+    const bar = all(on.anchor).find(e => e.className === "labs-bar");
+    assert(bar && /Voltar ao visual normal/.test(text(bar)) && all(bar).some(e => e.tag === "a" && /issues\/new\?title=Labs/.test(e.href)), "the Labs bar: the opinion (a GitHub issue) and the way back");
+    await all(bar).find(e => e.className === "labs-back").listeners.click(); assert(on.store.prefs.labs === false, "Voltar ao visual normal turns Labs off"); }
   const otc = await runContent("/courses/42", [], {}, { courseId: 42 });
   assert(!/garantidos de 10/.test(text(otc.anchor)) && all(otc.anchor).some(e => e.textContent === "Baixar arquivos da matéria"), "other turma course page: files only");
   // subjects the student is not enrolled in: no exam of theirs in the week, the reminders or the icon
@@ -506,7 +554,74 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(cp.store.myRules && cp.store.myRules[5]["71306"].own === true && reloads.length === 1, "saved as the student's own rule, the page reloads");
     const after = await runContent("/courses/71306", [], { myRules: cp.store.myRules }), ap = after.anchor.kids.find(k => k.id === "qf-panel");
     assert(/Pela sua fórmula|Sua fórmula/.test(text(ap)) && /Voltar à regra pronta/.test(text(ap)) && !/Pesos do Plano de Ensino 2026\/2 · não oficial/.test(text(ap)), "the course page now shows the student's rule, with a way back");
-    assert(/^Final = .*% /.test(cp.store.myRules[5]["71306"].formula) && /Começou dos pesos do Plano de Ensino/.test(text(ap)), "it starts from the Plano's weights, written as a formula and saved");
+    assert(/^Final = .*% /.test(cp.store.myRules[5]["71306"].formula) && /Começou do Plano de Ensino por RA, com as notas do Canvas já em pontos da final/.test(text(ap)), "it starts from the Plano by RA, written as a formula and saved");
+    const OLD = "Final = 25% RA1 + 50% RA2 + 25% RA3\nRA1 = 40% PjBL - Parte 1 + 50% Avaliação somativa RA1 + 10% Entrega TDE\nRA2 = 40% PjBL - Parte 2 + 50% Avaliação somativa RA2 + 10% Entrega TDE\nRA3 = 40% Pjbl Parte 3 + 50% Avaliação somativa RA3 + 10% Entrega TDE";   // a formula in % of each RA, the Plano's own weights
+    { // the builder: the Plano's weights by RA; one Canvas activity (Entrega TDE, the TDE of the 3 RAs) put in each RA by clicks
+      assert(cp.store.myRules[5]["71306"].formula === "Final = 22,5% RA1 + 50% RA2 + 22,5% RA3 + 5% Entrega TDE\nRA1 = soma(PjBL - Parte 1, Avaliação somativa RA1) de 2,25\nRA2 = soma(PjBL - Parte 2, Avaliação somativa RA2) de 5\nRA3 = soma(Pjbl Parte 3, Avaliação somativa RA3) de 2,25", "BD's start: one line per RA adding the Canvas points (already points of the final), the Entrega TDE (TDE of RA1 and RA3) 0,5 of the final: " + cp.store.myRules[5]["71306"].formula);
+      { const pm = all(ap).filter(e => /seg rb-md/.test(e.className || "")); assert(pm.length === 4 && pm.slice(0, 3).every(m => m.kids[1]["aria-pressed"] === "true") && pm[3].kids[0]["aria-pressed"] === "true" && /As notas do Canvas fecham os 5,00 pts de RA2/.test(text(ap)), "the builder draws BD's RAs in points of the final, RA2 closed by the Canvas, the TDE a part of its own: " + pm.length); }
+      const bc = await runContent("/courses/71306", [], { myRules: { 5: { 71306: { own: true, formula: OLD } } } }, { extraAsg: [{ name: "Entrega TDE", points_possible: 1, html_url: "/courses/71306/assignments/77", submission: { score: 1 } }] });
+      const bp = () => bc.anchor.kids.find(k => k.id === "qf-panel") || all(bc.anchor).find(k => k.id === "qf-panel"), bta = () => ({ value: (all(bp()).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula });
+      const count = all(bp()).find(e => /seg rb-n/.test(e.className || "")); assert(count && count.kids[2]["aria-pressed"] === "true", "the builder shows 3 RAs");
+      const tdeRow = () => all(bp()).find(e => e.className === "rb-mr" && /^Entrega TDE$/.test(e.kids[0].textContent));
+      assert(/^Final = 25% RA1 \+ 50% RA2 \+ 25% RA3\nRA1 = 40% PjBL - Parte 1 \+ 50% Avaliação somativa RA1 \+ 10% Entrega TDE\nRA2 = 40% PjBL - Parte 2 \+ 50% Avaliação somativa RA2 \+ 10% Entrega TDE\n/.test(bta().value), "the builder draws a % formula (the Plano's TDE row: 10% in each RA, one Canvas activity): " + bta().value);
+      assert(tdeRow() && tdeRow().kids[1].kids.every(b => b["aria-pressed"] === "true"), "Entrega TDE starts in the 3 RAs");
+      tdeRow().kids[1].kids[1].listeners.click();
+      assert(!/^RA2 = .*Entrega TDE/m.test(bta().value) && tdeRow().kids[1].kids[1]["aria-pressed"] === "false", "a click takes it out of RA2");
+      tdeRow().kids[1].kids[1].listeners.click();
+      assert(bta().value.split("\n").filter(l => /^RA\d = .*% Entrega TDE/.test(l)).length === 3, "and puts it back: " + bta().value);
+      assert(/Com esta fórmula:/.test(text(bp())) && !/conta em/.test(text(bp())), "one activity in the 3 RAs is not an error");
+      const w = all(bp()).find(e => e.tag === "input" && e.dataset && e.dataset.k === "pw0"); w.value = "30"; w.listeners.input();
+      assert(/^Final = 30% RA1/.test(bta().value) && /Os RAs somam 105%/.test(text(bp())), "a RA's weight typed: the formula follows and the sum is flagged: " + bta().value.split("\n")[0]);
+      { const w2 = all(bp()).find(e => e.tag === "input" && e.dataset && e.dataset.k === "pw0"); w2.value = "12,"; w2.listeners.input();
+        assert(all(bp()).find(e => e.dataset && e.dataset.k === "pw0").value === "12," && /^Final = 12% RA1/.test(bta().value), "a weight half typed (\"12,\") stays as typed, the formula takes 12");
+        const w3 = all(bp()).find(e => e.dataset && e.dataset.k === "pw0"); w3.value = "12,5"; w3.listeners.input(); assert(/^Final = 12,5% RA1/.test(bta().value), "then 12,5");
+        const w4 = all(bp()).find(e => e.dataset && e.dataset.k === "pw0"); w4.value = ""; w4.listeners.input();
+        assert(all(bp()).find(e => e.dataset && e.dataset.k === "pw0").value === "" && /^Final = 12,5% RA1/.test(bta().value), "emptied to type again: the field stays empty, the formula keeps the last number");
+        const w5 = all(bp()).find(e => e.dataset && e.dataset.k === "pw0"); w5.value = "30"; w5.listeners.input(); }
+      { const before = bta().value; all(bp()).find(e => /seg rb-n/.test(e.className || "")).kids[2].listeners.click(); assert(bta().value === before, "the count already chosen: nothing changes"); }
+      all(bp()).find(e => /seg rb-n/.test(e.className || "")).kids[1].listeners.click(); const c2 = all(bp()).find(e => /seg rb-n/.test(e.className || ""));
+      assert(/^Final = 30% RA1 \+ 50% RA2\n/.test(bta().value) && !/RA3/.test(bta().value) && c2.kids[1]["aria-pressed"] === "true", "2 RAs: weights set by hand are kept: " + bta().value.split("\n")[0]);
+      all(bp()).find(e => /seg rb-n/.test(e.className || "")).kids[2].listeners.click();
+      assert(/^Final = 30% RA1 \+ 50% RA2 \+ 25% RA3\n/.test(bta().value) && /^RA3 = .*Entrega TDE/m.test(bta().value), "back to 3: RA3 comes back with its grades: " + bta().value);
+      all(bp()).find(e => /seg rb-n/.test(e.className || "")).kids[1].listeners.click();
+      const add = all(bp()).find(e => e.textContent === "+ nota que ainda não saiu"); add.listeners.click();
+      const ref = all(bp()).filter(e => e.className === "rb-ref").pop(); ref.value = "Prova extra"; ref.listeners.input();
+      assert(/Prova extra/.test(bta().value) && /ainda não saiu: conta como o que falta/.test(text(bp())), "a grade not in Canvas yet, typed by hand, counts as what is left"); }
+    { // the course hero: the Canvas sum on Canvas's own points (one Entrega TDE counted once), against the Plano's
+      const hc = await runContent("/courses/71306", [], {}, { extraAsg: [{ name: "Entrega TDE", points_possible: 1, html_url: "/courses/71306/assignments/77", submission: { score: 1 } }] });
+      const ht = text(hc.anchor.kids.find(k => k.id === "qf-panel") || all(hc.anchor).find(k => k.id === "qf-panel"));
+      assert(/No Canvas as notas somam 8,25; pelos pesos do Plano de Ensino valem 7,75/.test(ht) && /TDE: o Canvas lança de 0 a 1,00, vale 0,25/.test(ht), "the Canvas sum on Canvas points (7,25 + the TDE once), and why ours differs: " + (ht.match(/No Canvas.{0,200}/) || [""])[0]); }
+    { // the professor posts the grade already in points of the final: the RA adds the Canvas points up to what it is worth
+      const tde = { extraAsg: [{ name: "Entrega TDE", points_possible: 1, html_url: "/courses/71306/assignments/77", submission: { score: 1 } }] };
+      const pc = await runContent("/courses/71306", [], { myRules: { 5: { 71306: { own: true, formula: OLD } } } }, tde);
+      const pp = () => pc.anchor.kids.find(k => k.id === "qf-panel") || all(pc.anchor).find(k => k.id === "qf-panel"), pf = () => (all(pp()).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula;
+      const modes = () => all(pp()).filter(e => /seg rb-md/.test(e.className || ""));
+      assert(modes().length === 3 && modes().every(m => m.kids[0]["aria-pressed"] === "true"), "each RA says how its grades are posted, % of the RA to start");
+      modes()[0].kids[1].listeners.click();
+      assert(/^RA1 = soma\(PjBL - Parte 1, Avaliação somativa RA1, Entrega TDE\) de 2,5$/m.test(pf()), "points of the final: RA1 adds its Canvas points, out of what it is worth (25% = 2,5): " + pf());
+      assert(/somam 3,25 pts, mais que os 2,50 pts/.test(text(pp())) && /vale .* pontos, mas as atividades do Canvas nela já somam 3,25/.test(text(pp())) && /contaria duas vezes/.test(text(pp())), "points above what the RA is worth: said, and no number from it: " + text(pp()).match(/As atividades.{0,160}|vale 2.{0,160}|Uma atividade.{0,80}/g));
+      const tdeRow = all(pp()).find(e => e.className === "rb-mr" && /^Entrega TDE$/.test(e.kids[0].textContent)); tdeRow.kids[1].kids[0].listeners.click();
+      assert(/^RA1 = soma\(PjBL - Parte 1, Avaliação somativa RA1\) de 2,5$/m.test(pf()) && /No Canvas: 2,25 de 2,50 pts · os outros 0,25 pts ainda não saíram/.test(text(pp())) && !/contaria duas vezes/.test(text(pp())), "the TDE out of RA1: 2,25 of 2,5 in Canvas, the rest is left: " + pf());
+      all(pp()).find(e => /seg rb-md/.test(e.className || "")).kids[0].listeners.click(); modes()[0].kids[1].listeners.click();
+      tdeRow.kids && all(pp()).find(e => e.className === "rb-mr" && /^Entrega TDE$/.test(e.kids[0].textContent)).kids[1].kids[0].listeners.click();
+      assert(!/^RA[23] = .*Entrega TDE/m.test(pf()) && /^RA1 = soma\(.*Entrega TDE\) de 2,5$/m.test(pf()), "an activity put in a points RA leaves the other RAs (it would count twice): " + pf());
+      all(pp()).find(e => e.className === "rb-mr" && /^Entrega TDE$/.test(e.kids[0].textContent)).kids[1].kids[0].listeners.click();
+      await all(pp()).find(e => e.textContent === "Aplicar").listeners.click(); await new Promise(r => setTimeout(r, 20));
+      assert(/^RA1 = soma\(PjBL - Parte 1, Avaliação somativa RA1\) de 2,5$/m.test(pc.store.myRules[5]["71306"].formula), "saved: " + pc.store.myRules[5]["71306"].formula);
+      const again = await runContent("/courses/71306", [], { myRules: pc.store.myRules }, tde), ap2 = again.anchor.kids.find(k => k.id === "qf-panel") || all(again.anchor).find(k => k.id === "qf-panel");
+      const m2 = all(ap2).filter(e => /seg rb-md/.test(e.className || ""));
+      assert(m2.length === 3 && m2[0].kids[1]["aria-pressed"] === "true" && m2[1].kids[0]["aria-pressed"] === "true" && /= 2,5 pts/.test(text(ap2)), "opened again: RA1 still in points of the final, the others in %"); }
+    { // the course page reads its activities again: one that just came out shows without waiting for the next full reading
+      const st = { myRules: cp.store.myRules, cache: Object.assign({}, after.store.cache, { at: Date.now() - 2 * 60 * 1000 }) };
+      const rc = await runContent("/courses/71306", [], st, { extraAsg: [{ name: "Entrega TDE", points_possible: 1, html_url: "/courses/71306/assignments/77", submission: { score: 1 } }, { name: "Atividade nova", points_possible: 2, html_url: "/courses/71306/assignments/78", submission: { score: null } }] });
+      await new Promise(r => setTimeout(r, 60));
+      const rp = rc.anchor.kids.find(k => k.id === "qf-panel") || all(rc.anchor).find(k => k.id === "qf-panel"), names = rc.store.cache.data.courses.find(c => String(c.id) === "71306").assignments.map(x => x.name);
+      assert(names.includes("Atividade nova") && all(rp).some(e => e.className === "rb-mr" && e.kids[0].textContent === "Atividade nova"), "the new activity is in the reading and in the builder's list");
+      const nova = { extraAsg: [{ name: "Atividade nova", points_possible: 2, html_url: "/courses/71306/assignments/78", submission: { score: null } }] }, has = r => r.store.cache.data.courses.find(c => String(c.id) === "71306").assignments.some(x => x.name === "Atividade nova");
+      const busy = await runContent("/courses/71306", [], Object.assign({}, st, { refreshing: Date.now() }), nova); await new Promise(r => setTimeout(r, 60));
+      assert(!has(busy), "a full reading under way: the course is not read on its own (it would write an older reading over the new one)");
+      const twice = await runContent("/courses/71306", [], Object.assign({}, st, { freshAt: { 71306: Date.now() - 5000 } }), nova); await new Promise(r => setTimeout(r, 60));
+      assert(!has(twice) && twice.fetches.filter(u => u.startsWith("/api/v1/courses/71306/assignments")).length === 0, "read 5 s ago on another page load: not again (once a minute per course, kept in storage)"); }
     const dash = await runContent("/", null, { myRules: cp.store.myRules }), dt = text(dash.anchor.kids.find(k => k.id === "cp-dash"));
     assert(/sua regra/i.test(dt) && /Banco de Dados|Arquitetura/.test(dt), "the dashboard lists it with the student's rule: " + dt.slice(0, 200)); }
   assert(all(cpb).filter(e => e.className === "big" && /garantido/.test(text(e))).every(e => e.title === C.GARANTIDO_TIP), "garantido tooltip: not official");
@@ -516,7 +631,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // Now the user is always confirmed (the id in the page, else /users/self); /courses once; one tab reads at a time.
   const reads = r => r.fetches.filter(u => !/\/(files|modules)\?|\/users\?enrollment_type/.test(u));   // what changed (hourly) and the teachers (daily) have their own tests   // "what changed" reads files and modules at most once an hour (its own test)
   const cold = await runContent("/", null);
-  assert.deepStrictEqual(reads(cold).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 6 calls, /courses once");
+  assert.deepStrictEqual(reads(cold).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignment_groups", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "cold: 7 calls (the assignment groups say which activity is in which RA), /courses once");
   const KEEP_P = ["plannable_type", "plannable_id", "plannable_date", "plannable", "html_url", "course_id", "context_name", "submissions", "planner_override"];
   assert(cold.store.cache.planner.length && cold.store.cache.planner.every(p => Object.keys(p).every(k => KEEP_P.includes(k)) && (!p.plannable || Object.keys(p.plannable).join() === "title")), "the stored planner keeps only what the week reads");
   const warm = await runContent("/", null, cold.store);
@@ -525,10 +640,10 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(reads(warmEnv).length, 0, "warm with the user id in the page: no call");
   const st10 = Object.assign({}, cold.store, { cache: Object.assign({}, cold.store.cache, { at: Date.now() - 11 * 60 * 1000 }) });
   const later = await runContent("/", null, st10);
-  assert.deepStrictEqual(reads(later).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (6 calls)");
+  assert.deepStrictEqual(reads(later).map(u => u.split("?")[0]).sort(), ["/api/v1/announcements", "/api/v1/conversations", "/api/v1/courses", "/api/v1/courses/71306/assignment_groups", "/api/v1/courses/71306/assignments", "/api/v1/planner/items", "/api/v1/users/self"], "reading older than 10 min, no user id in the page: the user is confirmed before reading (7 calls)");
   const pageEnv = [{ textContent: 'ENV = {"current_user_id":"5"}' }];
   const laterEnv = await runContent("/", null, st10, { scripts: pageEnv });
-  assert.strictEqual(reads(laterEnv).length, 5, "reading older than 10 min with the user id in the page: 5 calls");
+  assert.strictEqual(reads(laterEnv).length, 6, "reading older than 10 min with the user id in the page: 6 calls");
   // an older reading shows at once; the new one replaces it when Canvas answers (one panel, never two)
   const oldFirst = await runContent("/", null, st10, { scripts: pageEnv, slow: 80 });
   const dashes = () => all(oldFirst.anchor).filter(e => e.id === "cp-dash");
@@ -541,7 +656,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const updRun = await runContent("/", null, upd, { scripts: pageEnv, slow: 80 });
   assert.strictEqual(all(updRun.anchor).filter(e => e.id === "cp-dash").length, 1, "after an update the panel is drawn from the last reading, not after Canvas answers");
   await new Promise(r => setTimeout(r, 400));
-  assert(updRun.store.cache.v === C.EXT_LATEST && reads(updRun).length === 5, "and the reading is redone in the background");
+  assert(updRun.store.cache.v === C.EXT_LATEST && reads(updRun).length === 6, "and the reading is redone in the background");
   // a failed reading (Canvas throttled or down) keeps the lock a minute: the next page shows the last reading, no new burst
   const failed = await runContent("/", null, st10, { scripts: pageEnv, failCourses: true }); await new Promise(r => setTimeout(r, 50));
   assert(failed.store.refreshing > 0, "a failed reading leaves the lock");
@@ -627,41 +742,47 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const noScroll = await runContent("/", null, { prefs: { scroll: false } }, { tall: 4000 });
   assert(!noScroll.body.kids.some(k => k.id === "cp-scroll"), "switched off: none"); ok();
 
-  // Simular notas on the course page: the ring and the needs follow the typed grades; nothing is saved
+  // the grade card on the course page: Simular (the hero follows the typed grades, nothing counts) and Minhas notas (saved
+  // per user, counted in the hero and the dashboard); the same card for every source
   const simP = await runContent("/courses/71306", []), sp = simP.anchor.kids.find(k => k.id === "qf-panel");
   const headTxt = () => text(all(sp).find(e => /^card cring/.test(e.className)));
-  const keys0 = JSON.stringify(simP.store), before = headTxt(), sbtn = all(sp).find(e => e.textContent === "Simular ou lançar notas");
-  assert(sbtn && !all(sp).some(e => e.className === "simi"), "a Simular button, no inputs yet");
-  sbtn.listeners.click();
-  const ins = all(sp).filter(e => e.className === "simi");
-  assert(ins.length > 0 && ins.every(i => i.placeholder && /^Simular a nota de /.test(i["aria-label"])), "one input per item without a grade, the need as placeholder");
+  const before = headTxt(), modeB = l => all(sp).find(e => e.tag === "button" && e.textContent === l);
+  const ins = all(sp).filter(e => /^simi/.test(e.className || ""));
+  assert(modeB("Simular") && modeB("Minhas notas") && modeB("Simular")["aria-pressed"] === "true" && ins.length > 0 && ins.every(i => i.placeholder && /^Nota de .+\(de [\d,]+\)$/.test(i["aria-label"])), "two modes, Simular first; one box per item without a grade, the need as placeholder");
   ins.forEach(i => { i.value = "abc"; i.listeners.input(); });
-  assert.strictEqual(headTxt().replace(" (simulação)", "").replace("com essas notas", "pelas notas lançadas"), before, "an invalid grade changes nothing");
+  assert.strictEqual(headTxt(), before, "an invalid grade changes nothing");
   ins.forEach(i => { i.value = String(i["aria-label"].match(/de ([\d,]+)\)$/)[1]); i.listeners.input(); });
-  assert(/\(simulação\)/.test(headTxt()) && /10 garantidos de 10|garantida com essas notas/.test(headTxt()), "full marks everywhere: the head says so: " + headTxt());
-  assert(/simulating/.test(all(sp).find(e => /^card cring/.test(e.className)).className), "the head is marked as a simulation");
-  sbtn.listeners.click();
-  assert.strictEqual(headTxt(), before, "leaving puts the real numbers back"); assert(!all(sp).some(e => e.className === "simi"), "inputs gone");
-  assert.strictEqual(JSON.stringify(simP.store), keys0, "nothing saved");
-  // the same inputs, with "guardar como minhas notas": kept per user, shown as "sua nota", and counted everywhere
-  sbtn.listeners.click(); const in2 = all(sp).filter(e => e.className === "simi");
-  const top0 = String(in2[0]["aria-label"].match(/de ([\d,]+)\)$/)[1]); in2[0].value = top0; in2[0].listeners.input();
-  const saveB = all(sp).find(e => e.textContent === "Guardar"), keepBox = all(sp).find(e => e.tag === "input" && e.type === "checkbox");
-  await saveB.listeners.click(); assert(!simP.store.hand, "without the box ticked it is only a simulation");
-  keepBox.checked = true; await saveB.listeners.click(); await new Promise(r => setTimeout(r, 10));
-  const handKey = Object.keys(simP.store.hand[5])[0];
-  assert(simP.store.hand[5][handKey] === top0 && /sua nota/.test(text(sp)) && !all(sp).some(e => e.className === "simi"), "saved for this user, shown as their grade: " + JSON.stringify(simP.store.hand) + " " + /sua nota/.test(text(sp)) + " " + all(sp).filter(e => e.className === "simi").length);
-  const reload = await runContent("/courses/71306", [], { hand: simP.store.hand });
-  assert(/sua nota/.test(text(reload.anchor)), "back on the next visit and in the numbers"); ok();
+  assert(/\(simulação\)/.test(headTxt()) && /10 garantidos de 10|garantida com essas notas/.test(headTxt()) && /simulating/.test(all(sp).find(e => /^card cring/.test(e.className)).className), "full marks everywhere: the hero follows, marked as a simulation: " + headTxt());
+  assert(!simP.store.hand, "Simular never writes the student's grades");
+  await all(sp).find(e => e.textContent === "Limpar").listeners.click();
+  assert.strictEqual(headTxt(), before, "Limpar puts the real numbers back");
+  await modeB("Minhas notas").listeners.click(); assert(modeB("Minhas notas")["aria-pressed"] === "true" && simP.store.gtMode === "mine", "Minhas notas chosen and remembered");
+  const top0 = String(ins[0]["aria-label"].match(/de ([\d,]+)\)$/)[1]); ins[0].value = top0; ins[0].listeners.input(); await new Promise(r => setTimeout(r, 20));
+  const handKey = simP.store.hand && Object.keys(simP.store.hand[5] || {})[0];
+  assert(handKey && Number(simP.store.hand[5][handKey].replace(",", ".")) === Number(top0.replace(",", ".")) && !/simulação/.test(headTxt()) && headTxt() !== before, "saved for this user and counted in the hero: " + JSON.stringify(simP.store.hand) + " " + headTxt());
+  const reload = await runContent("/courses/71306", [], { hand: simP.store.hand }), rIns = all(reload.anchor).filter(e => /^simi/.test(e.className || ""));
+  assert(rIns.some(i => i.value && /mine/.test(i.className)), "back on the next visit, in its box");
+  const rdash = await runContent("/", null, { hand: simP.store.hand }), ddash = await runContent("/", null);
+  assert(text(rdash.anchor) !== text(ddash.anchor), "and the dashboard counts it"); ok();
+  { // a course with the Centro de Notas: Minhas notas goes to myGrades and the dashboard number moves with it
+    const cu = { grupos: [{ id_grupo: 1, grupo_colunas: [{ coluna: { id_coluna: 1, tipo_coluna: "padrao", nome_coluna: "Prova 1", notas: [{ nota: "4" }], atividade: { pontos_possiveis: 10 } } }, { coluna: { id_coluna: 2, tipo_coluna: "padrao", nome_coluna: "Prova 2", notas: [], atividade: { pontos_possiveis: 10 } } }] }],
+      colunas: [{ id_coluna: 9, tipo_coluna: "final", tipo_calculo: "media_ponderada", colunas_associadas_pai: [{ id_coluna: 1, pivot: { peso_coluna_filho: 50 } }, { id_coluna: 2, pivot: { peso_coluna_filho: 50 } }] }] };
+    const nm = { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" }, cst = { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: cu } } };
+    const cpg = await runContent("/courses/99901", [], Object.assign({ gtMode: "mine" }, cst), nm), box2 = all(cpg.anchor).find(e => /^simi/.test(e.className || ""));
+    box2.value = "10"; box2.listeners.input(); await new Promise(r => setTimeout(r, 20));
+    assert(cpg.store.myGrades && cpg.store.myGrades[5] && cpg.store.myGrades[5]["99901"] && cpg.store.myGrades[5]["99901"][2] === 10 && /7,0 garantidos de 10/.test(text(all(cpg.anchor).find(e => /^card cring/.test(e.className)))), "Centro course: kept in myGrades, counted in the hero: " + JSON.stringify(cpg.store.myGrades));
+    const before2 = await runContent("/", null, cst, nm), after2 = await runContent("/", null, Object.assign({ myGrades: cpg.store.myGrades }, cst), nm);
+    assert(/2,0/.test(text(before2.anchor)) && /7,0/.test(text(after2.anchor)), "the dashboard moves from 2,0 to 7,0 with the grade the student entered");
+  }
 
   // logging out also clears the reminders, the week list and the icon; a course panel in use is not swapped by a newer reading
   const lo2 = await runContent("/logout", null, cold.store);
   assert(lo2.sent.some(m => m.type === "remind" && m.items.length === 0 && m.alarms === false) && lo2.sent.some(m => m.type === "next" && m.date === null), "logout: service worker state dropped");
   const busy2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
   const p0 = busy2.anchor.kids.find(k => k.id === "qf-panel");
-  all(p0).find(e => e.textContent === "Simular ou lançar notas").listeners.click();
+  if (p0.cpRoot) p0.cpRoot.activeElement = all(p0).find(e => /^simi/.test(e.className || ""));   // typing in a grade box
   await new Promise(r => setTimeout(r, 350));
-  assert(busy2.store.cache.at > st10.cache.at && busy2.anchor.kids.find(k => k.id === "qf-panel") === p0, "simulating: the panel stays while the new reading is saved");
+  assert(busy2.store.cache.at > st10.cache.at && busy2.anchor.kids.find(k => k.id === "qf-panel") === p0, "typing a grade: the panel stays while the new reading is saved");
   const idle2 = await runContent("/courses/71306", [], st10, { scripts: pageEnv, slow: 60 });
   const q0 = idle2.anchor.kids.find(k => k.id === "qf-panel"); await new Promise(r => setTimeout(r, 350));
   assert(idle2.anchor.kids.find(k => k.id === "qf-panel") !== q0 && idle2.anchor.kids.filter(k => k.id === "qf-panel").length === 1, "idle: redrawn once with the new reading"); ok();
@@ -669,9 +790,9 @@ async function runContent(pathname, files, preStore, opts = {}) {
   // the course page: hero, tabs (Visão geral first), Anotações per course and user, the last tab kept
   const np = await runContent("/courses/71306", [], { notes: { 9: { 71306: "do outro" } } }); await new Promise(r => setTimeout(r, 20));
   const nbx = np.anchor.kids.find(k => k.id === "qf-panel"), tabB = label => all(nbx).find(e => e.role === "tab" && e.textContent.startsWith(label));
-  const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].indexOf(label)];
-  assert(["Visão geral", "Notas", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)), "five tabs");
-  assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Notas").hidden, "opens on Visão geral");
+  const paneOf = label => all(nbx).filter(e => e.role === "tabpanel")[["Visão geral", "Materiais", "Avisos", "Anotações"].indexOf(label)];
+  assert(["Visão geral", "Materiais", "Avisos", "Anotações"].every(l => tabB(l)) && !tabB("Notas"), "four tabs: the grades sit above them, no Notas tab");
+  assert(tabB("Visão geral")["aria-selected"] === "true" && !paneOf("Visão geral").hidden && paneOf("Materiais").hidden, "opens on Visão geral");
   assert.strictEqual(np.store.ctab, undefined, "opening the page writes nothing: the tab is saved only when the student picks one");
   assert(/A seguir/.test(text(paneOf("Visão geral"))) && all(paneOf("Visão geral")).filter(e => /^mc-day/.test(e.className)).length >= 28 && !all(paneOf("Visão geral")).some(e => e.href === "/courses/71306/modules"), "what comes next, and no Abrir no Canvas row (Canvas has its own menu)");
   assert(/Avisos da matéria/.test(text(paneOf("Avisos"))) && /Prova adiada/.test(text(paneOf("Avisos"))), "this course's announcements");
@@ -681,7 +802,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   ta.value = "RA3 cai JOIN"; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes, { 9: { 71306: "do outro" }, 5: { 71306: "RA3 cai JOIN" } }, "saved per user and course");
   const np2 = await runContent("/courses/71306", [], { notes: np.store.notes, ctab: "anot" }); await new Promise(r => setTimeout(r, 20));
-  const box2 = np2.anchor.kids.find(k => k.id === "qf-panel"), pane2 = all(box2).filter(e => e.role === "tabpanel")[4];
+  const box2 = np2.anchor.kids.find(k => k.id === "qf-panel"), pane2 = all(box2).filter(e => e.role === "tabpanel")[3];
   assert(!pane2.hidden && all(pane2).find(e => e.tag === "textarea").value === "RA3 cai JOIN", "back on the next visit, on the same tab");
   ta.value = ""; ta.listeners.input(); await new Promise(r => setTimeout(r, 450));
   assert.deepStrictEqual(np.store.notes[5], {}, "emptied: removed");
@@ -829,15 +950,16 @@ async function runContent(pathname, files, preStore, opts = {}) {
         { name: "Tarefa B", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/82", submission: { score: 5 } }, { name: "Prova", points_possible: 10, assignment_group_id: 1, html_url: "/courses/42/assignments/83", submission: { score: null } },
         { name: "Vídeo", points_possible: 10, assignment_group_id: 2, html_url: "/courses/42/assignments/84", submission: { score: 10 } }];
       const gc = await runContent("/courses/42", null, {}, { courseId: 42, groups: G, extraAsg: A }), ph = gc.anchor.kids.find(k => k.id === "qf-panel") || all(gc.anchor).find(k => k.id === "qf-panel");
-      const ta = all(ph).find(e => e.tag === "textarea"), pt = text(ph);
+      const ta = { value: (all(ph).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula }, pt = text(ph);
       assert(ta && /^Final = 70% RA1 \+ 30% Vídeo/.test(ta.value) && /RA1 = soma\(Tarefa A, Tarefa B, Prova\)/.test(ta.value) && /Começou dos pesos que o professor pôs no Canvas/.test(pt), "a course with Canvas weights: the formula starts from them, a one-activity group is the activity: " + (ta && ta.value));
       assert(!/garantida/.test(pt.split("Com esta fórmula:")[1] || ""), "and its preview is no false garantido (14 of 30 in RA1, the Prova still open: 6,2 now)");
       { // the table of assessments, as before: each activity with its weight in the final grade, a box where there is no grade
         const rows = all(ph).filter(e => e.className === "ir"), inp = all(ph).find(e => e.tag === "input" && /Prova/.test((e.attrs && e.attrs["aria-label"]) || e["aria-label"] || ""));
-        assert(rows.length === 4 && /23%/.test(text(rows[0])) && /30%/.test(text(rows[3])) && inp, "a row per activity with its weight (70% / 3 ≈ 23%, the Vídeo 30%) and a box for the open Prova: " + rows.map(text).join(" | "));
+        assert(rows.length === 4 && /23,\d%/.test(text(rows[0])) && /30%/.test(text(rows[3])) && inp, "a row per activity with its weight (70% / 3 ≈ 23,3%, one decimal so the column adds up, the Vídeo 30%) and a box for the open Prova: " + rows.map(text).join(" | "));
         const out = () => all(ph).find(e => /^t( |$)/.test(e.className || "") && /Com essas notas|Digite a nota/.test(e.textContent));
         inp.value = "7"; inp.listeners.input(); await new Promise(r => setTimeout(r, 10));
         assert(/Com essas notas você fica com 7,9 ✓/.test(out().textContent), "a typed grade gives the final by the Canvas weights (0,7 × 21/30 × 10 + 3 = 7,9): " + out().textContent);
+        { const hero = all(ph).find(e => /^card cring/.test(e.className || "")); assert(hero && /7,9 garantidos de 10 \(simulação\)/.test(text(hero)), "the hero follows the typed grade too: " + (hero && text(hero)).slice(0, 160)); }
         assert(gc.store.centroSim && gc.store.centroSim[5] && gc.store.centroSim[5]["42"], "kept on this computer, per user and course");
         assert(all(ph).some(e => e.tag === "details" && /editar a fórmula/.test(text(e)) && !e.open), "the formula editor folded under the table"); }
     }
@@ -848,7 +970,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
         { name: "Avaliação somativa - Prova", points_possible: 17, assignment_group_id: 1, html_url: "/courses/42/assignments/93", submission: { score: null } },
         { name: "TDE - TAREFA SOMATIVA - VÍDEO", points_possible: 1, assignment_group_id: 2, html_url: "/courses/42/assignments/94", submission: { score: 1 } }];
       const ec = await runContent("/courses/42", null, {}, { courseId: 42, groups: G, extraAsg: A }), eh = ec.anchor.kids.find(k => k.id === "qf-panel") || all(ec.anchor).find(k => k.id === "qf-panel");
-      const ta = all(eh).find(e => e.tag === "textarea");
+      const ta = { value: (all(eh).find(e => e.dataset && typeof e.dataset.formula === "string") || {}).dataset.formula };
       assert(ta && ta.value === "Final = 70% RA1 + 30% TDE\nRA1 = soma(Aula 4, Aula 7, Avaliação somativa - Prova)", "short names a student can read (\"Avaliação somativa\" alone would also find the other course items of that name): " + (ta && ta.value));
       assert(/Com esta fórmula: 5,5 agora/.test(text(eh)) && !/erro/.test(text(eh).split("Com esta fórmula:")[1].slice(0, 40)), "the short names find the same activities (11/30 × 7 + 3 = 5,5 now): " + text(eh).split("Com esta fórmula:")[1].slice(0, 80));
     }
@@ -859,11 +981,15 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(/05\/01/.test(pt) && /data a confirmar/.test(pt), "Canvas's due date (05/01) over the Plano's 18/11; the unconfirmed TDE says data a confirmar: " + pt.match(/PjBL Parte III[^|]*\|[^|]*\|[^|]*/));
     ok(); }
   { // the Centro de Notas never read (no permission): the dashboard and the course page offer it; the button asks the worker
-    const off = await runContent("/", null, { centroOff: true }), ask = all(off.anchor).find(e => e.textContent === "Permitir a leitura");
-    assert(ask && /ainda não foram lidas/.test(text(off.anchor)), "the offer on the dashboard"); await ask.listeners.click();
+    const off = await runContent("/", null, { centroOff: true }), ask = all(off.anchor).find(e => e.textContent === "Usar a fórmula do professor ↗");
+    assert(ask && /fórmula exata do seu professor/.test(text(off.anchor)), "the offer on the dashboard"); await ask.listeners.click();
     assert(off.sent.some(m => m.type === "centroAsk"), "the button asks the worker to open the permission page");
-    const cpo = await runContent("/courses/71306", [], { centroOff: true }); assert(/Permitir a leitura/.test(text(cpo.anchor.kids.find(k => k.id === "qf-panel"))), "and on the course page");
-    const on = await runContent("/", null); assert(!/Permitir a leitura/.test(text(on.anchor)), "no offer once it was read or allowed");
+    const cpo = await runContent("/courses/71306", [], { centroOff: true }); assert(/Usar a fórmula do professor/.test(text(cpo.anchor.kids.find(k => k.id === "qf-panel"))), "and on the course page");
+    const on = await runContent("/", null); assert(!/Usar a fórmula do professor/.test(text(on.anchor)), "no offer once it was read or allowed");
+    const later = await runContent("/", null, { centroOff: true }), no = all(later.anchor).find(e => e.textContent === "Agora não");
+    await no.listeners.click(); await new Promise(r => setTimeout(r, 10));
+    assert(later.store.centroSnooze > Date.now() + 6 * 864e5, "Agora não snoozes the offer for a week");
+    const snoozed = await runContent("/", null, { centroOff: true, centroSnooze: Date.now() + 864e5 }); assert(!/Usar a fórmula do professor/.test(text(snoozed.anchor)), "no offer while snoozed");
     // the course card says why our sum differs from Canvas's (an item graded on another scale)
     ok(); }
   { const live = await runContent("/", null); assert(/Minhas tarefas/.test(text(live.anchor)), "tasks card on");
@@ -1100,14 +1226,36 @@ async function runContent(pathname, files, preStore, opts = {}) {
     assert(all(other.anchor).some(e => /card centro/.test(e.className || "")), "no rules: the dashboard lists quanto falta from the Centro de Notas");
     const noF = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: { grupos: [], colunas: [{ id_coluna: 9, tipo_coluna: "final" }] } } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
     assert(!/\/10 · /.test(text(noF.header)), "no formula in the Centro de Notas: no number invented");
+    { // an approximate Centro result (a hidden part of the formula): never "garantido" on the course page nor on the dashboard
+      const ap = { grupos: [{ id_grupo: 1, grupo_colunas: [{ coluna: { id_coluna: 1, tipo_coluna: "padrao", nome_coluna: "Prova", notas: [{ nota: "10" }], atividade: { pontos_possiveis: 10 } } }, { coluna: { id_coluna: 2, tipo_coluna: "padrao", nome_coluna: "Lista", notas: [{ nota: "10" }], atividade: { pontos_possiveis: 10 } } }] }],
+        colunas: [{ id_coluna: 9, tipo_coluna: "final", tipo_calculo: "media_ponderada", colunas_associadas_pai: [{ id_coluna: 1, pivot: { peso_coluna_filho: 50 } }, { id_coluna: 50, grupos: [{ id_grupo: 1 }], pivot: { peso_coluna_filho: 50 } }] }] };
+      const ac = await runContent("/courses/99901", [], { centro: { user: 5, at: Date.now(), courses: { 99901: ap } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+      const ah = text(ac.anchor.kids[0]);
+      assert(/≈ 10,0 de 10 agora/.test(ah) && /confira no Centro de Notas/.test(ah) && !/garantid/.test(ah.replace(/:host[\s\S]*?\}\s*\|/, "")), "approximate Centro on the course page: an estimate, no garantido: " + ah.slice(-300));
+      const ad = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: ap } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+      assert(!/tudo garantido|já na meta/.test(text(ad.anchor)) && /confira/.test(text(ad.anchor)), "approximate Centro on the dashboard: confira, not garantido");
+      const ap2 = JSON.parse(JSON.stringify(ap)); ap2.grupos[0].grupo_colunas[0].coluna.notas = [{ nota: "4" }]; ap2.grupos[0].grupo_colunas.push({ coluna: { id_coluna: 3, tipo_coluna: "padrao", nome_coluna: "Trabalho", notas: [], atividade: { pontos_possiveis: 10 } } }); ap2.colunas[0].colunas_associadas_pai[0] = { id_coluna: 3, pivot: { peso_coluna_filho: 50 } };   // approximate and still precisa: its need shows, its "now" is marked ≈ and stays out of the guaranteed average
+      const ad2 = await runContent("/", null, { hidden: [], centro: { user: 5, at: Date.now(), courses: { 99901: ap2 } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
+      assert(/≈ \d/.test(text(ad2.anchor)), "approximate precisa on the dashboard: its number marked ≈: " + (text(ad2.anchor).match(/.{0,80}≈.{0,40}/) || [""])[0]);
+    }
+    { // below the meta with a recovery exam: what it needs, and a box to simulate it or type its grade
+      const K = (id, tipo, calc, nota, kids, nome) => ({ id_coluna: id, nome_coluna: nome || "c" + id, tipo_coluna: tipo, tipo_calculo: calc, atividade: tipo === "padrao" ? { pontos_possiveis: 10 } : null, notas: nota ? [{ nota }] : [], colunas_associadas_pai: (kids || []).map(([k, w]) => ({ id_coluna: k, pivot: { id_coluna_filho: k, peso_coluna_filho: w == null ? null : w } })) });
+      const rc = { grupos: [{ id_grupo: 1, grupo_colunas: [K(1, "padrao", null, "2,00", null, "Prova RA1"), K(2, "padrao", null, null, null, "Recuperação RA1"), K(3, "grupo", "media_ponderada", null, [[1, 100]]), K(4, "recuperacao_grupo", "total", null, [[2]]), K(5, "final_grupo", "maximo", null, [[3], [4]])].map(c => ({ coluna: c })) }],
+        colunas: [K(9, "final", "media_ponderada", null, [[5, 100]])] };
+      const rp = await runContent("/courses/99901", [], { centro: { user: 5, at: Date.now(), courses: { 99901: rc } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" }), rt = () => text(rp.anchor.kids[0]);
+      assert(/Recuperação: precisa 7,0 na Recuperação RA1/.test(rt()), "the recovery exam's need: " + (rt().match(/Recupera.{0,60}/) || [""])[0]);
+      const ri = all(rp.anchor.kids[0]).find(e => e.tag === "input" && /Recuperação RA1/.test(e["aria-label"] || (e.attrs && e.attrs["aria-label"]) || ""));
+      assert(ri && /recuperação/.test(rt()), "a box for the recovery exam");
+      ri.value = "9"; ri.listeners.input(); await new Promise(r => setTimeout(r, 10));
+      assert(/9,0/.test(rt()) && /meta 7/.test(rt()), "simulated 9 in the recovery: max(2, 9) = 9 and the meta: " + (rt().match(/.{0,40}9,0.{0,60}/) || [""])[0]); }
     curso.grupos[0].grupo_colunas[1].coluna.nome_coluna = "Prova final";
     const cp = await runContent("/courses/99901", [], { centro: { user: 5, at: Date.now(), courses: { 99901: curso } } }, { courseId: 99901, courseName: "Cálculo Diferencial (Turma 1A) - Engenharia - 2026 / 2º Sem" });
     const cph = cp.anchor.kids[0];
-    assert(cph && /2,0 de 10 agora/.test(text(cph)) && /precisa 10,0\/10 em média no que falta/.test(text(cph)) && /Falta: Prova final/.test(text(cph)), "the course page: now, the need and what is left, from the Centro de Notas: " + (cph && text(cph)).slice(0, 200));
-    const inp = all(cph).find(e => e.tag === "input" && e.type === "text" && /Prova final/.test(e["aria-label"] || (e.attrs && e.attrs["aria-label"]) || "")) || all(cph).find(e => e.tag === "input" && e.type === "text"), simOut = () => all(cph).find(e => /^t( |$)/.test(e.className || "") && /Com essas notas|Digite a nota/.test(e.textContent));
-    assert(inp && /Digite a nota/.test(simOut().textContent), "the simulator: one box per item left, waiting for a grade");
+    assert(cph && /2,0 garantidos de 10/.test(text(cph)) && /faltam 5,0 pontos pra meta 7/.test(text(cph)) && /10,0 \| média que falta tirar \(de 10\)/.test(text(cph)) && /Falta: Prova final/.test(text(cph)), "the course page: now, the need and what is left, from the Centro de Notas: " + (cph && text(cph)).slice(0, 200));
+    const inp = all(cph).find(e => e.tag === "input" && e.type === "text" && /Prova final/.test(e["aria-label"] || (e.attrs && e.attrs["aria-label"]) || "")) || all(cph).find(e => e.tag === "input" && e.type === "text"), simOut = () => all(cph).find(e => /^t( |$)/.test(e.className || "") && /Com essas notas|Digite uma nota/.test(e.textContent));
+    assert(inp && /Digite uma nota/.test(simOut().textContent), "the simulator: one box per item left, waiting for a grade");
     inp.value = "10"; inp.listeners.input(); await new Promise(r => setTimeout(r, 10));
-    assert(/Com essas notas você fica com 7,0 ✓/.test(simOut().textContent), "a typed grade gives the final: " + simOut().textContent);
+    assert(/Com essas notas você fica com 7,0 ✓/.test(simOut().textContent) && /7,0 garantidos de 10 \(simulação\)/.test(text(all(cph).find(e => /^card cring/.test(e.className)))), "a typed grade gives the final, and the hero follows: " + simOut().textContent);
     assert(cp.store.centroSim && cp.store.centroSim[5] && cp.store.centroSim[5]["99901"] && Object.values(cp.store.centroSim[5]["99901"])[0] === 10, "the typed grade is kept on this computer, per user and course");
     inp.value = "4"; inp.listeners.input(); await new Promise(r => setTimeout(r, 10)); assert(/faltam 3,0 para a meta/.test(simOut().textContent), "below the meta: how much is missing: " + simOut().textContent);
   }
@@ -1134,7 +1282,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   assert.strictEqual(reads(locked).length, 0, "another tab is reading: this one uses the last reading");
   assert(all(locked.anchor).some(e => /kpi/.test(e.className)), "and still draws it");
   const freed = await runContent("/", null, Object.assign({}, st10, { refreshing: Date.now() - 2 * 60 * 1000 }));
-  assert.strictEqual(reads(freed).length, 6, "a lock left by a closed tab expires after a minute"); assert(!freed.store.refreshing, "lock released (0: not reading, written with the cache in one go)");
+  assert.strictEqual(reads(freed).length, 7, "a lock left by a closed tab expires after a minute"); assert(!freed.store.refreshing, "lock released (0: not reading, written with the cache in one go)");
   // SSO or cookie switch: no user id in the page, a fresh reading of A, but the session is B → nothing of A is drawn
   const toB = await runContent("/", null, Object.assign({}, cold.store, { who: { id: 5, at: Date.now() } }), { selfId: 8, failCourses: true });
   assert.strictEqual(toB.store.cache, undefined, "A's reading dropped"); assert(!all(toB.anchor).some(e => /kpi|week|cring/.test(e.className || "")) && all(toB.anchor).some(e => /trouble/.test(e.className || "")), "nothing of A drawn, only why Canvas could not be read"); assert.strictEqual(toB.fetches[0], "/api/v1/users/self");
@@ -1143,7 +1291,7 @@ async function runContent(pathname, files, preStore, opts = {}) {
   const fromPage = await runContent("/", null, {}, { scripts: [{ textContent: 'ENV = {"current_user_id":"5","x":1}' }] });
   assert(!fromPage.fetches.includes("/api/v1/users/self") && fromPage.store.cache.user === 5, "user id printed in the page: no /users/self");
   const switched = await runContent("/", null, cold.store, { scripts: [{ textContent: 'ENV = {"current_user_id":"8"}' }] });
-  assert(switched.store.cache.user === 8 && reads(switched).length === 5, "another user in the page: the reading is not reused");
+  assert(switched.store.cache.user === 8 && reads(switched).length === 6, "another user in the page: the reading is not reused");
   for (const pth of ["/login/canvas", "/logout", "/users/sign_out"]) {
     const lo = await runContent(pth, null, cold.store);
     assert.strictEqual(lo.store.who, undefined, pth + ": cached user forgotten"); assert.strictEqual(lo.store.cache, undefined, pth + ": last reading removed, not only marked old");

@@ -13,3 +13,6 @@ __pycache__/
 !/app.html
 !/privacidade.html
 !/ia.html
+video/social/node_modules/
+video/social/frames/
+.probe/
