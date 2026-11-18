@@ -3,6 +3,18 @@
 // courses of the term (NotasCore.TERM), or { error } (never rejects). seen.courses gets every active course ({ id, name }), so the caller
 // does not fetch the list again. known: course ids of the last reading; their assignments are asked together with the course
 // list (one trip to Canvas less), and used only for the courses still in the term.
+// One Canvas assignment as the reading keeps it (also the course page's fresh read of its activities)
+const canvasAsgUrl = id => "/api/v1/courses/" + id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100";
+function canvasAsg(a) {
+  return { name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null, group: a.assignment_group_id == null ? null : a.assignment_group_id,
+    score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
+    due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
+    excused: !!(a.submission && a.submission.excused) || a.omit_from_final_grade === true,   // dispensed, or left out of the final grade by the professor
+    submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),
+    online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),
+    stats: a.score_statistics && typeof a.score_statistics.mean === "number"
+      ? { mean: a.score_statistics.mean, min: a.score_statistics.min, max: a.score_statistics.max } : null };
+}
 async function collectCanvasGrades(seen, known) {
   // one GET: 20 s for the whole answer; a throttle (429, 403 with no quota left) or a gateway error is tried twice more
   const once = async (url, tries = 3) => {
@@ -30,7 +42,7 @@ async function collectCanvasGrades(seen, known) {
     return out;
   };
   try {
-  const asgUrl = id => "/api/v1/courses/" + id + "/assignments?include[]=submission&include[]=score_statistics&per_page=100";
+  const asgUrl = canvasAsgUrl;
   const early = new Map();   // the head start: never an error here (a failed one is asked again below)
   for (const id of [...new Set((Array.isArray(known) ? known : []).map(String).filter(x => /^\d{1,15}$/.test(x)))].slice(0, 12)) early.set(id, get(asgUrl(id), 1).catch(() => null));   // one try each: when Canvas is throttling, the head start must not multiply the requests
   const active = (await get("/api/v1/courses?enrollment_state=active&per_page=100")).filter(c => c && typeof c.name === "string");
@@ -44,17 +56,12 @@ async function collectCanvasGrades(seen, known) {
     let as;   // one course that does not answer (403, 5xx) does not take the others down: it comes back empty and marked
     try { as = (early.has(String(c.id)) && await early.get(String(c.id))) || await get(asgUrl(c.id)); }
     catch (e) { if (/ 401$/.test(String(e && e.message)) || cs.length === 1) throw e; return { id: c.id, name: c.name, assignments: [], failed: true }; }
-    // the professor's own weights, when the course weighs its assignment groups in Canvas (an official formula)
-    let weights; if (c.apply_assignment_group_weights === true) { try { const gs = await get("/api/v1/courses/" + c.id + "/assignment_groups?per_page=50", 1);
-      weights = (Array.isArray(gs) ? gs : []).filter(g => g && Number(g.group_weight) > 0).map(g => ({ id: g.id, name: String(g.name || "").slice(0, 80), w: Number(g.group_weight) })); } catch (e) { weights = undefined; } }
-    return ({ id: c.id, name: c.name, ...(weights && weights.length ? { weights } : {}), assignments: as.map(a => ({ name: a.name, points: a.points_possible, url: typeof a.html_url === "string" ? a.html_url : null, group: a.assignment_group_id == null ? null : a.assignment_group_id,
-      score: a.submission && typeof a.submission.score === "number" ? a.submission.score : null,
-      due: a.due_at || null, missing: !!(a.submission && a.submission.missing),
-      excused: !!(a.submission && a.submission.excused) || a.omit_from_final_grade === true,   // dispensed, or left out of the final grade by the professor
-      submitted: !!(a.submission && (a.submission.submitted_at || /^(submitted|graded|pending_review)$/.test(a.submission.workflow_state))),
-      online: !Array.isArray(a.submission_types) || a.submission_types.some(t => !/^(on_paper|none|not_graded)$/.test(t)),
-      stats: a.score_statistics && typeof a.score_statistics.mean === "number"
-        ? { mean: a.score_statistics.mean, min: a.score_statistics.min, max: a.score_statistics.max } : null })) });
+    // the assignment groups: the professor's own weights when the course weighs them in Canvas (an official formula), and
+    // the groups the professor named by RA ("RA1", "RA2 - Avaliações"), which say which activity is in which RA
+    let weights, ras; try { const gs = await get("/api/v1/courses/" + c.id + "/assignment_groups?per_page=50", 1), arr = Array.isArray(gs) ? gs : [];
+      if (c.apply_assignment_group_weights === true) weights = arr.filter(g => g && Number(g.group_weight) > 0).map(g => ({ id: g.id, name: String(g.name || "").slice(0, 80), w: Number(g.group_weight) }));
+      ras = arr.filter(g => g && /^\s*RA\s*\d\b/i.test(String(g.name || ""))).slice(0, 8).map(g => ({ id: g.id, name: String(g.name).slice(0, 80) })); } catch (e) { weights = undefined; ras = undefined; }
+    return ({ id: c.id, name: c.name, ...(weights && weights.length ? { weights } : {}), ...(ras && ras.length > 1 ? { ras } : {}), assignments: as.map(canvasAsg) });
   }));
   let announcements = null;
   try {

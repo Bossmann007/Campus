@@ -22,6 +22,38 @@
     pontilhado: [`radial-gradient(color-mix(in srgb, var(--cp-ink) 16%, transparent) 1.3px, transparent 1.7px)`, "20px 20px"],
     aurora: [`radial-gradient(1100px 620px at 0% 0%, ${TINT(11)}, transparent 70%), radial-gradient(900px 620px at 100% 100%, ${TINT(8)}, transparent 70%)`, "auto"]
   };
+  // Animated scenes behind the page, in the look's accent: soft gradient shapes that move slowly at the edges and keep
+  // the middle (where the text is) calm; still when the system asks for less motion. The way of building them (one SVG,
+  // gradients and CSS keyframes, no filters, no script) follows Anthropic's theme-examples plugin for Claude Code
+  // (Apache-2.0); see extension/NOTICE-cenas.txt. Drawn as a CSS background image, so no script of ours runs in it.
+  const SCENES = {
+    "aurora-viva": a => [`.r{transform-origin:50% 0;animation:w 44s ease-in-out infinite alternate}.r.b{animation-duration:63s;animation-direction:alternate-reverse}.h{animation:o 30s ease-in-out infinite alternate}
+@keyframes w{from{transform:translateX(-70px) skewX(-7deg) scaleY(.94)}to{transform:translateX(70px) skewX(7deg) scaleY(1.08)}}@keyframes o{from{opacity:.55}to{opacity:1}}`,
+      `${g("x", a, .34)}${g("y", a, .2)}`,
+      `<ellipse class="h" cx="200" cy="40" rx="560" ry="280" fill="url(#y)"/><ellipse class="h" cx="1420" cy="980" rx="560" ry="300" fill="url(#y)" style="animation-delay:-12s"/>
+<g class="r"><ellipse cx="-40" cy="150" rx="330" ry="120" fill="url(#x)"/><ellipse cx="300" cy="90" rx="360" ry="120" fill="url(#x)"/><ellipse cx="1250" cy="70" rx="340" ry="110" fill="url(#x)"/><ellipse cx="1600" cy="130" rx="330" ry="120" fill="url(#x)"/></g>
+<g class="r b"><ellipse cx="80" cy="80" rx="340" ry="100" fill="url(#y)"/><ellipse cx="1520" cy="60" rx="340" ry="110" fill="url(#y)"/><ellipse cx="60" cy="900" rx="300" ry="160" fill="url(#y)"/></g>`],
+    mar: a => [`.s{transform-origin:50% 0;animation:k 38s ease-in-out infinite alternate}.s.b{animation-duration:52s;animation-direction:alternate-reverse}.d{animation:m 70s ease-in-out infinite alternate}.u{animation:up 46s linear infinite}
+@keyframes k{from{transform:skewX(-5deg)}to{transform:skewX(6deg)}}@keyframes m{from{transform:translateX(-90px)}to{transform:translateX(90px)}}@keyframes up{from{transform:translateY(0);opacity:0}12%{opacity:1}85%{opacity:1}to{transform:translateY(-1150px);opacity:0}}`,
+      `<linearGradient id="ray" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${a}" stop-opacity="0"/><stop offset=".5" stop-color="${a}" stop-opacity=".14"/><stop offset="1" stop-color="${a}" stop-opacity="0"/></linearGradient>${g("c", a, .18)}${g("b", a, .3)}`,
+      `<g transform="translate(-60 0) skewX(-14)"><rect class="s" x="0" y="-40" width="420" height="760" fill="url(#ray)"/></g><g transform="translate(1200 0) skewX(11)"><rect class="s b" x="0" y="-40" width="460" height="760" fill="url(#ray)"/></g>
+<g class="d"><ellipse cx="300" cy="120" rx="560" ry="60" fill="url(#c)"/><ellipse cx="1300" cy="900" rx="560" ry="70" fill="url(#c)"/></g>
+<circle class="u" cx="70" cy="1060" r="40" fill="url(#b)" style="animation-delay:-4s"/><circle class="u" cx="1530" cy="1080" r="56" fill="url(#b)" style="animation-delay:-21s"/><circle class="u" cx="1460" cy="1050" r="26" fill="url(#b)" style="animation-delay:-33s"/><circle class="u" cx="150" cy="1070" r="22" fill="url(#b)" style="animation-delay:-14s"/>`],
+    brasas: a => [`.e{animation:p 9s ease-in-out infinite alternate}.e.b{animation-duration:13s;animation-direction:alternate-reverse}.m{animation:l 34s linear infinite}
+@keyframes p{from{opacity:.6;transform:scale(.97)}to{opacity:1;transform:scale(1.04)}}@keyframes l{from{transform:translate(0,0);opacity:0}10%{opacity:.9}70%{opacity:.5}to{transform:translate(60px,-1100px);opacity:0}}`,
+      `${g("f", a, .3)}${g("t", a, .6)}`,
+      `<g class="e" style="transform-origin:120px 1000px"><ellipse cx="120" cy="1010" rx="620" ry="460" fill="url(#f)"/></g><g class="e b" style="transform-origin:1500px 1000px"><ellipse cx="1500" cy="1020" rx="640" ry="480" fill="url(#f)"/></g>
+<circle class="m" cx="380" cy="1040" r="12" fill="url(#t)" style="animation-delay:-3s"/><circle class="m" cx="200" cy="1060" r="9" fill="url(#t)" style="animation-delay:-17s"/><circle class="m" cx="1380" cy="1050" r="14" fill="url(#t)" style="animation-delay:-9s"/><circle class="m" cx="1500" cy="1040" r="10" fill="url(#t)" style="animation-delay:-25s"/><circle class="m" cx="1250" cy="1070" r="8" fill="url(#t)" style="animation-delay:-30s"/>`],
+    estrelas: a => [`.w{animation:tw 6s ease-in-out infinite alternate}.w.b{animation-duration:9s;animation-delay:-3s}.w.c{animation-duration:12s;animation-delay:-7s}.dr{animation:dr 120s linear infinite alternate}
+@keyframes tw{from{opacity:.15}to{opacity:.9}}@keyframes dr{from{transform:translateX(-40px)}to{transform:translateX(40px)}}`,
+      `${g("s", a, .9)}${g("n", a, .14)}`,
+      `<ellipse cx="1400" cy="80" rx="520" ry="260" fill="url(#n)"/><ellipse cx="160" cy="940" rx="520" ry="260" fill="url(#n)"/><g class="dr">${[[80,90],[210,40],[330,150],[120,260],[1480,180],[1370,60],[1530,300],[1260,140],[90,640],[220,820],[60,470],[1520,620],[1430,840],[1560,480],[300,930],[1300,950]].map(([x, y], i) => `<circle class="w${" bc".charAt(i % 3) === " " ? "" : " " + " bc".charAt(i % 3)}" cx="${x}" cy="${y}" r="${(i % 4) + 3}" fill="url(#s)"/>`).join("")}</g>`]
+  };
+  function g(id, c, peak) { return `<radialGradient id="${id}"><stop offset="0" stop-color="${c}" stop-opacity="${peak}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`; }
+  const sceneUrl = (name, accent) => { const f = SCENES[name]; if (!f || !/^#[0-9a-f]{6}$/i.test(accent)) return null; const [style, defs, body] = f(accent);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" preserveAspectRatio="xMidYMid slice"><style>${style} @media (prefers-reduced-motion: reduce){*{animation:none!important}}</style><defs>${defs}</defs>${body}</svg>`;
+    return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`; };
+  let bgImg = null;   // the student's own picture (popup: "Sua imagem"), a JPEG data URL kept in chrome.storage.local "bgImage"
   const NAV = { tinta: "#1D2433", coral: "#B8361C", verde: "#1F5C42", azul: "#1E3A6E", roxo: "#3B3363" };
   // The course menu icons, one sprite (a row of 16 px cells) cut by mask-position: every SVG image used in CSS is a whole
   // document for the browser, and one per icon kept 13 extra documents alive on each course page.
@@ -205,6 +237,16 @@ ${NAV_ICONS.map(([sel], i) => i ? `:root.cp-look #section-tabs ${sel}::before { 
 :root.cp-look-nav .ic-app-header { background:${menu} !important; }
 :root.cp-look-nav .ic-app-header .ic-app-header__menu-list-item.ic-app-header__menu-list-item--active .ic-app-header__menu-list-link { background:${L ? L[5] : "rgba(255,255,255,.18)"} !important; color:#fff !important; }
 :root.cp-look-nav .ic-app-header .ic-app-header__menu-list-link:hover { background-color:rgba(255,255,255,.14) !important; }`);
+    // a scene or the student's picture: one fixed layer behind the page (not one per Canvas layer, so the animation runs once);
+    // the page layers turn see-through over it. A veil of the paper keeps the text readable over a picture. Dark modes invert the
+    // page: the layer is turned back, and its veil is dark there
+    { const accent = L ? L[5] : null, img = cards.bg === "imagem" && bgImg, sc = !img && accent ? sceneUrl(cards.bg, accent) : null;
+      if (img || sc) {
+        const veil = dark ? "rgba(0,0,0,.55)" : "color-mix(in srgb, var(--cp-paper) 72%, transparent)";
+        out.push(`:root.cp-look :is(#application, #wrapper, #main, .ic-Layout-wrapper, .ic-Layout-contentMain, #content-wrapper, #right-side-wrapper, #right-side, .ic-Dashboard-header, .ic-Dashboard-header :is(div, span, header):not(.cp-host, button *, [role="button"] *)) { background-color:transparent !important; background-image:none !important; }
+:root.cp-look body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; background:${img ? `linear-gradient(${veil}, ${veil}), url("${img}") center / cover no-repeat` : `${sc} center / cover no-repeat`}; ${dark ? `filter:${BACK};` : ""} }
+:root.cp-look body { isolation:isolate; }
+:root.cp-look .ic-Dashboard-header { background-color:color-mix(in srgb, var(--cp-paper) 84%, transparent) !important; -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }`); } }   // the header that stays on top while scrolling: frosted, never see-through over the panel
     // less motion when the system asks for it: our own transitions on Canvas (the course menu, the cards, the folded menu)
     out.push(`@media (prefers-reduced-motion:reduce) { :root.cp-look :is(#section-tabs li a, .ic-DashboardCard, #left-side), #cp-navfold, #cp-navopen, #cp-navopen i { transition:none !important; } }`);
     return out.join("\n");
@@ -219,6 +261,8 @@ ${NAV_ICONS.map(([sel], i) => i ? `:root.cp-look #section-tabs ${sel}::before { 
 html.cp-dark.cp-dim { filter:${BACK} contrast(.78) brightness(1.08); }
 html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-header, .mobile-header, #mobile-header, .ic-DashboardCard__header_hero, [style*="background-image"]) { filter:${BACK}; }
 html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-header, .ic-DashboardCard__header_hero, [style*="background-image"]) :is(img, video, picture, canvas, [style*="background-image"], .ic-DashboardCard__header_hero) { filter:none; }`;
+  // the Caderno+ serif in the panels too (the popup and the onboarding already use it); a page font, so shadow roots see it
+  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL) style.textContent += `\n@font-face { font-family:"Fraunces"; font-style:normal; font-weight:500; font-display:swap; src:url(${chrome.runtime.getURL("fonts/fraunces-latin-500-normal.woff2")}) format("woff2"); }`;
   (document.head || document.documentElement).append(style, look);
   const dark = matchMedia("(prefers-color-scheme: dark)");
   let p = cpPrefs(null);
@@ -241,7 +285,9 @@ html.cp-dark :is(img, video, picture, canvas, iframe, embed, object, .ic-app-hea
   let nightTimer = null;   // only the "night" theme needs the clock: no timer in every tab otherwise
   const nightClock = () => { if (p.theme === "night" && !nightTimer) nightTimer = setInterval(() => { if (p.theme === "night") apply(); else { clearInterval(nightTimer); nightTimer = null; } }, 5 * 60 * 1000); };
   nightClock();
-  chrome.storage.local.get("prefs").then(({ prefs }) => take(prefs));
-  chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.prefs) take(ch.prefs.newValue); });
+  chrome.storage.local.get(["prefs", "bgImage"]).then(({ prefs, bgImage }) => { bgImg = typeof bgImage === "string" && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(bgImage) ? bgImage : null; take(prefs); });
+  chrome.storage.onChanged.addListener((ch, area) => { if (area !== "local") return;
+    if (ch.bgImage) { const v = ch.bgImage.newValue; bgImg = typeof v === "string" && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) ? v : null; if (!ch.prefs) apply(); }
+    if (ch.prefs) take(ch.prefs.newValue); });
   dark.addEventListener("change", apply);
 })();

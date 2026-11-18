@@ -51,6 +51,9 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
   assert.strictEqual(centro(c, 7).now, 2, "max(2, 0)");
   c.grupos[0].grupo_colunas[1].coluna.notas = [{ nota: "8,00" }];
   assert.strictEqual(centro(c, 7).now, 8, "a recovery grade replaces a lower RA grade (maximo)");
+  c.grupos[0].grupo_colunas[1].coluna.notas = [];
+  const rr = centro(c, 7); assert(rr.status === "nao-da" && rr.rec && rr.rec.left.join() === "2" && rr.rec.need === 7, "below the meta: what the recovery exam needs (7, as max(2, Rec) >= 7): " + JSON.stringify(rr));
+  const typed = centro(c, 7, { grades: { 2: 9 }, rest: 0 }); assert(typed.now === 9 && typed.status === "garantido", "a recovery grade the student types (or simulates) counts: max(2, 9) = 9: " + JSON.stringify(typed));
   ok();
 }
 { // the student's view hides some formula columns (real Imperativa: the RA2 "Nota Final do RA" is only a reference with
@@ -126,7 +129,44 @@ const imp = (ra2work, ra2exam, finalShown) => curso([
     const r4 = NotasCore.formulaEval("Final = 50% RA1 + 50% RA2\nRA1 = 100% Prova\nRA2 = 100% Prova RA2", [{ key: "1", name: "Prova RA1", points: 10, score: 10 }, { key: "2", name: "Prova RA2", points: 10, score: null }], 7);
     assert(r4.errors.some(e => /Prova RA2" conta em RA1/.test(e)), "a short name that also finds an activity of another line is warned: " + JSON.stringify(r4.errors));
     const r5 = NotasCore.formulaEval("Final = 50% A + 50% B\nA = média(T1)\nB = média(T2)", [{ key: "1", name: "T1", points: 10, score: 8 }, { key: "2", name: "T2", points: 10, score: null }], 7);
-    assert(!r5.errors.length, "distinct names: no warning"); }
+    assert(!r5.errors.length, "distinct names: no warning");
+    // one Canvas activity graded for several RAs (BD: "Entrega TDE" is the TDE of RA1, RA2 and RA3): the same name in each RA counts its 0-10 there
+    const tde = [{ key: "t", name: "Entrega TDE", points: 1, score: 1 }, { key: "1", name: "Prova RA1", points: 10, score: 6 }, { key: "2", name: "Prova RA2", points: 10, score: null }];
+    const r6 = NotasCore.formulaEval("Final = 50% RA1 + 50% RA2\nRA1 = 90% Prova RA1 + 10% Entrega TDE\nRA2 = 90% Prova RA2 + 10% Entrega TDE", tde, 7);
+    assert(!r6.errors.length && r6.status === "precisa" && r6.now === 3.7, "the same name in two RAs: no warning, each RA counts it (0,5 x (5,4 + 1) + 0,5 x 1 = 3,7): " + JSON.stringify([r6.errors, r6.now]));
+    const r7 = NotasCore.formulaEval("Final = 50% A + 50% B\nA = soma(Entrega TDE) de 1\nB = soma(Entrega TDE) de 1", tde, 7);
+    assert(r7.errors.some(e => /conta em A/.test(e)), "soma() adds points: the same activity in two of them is still warned");
+    const r8 = NotasCore.formulaEval("Final = 50% RA1 + 50% RA2\nRA1 = 100% Prova\nRA2 = 100% Prova", [{ key: "1", name: "Prova RA1", points: 10, score: 10 }, { key: "2", name: "Prova RA2", points: 10, score: null }], 7);
+    assert(r8.errors.some(e => /conta em RA1/.test(e)), "the same short name finding two activities (both exams in both RAs) is still warned: " + JSON.stringify(r8.errors)); }
+  { // the professor posts the grade in points of the final: a RA adds them up out of what it is worth
+    const pts = [{ key: "p1", name: "Prova RA1", points: 1.5, score: 1.2 }, { key: "t1", name: "TDE 1", points: 1, score: 1 }, { key: "p2", name: "Prova RA2", points: 5, score: null }];
+    const r9 = NotasCore.formulaEval("Final = 25% RA1 + 75% RA2\nRA1 = soma(Prova RA1, TDE 1) de 2,5\nRA2 = soma(Prova RA2) de 7,5", pts, 7);
+    assert(!r9.errors.length && r9.now === 2.2 && r9.status === "precisa", "points of the final: now is the plain sum of the grades (1,2 + 1): " + JSON.stringify([r9.errors, r9.now]));
+    const r10 = NotasCore.formulaEval("Final = 20% RA1 + 80% RA2\nRA1 = soma(Prova RA1, TDE 1) de 2\nRA2 = soma(Prova RA2) de 8", pts, 7);
+    assert(r10.status === "erro" && /já somam 2,5/.test(r10.errors.join(" ")), "points above what the RA is worth: an error, never a 10 or a garantido: " + JSON.stringify(r10));
+    const r11 = NotasCore.formulaEval("Final = 33,33% RA1 + 66,67% RA2\nRA1 = soma(Prova RA1, TDE 1) de 3,33\nRA2 = soma(Prova RA2) de 6,67", [{ key: "p1", name: "Prova RA1", points: 2.34, score: 2 }, { key: "t1", name: "TDE 1", points: 1, score: 1 }, { key: "p2", name: "Prova RA2", points: 6.67, score: null }], 7);
+    assert(!r11.errors.length, "a third of the final written as 3,33 pts, the professor's 3,34 in Canvas: rounding, not an error: " + JSON.stringify(r11.errors));
+    const r12 = NotasCore.formulaEval("Final = 0% RA1 + 0% RA2\nRA1 = 100% Prova RA1\nRA2 = 100% TDE 1", pts, 7);
+    assert(r12.status === "erro" && /somam 0%/.test(r12.errors.join(" ")), "weights adding up to 0%: an error, never \"nem com 10\": " + JSON.stringify(r12)); }
+  { // what makes the shown grade the real one: excused activities leave, an error never shows a number, the professor's empty group is still to come
+    const A = (name, points, score, extra) => Object.assign({ key: name, name, points, score }, extra);
+    const ex = NotasCore.formulaEval("Final = média(Lista 1, Lista 2)", [A("Lista 1", 10, 8), A("Lista 2", 10, null, { excused: true })], 7);
+    assert(!ex.errors.length && ex.now === 8 && ex.status === "garantido" && ex.leaves.find(l => l.name === "Lista 2").excused, "an activity excused in Canvas leaves the average (8, garantido), not 'what is left': " + JSON.stringify([ex.now, ex.status]));
+    const ex2 = NotasCore.formulaEval("Final = 50% Prova + 50% Lista 2", [A("Prova", 10, 6), A("Lista 2", 10, null, { excused: true })], 7);
+    assert(ex2.now === 6 && ex2.status === "nao-da", "excused in a weighted line: its weight goes to the rest (6 of 10)");
+    const tw = NotasCore.formulaEval("Final = 50% RA1 + 50% RA2\nRA1 = soma(Entrega TDE, P1) de 5\nRA2 = soma(Entrega TDE, P2) de 5", [A("Entrega TDE", 1, 1), A("P1", 4, 3), A("P2", 4, null)], 7);
+    assert(tw.status === "erro" && tw.now === null, "one activity added up in two RAs: an error, no number counting it twice: " + JSON.stringify([tw.status, tw.now]));
+    const cw = NotasCore.custom([A("A", 10, 8)], { parts: { A: { w: 40 }, B: { w: 60 } }, part: { A: "A" }, official: true }, 7);
+    assert(cw.status === "precisa" && cw.now === 3.2 && Math.abs(cw.need - 6.34) < 0.02, "the professor's Canvas group with no activity yet: still to come, not 'no number' (0,4 x 8 = 3,2): " + JSON.stringify(cw)); }
+  for (const c of NotasCore.COURSES.filter(x => x.plan)) {   // the Plano de Ensino by RA in the rules pack: it parses, two levels of weights, each line adds up to 100%
+    const { lines, errors } = NotasCore.formulaParse(c.plan), by = new Set(lines.map(l => l.name.toLowerCase()));
+    const fin = lines.find(l => /^final$/i.test(l.name)), wOf = n => (fin.terms.find(t => t.ref.toLowerCase() === n.toLowerCase()) || {}).w;
+    assert(!errors.length && lines.length > 1 && fin && lines.every(l => l.op === "w" ? Math.abs(l.terms.reduce((s, x) => s + x.w, 0) - 100) < 0.05 : l.op === "sum" && Math.abs(l.top - wOf(l.name) / 10) < 0.005), c.id + ": the plan is weights adding up to 100% in each line, or points of the final adding up to what the RA is worth: " + JSON.stringify(errors));
+    assert(fin.terms.some(x => by.has(x.ref.toLowerCase())) && lines.filter(l => l !== fin).every(l => l.terms.every(x => !by.has(x.ref.toLowerCase()))), c.id + ": Final = the RAs (or a grade straight in the final), each RA = Canvas activities (what the builder draws)"); }
+  { // BD: the Canvas grades are already points of the final (professor, 10/11; Canvas groups RA1, RA2, RA3); the Entrega TDE (0-1) is the TDE of RA1 and RA3, 0,5 of the final
+    const bd = NotasCore.COURSES.find(c => c.id === "abd"), A = (name, points, score) => ({ key: name, name, points, score });
+    const r = NotasCore.formulaEval(bd.plan, [A("Entrega TDE", 1, 1), A("Entrega PjBL - Parte 1 03/09", 1, 0.86), A("Avaliação somativa RA1 10/09", 1.25, 1.1), A("Avaliação somativa RA2 22/10", 3, 2.7), A("Entrega PjBL - Parte 2 15/10", 2, 1.84), A("Entrega Pjbl Parte 3 - 18/11", 1, null)], 7);
+    assert(!r.errors.length && r.now === 7 && r.status === "garantido", "BD from its plan: the plain sum of the Canvas points, the TDE at 0,5 (1,96 + 4,54 + 0,5 = 7,0): " + JSON.stringify([r.errors, r.now, r.status])); }
   { const sc = NotasCore.custom([{ key: "a", points: 10, score: 9 }, { key: "b", points: 10, score: 8 }], null, 7);
     assert(sc.scaled && sc.total === 20 && sc.now === 8.5 && sc.status === "garantido", "no rule at all: the Canvas points brought to 0-10 (17 of 20 = 8,5): " + JSON.stringify(sc)); }
   assert.strictEqual(NotasCore.custom(it, { off: ["a", "b", "c", "x"] }, 7).status, "vazio", "nothing counts");

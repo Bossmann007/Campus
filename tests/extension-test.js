@@ -20,6 +20,10 @@ const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
 const ob = fs.readFileSync(path.join(dir, "onboarding.html"), "utf8");
 { const ai = fs.readFileSync(path.join(dir, "ai.html"), "utf8"), pk = fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8");
   assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ai) && !/\son\w+=/.test(ai) && /Novo token de acesso/.test(ai) && !/caderno-agente|agentFile/.test(ai) && /ai\.html ai\.css ai\.js/.test(pk), "Sua IA page: no inline script (MV3 CSP), the token steps, no file, shipped in the zip"); }
+{ const oj = fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"), host = manifest.optional_host_permissions[0];
+  assert(oj.includes('"' + host + '"') && /chrome\.permissions\.request\(\{ origins: \[CENTRO\] \}\)/.test(oj) && /button\[data-centro\]/.test(oj) && /data-name="Notas"/.test(ob) && /data-centro-late/.test(ob), "onboarding asks for the Centro de Notas host (store installs start without it)"); }
+{ const ai = fs.readFileSync(path.join(dir, "ai.html"), "utf8"), aj = fs.readFileSync(path.join(dir, "ai.js"), "utf8");
+  assert(["canvas", "ponte", "centro", "token"].every(k => ai.includes('data-conn="' + k + '"')) && /testCanvas\(\); testPonte\(\); testCentro\(\);/.test(aj) && aj.includes('"' + manifest.optional_host_permissions[0] + '"'), "Sua IA: one card per connection (Canvas, ponte, Centro, token), the three the extension can see are tested on open"); }
 assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(ob) && !/\son\w+=/.test(ob), "onboarding: no inline script or handler (MV3 CSP)");
 assert(/details\.reason === "install"\) \{ chrome\.storage\.local\.set\(\{ notesSeen: chrome\.runtime\.getManifest\(\)\.version \}\); chrome\.tabs\.create\(\{ url: chrome\.runtime\.getURL\("onboarding\.html"\) \}\)/.test(fs.readFileSync(path.join(dir, "background.js"), "utf8")), "the onboarding opens on first install");
 for (const k of ["turma", "mode", "look", "theme", "navHide", "remind", "newgrades", "summary", "cardsFirst"]) assert(new RegExp('data-(set|pref|sel)="' + k + '"').test(ob) || (k === "turma" && /dataset\.set = "turma"/.test(fs.readFileSync(path.join(dir, "onboarding.js"), "utf8"))), "onboarding sets " + k);
@@ -50,6 +54,7 @@ assert(!/agentErr|agentFile|caderno-agente/.test(html), "popup: no AI file switc
   for (const w of [/nuvem da empresa da IA/, /acesso total/, /3\(i\)/, /só o seu usuário/, /no seu computador/, /href="\/privacidade"/]) assert(w.test(ia), "the /ia page says " + w);
   assert(/Caderno\+ MCP: conectar sua IA/.test(pv) && /aqui os dados saem do computador/.test(pv) && /única exceção é opcional/.test(pv), "privacy page: the MCP section and the exception in the summary"); }
 assert(/const KEEP = \[[^\]]*"checks"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /checks: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "the backup carries the checklists, validated on import");
+assert(/const KEEP = \[[^\]]*"myGrades"/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")) && /myGrades: u =>/.test(fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "Minhas notas go in the backup and come back validated");
 { // the backup carries only the student who is using Canvas now (other students of this Chrome stay out of the file)
   const pj = fs.readFileSync(path.join(dir, "popup.js"), "utf8"), m = /const backupOf = ([\s\S]*?);\n/.exec(pj);
   assert(m, "popup.js has backupOf(got, user)");
@@ -114,7 +119,7 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   // popup: "Atualizar agora" marks the last reading as old, so the next Canvas page reads everything again
   const els = {}, store = { cache: { at: Date.now(), user: 5, data: { courses: [] } }, refreshing: Date.now() };
   const pel = id => els[id] || (els[id] = { id, value: "", textContent: "", classList: { toggle() {} }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
-  const palarms = {}, pchrome = { runtime: { getManifest: () => manifest, getURL: f => f }, tabs: { create() {} },
+  const palarms = {}, psent = [], pchrome = { runtime: { getManifest: () => manifest, getURL: f => f, sendMessage: async m => { psent.push(m); } }, tabs: { create() {} }, permissions: { contains: async () => false },
     alarms: { create: async (n, o) => { palarms[n] = o; }, clear: async n => { delete palarms[n]; } },
     storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, store[x]])), set: async o => { Object.assign(store, o); }, remove: async k => { [].concat(k).forEach(x => delete store[x]); } } } };
   const popupSrc = ["prefs.js", "popup.js"].map(f => fs.readFileSync(path.join(dir, f), "utf8")).join("\n");
@@ -126,6 +131,36 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   await new Promise(r => setTimeout(r, 10));
   assert.deepStrictEqual(store.hand, { 5: { "imp:pbl08": "7", "abd:s3": "1,1" } }, "old Caderno+ page grades move into the Canvas panels (grades already there win, odd keys dropped)");
   assert(store.migrated === 1 && store.prefs.meta === "8", "once, with the old meta");
+  { // backgrounds: animated scenes in the theme's accent (still under reduced motion) and the student's own picture
+    const th = fs.readFileSync(path.join(dir, "theme.js"), "utf8"), html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
+    for (const k of ["aurora-viva", "mar", "brasas", "estrelas"]) assert(html.includes('value="' + k + '"') && new RegExp('"?' + k + '"?: a =>').test(th), "scene " + k + " in the popup and in theme.js");
+    assert(/prefers-reduced-motion: reduce\)\{\*\{animation:none!important\}\}/.test(th) && /body::before/.test(th) && /NOTICE-cenas\.txt/.test(fs.readFileSync(path.join(__dirname, "..", "scripts", "package-extension"), "utf8")), "scenes stop under reduced motion, one fixed layer, the Apache notice shipped");
+    assert(html.includes('value="imagem"') && /id="bgPick"/.test(html) && /data:image\\\/\(jpeg\|png\|webp\);base64/.test(th), "Sua imagem: picked in the popup, only an image data URL is taken"); }
+  { // theme.js runs (not only parses) with every background, light and dark: the look's CSS is written, scenes as one layer
+    const src = fs.readFileSync(path.join(dir, "prefs.js"), "utf8") + "\n" + fs.readFileSync(path.join(dir, "theme.js"), "utf8");
+    const run = async (prefs, extra) => { const styles = [], cls = new Set(), listeners = [];
+      const document = { documentElement: { classList: { toggle: (c, on) => { if (on) cls.add(c); else cls.delete(c); }, add: c => cls.add(c), contains: c => cls.has(c) }, append() {} }, head: { append: (...x) => styles.push(...x) }, createElement: () => ({ textContent: "" }) };
+      const chrome = { storage: { local: { get: async () => Object.assign({ prefs }, extra) }, onChanged: { addListener: f => listeners.push(f) } } };
+      new Function("document", "chrome", "matchMedia", "localStorage", "location", src)(document, chrome, () => ({ matches: false, addEventListener() {} }), { getItem: () => null, setItem() {} }, { pathname: "/" });
+      await new Promise(r => setTimeout(r, 5)); return styles.map(x => x.textContent).join("\n"); };
+    for (const bg of ["liso", "pautado", "aurora", "aurora-viva", "mar", "brasas", "estrelas"]) for (const theme of ["off", "dark"]) {
+      const css = await run({ look: "caderno", bg, theme });
+      assert(/--cp-paper:/.test(css), "theme.js writes the look (" + bg + ", " + theme + ")");
+      assert(/^(aurora-viva|mar|brasas|estrelas)$/.test(bg) === /body::before \{ content:""; position:fixed/.test(css), "a scene is one fixed layer, only for scenes (" + bg + ", " + theme + ")"); }
+    const img = await run({ look: "caderno", bg: "imagem" }, { bgImage: "data:image/jpeg;base64,QUJD" }), bad = await run({ look: "caderno", bg: "imagem" }, { bgImage: "javascript:alert(1)" });
+    assert(/url\("data:image\/jpeg;base64,QUJD"\)/.test(img) && !/javascript:/.test(bad) && !/body::before/.test(bad), "the student's picture: a JPEG data URL is used, anything else is not"); }
+  { // "Avalie o Caderno+": 5 stars; 4-5 open the store reviews, 1-3 a GitHub issue with the version only; nothing is sent
+    const html = fs.readFileSync(path.join(dir, "popup.html"), "utf8");
+    assert((html.match(/class="star" data-n="\d"/g) || []).length === 5 && /id="gh" href="https:\/\/github\.com\/Bossmann007\/Campus"/.test(html), "the popup has the 5 stars and the GitHub link");
+    const rels = {}, rel = id => rels[id] || (rels[id] = { id, hidden: true, textContent: "", href: "#", attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {} });
+    const parent = { addEventListener() {} }, stars = [1, 2, 3, 4, 5].map(n => ({ n, on: false, parentNode: parent, attrs: {}, listeners: {}, classList: { toggle(c, v) { stars[n - 1].on = v; } }, setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this.listeners[t] = f; } }));
+    const rstore = {}, rchrome = Object.assign({}, pchrome, { storage: { local: { get: async k => Object.fromEntries([].concat(k).map(x => [x, rstore[x]])), set: async o => { Object.assign(rstore, o); }, remove: async () => {} } } });
+    new Function("document", "chrome", "setInterval", "window", popupSrc)({ getElementById: id => /^rate|^gh$/.test(id) ? rel(id) : pel(id + "_r"), querySelectorAll: q => q === "#rate .star" ? stars : [] }, rchrome, () => {}, pwin);
+    await new Promise(r => setTimeout(r, 5));
+    stars[4].listeners.click(); await new Promise(r => setTimeout(r, 5));
+    assert(rstore.rated.n === 5 && stars.every(x => x.on) && rels.rateGo.hidden === false && rels.rateGo.href === "https://chromewebstore.google.com/detail/pmpjlaiflcnngpbkphcobndjgnihfkmp/reviews", "5 stars: kept, all lit, the Chrome Web Store reviews");
+    stars[1].listeners.click();
+    assert(rstore.rated.n === 2 && stars.filter(x => x.on).length === 2 && /^https:\/\/github\.com\/Bossmann007\/Campus\/issues\/new\?title=Sugest/.test(rels.rateGo.href) && decodeURIComponent(rels.rateGo.href).includes("Versão " + manifest.version) && /não ponha notas/.test(rels.rateMsg.textContent), "2 stars: a GitHub issue with the version only, and the public-page warning: " + rels.rateGo.href); }
   store.prefs = Object.assign({}, store.prefs, { mode: "foco" });   // changed by the Canvas panel while the popup is open
   await pel("theme").listeners.change(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.prefs.mode, "foco", "a popup change writes only its own key: the panel's mode survives");
@@ -134,6 +169,11 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", hand: { 5: { "abd:s3": "1", "x": 5 }, "../x": {} }, tasks: { 5: [{ id: "t", title: "ok", date: "2026-11-09", subs: [{ t: "passo", d: true, x: 1 }, { t: 7 }, null] }, { id: "u", title: 3 }] }, hidden: ["88", "x;}"], prefs: { look: "menta" } }) }];
   await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.hand[5]["abd:s3"], "1", "import: the backup's grade"); assert(!("x" in store.hand[5]), "import: well-formed grades only");
+  { const U1 = "https://pucpr.instructure.com/courses/71306/assignments/1092345", U2 = "https://pucpr.instructure.com/courses/71306/assignments/1092346";
+    store.myGrades = { 5: { 71306: { [U2]: 7 } } };
+    pel("importFile").files = [{ text: async () => JSON.stringify({ app: "caderno-plus", myGrades: { 5: { 71306: { [U1]: 8, bad: 11 } } } }) }];
+    await pel("importFile").listeners.change(); await new Promise(r => setTimeout(r, 5));
+    assert(store.myGrades[5][71306][U1] === 8 && store.myGrades[5][71306][U2] === 7 && !("bad" in store.myGrades[5][71306]), "Minhas notas: activity URLs (over 60 characters) kept, merged grade by grade (one typed after the backup stays): " + JSON.stringify(store.myGrades)); }
   assert(Object.keys(store.hand[5]).length >= 1, "import: merged into what the student has (grades typed after the backup stay)"); assert(store.tasks[9] && store.tasks[5].length === 1, "merged per user, bad tasks dropped");
   assert.deepStrictEqual(store.tasks[5][0].subs, [{ t: "passo", d: true }], "import: a task keeps its well-formed steps");
   assert.deepStrictEqual(store.hidden, ["88"], "hidden courses: only course ids"); assert(store.prefs.look === "menta" && store.prefs.meta === "8", "prefs merged");
@@ -144,6 +184,9 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert(/id="refresh"/.test(html), "popup has the Atualizar agora button");
   await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert.strictEqual(store.cache.at, 0, "reading marked old"); assert.strictEqual(store.refreshing, undefined, "no read lock left"); assert.match(pel("status").textContent, /Atualiza/, "says what happens next");
+  assert(psent.length === 1 && psent[0].type === "centroAsk" && store.centroAskedAt > 0 && !store.centroSnooze, "without the Centro permission: the explaining page, last, apart from the Canvas offer's snooze");
+  store.cache.at = 1; await pel("refresh").listeners.click(); await new Promise(r => setTimeout(r, 5));
+  assert(psent.length === 1 && store.cache.at === 0, "once a day from the popup; the refresh itself still happens");
   await pel("f25").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert(palarms["focus|foco"] && store.focus.kind === "foco" && Math.abs(store.focus.end - Date.now() - 25 * 60000) < 2000, "Foco 25 min: one alarm, end saved");
   assert.match(pel("focus").textContent, /^Foco: 2[45]:\d\d restantes$/); assert.strictEqual(pel("fstop").hidden, false); assert.strictEqual(ticks.length, 1, "the countdown ticks");
@@ -151,7 +194,7 @@ assert.deepStrictEqual(manifest.web_accessible_resources, [{ resources: ["fonts/
   assert(!palarms["focus|foco"] && palarms["focus|pausa"], "a break replaces the study block");
   await pel("fstop").listeners.click(); await new Promise(r => setTimeout(r, 5));
   assert(!palarms["focus|pausa"] && !store.focus && pel("fstop").hidden, "Parar clears it");
-  assert(!/rascunho|nova-turma|issues\/new/.test(html + fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "no turma draft or issue in the popup (planned inside the extension, not shipped)");
+  assert(!/rascunho|nova-turma|template=/.test(html + fs.readFileSync(path.join(dir, "popup.js"), "utf8")), "no turma draft or turma issue template in the popup (planned inside the extension, not shipped); the rating's plain feedback issue is allowed");
   { // status colours never come from the theme accent (a green look made "sem nota" and the need look like "ok")
     const ct = fs.readFileSync(path.join(dir, "content.js"), "utf8"), th = fs.readFileSync(path.join(dir, "theme.js"), "utf8");
     assert(/\.trk i\.late \{ background:var\(--warn\); \}/.test(ct) && /\.kpi \.v\.need \{ color:var\(--warn\); \}/.test(ct) && !/t-bad \{ color:var\(--coral\)/.test(ct), "late, need and bad in status colours");

@@ -1,0 +1,8 @@
+Cenas de fundo animadas (theme.js, SCENES)
+
+O jeito de montar as cenas (um SVG com gradientes radiais e keyframes CSS, sem filtros nem script, formas lentas nas
+bordas e o meio calmo, paradas quando o sistema pede menos movimento) segue o plugin "theme-examples" da Anthropic para o
+Claude Code (claude-plugins-official/plugins/theme-examples, hooks/scenes/classic.ts), licenciado sob a Apache License 2.0:
+http://www.apache.org/licenses/LICENSE-2.0
+
+As cenas daqui foram redesenhadas para o Caderno+: usam a cor de destaque do tema escolhido e ficam atrás do Canvas.

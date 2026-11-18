@@ -24,6 +24,7 @@
         "canvasIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "integer", "exclusiveMinimum": 0 }, "description": "Números da matéria no Canvas (o 71306 de pucpr.instructure.com/courses/71306). É assim que o Caderno+ sabe que o aluno é desta turma; cada número só pode aparecer em uma turma." },
         "formula": { "type": "string", "minLength": 1, "description": "Como o Plano de Ensino calcula a nota final, em uma frase (ex.: \"Final = 25% RA1 + 40% RA2 + 35% RA3\")." },
         "src": { "type": "string", "minLength": 1, "description": "De onde vêm os pesos: Plano de Ensino (com página ou linha), tabela do professor ou aviso." },
+        "plan": { "type": "string", "minLength": 1, "description": "A fórmula do Plano de Ensino por RA, na sintaxe de Sua fórmula (uma parte por linha: Final = 25% RA1 + 50% RA2; RA1 = 40% PjBL - Parte 1 + 50% Avaliação somativa RA1 + 10% Entrega TDE). Cada nome acha a atividade no Canvas pelas palavras inteiras; uma atividade que vale para vários RAs (uma TDE) entra em cada RA. Quando o professor lança no Canvas a nota já em pontos da final, o RA é soma(atividades) de N, N = o que o RA vale na final. É de onde o montador da fórmula começa." },
         "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/item" }, "description": "As avaliações. A soma de todos os max da matéria precisa dar 10 (a nota final)." },
         "canvas": {
           "type": "object", "additionalProperties": false, "required": ["items"],

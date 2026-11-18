@@ -462,7 +462,7 @@
     <h1 id="h1"><span id="h1a">Caderno+</span> <svg class="hlogo logo" viewBox="0 0 32 32" width="84" height="84" aria-hidden="true"><rect class="lt" x="1" y="1" width="30" height="30" rx="7"/><path class="lc" d="M18.71 19.77Q18.7 20.58 18.26 21.39Q17.82 22.21 17 22.89Q16.17 23.58 14.99 23.99Q13.81 24.4 12.3 24.4Q9.84 24.4 8.04 23.34Q6.25 22.28 5.28 20.4Q4.3 18.52 4.3 16.09Q4.3 14.24 4.88 12.7Q5.45 11.16 6.5 10.01Q7.54 8.87 8.95 8.23Q10.35 7.6 12 7.6Q13.15 7.6 13.86 7.82Q14.58 8.05 14.99 8.27Q15.4 8.5 15.64 8.5Q15.93 8.5 16.08 8.3Q16.23 8.1 16.39 7.91Q16.55 7.71 16.83 7.71Q17.04 7.71 17.17 7.85Q17.31 7.98 17.4 8.28L18.6 12.22Q18.68 12.48 18.55 12.69Q18.42 12.9 18.16 12.95Q17.88 13.01 17.66 12.9Q17.45 12.79 17.32 12.52Q16.71 11.15 15.96 10.34Q15.21 9.54 14.34 9.19Q13.48 8.83 12.47 8.83Q11.46 8.83 10.61 9.29Q9.77 9.76 9.15 10.61Q8.53 11.47 8.2 12.67Q7.86 13.87 7.86 15.36Q7.86 17.65 8.57 19.25Q9.29 20.84 10.52 21.66Q11.75 22.48 13.34 22.48Q14.86 22.48 15.98 21.76Q17.11 21.03 17.73 19.71Q17.86 19.45 18.02 19.36Q18.18 19.28 18.37 19.31Q18.54 19.33 18.63 19.45Q18.71 19.57 18.71 19.77Z"/><path class="lp" d="M24.5 9v6.6M21.2 12.3h6.6" transform="rotate(-6 24.5 12.3)"/></svg><br><span class="dim" id="h1b">quanto falta?</span></h1>
     <p class="lead">Lance suas notas e veja o mínimo em cada prova. Sem conta, sem login: tudo fica no seu navegador.</p>
     <div class="focus" id="focus" hidden></div>
-    <div class="cta"><a class="btn primary" href="https://github.com/Bossmann007/Campus/releases/latest/download/quanto-falta-extension.zip" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Baixar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
+    <div class="cta"><a class="btn primary" href="https://chromewebstore.google.com/detail/pmpjlaiflcnngpbkphcobndjgnihfkmp" id="herodl"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Instalar a extensão</a><a class="btn" href="#materias" id="startbtn">Lançar minhas notas</a></div>
     <details class="how"><summary>Como funciona</summary><ul>
       <li>Lance a nota na escala do professor (aparece ao lado do campo). Vazio = ainda não saiu.</li>
       <li><b>Precisa</b>: a mesma fração da nota máxima em tudo que falta, proporcional ao peso de cada item.</li>
@@ -531,24 +531,18 @@
       <div class="acts canvasgo"><a class="btn" href="https://pucpr.instructure.com/" target="_blank" rel="noopener noreferrer">Abrir o Canvas da PUCPR ↗</a><span class="muted">com a extensão, o quanto falta já aparece lá dentro; esta página é para simular à mão</span></div>
       <details class="exthow" id="exthow"><summary>Ver as notas direto no Canvas, com a extensão</summary>
       <ol class="steps ext">
-        <li><b>Instale a extensão Caderno+</b> no Chrome, Brave ou Edge (no computador).
-          <div class="acts"><a class="btn primary" id="extdl" href="https://github.com/Bossmann007/Campus/releases/latest/download/quanto-falta-extension.zip">Baixar extensão</a></div>
-          <details class="exthelp"><summary>Como instalar (1 minuto)</summary><ol>
-            <li>Descompacte o arquivo baixado: fica uma pasta <b>quanto-falta-extension</b>.</li>
+        <li><b>Instale a extensão Caderno+</b> pela Chrome Web Store, no Chrome, Brave ou Edge (no computador), e fixe o ícone na barra (quebra-cabeça → alfinete).
+          <div class="acts"><a class="btn primary" id="extdl" href="https://chromewebstore.google.com/detail/pmpjlaiflcnngpbkphcobndjgnihfkmp" target="_blank" rel="noopener noreferrer">Instalar extensão</a></div>
+          <details class="exthelp"><summary>Sem acesso à loja?</summary><ol>
+            <li><a href="https://github.com/Bossmann007/Campus/releases/latest/download/quanto-falta-extension.zip">Baixe o zip</a> e descompacte: fica uma pasta <b>quanto-falta-extension</b>.</li>
             <li>Abra <b>chrome://extensions</b> (no Brave, brave://extensions; no Edge, edge://extensions).</li>
             <li>Ligue o <b>Modo do desenvolvedor</b>, clique em <b>Carregar sem compactação</b> e escolha a pasta.</li>
-            <li>Fixe o ícone do Caderno+ na barra (ícone de quebra-cabeça → alfinete).</li>
           </ol><p class="muted">O código é aberto e só lê suas notas no Canvas: <a href="https://github.com/Bossmann007/Campus/tree/main/extension">veja a extensão no GitHub</a>.</p></details></li>
         <li><b>Abra o Canvas da PUCPR</b>, já logado: o painel do Caderno+ aparece na página inicial e em cada matéria, com as suas notas e quanto falta.</li>
         <li><b>Esta página não recebe mais as notas da extensão</b>: aqui você lança as notas à mão para simular, ou cola o texto do script abaixo.</li>
       </ol></details>
       <details class="exthow" id="exthow-up"><summary>Como atualizar a extensão</summary>
-        <ol class="steps ext">
-          <li><b>Baixe a versão nova</b> pelo mesmo botão (sempre a mais recente).</li>
-          <li><b>Descompacte por cima da pasta antiga</b>, substituindo os arquivos.</li>
-          <li>Em <b>chrome://extensions</b>, clique em <b>↻ Recarregar</b> no Caderno+. Se você apagou a pasta antiga, remova a extensão e carregue a pasta nova.</li>
-        </ol>
-        <p class="muted">Suas notas não se perdem: elas ficam salvas neste site, não na extensão. A versão instalada aparece embaixo do botão da extensão.</p>
+        <p class="muted">Pela Chrome Web Store ela atualiza sozinha. Se instalou pelo zip: baixe a versão nova, descompacte por cima da pasta antiga e clique em <b>↻ Recarregar</b> no Caderno+ em <b>chrome://extensions</b>. Suas notas ficam salvas neste site, não na extensão.</p>
       </details>
       <details class="exthow" id="apitoken"><summary>Prefere usar o seu token da API do Canvas?</summary>
         <ol class="steps ext">
@@ -596,7 +590,7 @@ const NotasCore = (() => {
   // where it came from; alt = a conflicting date; unv = date not verified. Subject ids are unique across the term's packs.
   const PACKS = /*RULES*/[
     { term:"2026 / 2", termEnd:"2027-01-31", turma:"Ciência da Computação, manhã", subjects:[
-      { id:"imp", name:"Programação Imperativa", short:"Imperativa", canvasIds:[72009], formula:"Pesos diretos na nota do semestre (10/30/10/10/40%)", src:"Plano de Ensino de Programação Imperativa l.335-371",
+      { id:"imp", name:"Programação Imperativa", short:"Imperativa", canvasIds:[72009], formula:"Pesos diretos na nota do semestre (10/30/10/10/40%)", src:"Plano de Ensino de Programação Imperativa l.335-371", plan:"Final = 40% RA1 + 60% RA2\nRA1 = 3,57% TDE 1 + 3,57% TDE 2 + 3,57% PBL01 + 3,57% PBL02 + 3,57% PBL03 + 3,57% PBL04 + 3,58% PBL05 + 75% Prova do RA1\nRA2 = 3,33% PBL06 + 3,33% PBL07 + 3,33% PBL08 + 3,33% PBL09 + 3,34% PBL10 + 16,67% Trabalho do RA2 + 66,66% Prova do RA2",
         canvas:{"items":{"ex1":{"avg":["TDE 1:","TDE 2:","PBL01","PBL02","PBL03","PBL04","PBL05"]},"p1":{"one":"Prova do RA1"},"ex2":{"avg":["PBL06","PBL07","PBL08","PBL09","PBL10"]},"t2":{"one":"Trabalho do RA2"},"p2":{"one":"Prova do RA2"}}},
         items:[
           {"id":"ex1","name":"Exercícios do RA1 (TDE 1, TDE 2, PBL01–05)","max":1,"inMax":10,"date":"2026-09-13","dateSrc":"Plano: de 5/8 a 13/9","wSrc":"Plano l.341: 10%"},
@@ -604,8 +598,8 @@ const NotasCore = (() => {
           {"id":"ex2","name":"Exercícios do RA2 (PBL06–10)","max":1,"inMax":10,"date":"2026-10-28","dateSrc":"Plano: de 23/9 a 28/10","alt":"Canvas: PBL10 até 03/11","unv":true,"wSrc":"Plano l.360: 10%"},
           {"id":"t2","name":"Trabalho do RA2 (equipe)","max":1,"inMax":10,"date":"2026-11-17","dateSrc":"Canvas: 17/11 23:59","alt":"Plano l.349: 18/11","wSrc":"Plano l.361: 10%"},
           {"id":"p2","name":"Prova do RA2","max":4,"inMax":10,"exam":true,"date":"2026-11-11","dateSrc":"Canvas: 11/11 14:10; Plano l.365","wSrc":"Plano l.371: 40%"} ] },
-      { id:"abd", name:"Arquitetura de Banco de Dados", short:"Banco de Dados", canvasIds:[71306], formula:"Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; As notas do Canvas já são os pontos da final (professor, 10/11/2026): PjBL II vale 2,0 e inclui a TDE do RA2.", src:"Plano de Ensino de Arquitetura de Banco de Dados l.365-446",
-        canvas:{"items":{"pj1":{"one":"PjBL - Parte 1"},"s1":{"one":"Avaliação somativa RA1"},"pj2":{"one":"PjBL - Parte 2"},"s2":{"one":"Avaliação somativa RA2"},"pj3":{"one":"Pjbl Parte 3"},"s3":{"one":"Avaliação somativa RA3"}}},
+      { id:"abd", name:"Arquitetura de Banco de Dados", short:"Banco de Dados", canvasIds:[71306], formula:"Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; As notas do Canvas já são os pontos da final (professor, 10/11/2026): PjBL II vale 2,0 e inclui a TDE do RA2.", src:"Plano de Ensino de Arquitetura de Banco de Dados l.365-446", plan:"Final = 22,5% RA1 + 50% RA2 + 22,5% RA3 + 5% Entrega TDE\nRA1 = soma(PjBL - Parte 1, Avaliação somativa RA1) de 2,25\nRA2 = soma(PjBL - Parte 2, Avaliação somativa RA2) de 5\nRA3 = soma(Pjbl Parte 3, Avaliação somativa RA3) de 2,25",
+        canvas:{"items":{"pj1":{"one":"PjBL - Parte 1"},"s1":{"one":"Avaliação somativa RA1"},"tde1":{"one":"Entrega TDE"},"pj2":{"one":"PjBL - Parte 2"},"s2":{"one":"Avaliação somativa RA2"},"pj3":{"one":"Pjbl Parte 3"},"s3":{"one":"Avaliação somativa RA3"},"tde3":{"one":"Entrega TDE"}}},
         items:[
           {"id":"pj1","name":"RA1 · PjBL Parte I","max":1,"inMax":1,"date":"2026-09-03","dateSrc":"Plano","wSrc":"Plano: 40% de RA1 (25%) = 1,0 pt"},
           {"id":"s1","name":"RA1 · Somativa individual I","max":1.25,"inMax":1.25,"exam":true,"date":"2026-09-10","dateSrc":"Plano","wSrc":"Plano: 50% de RA1 = 1,25 pt"},
@@ -615,7 +609,7 @@ const NotasCore = (() => {
           {"id":"pj3","name":"RA3 · PjBL Parte III (entrega final)","max":1,"inMax":1,"date":"2026-11-18","dateSrc":"Canvas: 18/11 10:40","alt":"Plano l.426: 19/11","wSrc":"Plano: 40% de RA3 (25%) = 1,0 pt"},
           {"id":"s3","name":"RA3 · Somativa individual III","max":1.25,"inMax":1.25,"exam":true,"date":"2026-11-19","dateSrc":"Plano l.416","wSrc":"Plano: 50% de RA3 = 1,25 pt"},
           {"id":"tde3","name":"RA3 · TDE","max":0.25,"inMax":0.25,"date":"2026-11-12","dateSrc":"Plano l.436: TDE 12/11","unv":true,"wSrc":"Plano: 10% de RA3 = 0,25 pt"} ] },
-      { id:"rpnd", name:"Resolução de Problemas de Natureza Discreta", short:"RPND", canvasIds:[72005], formula:"Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)", src:"Plano de Ensino de RPND l.315-374",
+      { id:"rpnd", name:"Resolução de Problemas de Natureza Discreta", short:"RPND", canvasIds:[72005], formula:"Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)", src:"Plano de Ensino de RPND l.315-374", plan:"Final = 60% RA1 + 40% RA2\nRA1 = 5% AS 01 + 5% AS 02 + 10% AS 03 + 10% AS 04 + 70% AS 05\nRA2 = 15% AS 06 + 15% AS 07 + 70% AS 08",
         canvas:{"items":{"as1":{"one":"AS 01"},"as2":{"one":"AS 02"},"as3":{"one":"AS 03"},"as4":{"one":"AS 04"},"as5":{"one":"AS 05"},"as6":{"one":"AS 06"},"as7":{"one":"AS 07"},"as8":{"one":"AS 08"}}},
         items:[
           {"id":"as1","name":"RA1 · AS 01 (grupo)","max":0.3,"inMax":0.5,"date":"2026-08-17","dateSrc":"Plano l.319","wSrc":"Plano: 0,5 de 10 no RA1"},
@@ -626,25 +620,25 @@ const NotasCore = (() => {
           {"id":"as6","name":"RA2 · AS 06 (grupo)","max":0.6,"inMax":1.5,"date":"2026-10-21","dateSrc":"Plano l.349","wSrc":"Plano: 1,5 de 10 no RA2"},
           {"id":"as7","name":"RA2 · AS 07 (grupo)","max":0.6,"inMax":1.5,"date":"2026-11-11","dateSrc":"Canvas: 11/11 14:10; Plano l.355","wSrc":"Plano: 1,5 de 10 no RA2"},
           {"id":"as8","name":"RA2 · AS 08 (individual)","max":2.8,"inMax":7,"exam":true,"date":"2026-11-18","dateSrc":"Canvas: 18/11 14:10; Plano l.361","wSrc":"Plano: 7,0 de 10 no RA2"} ] },
-      { id:"web", name:"Programação WEB", short:"WEB", canvasIds:[71310], formula:"Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE", src:"PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376",
-        canvas:{"items":{"p1":{"one":"Avaliação Somativa RA1 - GRUPO B e GRUPO A"},"tde":{"one":"Entrega TDE"}}},
+      { id:"web", name:"Programação WEB", short:"WEB", canvasIds:[71310], formula:"Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE", src:"PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376", plan:"Final = 25% RA1 + 40% RA2 + 35% RA3\nRA1 = 85% Avaliação Somativa RA1 + 15% Entrega TDE\nRA2 = 85% Somativa RA2 + 15% Entrega TDE\nRA3 = 85% Somativa RA2 + 15% Entrega TDE",
+        canvas:{"items":{"p1":{"one":"Avaliação Somativa RA1 - GRUPO B e GRUPO A"},"tde":{"one":"Entrega TDE"},"p23":{"one":"Avaliação Somativa RA2 e RA3"}}},
         items:[
           {"id":"p1","name":"Prova do RA1","max":2.125,"inMax":10,"exam":true,"date":"2026-09-28","dateSrc":"Plano","wSrc":"85% de RA1 (25%)"},
           {"id":"tde","name":"TDE (CRUD, conta nos 3 RAs)","max":1.5,"inMax":10,"date":"2026-11-06","dateSrc":"PDF do trabalho: 06/11 07:50","alt":"Plano l.368: 09/nov","unv":true,"wSrc":"15% de cada RA"},
           {"id":"p23","name":"Prova do RA2 e do RA3 (uma prova, conta nos dois)","max":6.375,"inMax":10,"exam":true,"date":"2026-11-13","dateSrc":"Cronograma: 13/11","alt":"Plano l.358: 16/nov","unv":true,"wSrc":"85% de RA2 (40%) + 85% de RA3 (35%) = 3,4 + 2,975"} ] },
-      { id:"etica", name:"Ética", short:"Ética", canvasIds:[72006], formula:"Final = 70% RA1 + 30% RA2; notas em pontos da final", src:"Plano de Ensino de Ética l.208 e l.261",
+      { id:"etica", name:"Ética", short:"Ética", canvasIds:[72006], formula:"Final = 70% RA1 + 30% RA2; notas em pontos da final", src:"Plano de Ensino de Ética l.208 e l.261", plan:"Final = 70% RA1 + 30% RA2\nRA1 = 33,33% Aula 4 + 33,33% Aula 7 + 33,34% Avaliação somativa - Prova\nRA2 = 100% TDE - TAREFA SOMATIVA - VÍDEO",
         canvas:{"items":{"ra1":{"sum":["Aula 4 - TAREFA SOMATIVA","Aula 7 - TAREFA SOMATIVA","Avaliação somativa -  Prova"],"factor":0.23333333333333334},"ra2":{"one":"TDE - TAREFA SOMATIVA - VÍDEO"}}},
         items:[
           {"id":"ra1","name":"RA1 (prova e atividades)","max":7,"inMax":7,"exam":true,"date":"2026-10-16","dateSrc":"Plano l.409: prova 16/10","wSrc":"Plano l.208: 70%"},
           {"id":"ra2","name":"RA2 · TDE vídeo (TBL)","max":3,"inMax":3,"date":"2026-11-10","dateSrc":"Prof.: link 10/11, apresenta 13/11","unv":true,"wSrc":"Plano l.261: 30%"} ] },
-      { id:"cscf", name:"Conectividade em Sistemas Ciberfísicos", short:"Conectividade", canvasIds:[72011], formula:"Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)", src:"Plano de Ensino de Conectividade l.288-306 e l.554",
-        canvas:{"items":{"as1":{"one":"AS01 - NOTAS","pts":10},"pj":{"one":"Projeto CSCF"}}},
+      { id:"cscf", name:"Conectividade em Sistemas Ciberfísicos", short:"Conectividade", canvasIds:[72011], formula:"Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)", src:"Plano de Ensino de Conectividade l.288-306 e l.554", plan:"Final = 50% RA1 + 50% RA2\nRA1 = 100% AS01\nRA2 = 60% AS02 + 40% Projeto CSCF",
+        canvas:{"items":{"as1":{"one":"AS01 - NOTAS","pts":10},"as2":{"one":"AS02 - NOTAS","pts":10},"pj":{"one":"Projeto CSCF"}}},
         items:[
           {"id":"as1","name":"RA1 · Avaliação Somativa 1 (nota do RA1)","max":5,"inMax":10,"exam":true,"date":"2026-09-21","dateSrc":"Data não confirmada no Plano","unv":true,"wSrc":"Plano l.294: AS1 = 100% do RA1"},
           {"id":"as2","name":"RA2 · Avaliação Somativa 2","max":3,"inMax":10,"exam":true,"date":"2026-11-09","dateSrc":"Aviso em aula: 09/11 07:50","unv":true,"wSrc":"Plano l.300: 60% do RA2"},
           {"id":"pj","name":"RA2 · Projeto PjBL (MQTT)","max":2,"inMax":10,"date":"2026-11-09","dateSrc":"Canvas: 09/11 (hora a conferir)","unv":true,"wSrc":"Plano l.306: 40% do RA2"} ] } ] } ]/*RULES*/;
   const COURSES = [], PACK_OF = {};
-  for (const p of PACKS) for (const s of p.subjects) { COURSES.push({ id:s.id, name:s.name, formula:s.formula, src:s.src, items:s.items }); PACK_OF[s.id] = p; }
+  for (const p of PACKS) for (const s of p.subjects) { COURSES.push(Object.assign({ id:s.id, name:s.name, formula:s.formula, src:s.src, items:s.items }, s.plan ? { plan:s.plan } : {})); PACK_OF[s.id] = p; }
 
   // Public build: everyone starts empty; grades live only in each visitor's browser.
   const SEED = {};
@@ -816,7 +810,7 @@ const NotasCore = (() => {
   }
 
   // Latest extension on the release page; an import from an older copy (or one too old to say) shows how to update.
-  const EXT_LATEST = "6.16.0";
+  const EXT_LATEST = "6.24.0";
   const verLess = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 
@@ -925,9 +919,10 @@ const NotasCore = (() => {
     const of = rule.part && typeof rule.part === "object" ? rule.part : {}, parts = [];
     let now = 0, gain = 0, counted = 0, open = 0, notYet = 0;
     for (const k of ids) {
-      const its = items.filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)) && of[String(i.key)] === k);
+      const its = items.filter(i => i && Number(i.points) > 0 && !i.excused && !off.has(String(i.key)) && of[String(i.key)] === k);
       let e = 0, o = 0, pl = 0; for (const i of its) { const p = Number(i.points); pl += p; if (i.score == null || !Number.isFinite(Number(i.score))) o += p; else e += Math.min(p, Math.max(0, Number(i.score))); }
       const top = Number(P[k].top) > 0 ? Number(P[k].top) : pl, w = Number(P[k].w) / W;
+      if (!(top > 0) && rule.official) { gain += w * 10; notYet += 1; parts.push({ id: k, w: Number(P[k].w), now: 0, top: 0, planned: 0, empty: true }); continue; }   // the professor's group with nothing yet: all of it still to come
       if (!(top > 0)) return { status: "vazio", now: 0, need: null, open: 0, notYet: 0, counted, total: 10, parts, emptyPart: k };   // a weighted part with nothing in it
       if (pl > top * 1.001) return { status: "acima", now: null, need: null, open: 0, notYet: 0, counted, total: top, planned: Math.round(pl * 100) / 100, part: k, parts };
       const ny = Math.max(0, top - pl); counted += its.length; open += o; notYet += ny;
@@ -980,12 +975,14 @@ const NotasCore = (() => {
       const top = named || lines.find(l => !used.has(foldName(l.name))) || lines[0]; lines.splice(lines.indexOf(top), 1); lines.unshift(top); }
     const out = (status, extra) => Object.assign({ status, now: null, need: null, open: 0, notYet: 0, counted: 0, total: 10, leaves: [], errors }, extra);
     if (errors.length || !lines.length) return out("erro");
-    const acts = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0), leaves = new Map();
-    const leafOf = ref => { const k = foldName(ref); if (!leaves.has(k)) { const exact = acts.filter(a => foldName(a.name) === k), hit = !k ? [] : exact.length ? exact : acts.filter(a => (" " + foldName(a.name) + " ").includes(" " + k + " ")); /* whole words: "TDE 1" is not "TDE 10" */ leaves.set(k, { name: ref, items: hit, missing: !hit.length }); } return leaves.get(k); };
+    const all = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0), acts = all.filter(i => !i.excused), exc = all.filter(i => i.excused), leaves = new Map();
+    const find = (list, k) => { const exact = list.filter(a => foldName(a.name) === k); return !k ? [] : exact.length ? exact : list.filter(a => (" " + foldName(a.name) + " ").includes(" " + k + " ")); };   // whole words: "TDE 1" is not "TDE 10"
+    const leafOf = ref => { const k = foldName(ref); if (!leaves.has(k)) { const hit = find(acts, k), ex = hit.length ? [] : find(exc, k); leaves.set(k, { name: ref, items: hit, missing: !hit.length && !ex.length, excused: ex.length > 0 }); } return leaves.get(k); };   // excused (dispensada) in Canvas: out of the account
     // value of a node with "x" (0-1) on everything left: { v: 0-10, pts, top }
     const val = (ref, x, seen) => {
       const l = byName.get(foldName(ref));
       if (!l) { const lf = leafOf(ref);
+        if (lf.excused) return { v: 0, pts: 0, top: 0, skip: true };   // dispensada: its weight goes to the rest of the line
         if (lf.missing) return { v: x * 10, pts: null, top: null, left: true };
         let got = 0, of = 0; for (const a of lf.items) { const p = Number(a.points); of += p; got += a.score == null || !Number.isFinite(Number(a.score)) ? x * p : Math.min(p, Math.max(0, Number(a.score))); }
         return { v: got / of * 10, pts: got, top: of }; }
@@ -995,18 +992,22 @@ const NotasCore = (() => {
         const known = kids.reduce((s, k) => s + (k.top || 0), 0), got = kids.reduce((s, k) => s + (k.pts == null ? 0 : k.pts), 0);
         const line = l.terms.find((t, i) => kids[i].pts === undefined); if (line) throw new Error("\"" + l.name + "\" soma pontos, mas \"" + line.ref + "\" é uma média ou um peso (sem pontos): use pesos (ex.: 50% " + line.ref + " + 50% ...) ou faça \"" + line.ref + "\" com soma(...) de N");   // its points would vanish and its whole weight count as left
         if (kids.some(k => k.top == null) && !l.top) throw new Error("\"" + l.name + "\" soma algo que ainda não está no Canvas: diga quantos pontos ela vale com \"de N\" (ex.: soma(...) de 5)");
+        if (l.top && known > l.top + 0.011) throw new Error("\"" + l.name + "\" vale " + String(l.top).replace(".", ",") + " pontos, mas as atividades do Canvas nela já somam " + String(Math.round(known * 100) / 100).replace(".", ",") + ": se o professor não lança em pontos da final, use pesos em % (ex.: 50% " + l.terms[0].ref + " + 50% ...)");   // never a 10 (or a garantido) from points above the top
         const top = l.top || known; return { v: top > 0 ? Math.min(10, (got + x * Math.max(0, top - known)) / top * 10) : 0, pts: got + x * Math.max(0, top - known), top }; }
-      if (l.op === "avg") return { v: kids.reduce((s, k) => s + k.v, 0) / kids.length };
-      const W = kids.reduce((s, k) => s + k.w, 0); return { v: W > 0 ? kids.reduce((s, k) => s + k.w * k.v, 0) / W : 0 };
+      const ks = kids.filter(k => !k.skip); if (!ks.length) return { v: 0, pts: 0, top: 0, skip: true };   // every grade of the line dispensada: the line leaves too
+      if (l.op === "avg") return { v: ks.reduce((s, k) => s + k.v, 0) / ks.length };
+      const W = ks.reduce((s, k) => s + k.w, 0); if (!(W > 0)) throw new Error("os pesos de \"" + l.name + "\" somam 0%: dê um peso a pelo menos uma parte");   // never a "nem com 10" from no weights
+      return { v: W > 0 ? ks.reduce((s, k) => s + k.w * k.v, 0) / W : 0 };
     };
     let now, best;
     try { now = val(lines[0].name, 0, new Set()).v; best = val(lines[0].name, 1, new Set()).v; } catch (e) { errors.push(String(e.message)); return out("erro"); }
     const lv = [...leaves.values()], counted = lv.reduce((s, l) => s + l.items.length, 0);
-    { const where = new Map(); for (const l of lines) for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref));   // one activity in two lines counts twice (a short name like "Prova" also finds "Prova RA2")
-      for (const a of lf ? lf.items : []) { const w = where.get(a); if (w && w.line !== l) errors.push("\"" + a.name + "\" conta em " + w.line.name + " (por \"" + w.ref + "\") e em " + l.name + " (por \"" + t.ref + "\"): use um nome mais completo"); else if (!w) where.set(a, { line: l, ref: t.ref }); } } }
+    { const where = new Map(); for (const l of lines) for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref));   // one activity in two lines counts twice (a short name like "Prova" also finds "Prova RA2"; the same name on purpose in weighted lines, finding one activity, is one grade used in each, e.g. a TDE graded for the 3 RAs)
+      for (const a of lf ? lf.items : []) { const w = where.get(a); if (w && w.line !== l && !(w.line.op !== "sum" && l.op !== "sum" && foldName(w.ref) === foldName(t.ref) && lf.items.length === 1)) errors.push("\"" + a.name + "\" conta em " + w.line.name + " (por \"" + w.ref + "\") e em " + l.name + " (por \"" + t.ref + "\"): use um nome mais completo"); else if (!w) where.set(a, { line: l, ref: t.ref }); } } }
     for (const l of lines) { const seen = new Map(); for (const t of l.terms) { const lf = byName.has(foldName(t.ref)) ? null : leaves.get(foldName(t.ref)); for (const a of lf ? lf.items : []) { if (seen.has(a) && seen.get(a) !== t.ref) errors.push("\"" + a.name + "\" entrou duas vezes em " + l.name + " (por \"" + seen.get(a) + "\" e \"" + t.ref + "\"): um nome com vírgula? use um pedaço sem vírgula"); seen.set(a, t.ref); } } }
     const open = acts.filter(a => lv.some(l => l.items.includes(a)) && (a.score == null || !Number.isFinite(Number(a.score)))).length;
-    const extra = { leaves: lv.map(l => ({ name: l.name, items: l.items.map(a => a.name), missing: l.missing })), counted, open, notYet: lv.filter(l => l.missing).length, weights: lines.filter(l => l.op === "w" && Math.abs(l.terms.reduce((s, t) => s + t.w, 0) - 100) > 0.5).map(l => l.name) };
+    const extra = { leaves: lv.map(l => Object.assign({ name: l.name, items: l.items.map(a => a.name), missing: l.missing }, l.excused ? { excused: true } : {})), counted, open, notYet: lv.filter(l => l.missing).length, weights: lines.filter(l => l.op === "w" && Math.abs(l.terms.reduce((s, t) => s + t.w, 0) - 100) > 0.5).map(l => l.name) };
+    if (errors.length) return out("erro", extra);   // never a number that counts an activity twice
     const shown = floor2(now);
     if (now >= meta - 1e-9) return out("garantido", Object.assign(extra, { now: shown, need: 0 }));
     if (best < meta - 1e-9) return out("nao-da", Object.assign(extra, { now: shown }));
@@ -1017,7 +1018,7 @@ const NotasCore = (() => {
     if (rule && typeof rule.formula === "string" && rule.formula.trim()) return formulaEval(rule.formula, items, meta);   // the student's own formula wins
     const off = new Set(rule && Array.isArray(rule.off) ? rule.off.map(String) : []), total = rule && Number(rule.total) > 0 && Number(rule.total) <= 1000 ? Number(rule.total) : 10;
     if (rule && rule.parts && typeof rule.parts === "object" && Object.keys(rule.parts).some(k => /^[A-E]$/.test(k) && Number(rule.parts[k] && rule.parts[k].w) > 0)) return customParts(Array.isArray(items) ? items : [], rule, meta, off);
-    const counted = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0 && !off.has(String(i.key)));
+    const counted = (Array.isArray(items) ? items : []).filter(i => i && Number(i.points) > 0 && !i.excused && !off.has(String(i.key)));
     if (!rule) { const sum = counted.reduce((t, i) => t + Number(i.points), 0); if (sum > 10) return Object.assign(custom(items, { total: Math.min(1000, Math.ceil(sum * 100) / 100) }, meta), { scaled: true }); }   // no rule at all: the Canvas points, brought to 0-10
     if (!counted.length) return { status: "vazio", now: 0, need: null, open: 0, notYet: 0, counted: 0, total };
     let earned = 0, open = 0, planned = 0;
@@ -1055,13 +1056,14 @@ const NotasCore = (() => {
       // value of a column; f: the fraction given to every leaf still open (the projection). raw: points, for "total"
       // fill: a number (0-10 on everything left) or { grades: { columnId: 0-10 }, rest }: grades the student typed count as given
       let per = new Map();   // empty while the tool's own value is calibrated; the typed grades come in after
+      let recF = null; const recs = new Set();   // the recovery exams still without a grade, and the fraction tried on them (null: they count 0)
       const perIn = new Map(fill && typeof fill === "object" && fill.grades && typeof fill.grades === "object" ? Object.entries(fill.grades).map(([k, v]) => [Number.isNaN(Number(k)) ? k : Number(k), Math.min(10, Math.max(0, Number(v)))]).filter(([, v]) => Number.isFinite(v)) : []);
       let visits = 0;   // a hostile tree (layers of columns sharing children) must not hang the page or the MCP
       const val = (c, f, seen, raw) => {
         if (!c) return 0;
         if (++visits > 20000) throw new Error("fórmula grande demais");
         if (seen.has(c.id_coluna)) return 0; seen = new Set(seen).add(c.id_coluna);
-        if (isLeaf(c)) { const v = num(c), p = pts(c), g = per.get(c.id_coluna); return v != null ? (raw ? v : v * 10 / p) : open.has(c.id_coluna) ? (g != null ? (raw ? g * p / 10 : g) : (raw ? f * p : f * 10)) : 0; }   // g: a grade the student typed (0-10)
+        if (isLeaf(c)) { const v = num(c), p = pts(c), g = per.get(c.id_coluna); return v != null ? (raw ? v : v * 10 / p) : open.has(c.id_coluna) ? (g != null ? (raw ? g * p / 10 : g) : (raw ? f * p : f * 10)) : g != null ? (raw ? g * p / 10 : g) : recF != null && recs.has(c.id_coluna) ? (raw ? recF * p : recF * 10) : 0; }   // g: a grade the student typed (0-10), a recovery exam's too
         const ks = kids(c);
         if (c.tipo_coluna === "oculta" && c.h0 != null) return c.h0 + ks.reduce((s, k) => s + (k.c && open.has(k.c.id_coluna) ? (per.has(k.c.id_coluna) ? per.get(k.c.id_coluna) : f * 10) : 0), 0) / c.n;   // calibrated: what is graded inside = h0
         if (!ks.length || !CALC.includes(c.tipo_calculo)) { const v = num(c); return v != null ? v : 0; }
@@ -1077,7 +1079,7 @@ const NotasCore = (() => {
       };
       // the leaves under the final still without a grade: not under a recovery column, not left out of the final grade
       const open = new Set(), walk = (c, rec, seen) => { if (!c || seen.has(c.id_coluna)) return; seen.add(c.id_coluna);
-        if (isLeaf(c)) { if (!rec && num(c) == null && !(c.atividade && c.atividade.omitir_nota_final)) open.add(c.id_coluna); return; }
+        if (isLeaf(c)) { if (num(c) == null && !(c.atividade && c.atividade.omitir_nota_final)) (rec ? recs : open).add(c.id_coluna); return; }
         for (const k of kids(c)) walk(k.c, rec || c.tipo_coluna === "recuperacao_grupo", seen); };
       walk(fin, false, new Set());
       if (lost) return none("incompleto");
@@ -1093,12 +1095,15 @@ const NotasCore = (() => {
       const rest = fill && typeof fill === "object" ? Number(fill.rest) : fill;
       const extra = rest != null && Number.isFinite(Number(rest)) ? { projected: Math.round(Math.min(10, at(Math.min(10, Math.max(0, Number(rest))) / 10)) * 100) / 100 } : {};
       if (at(0) >= T - 1e-9) return Object.assign({ status: "garantido", now, need: 0, left, approx }, extra);
-      if (!left.length || at(1) < T - 1e-9) return Object.assign({ status: "nao-da", now, need: null, left, approx }, extra);
+      if (!left.length || at(1) < T - 1e-9) {   // not with what is left: what the recovery exam would need (everything else open at 10)
+        const recLeft = [...recs].filter(id => !perIn.has(id)), ok = r => { recF = r; const v = at(1); recF = null; return v >= T - 1e-9; };
+        let rec; if (recLeft.length) { if (!ok(1)) rec = { left: recLeft, need: null }; else { let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (ok(mid)) hi = mid; else lo = mid; } rec = { left: recLeft, need: Math.ceil(hi * 1000 - 1e-9) / 100 }; } }
+        return Object.assign({ status: "nao-da", now, need: null, left, approx }, rec ? { rec } : {}, extra); }
       let lo = 0, hi = 1; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (at(mid) >= T - 1e-9) hi = mid; else lo = mid; }
       return Object.assign({ status: "precisa", now, need: Math.ceil(hi * 1000 - 1e-9) / 100, left, approx }, extra);
     } catch (e) { return none("sem-formula"); }
   }
-  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, formulaParse, formulaEval, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
+  return { COURSES, SEED, CANVAS, TERM, TERM_END, TURMA, custom, formulaParse, formulaEval, foldName, turmaOf, centro, coursesFor, expired, EXPIRED_NOTE, extBoot, subjectOf, storageKey, GARANTIDO_TIP, fromCanvas, EXT_LATEST, verLess, SEMESTER, toBackup, fromBackup, itemByKey, parseNum, itemPoints, weightSum, key, courseState, requiredFor, minimumFor, upcoming, localISO, fullMarks,
            SHORT, fractionTone, statusTone, nextItem, ringParts, courseNeed, stillCounts, semester };
 })();
 </script>

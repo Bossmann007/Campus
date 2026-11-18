@@ -234,6 +234,10 @@ let n = 0; const ok = () => n++;
     const c1 = q1.subjects.find(x => x.course_id === 777);
     assert(c1 && c1.source === "centro" && c1.status === "precisa" && c1.now === 4 && c1.need === 6 && c1.label === "precisa 6,0/10" && c1.approx === false, "quanto_falta via Centro for a course without a rule pack: 0,5 × 8 now, 6,0 on the rest for 7");
     assert.deepStrictEqual(c1.untrusted_canvas_text.left, ["Prova 2"], "what is left, by name, inside untrusted_canvas_text and cleaned");
+    { const L = (id, n, nota) => ({ coluna: { id_coluna: id, tipo_coluna: "padrao", nome_coluna: n, notas: [{ nota }], atividade: { pontos_possiveis: 10 } } });
+      const ap = { grupos: [{ id_grupo: 1, grupo_colunas: [L(1, "Prova", "10"), L(2, "Lista", "10")] }], colunas: [{ id_coluna: 9, tipo_coluna: "final", tipo_calculo: "media_ponderada", colunas_associadas_pai: [{ id_coluna: 1, pivot: { peso_coluna_filho: 50 } }, { id_coluna: 50, grupos: [{ id_grupo: 1 }], pivot: { peso_coluna_filho: 50 } }] }] };
+      const qa = (await makeCanvas(TOKEN, { fetch: stand({ curso: ap }).fetch }).tools.quanto_falta({})).subjects.find(x => x.course_id === 777);
+      assert(qa && qa.status === "confira" && qa.approx === true && !/^garantido/.test(qa.label) && /confira/.test(qa.label), "an approximate Centro result (a hidden part): confira, never garantido, as the panel: " + JSON.stringify(qa)); }
     const toTool = s1.calls.filter(c => c.u.startsWith(CENTRO)), launch = s1.calls.find(c => c.u.includes("verifier="));
     { const sr = stand({ hop: "https://evil.example/steal" }), q = await makeCanvas(TOKEN, { fetch: sr.fetch }).tools.quanto_falta({});
       assert(!sr.calls.some(c => /evil/.test(c.u)) && q.subjects.find(x => x.course_id === 777).status === "erro", "a launch redirect out of Canvas is never followed (the course says it could not read)"); }
@@ -277,11 +281,12 @@ let n = 0; const ok = () => n++;
     const fr = P.frame({ a: "é" }), got = []; P.unframer(m => got.push(m))(Buffer.concat([fr.subarray(0, 3), fr.subarray(3), P.frame({ b: 2 })]));
     assert(fr.readUInt32LE(0) === Buffer.byteLength(JSON.stringify({ a: "é" })) && got.length === 2 && got[0].a === "é" && got[1].b === 2, "native messaging frames: 32-bit length + UTF-8 JSON, split anywhere");
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cpt-")), sock = path.join(tmp, "s", "ponte.sock"), input = new PassThrough(), output = new PassThrough();
-    let rulesUser = 5; const A1 = "https://pucpr.instructure.com/courses/7/assignments/1", A2 = "https://pucpr.instructure.com/courses/7/assignments/2";
-    const getBody = url => /\/users\/self/.test(url) ? { id: 5, name: "Aluno" } : /\/assignments/.test(url) ? [{ name: "P1", points_possible: 10, html_url: A1, submission: { score: 8 } }, { name: "P2", points_possible: 10, html_url: A2, submission: { score: null } }]
+    let rulesUser = 5, myG = {}, cscf = false; const A1 = "https://pucpr.instructure.com/courses/7/assignments/1", A2 = "https://pucpr.instructure.com/courses/7/assignments/2";
+    const getBody = url => /\/users\/self/.test(url) ? { id: 5, name: "Aluno" } : /\/courses\/72011\/assignments/.test(url) ? [{ name: "AS01 - NOTAS", points_possible: 0, html_url: "https://pucpr.instructure.com/courses/72011/assignments/1", submission: { score: 8.4 } }]
+      : cscf && (/\/courses\?/.test(url) || /\/courses$/.test(url.split("?")[0])) ? [{ id: 7, name: "Banco (Turma 2º B) - 2026 / 2º Sem" }, { id: 72011, name: "Conectividade em Sistemas Ciberfísicos (Turma 2º B) - Ciência da Computação (Manhã) - 2026 / 2º Sem" }] : /\/assignments/.test(url) ? [{ name: "P1", points_possible: 10, html_url: A1, submission: { score: 8 } }, { name: "P2", points_possible: 10, html_url: A2, submission: { score: null } }]
       : /\/courses\?/.test(url) || /\/courses$/.test(url.split("?")[0]) ? [{ id: 7, name: "Banco (Turma 2º B) - 2026 / 2º Sem" }] : [];
     const browser = P.unframer(m => input.write(P.frame(m.op === "ping" ? { id: m.id, ok: true } : m.op === "get" ? { id: m.id, ok: true, status: 200, link: null, body: JSON.stringify(getBody(m.url)) }
-      : m.op === "rules" ? { id: m.id, ok: true, user: rulesUser, rules: { 7: { off: [], total: 10, parts: { A: { w: 40 }, B: { w: 60 } }, part: { [A1]: "A", [A2]: "B" } } } } : { id: m.id, error: "?" })));
+      : m.op === "rules" ? { id: m.id, ok: true, user: rulesUser, rules: { 7: { off: [], total: 10, parts: { A: { w: 40 }, B: { w: 60 } }, part: { [A1]: "A", [A2]: "B" } }, 72011: { own: true, formula: "Final = 100% AS01" } }, grades: myG } : { id: m.id, error: "?" })));
     output.on("data", browser);
     let exited = null; const srv = P.host({ input, output, sock, platform: process.platform, exit: c => { exited = c; } });
     await new Promise(r => srv.on("listening", r));
@@ -294,7 +299,11 @@ let n = 0; const ok = () => n++;
     { const qf = await cvP.tools.quanto_falta({ meta: 7 }), b = qf.subjects.find(x => x.course_id === 7);
       assert(b && b.source === "regra-do-aluno" && b.now === 3.2 && Math.abs(b.need - 6.33) < 0.01, "quanto_falta uses the student's own rule from the extension (RA1 40% graded 8, RA2 60% open): " + JSON.stringify(b));
       rulesUser = 9; const other = (await makeCanvas(null, { ponte: cl }).tools.quanto_falta({ meta: 7 })).subjects.find(x => x.course_id === 7);
-      assert(other && other.source === "soma-dos-pontos", "rules of another Canvas user (the extension's last reading) are not applied: " + JSON.stringify(other)); }
+      assert(other && other.source === "soma-dos-pontos", "rules of another Canvas user (the extension's last reading) are not applied: " + JSON.stringify(other));
+      rulesUser = 5; myG = { 7: { [A2]: 9 } }; const typed = (await makeCanvas(null, { ponte: cl }).tools.quanto_falta({ meta: 7 })).subjects.find(x => x.course_id === 7);
+      assert(typed && typed.now === 8.6 && typed.status === "garantido", "a grade typed in Minhas notas counts as in the panel (P2 9 of 10: 3,2 + 5,4): " + JSON.stringify(typed));
+      myG = {}; cscf = true; const zero = (await makeCanvas(null, { ponte: cl }).tools.quanto_falta({ meta: 7 })).subjects.find(x => x.course_id === 72011); cscf = false;
+      assert(zero && zero.source === "regra-do-aluno" && zero.now === 8.4, "a grade Canvas posts as worth 0 points (CSCF AS01) counts on the pack's scale, as in the panel: " + JSON.stringify(zero)); }
     { // a second browser takes the socket over; the first one leaving does not remove it
       const in2 = new PassThrough(), out2 = new PassThrough(); out2.on("data", P.unframer(m => in2.write(P.frame({ id: m.id, ok: true, who: 2 }))));
       let ex2 = null; const s2 = P.host({ input: in2, output: out2, sock, platform: process.platform, exit: c => { ex2 = c; } }); await new Promise(r => s2.on("listening", r));

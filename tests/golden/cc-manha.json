@@ -56,7 +56,8 @@
      "dateSrc": "Canvas: 11/11 14:10; Plano l.365",
      "wSrc": "Plano l.371: 40%"
     }
-   ]
+   ],
+   "plan": "Final = 40% RA1 + 60% RA2\nRA1 = 3,57% TDE 1 + 3,57% TDE 2 + 3,57% PBL01 + 3,57% PBL02 + 3,57% PBL03 + 3,57% PBL04 + 3,58% PBL05 + 75% Prova do RA1\nRA2 = 3,33% PBL06 + 3,33% PBL07 + 3,33% PBL08 + 3,33% PBL09 + 3,34% PBL10 + 16,67% Trabalho do RA2 + 66,66% Prova do RA2"
   },
   {
    "id": "abd",
@@ -142,7 +143,8 @@
      "unv": true,
      "wSrc": "Plano: 10% de RA3 = 0,25 pt"
     }
-   ]
+   ],
+   "plan": "Final = 22,5% RA1 + 50% RA2 + 22,5% RA3 + 5% Entrega TDE\nRA1 = soma(PjBL - Parte 1, Avaliação somativa RA1) de 2,25\nRA2 = soma(PjBL - Parte 2, Avaliação somativa RA2) de 5\nRA3 = soma(Pjbl Parte 3, Avaliação somativa RA3) de 2,25"
   },
   {
    "id": "rpnd",
@@ -224,7 +226,8 @@
      "dateSrc": "Canvas: 18/11 14:10; Plano l.361",
      "wSrc": "Plano: 7,0 de 10 no RA2"
     }
-   ]
+   ],
+   "plan": "Final = 60% RA1 + 40% RA2\nRA1 = 5% AS 01 + 5% AS 02 + 10% AS 03 + 10% AS 04 + 70% AS 05\nRA2 = 15% AS 06 + 15% AS 07 + 70% AS 08"
   },
   {
    "id": "web",
@@ -265,7 +268,8 @@
      "unv": true,
      "wSrc": "85% de RA2 (40%) + 85% de RA3 (35%) = 3,4 + 2,975"
     }
-   ]
+   ],
+   "plan": "Final = 25% RA1 + 40% RA2 + 35% RA3\nRA1 = 85% Avaliação Somativa RA1 + 15% Entrega TDE\nRA2 = 85% Somativa RA2 + 15% Entrega TDE\nRA3 = 85% Somativa RA2 + 15% Entrega TDE"
   },
   {
    "id": "etica",
@@ -293,7 +297,8 @@
      "unv": true,
      "wSrc": "Plano l.261: 30%"
     }
-   ]
+   ],
+   "plan": "Final = 70% RA1 + 30% RA2\nRA1 = 33,33% Aula 4 + 33,33% Aula 7 + 33,34% Avaliação somativa - Prova\nRA2 = 100% TDE - TAREFA SOMATIVA - VÍDEO"
   },
   {
    "id": "cscf",
@@ -333,7 +338,8 @@
      "unv": true,
      "wSrc": "Plano l.306: 40% do RA2"
     }
-   ]
+   ],
+   "plan": "Final = 50% RA1 + 50% RA2\nRA1 = 100% AS01\nRA2 = 60% AS02 + 40% Projeto CSCF"
   }
  ],
  "canvas": {
@@ -382,6 +388,9 @@
     "s1": {
      "one": "Avaliação somativa RA1"
     },
+    "tde1": {
+     "one": "Entrega TDE"
+    },
     "pj2": {
      "one": "PjBL - Parte 2"
     },
@@ -393,6 +402,9 @@
     },
     "s3": {
      "one": "Avaliação somativa RA3"
+    },
+    "tde3": {
+     "one": "Entrega TDE"
     }
    }
   },
@@ -435,6 +447,9 @@
     },
     "tde": {
      "one": "Entrega TDE"
+    },
+    "p23": {
+     "one": "Avaliação Somativa RA2 e RA3"
     }
    }
   },
@@ -461,6 +476,10 @@
    "items": {
     "as1": {
      "one": "AS01 - NOTAS",
+     "pts": 10
+    },
+    "as2": {
+     "one": "AS02 - NOTAS",
      "pts": 10
     },
     "pj": {
@@ -630,7 +649,7 @@
     },
     {
      "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
     },
     {
      "key": "abd:pj2",
@@ -646,7 +665,7 @@
     },
     {
      "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
     },
     {
      "key": "rpnd:as2",
@@ -674,7 +693,7 @@
     },
     {
      "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
     },
     {
      "key": "etica:ra1",
@@ -690,7 +709,7 @@
     },
     {
      "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "cscf:pj",
@@ -746,7 +765,7 @@
     },
     {
      "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "abd:pj2",
@@ -766,7 +785,7 @@
     },
     {
      "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "rpnd:as1",
@@ -810,7 +829,7 @@
     },
     {
      "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "etica:ra1",
@@ -822,7 +841,7 @@
     },
     {
      "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
     },
     {
      "key": "cscf:pj",
@@ -873,7 +892,7 @@
     },
     {
      "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "abd:pj2",
@@ -893,7 +912,7 @@
     },
     {
      "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "rpnd:as1",
@@ -937,7 +956,7 @@
     },
     {
      "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "etica:ra2",
@@ -949,7 +968,7 @@
     },
     {
      "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "cscf:pj",
@@ -998,7 +1017,7 @@
     },
     {
      "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "abd:pj2",
@@ -1018,7 +1037,7 @@
     },
     {
      "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "rpnd:as1",
@@ -1062,7 +1081,7 @@
     },
     {
      "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "etica:ra1",
@@ -1078,7 +1097,7 @@
     },
     {
      "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "cscf:pj",
@@ -1125,7 +1144,7 @@
     },
     {
      "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
     },
     {
      "key": "abd:pj2",
@@ -1145,7 +1164,7 @@
     },
     {
      "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "avaliação não está no Canvas (ou aparece repetida)"
     },
     {
      "key": "rpnd:as1",
@@ -1189,7 +1208,7 @@
     },
     {
      "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "etica:ra1",
@@ -1205,7 +1224,7 @@
     },
     {
      "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "cscf:pj",
@@ -1254,7 +1273,7 @@
     },
     {
      "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "abd:pj2",
@@ -1274,7 +1293,7 @@
     },
     {
      "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "rpnd:as1",
@@ -1318,7 +1337,7 @@
     },
     {
      "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "etica:ra1",
@@ -1334,7 +1353,7 @@
     },
     {
      "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
+     "reason": "matéria não veio do Canvas"
     },
     {
      "key": "cscf:pj",
@@ -1370,7 +1389,9 @@
    "grades": {
     "imp:p2": "10",
     "abd:s1": "1.25",
+    "abd:tde1": "0.125",
     "abd:pj3": "0.5",
+    "abd:tde3": "0.125",
     "rpnd:as1": "0",
     "rpnd:as2": "0.125",
     "rpnd:as3": "0.5",
@@ -1378,8 +1399,10 @@
     "rpnd:as7": "1.125",
     "rpnd:as8": "7",
     "web:tde": "0",
+    "web:p23": "5",
     "etica:ra1": "1.75",
     "cscf:as1": "0",
+    "cscf:as2": "0",
     "cscf:pj": "10"
    },
    "missing": [
@@ -1404,10 +1427,6 @@
      "reason": "sem nota ainda no Canvas"
     },
     {
-     "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
-    },
-    {
      "key": "abd:pj2",
      "reason": "sem nota ainda no Canvas"
     },
@@ -1418,10 +1437,6 @@
     {
      "key": "abd:s3",
      "reason": "avaliação não está no Canvas (ou aparece repetida)"
-    },
-    {
-     "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
     },
     {
      "key": "rpnd:as4",
@@ -1436,16 +1451,8 @@
      "reason": "sem nota ainda no Canvas"
     },
     {
-     "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
-    },
-    {
      "key": "etica:ra2",
      "reason": "sem nota ainda no Canvas"
-    },
-    {
-     "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
     }
    ],
    "notes": [],
@@ -1465,7 +1472,7 @@
     {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
-     "name": "Atividade Desafio - Protocolos da Camada de Aplicação",
+     "name": "AS02 - NOTAS",
      "due": "2026-11-10"
     },
     {
@@ -1511,6 +1518,12 @@
      "due": "2026-11-12"
     },
     {
+     "course": "web",
+     "courseName": "Programação WEB",
+     "name": "Avaliação Somativa RA2 e RA3",
+     "due": "2026-11-12"
+    },
+    {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
      "name": "25 - SERVIÇO DE TRANSFERÊNCIA DE ARQUIVOS",
@@ -1531,7 +1544,7 @@
     {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
-     "name": "Desafio 05 - Identificação de portas",
+     "name": "Desafio 04 - Packet Tracer - Roteador e duas sub-redes",
      "due": "2026-11-16"
     },
     {
@@ -1623,7 +1636,7 @@
     {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
-     "name": "Atividade Desafio — Instalando e Testando um Broker MQTT Mosquitto",
+     "name": "Atividade Desafio - Protocolos da Camada de Aplicação",
      "due": "2026-11-11"
     },
     {
@@ -1683,7 +1696,7 @@
     {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
-     "name": "Desafio 01 – A Letra \"A\" pelas Camadas OSI!",
+     "name": "Atividade Desafio — Instalando e Testando um Broker MQTT Mosquitto",
      "due": "2026-11-12"
     },
     {
@@ -1749,7 +1762,7 @@
     {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
-     "name": "Desafio 03 – Rede local com HUB e SWITCH",
+     "name": "Desafio 02 – Diagnóstico de Rede com Comandos Linux",
      "due": "2026-11-14"
     },
     {
@@ -1843,6 +1856,12 @@
      "due": "2026-11-16"
     },
     {
+     "course": "abd",
+     "courseName": "Arquitetura de Banco de Dados",
+     "name": "Entrega TDE",
+     "due": "2026-11-17"
+    },
+    {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
      "name": "17 - SOCKETS UDP",
@@ -1851,7 +1870,7 @@
     {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
-     "name": "Formativa 1 - MODELO EM CAMADAS",
+     "name": "Desafio 05 - Identificação de portas",
      "due": "2026-11-17"
     },
     {
@@ -1869,7 +1888,7 @@
     {
      "course": "cscf",
      "courseName": "Conectividade em Sistemas Ciberfísicos",
-     "name": "Lista de Exercícios – Endereçamento IP, Máscara e CIDR",
+     "name": "Formativa 1 - MODELO EM CAMADAS",
      "due": "2026-11-18"
     },
     {
@@ -1909,9 +1928,11 @@
     "imp:p2": "2026-11-14",
     "abd:pj1": "2026-11-13",
     "abd:s1": "2026-11-14",
+    "abd:tde1": "2026-11-17",
     "abd:pj2": "2026-11-17",
     "abd:s2": "2026-11-15",
     "abd:pj3": "2026-11-12",
+    "abd:tde3": "2026-11-17",
     "rpnd:as1": "2026-11-10",
     "rpnd:as2": "2026-11-11",
     "rpnd:as3": "2026-11-12",
@@ -1922,11 +1943,23 @@
     "rpnd:as8": "2026-11-19",
     "web:p1": "2026-11-17",
     "web:tde": "2026-11-10",
+    "web:p23": "2026-11-12",
     "etica:ra2": "2026-11-17",
     "cscf:as1": "2026-11-19",
+    "cscf:as2": "2026-11-10",
     "cscf:pj": "2026-11-19"
    },
    "stats": {
+    "abd:tde1": {
+     "mean": 0.125,
+     "min": 0,
+     "max": 0.25
+    },
+    "abd:tde3": {
+     "mean": 0.125,
+     "min": 0,
+     "max": 0.25
+    },
     "rpnd:as2": {
      "mean": 0.25,
      "min": 0,
@@ -1975,9 +2008,11 @@
     "imp:p2": "10",
     "abd:pj1": "1",
     "abd:s1": "1.25",
+    "abd:tde1": "0.25",
     "abd:pj2": "2",
     "abd:s2": "3",
     "abd:pj3": "1",
+    "abd:tde3": "0.25",
     "rpnd:as1": "0.5",
     "rpnd:as2": "0.5",
     "rpnd:as3": "1",
@@ -1988,31 +2023,17 @@
     "rpnd:as8": "7",
     "web:p1": "10",
     "web:tde": "10",
+    "web:p23": "10",
     "etica:ra1": "7",
     "etica:ra2": "3",
     "cscf:as1": "0",
+    "cscf:as2": "0",
     "cscf:pj": "10"
    },
    "missing": [
     {
-     "key": "abd:tde1",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
-    },
-    {
      "key": "abd:s3",
      "reason": "avaliação não está no Canvas (ou aparece repetida)"
-    },
-    {
-     "key": "abd:tde3",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
-    },
-    {
-     "key": "web:p23",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
-    },
-    {
-     "key": "cscf:as2",
-     "reason": "lance à mão: não há uma avaliação equivalente no Canvas"
     }
    ],
    "notes": [],

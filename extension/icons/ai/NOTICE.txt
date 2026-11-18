@@ -1,0 +1,7 @@
+Logos of the AI apps the Caderno+ MCP works with, from Lobe Icons (https://github.com/lobehub/lobe-icons,
+package @lobehub/icons-static-svg 1.103.0), MIT License, Copyright (c) LobeHub. The marks belong to their owners and
+are shown only to say which app each install step is for; Caderno+ is not affiliated with them.
+
+canvas.svg: the Canvas LMS mark from Simple Icons 16.38.0 (CC0 data; source and guidelines
+https://www.instructure.com/about/brand-guide/media-resources). Canvas is a trademark of Instructure; Caderno+ is an
+unofficial extension and the mark only names the Canvas connection.

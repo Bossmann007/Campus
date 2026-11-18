@@ -12,6 +12,7 @@
       ],
       "formula": "Pesos diretos na nota do semestre (10/30/10/10/40%)",
       "src": "Plano de Ensino de Programação Imperativa l.335-371",
+      "plan": "Final = 40% RA1 + 60% RA2\nRA1 = 3,57% TDE 1 + 3,57% TDE 2 + 3,57% PBL01 + 3,57% PBL02 + 3,57% PBL03 + 3,57% PBL04 + 3,58% PBL05 + 75% Prova do RA1\nRA2 = 3,33% PBL06 + 3,33% PBL07 + 3,33% PBL08 + 3,33% PBL09 + 3,34% PBL10 + 16,67% Trabalho do RA2 + 66,66% Prova do RA2",
       "items": [
         {
           "id": "ex1",
@@ -107,6 +108,7 @@
       ],
       "formula": "Final = 25% RA1 + 50% RA2 + 25% RA3; RA1 e RA3 = 50% prova + 40% PjBL + 10% TDE; RA2 = 60% prova + 30% PjBL + 10% TDE. Notas em pontos da final; As notas do Canvas já são os pontos da final (professor, 10/11/2026): PjBL II vale 2,0 e inclui a TDE do RA2.",
       "src": "Plano de Ensino de Arquitetura de Banco de Dados l.365-446",
+      "plan": "Final = 22,5% RA1 + 50% RA2 + 22,5% RA3 + 5% Entrega TDE\nRA1 = soma(PjBL - Parte 1, Avaliação somativa RA1) de 2,25\nRA2 = soma(PjBL - Parte 2, Avaliação somativa RA2) de 5\nRA3 = soma(Pjbl Parte 3, Avaliação somativa RA3) de 2,25",
       "items": [
         {
           "id": "pj1",
@@ -195,6 +197,9 @@
           "s1": {
             "one": "Avaliação somativa RA1"
           },
+          "tde1": {
+            "one": "Entrega TDE"
+          },
           "pj2": {
             "one": "PjBL - Parte 2"
           },
@@ -206,6 +211,9 @@
           },
           "s3": {
             "one": "Avaliação somativa RA3"
+          },
+          "tde3": {
+            "one": "Entrega TDE"
           }
         }
       }
@@ -219,6 +227,7 @@
       ],
       "formula": "Final = 60% RA1 + 40% RA2; cada RA soma 10 pontos (AS lançadas em pontos do RA)",
       "src": "Plano de Ensino de RPND l.315-374",
+      "plan": "Final = 60% RA1 + 40% RA2\nRA1 = 5% AS 01 + 5% AS 02 + 10% AS 03 + 10% AS 04 + 70% AS 05\nRA2 = 15% AS 06 + 15% AS 07 + 70% AS 08",
       "items": [
         {
           "id": "as1",
@@ -333,6 +342,7 @@
       ],
       "formula": "Final = 25% RA1 + 40% RA2 + 35% RA3; cada RA = 85% prova + 15% TDE",
       "src": "PDF do Plano p.6, linha Total (25/40/35, texto sobreposto ao 100%) e Plano-de-Ensino.md l.336-376",
+      "plan": "Final = 25% RA1 + 40% RA2 + 35% RA3\nRA1 = 85% Avaliação Somativa RA1 + 15% Entrega TDE\nRA2 = 85% Somativa RA2 + 15% Entrega TDE\nRA3 = 85% Somativa RA2 + 15% Entrega TDE",
       "items": [
         {
           "id": "p1",
@@ -375,6 +385,9 @@
           },
           "tde": {
             "one": "Entrega TDE"
+          },
+          "p23": {
+            "one": "Avaliação Somativa RA2 e RA3"
           }
         }
       }
@@ -388,6 +401,7 @@
       ],
       "formula": "Final = 70% RA1 + 30% RA2; notas em pontos da final",
       "src": "Plano de Ensino de Ética l.208 e l.261",
+      "plan": "Final = 70% RA1 + 30% RA2\nRA1 = 33,33% Aula 4 + 33,33% Aula 7 + 33,34% Avaliação somativa - Prova\nRA2 = 100% TDE - TAREFA SOMATIVA - VÍDEO",
       "items": [
         {
           "id": "ra1",
@@ -435,6 +449,7 @@
       ],
       "formula": "Final = (RA1 + RA2) / 2; RA1 = AS1; RA2 = AS2 (60%) + PjBL (40%)",
       "src": "Plano de Ensino de Conectividade l.288-306 e l.554",
+      "plan": "Final = 50% RA1 + 50% RA2\nRA1 = 100% AS01\nRA2 = 60% AS02 + 40% Projeto CSCF",
       "items": [
         {
           "id": "as1",
@@ -473,6 +488,10 @@
         "items": {
           "as1": {
             "one": "AS01 - NOTAS",
+            "pts": 10
+          },
+          "as2": {
+            "one": "AS02 - NOTAS",
             "pts": 10
           },
           "pj": {

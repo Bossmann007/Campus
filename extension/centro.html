@@ -4,11 +4,12 @@
 <body>
   <main class="ob ai">
     <header><b class="wm">Caderno<i>+</i></b><span class="tagl">Centro de Notas</span></header>
-    <h1>Ler as notas do Centro de Notas</h1>
-    <p class="lead">O Centro de Notas é a aba da PUCPR em cada matéria onde o professor monta a fórmula da nota final. Para usar essa fórmula no quanto falta, o Caderno+ precisa da sua permissão para abrir o site do Centro de Notas (o mesmo que o Canvas abre na aba). Ele só lê, uma matéria por vez, no máximo de hora em hora.</p>
-    <p><button class="btn primary" type="button" id="allow">Permitir e ler agora</button></p>
-    <p class="fine" id="st" role="status"></p>
-    <p class="fine">Depois de permitir, volte para o Canvas: as matérias com fórmula mostram o número do Centro de Notas em um ou dois minutos. Para tirar a permissão, use o menu da extensão no navegador (Gerenciar extensão → Permissões).</p>
+    <h1>Calcular com a fórmula do seu professor?</h1>
+    <p class="lead">Com a sua permissão, o quanto falta usa a fórmula que o professor montou no Centro de Notas (a aba da PUCPR em cada matéria), e não uma estimativa. O Caderno+ só lê: a fórmula e as suas notas lançadas, uma matéria por vez, no máximo de hora em hora. Não muda nada e não envia nada para outro lugar.</p>
+    <p class="fine">O Chrome vai pedir confirmação mostrando um endereço que termina em <b>azurecontainerapps.io</b>: é o servidor onde a PUCPR hospeda o Centro de Notas. O aviso padrão do Chrome fala em ler e alterar dados do site; o Caderno+ só lê.</p>
+    <p><button class="btn primary" type="button" id="allow">Usar a fórmula do professor</button> <button class="btn" type="button" id="back" hidden>Voltar para o Canvas</button></p>
+    <p class="fine" id="st" role="status" tabindex="-1"></p>
+    <p class="fine">Para desligar depois: <button class="link" type="button" id="manage">tirar a permissão</button> na página da extensão.</p>
   </main>
   <script src="centro.js"></script>
 </body>
